@@ -94,3 +94,27 @@ pub struct FilterRuleResponse {
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
 }
+
+// ============ AnimeLink DTO ============
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct AnimeLinkRequest {
+    pub series_id: i32,
+    pub group_id: i32,
+    pub episode_no: i32,
+    pub title: Option<String>,
+    pub url: String,
+    pub source_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnimeLinkResponse {
+    pub link_id: i32,
+    pub series_id: i32,
+    pub group_id: i32,
+    pub episode_no: i32,
+    pub title: Option<String>,
+    pub url: String,
+    pub source_hash: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}

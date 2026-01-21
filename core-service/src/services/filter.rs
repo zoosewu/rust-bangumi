@@ -57,7 +57,7 @@ mod tests {
             rule_order: id,
             rule_type: rule_type.to_string(),
             regex_pattern: pattern.to_string(),
-            created_at: Utc::now(),
+            created_at: Utc::now().naive_utc(),
         }
     }
 

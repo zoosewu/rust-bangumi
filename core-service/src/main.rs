@@ -80,6 +80,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/filters/:series_id/:group_id", get(handlers::filters::get_filter_rules))
         .route("/filters/:rule_id", delete(handlers::filters::delete_filter_rule))
 
+        // 動畫連結
+        .route("/links", post(handlers::links::create_anime_link))
+        .route("/links/:series_id", get(handlers::links::get_anime_links))
+
         // 健康檢查
         .route("/health", get(health_check))
 
