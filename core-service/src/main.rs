@@ -26,6 +26,18 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("啟動核心服務");
 
+    // 設置數據庫連接池
+    let database_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_password@localhost:5432/bangumi".to_string());
+
+    let pool = db::establish_connection_pool(&database_url)?;
+
+    // 嘗試運行遷移（如果 PostgreSQL 未運行將失敗，但這是可以接受的）
+    match db::run_migrations(&pool) {
+        Ok(_) => tracing::info!("數據庫遷移完成"),
+        Err(e) => tracing::warn!("數據庫遷移失敗: {}", e),
+    }
+
     // 構建應用路由
     let app = Router::new()
         // 服務註冊
