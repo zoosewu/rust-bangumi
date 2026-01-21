@@ -14,6 +14,7 @@ mod services;
 mod db;
 mod schema;
 mod state;
+mod dto;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -55,9 +56,24 @@ async fn main() -> anyhow::Result<()> {
         .route("/services/:service_id/health", get(handlers::services::health_check))
 
         // 動畫管理
+        .route("/anime", post(handlers::anime::create_anime))
         .route("/anime", get(handlers::anime::list_anime))
         .route("/anime/:anime_id", get(handlers::anime::get_anime))
-        .route("/anime/:anime_id/links", get(handlers::anime::get_links))
+        .route("/anime/:anime_id", axum::routing::delete(handlers::anime::delete_anime))
+
+        // 季度管理
+        .route("/seasons", post(handlers::anime::create_season))
+        .route("/seasons", get(handlers::anime::list_seasons))
+
+        // 動畫系列管理
+        .route("/anime/series", post(handlers::anime::create_anime_series))
+        .route("/anime/series/:series_id", get(handlers::anime::get_anime_series))
+        .route("/anime/:anime_id/series", get(handlers::anime::list_anime_series))
+
+        // 字幕組管理
+        .route("/subtitle-groups", post(handlers::anime::create_subtitle_group))
+        .route("/subtitle-groups", get(handlers::anime::list_subtitle_groups))
+        .route("/subtitle-groups/:group_id", axum::routing::delete(handlers::anime::delete_subtitle_group))
 
         // 過濾規則
         .route("/filters", post(handlers::filters::create_filter))
