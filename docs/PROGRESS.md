@@ -93,18 +93,16 @@ aa586db feat: Implement service registration REST API
 
 ---
 
-## 進行中
+### ✅ Phase 5: 動畫管理 API（5/5 完成）
 
-### ⏳ Phase 5: 動畫管理 API（規劃中 → 待實施）
+**已完成任務：**
+- [x] Task 12: 完成數據庫模型 CRUD 函數實現
+- [x] Task 13: 實現動畫 API 端點
+- [x] Task 14: 實現 API 端點單元測試
+- [x] Task 15: 實現過濾規則管理 API
+- [x] Task 16: 實現動畫連結管理 API
 
-**計畫任務：**
-- [ ] Task 12: 完成數據庫模型 CRUD 函數實現
-- [ ] Task 13: 實現動畫 API 端點
-- [ ] Task 14: 實現 API 端點單元測試
-- [ ] Task 15: 實現過濾規則管理 API
-- [ ] Task 16: 實現動畫連結管理 API
-
-**計畫 API 端點（16 個）：**
+**已實現 API 端點（17 個）：**
 - 動畫管理：CREATE, READ, DELETE (3)
 - 季度管理：CREATE, READ (2)
 - 系列管理：CREATE, READ, LIST_BY_ANIME (3)
@@ -112,7 +110,16 @@ aa586db feat: Implement service registration REST API
 - 過濾規則：CREATE, READ, DELETE (3)
 - 動畫連結：CREATE, READ (2)
 
-**預計完成：** 待開始
+**完成時間：** 2026-01-21 17:35 UTC+8
+
+**提交記錄：**
+```
+f4b7b89 feat: Implement anime links management API (Phase 5 Task 16)
+0ef4a8c feat: Implement filter rule management REST API
+ec40724 feat: Implement API endpoint integration tests for anime management
+405294b feat: Implement anime management REST API endpoints
+bc1c68d feat: Implement complete database model CRUD functions
+```
 
 ---
 
@@ -183,14 +190,14 @@ aa586db feat: Implement service registration REST API
 
 ## 項目統計
 
-### 代碼行數（估計）
+### 代碼行數（實際）
 
 | 組件 | 行數 | 狀態 |
 |------|------|------|
 | shared 庫 | ~200 | ✅ 完成 |
-| core-service | ~1,200 | ✅ 基礎完成 |
+| core-service | 2,522 | ✅ Phase 1-5 完成 |
 | 數據庫遷移 | ~400 | ✅ 完成 |
-| API 層 | ~800 (進行中) | ⏳ 進行中 |
+| API 層 | ~1,200 (Phase 5) | ✅ 完成 |
 | 擷取區塊 | ~600 | 📋 待規劃 |
 | 下載區塊 | ~600 | 📋 待規劃 |
 | 顯示區塊 | ~600 | 📋 待規劃 |
@@ -200,9 +207,9 @@ aa586db feat: Implement service registration REST API
 
 | 類型 | 數量 | 狀態 |
 |------|------|------|
-| 單元測試 | 9 | ✅ 通過 |
-| 集成測試 | 6 (待擴展) | ⏳ 進行中 |
-| API 端點測試 | 16 (規劃中) | 📋 待規劃 |
+| 單元測試 | 9 (FilterEngine, CronScheduler) | ✅ 通過 |
+| 集成測試 | 10 (Anime CRUD operations) | ✅ 完成 |
+| API 端點測試 | 17 個端點 | ✅ 實現 |
 
 ---
 
