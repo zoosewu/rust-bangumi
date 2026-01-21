@@ -2,12 +2,10 @@ use feed_rs::parser;
 use sha2::{Sha256, Digest};
 use regex::Regex;
 use shared::models::{FetchedAnime, FetchedLink};
-use chrono::{Utc, Datelike};
 use std::collections::HashMap;
 
 pub struct RssParser {
     episode_regex: Regex,
-    resolution_regex: Regex,
 }
 
 impl RssParser {
@@ -15,8 +13,6 @@ impl RssParser {
         Self {
             // Match episode numbers: [01], 第01話, EP01, etc.
             episode_regex: Regex::new(r"(?:\[|第|EP)(\d+)(?:\]|話|集)?").unwrap(),
-            // Match resolution: 1080p, 720p, etc.
-            resolution_regex: Regex::new(r"(\d{3,4}[pP])").unwrap(),
         }
     }
 
@@ -55,8 +51,8 @@ impl RssParser {
                     .or_insert_with(|| FetchedAnime {
                         title: anime_title.clone(),
                         description: String::new(),
-                        season: self.detect_season(&anime_title),
-                        year: self.detect_year(&anime_title).unwrap_or(2025),
+                        season: "unknown".to_string(),
+                        year: 2025,
                         series_no: 1,
                         links: Vec::new(),
                     })
@@ -68,7 +64,10 @@ impl RssParser {
     }
 
     fn parse_title(&self, title: &str) -> Option<(String, String, i32)> {
-        // Example format: "[Subtitle Group] Anime Title [01][1080p]"
+        // Example formats:
+        // - "[Subtitle Group] Anime Title [01][1080p]"
+        // - "[字幕組] 動畫標題 第05話 [1080p]"
+        // - "[Group] Title EP12 [720p]"
 
         // Extract subtitle group (first bracketed part)
         let subtitle_group = title
@@ -78,23 +77,19 @@ impl RssParser {
             .next()?
             .to_string();
 
-        // Extract episode number
-        let episode_no = self.episode_regex
-            .captures(title)
-            .and_then(|cap| cap.get(1))
+        // Extract episode number and find its position
+        let episode_match = self.episode_regex.captures(title)?;
+        let episode_no = episode_match
+            .get(1)
             .and_then(|m| m.as_str().parse::<i32>().ok())?;
+        let episode_match_start = episode_match.get(0)?.start();
 
-        // Extract anime title - between first ] and the episode number bracket
-        let anime_title = if let Some(first_close) = title.find(']') {
-            if let Some(episode_bracket) = title.rfind('[') {
-                let between = &title[first_close + 1..episode_bracket];
-                between.trim().to_string()
-            } else {
-                return None;
-            }
-        } else {
-            return None;
-        };
+        // Extract anime title - between first ] and the episode marker
+        let first_close = title.find(']')?;
+        let anime_title_end = episode_match_start;
+
+        let between = &title[first_close + 1..anime_title_end];
+        let anime_title = between.trim().to_string();
 
         if anime_title.is_empty() {
             return None;
@@ -108,21 +103,6 @@ impl RssParser {
         hasher.update(url.as_bytes());
         format!("{:x}", hasher.finalize())
     }
-
-    fn detect_season(&self, _title: &str) -> String {
-        // Simplified: determine by current month
-        let month = Utc::now().month();
-        match month {
-            1..=3 => "winter",
-            4..=6 => "spring",
-            7..=9 => "summer",
-            _ => "fall",
-        }.to_string()
-    }
-
-    fn detect_year(&self, _title: &str) -> Option<i32> {
-        Some(Utc::now().year() as i32)
-    }
 }
 
 #[cfg(test)]
@@ -130,25 +110,58 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_title() {
+    fn test_parse_title_standard_format() {
         let parser = RssParser::new();
-
         let title = "[SubGroup] Anime Title [01][1080p]";
         let result = parser.parse_title(title);
 
         assert!(result.is_some());
-        let (_anime, group, episode) = result.unwrap();
+        let (anime, group, episode) = result.unwrap();
         assert_eq!(group, "SubGroup");
         assert_eq!(episode, 1);
+        assert_eq!(anime, "Anime Title");
     }
 
     #[test]
-    fn test_generate_hash() {
+    fn test_parse_title_chinese_episode_format() {
         let parser = RssParser::new();
-        let hash1 = parser.generate_hash("magnet:?xt=test1");
-        let hash2 = parser.generate_hash("magnet:?xt=test2");
+        let title = "[字幕組] 動畫標題 第05話 [1080p]";
+        let result = parser.parse_title(title);
+
+        assert!(result.is_some());
+        let (_anime, group, episode) = result.unwrap();
+        assert_eq!(group, "字幕組");
+        assert_eq!(episode, 5);
+    }
+
+    #[test]
+    fn test_parse_title_ep_format() {
+        let parser = RssParser::new();
+        let title = "[Group] Title EP12 [720p]";
+        let result = parser.parse_title(title);
+
+        assert!(result.is_some());
+        let (_anime, _group, episode) = result.unwrap();
+        assert_eq!(episode, 12);
+    }
+
+    #[test]
+    fn test_generate_hash_deterministic() {
+        let parser = RssParser::new();
+        let url = "magnet:?xt=urn:btih:abc123";
+        let hash1 = parser.generate_hash(url);
+        let hash2 = parser.generate_hash(url);
+
+        assert_eq!(hash1, hash2);
+        assert_eq!(hash1.len(), 64);
+    }
+
+    #[test]
+    fn test_generate_hash_unique() {
+        let parser = RssParser::new();
+        let hash1 = parser.generate_hash("url1");
+        let hash2 = parser.generate_hash("url2");
 
         assert_ne!(hash1, hash2);
-        assert_eq!(hash1.len(), 64); // SHA256 length
     }
 }
