@@ -1,1 +1,2 @@
-// 模型模塊 - 將在後續實現
+pub mod db;
+pub use db::*;
