@@ -1,0 +1,7 @@
+CREATE TABLE seasons (
+  season_id SERIAL PRIMARY KEY,
+  year INTEGER NOT NULL,
+  season VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(year, season)
+);
