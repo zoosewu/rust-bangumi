@@ -2,6 +2,8 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 
+pub mod models;
+
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
