@@ -1,1 +1,3 @@
-// 服務模塊 - 將在後續實現
+pub mod registry;
+
+pub use registry::ServiceRegistry;
