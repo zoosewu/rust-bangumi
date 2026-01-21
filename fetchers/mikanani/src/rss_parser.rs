@@ -63,6 +63,10 @@ impl RssParser {
         Ok(animes_map.into_values().collect())
     }
 
+    pub fn parse_title_public(&self, title: &str) -> Option<(String, String, i32)> {
+        self.parse_title(title)
+    }
+
     fn parse_title(&self, title: &str) -> Option<(String, String, i32)> {
         // Example formats:
         // - "[Subtitle Group] Anime Title [01][1080p]"
@@ -96,6 +100,10 @@ impl RssParser {
         }
 
         Some((anime_title, subtitle_group, episode_no))
+    }
+
+    pub fn generate_hash_public(&self, url: &str) -> String {
+        self.generate_hash(url)
     }
 
     fn generate_hash(&self, url: &str) -> String {
