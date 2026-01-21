@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 
 // ============ Seasons ============
 #[derive(Queryable, Selectable, Debug, Clone)]
@@ -8,7 +8,7 @@ pub struct Season {
     pub season_id: i32,
     pub year: i32,
     pub season: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -16,6 +16,7 @@ pub struct Season {
 pub struct NewSeason {
     pub year: i32,
     pub season: String,
+    pub created_at: NaiveDateTime,
 }
 
 // ============ Animes ============
@@ -24,14 +25,16 @@ pub struct NewSeason {
 pub struct Anime {
     pub anime_id: i32,
     pub title: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::animes)]
 pub struct NewAnime {
     pub title: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 // ============ AnimeSeries ============
@@ -45,8 +48,8 @@ pub struct AnimeSeries {
     pub description: Option<String>,
     pub aired_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -58,6 +61,8 @@ pub struct NewAnimeSeries {
     pub description: Option<String>,
     pub aired_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 // ============ SubtitleGroups ============
@@ -66,13 +71,14 @@ pub struct NewAnimeSeries {
 pub struct SubtitleGroup {
     pub group_id: i32,
     pub group_name: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::subtitle_groups)]
 pub struct NewSubtitleGroup {
     pub group_name: String,
+    pub created_at: NaiveDateTime,
 }
 
 // ============ AnimeLinks ============
@@ -87,8 +93,8 @@ pub struct AnimeLink {
     pub url: String,
     pub source_hash: String,
     pub filtered_flag: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -101,6 +107,8 @@ pub struct NewAnimeLink {
     pub url: String,
     pub source_hash: String,
     pub filtered_flag: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 // ============ FilterRules ============
@@ -113,7 +121,7 @@ pub struct FilterRule {
     pub rule_order: i32,
     pub rule_type: String,
     pub regex_pattern: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -124,6 +132,7 @@ pub struct NewFilterRule {
     pub rule_order: i32,
     pub rule_type: String,
     pub regex_pattern: String,
+    pub created_at: NaiveDateTime,
 }
 
 // ============ Downloads ============
@@ -134,12 +143,12 @@ pub struct Download {
     pub link_id: i32,
     pub downloader_type: String,
     pub status: String,
-    pub progress: Option<f64>,
+    pub progress: Option<f32>,
     pub downloaded_bytes: Option<i64>,
     pub total_bytes: Option<i64>,
     pub error_message: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -147,6 +156,9 @@ pub struct Download {
 pub struct NewDownload {
     pub link_id: i32,
     pub downloader_type: String,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 // ============ CronLogs ============
@@ -158,7 +170,7 @@ pub struct CronLog {
     pub status: String,
     pub error_message: Option<String>,
     pub attempt_count: i32,
-    pub executed_at: DateTime<Utc>,
+    pub executed_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -168,4 +180,5 @@ pub struct NewCronLog {
     pub status: String,
     pub error_message: Option<String>,
     pub attempt_count: i32,
+    pub executed_at: NaiveDateTime,
 }
