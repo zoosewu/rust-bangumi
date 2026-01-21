@@ -1,7 +1,7 @@
 use axum::{
     http::StatusCode,
     response::Json,
-    routing::{get, post},
+    routing::{get, post, delete},
     Router,
 };
 use std::net::SocketAddr;
@@ -76,9 +76,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/subtitle-groups/:group_id", axum::routing::delete(handlers::anime::delete_subtitle_group))
 
         // 過濾規則
-        .route("/filters", post(handlers::filters::create_filter))
-        .route("/filters/:series_id/:group_id", get(handlers::filters::list_filters))
-        .route("/filters/:rule_id", post(handlers::filters::delete_filter))
+        .route("/filters", post(handlers::filters::create_filter_rule))
+        .route("/filters/:series_id/:group_id", get(handlers::filters::get_filter_rules))
+        .route("/filters/:rule_id", delete(handlers::filters::delete_filter_rule))
 
         // 健康檢查
         .route("/health", get(health_check))

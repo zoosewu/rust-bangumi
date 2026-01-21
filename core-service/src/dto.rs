@@ -73,3 +73,24 @@ pub struct SubtitleGroupResponse {
     pub group_name: String,
     pub created_at: NaiveDateTime,
 }
+
+// ============ FilterRule DTO ============
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct FilterRuleRequest {
+    pub series_id: i32,
+    pub group_id: i32,
+    pub rule_order: i32,
+    pub rule_type: String,
+    pub regex_pattern: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FilterRuleResponse {
+    pub rule_id: i32,
+    pub series_id: i32,
+    pub group_id: i32,
+    pub rule_order: i32,
+    pub rule_type: String,
+    pub regex_pattern: String,
+    pub created_at: NaiveDateTime,
+}
