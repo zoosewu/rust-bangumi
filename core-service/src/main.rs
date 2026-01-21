@@ -13,6 +13,7 @@ mod models;
 mod services;
 mod db;
 mod schema;
+mod state;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -38,6 +39,13 @@ async fn main() -> anyhow::Result<()> {
         Err(e) => tracing::warn!("數據庫遷移失敗: {}", e),
     }
 
+    // 初始化應用狀態
+    let registry = std::sync::Arc::new(services::ServiceRegistry::new());
+    let app_state = state::AppState {
+        db: pool,
+        registry,
+    };
+
     // 構建應用路由
     let app = Router::new()
         // 服務註冊
@@ -57,7 +65,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/filters/:rule_id", post(handlers::filters::delete_filter))
 
         // 健康檢查
-        .route("/health", get(health_check));
+        .route("/health", get(health_check))
+
+        // 應用狀態
+        .with_state(app_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     let listener = tokio::net::TcpListener::bind(addr).await?;
