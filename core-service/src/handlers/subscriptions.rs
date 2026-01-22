@@ -78,6 +78,40 @@ pub async fn create_subscription(
 
     match state.db.get() {
         Ok(mut conn) => {
+            // Check for existing subscription with same URL
+            let existing_with_url = rss_subscriptions::table
+                .filter(rss_subscriptions::rss_url.eq(&payload.rss_url))
+                .first::<RssSubscription>(&mut conn)
+                .optional();
+
+            match existing_with_url {
+                Ok(Some(_)) => {
+                    tracing::warn!(
+                        "Subscription already exists for URL: {}",
+                        payload.rss_url
+                    );
+                    return (
+                        StatusCode::CONFLICT,
+                        Json(json!({
+                            "error": "duplicate_url",
+                            "message": format!("Subscription already exists for this URL: {}", payload.rss_url)
+                        })),
+                    );
+                }
+                Err(e) => {
+                    tracing::error!("Failed to check existing subscriptions: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({
+                            "error": "database_error",
+                            "message": format!("Failed to check existing subscriptions: {}", e)
+                        })),
+                    );
+                }
+                _ => {} // OK - no existing subscription
+            }
+
+            // Insert subscription
             match diesel::insert_into(rss_subscriptions::table)
                 .values(&new_subscription)
                 .get_result::<RssSubscription>(&mut conn)

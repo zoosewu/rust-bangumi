@@ -96,6 +96,10 @@ async fn main() -> anyhow::Result<()> {
         // Fetcher 結果接收
         .route("/fetcher-results", post(handlers::fetcher_results::receive_fetcher_results))
 
+        // 衝突解決
+        .route("/conflicts", get(handlers::conflict_resolution::get_pending_conflicts))
+        .route("/conflicts/:conflict_id/resolve", post(handlers::conflict_resolution::resolve_conflict))
+
         // 健康檢查
         .route("/health", get(health_check))
 
