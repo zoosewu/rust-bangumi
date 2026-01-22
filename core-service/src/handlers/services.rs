@@ -7,6 +7,9 @@ use serde_json::json;
 use shared::{ServiceRegistration, ServiceRegistrationResponse, ServiceType};
 use uuid::Uuid;
 use crate::state::AppState;
+use crate::models::db::NewFetcherModule;
+use crate::schema::fetcher_modules;
+use diesel::prelude::*;
 
 /// Register a new service
 pub async fn register(
@@ -18,17 +21,62 @@ pub async fn register(
 
     let service = shared::RegisteredService {
         service_id,
-        service_type: payload.service_type,
-        service_name: payload.service_name,
-        host: payload.host,
+        service_type: payload.service_type.clone(),
+        service_name: payload.service_name.clone(),
+        host: payload.host.clone(),
         port: payload.port,
-        capabilities: payload.capabilities,
+        capabilities: payload.capabilities.clone(),
         is_healthy: true,
         last_heartbeat: now,
     };
 
     if let Err(e) = state.registry.register(service) {
         tracing::error!("Failed to register service: {}", e);
+    }
+
+    // If this is a Fetcher service, persist it to the database
+    if payload.service_type == ServiceType::Fetcher {
+        let naive_now = now.naive_utc();
+        let new_fetcher = NewFetcherModule {
+            name: payload.service_name.clone(),
+            version: "1.0.0".to_string(),
+            description: Some(format!("{}:{}:{}", payload.service_name, payload.host, payload.port)),
+            is_enabled: true,
+            config_schema: None,
+            created_at: naive_now,
+            updated_at: naive_now,
+        };
+
+        // Get a connection from the pool and insert the fetcher module
+        match state.db.get() {
+            Ok(mut conn) => {
+                match diesel::insert_into(fetcher_modules::table)
+                    .values(&new_fetcher)
+                    .execute(&mut conn)
+                {
+                    Ok(_) => {
+                        tracing::info!(
+                            "Successfully persisted Fetcher service to database: {} ({}:{})",
+                            payload.service_name,
+                            payload.host,
+                            payload.port
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to insert Fetcher module into database: {}",
+                            e
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Failed to get database connection: {}",
+                    e
+                );
+            }
+        }
     }
 
     let response = ServiceRegistrationResponse {
