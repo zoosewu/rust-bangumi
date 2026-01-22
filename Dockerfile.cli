@@ -1,0 +1,27 @@
+# Build stage
+FROM rust:latest as builder
+
+WORKDIR /app
+
+# Copy the entire workspace
+COPY . .
+
+# Build the CLI
+RUN cargo build --release --package bangumi-cli
+
+# Runtime stage
+FROM alpine:latest
+
+# Install minimal runtime dependencies
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+# Copy the built binary from builder
+COPY --from=builder /app/target/release/bangumi-cli /app/bangumi-cli
+
+# Set the entrypoint
+ENTRYPOINT ["/app/bangumi-cli"]
+
+# Default command shows help
+CMD ["--help"]

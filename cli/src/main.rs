@@ -2,6 +2,10 @@ use clap::{Parser, Subcommand};
 
 mod commands;
 mod client;
+mod models;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Parser)]
 #[command(name = "bangumi")]
