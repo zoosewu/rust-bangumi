@@ -1,7 +1,8 @@
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::QBittorrentClient;
+use std::time::Duration;
+use downloader_qbittorrent::{QBittorrentClient, retry_with_backoff};
 
 #[derive(Debug, Deserialize)]
 pub struct DownloadRequest {
@@ -28,7 +29,16 @@ pub async fn download(
         }));
     }
 
-    match client.add_magnet(&req.url, None).await {
+    // Use retry logic for download with exponential backoff
+    let result = retry_with_backoff(3, Duration::from_secs(1), || {
+        let client = client.clone();
+        let url = req.url.clone();
+        async move {
+            client.add_magnet(&url, None).await
+        }
+    }).await;
+
+    match result {
         Ok(hash) => {
             tracing::info!("Download started: link_id={}, hash={}", req.link_id, hash);
             (StatusCode::CREATED, Json(DownloadResponse {
@@ -38,7 +48,7 @@ pub async fn download(
             }))
         }
         Err(e) => {
-            tracing::error!("Download failed: {}", e);
+            tracing::error!("Download failed after retries: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, Json(DownloadResponse {
                 status: "error".to_string(),
                 hash: None,

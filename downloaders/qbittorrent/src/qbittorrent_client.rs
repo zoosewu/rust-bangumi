@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone)]
 pub struct QBittorrentClient {
-    client: Client,
-    base_url: String,
+    pub client: Client,
+    pub base_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -162,7 +162,7 @@ impl QBittorrentClient {
         }
     }
 
-    fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
+    pub fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
         // magnet:?xt=urn:btih:HASH&dn=...
         if let Some(start) = magnet_url.find("btih:") {
             let hash_start = start + 5;
