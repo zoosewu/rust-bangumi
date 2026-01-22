@@ -2,6 +2,8 @@ use std::time::Duration;
 use tokio::time::interval;
 use crate::RssParser;
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+use shared::FetchedAnime;
 
 pub struct FetchScheduler {
     parser: Arc<RssParser>,
@@ -12,6 +14,12 @@ pub struct FetchScheduler {
 #[derive(serde::Deserialize)]
 pub struct UrlResponse {
     pub urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetcherResultsPayload {
+    pub animes: Vec<FetchedAnime>,
+    pub fetcher_source: String,
 }
 
 impl FetchScheduler {
@@ -55,16 +63,34 @@ impl FetchScheduler {
                 Ok(urls) => {
                     tracing::info!("Fetched {} URLs from core service", urls.len());
 
+                    // Collect all parsed animes
+                    let mut all_animes = Vec::new();
+
                     for url in urls {
                         match self.parser.parse_feed(&url).await {
                             Ok(animes) => {
                                 let count: usize = animes.iter().map(|a| a.links.len()).sum();
                                 tracing::info!("Fetch successful for {}: {} links from {} anime", url, count, animes.len());
+                                all_animes.extend(animes);
                             }
                             Err(e) => {
                                 tracing::error!("Fetch failed for {}: {}", url, e);
                             }
                         }
+                    }
+
+                    // Send results to core service if we have any animes
+                    if !all_animes.is_empty() {
+                        match self.send_results_to_core(all_animes).await {
+                            Ok(_) => {
+                                tracing::info!("Successfully sent fetched results to core service");
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to send results to core service: {}", e);
+                            }
+                        }
+                    } else {
+                        tracing::info!("No animes fetched in this cycle");
                     }
                 }
                 Err(e) => {
@@ -90,6 +116,34 @@ impl FetchScheduler {
         tracing::info!("Received {} URLs from core service", url_response.urls.len());
 
         Ok(url_response.urls)
+    }
+
+    /// Send fetched anime results to core service
+    async fn send_results_to_core(&self, animes: Vec<FetchedAnime>) -> anyhow::Result<()> {
+        let core_service_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
+
+        let payload = FetcherResultsPayload {
+            animes,
+            fetcher_source: "mikanani".to_string(),
+        };
+
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&format!("{}/fetcher-results", core_service_url))
+            .json(&payload)
+            .send()
+            .await?;
+
+        if response.status().is_success() {
+            tracing::info!("Fetcher results successfully sent to core service");
+            Ok(())
+        } else {
+            anyhow::bail!(
+                "Failed to send fetcher results: HTTP {}",
+                response.status()
+            )
+        }
     }
 }
 

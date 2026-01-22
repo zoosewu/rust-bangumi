@@ -93,6 +93,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/fetcher-modules", get(handlers::subscriptions::list_fetcher_modules))
         .route("/subscriptions/:rss_url", delete(handlers::subscriptions::delete_subscription))
 
+        // Fetcher 結果接收
+        .route("/fetcher-results", post(handlers::fetcher_results::receive_fetcher_results))
+
         // 健康檢查
         .route("/health", get(health_check))
 
