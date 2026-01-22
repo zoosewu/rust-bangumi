@@ -1,16 +1,17 @@
 use axum::{
-    routing::post,
+    routing::{get, post},
     Router,
 };
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tracing_subscriber;
+use fetcher_mikanani::RssParser;
 
 mod handlers;
-mod rss_parser;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 初始化日誌
+    // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -18,20 +19,24 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    tracing::info!("啟動 Mikanani 擷取服務");
+    tracing::info!("Starting Mikanani fetcher service");
 
-    // 註冊到主服務
+    // Create RSS parser
+    let parser = Arc::new(RssParser::new());
+
+    // Register to core service
     register_to_core().await?;
 
-    // 構建應用路由
+    // Build router with state
     let app = Router::new()
         .route("/fetch", post(handlers::fetch))
-        .route("/health", post(handlers::health_check));
+        .route("/health", get(handlers::health_check))
+        .with_state(parser);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8001));
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    tracing::info!("Mikanani 擷取服務監聽於 {}", addr);
+    tracing::info!("Mikanani fetcher service listening on {}", addr);
 
     axum::serve(listener, app).await?;
 
