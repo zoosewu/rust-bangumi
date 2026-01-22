@@ -18,7 +18,7 @@ impl RssParser {
         }
     }
 
-    pub async fn parse_feed(&self, rss_url: &str) -> Result<Vec<FetchedAnime>, Box<dyn std::error::Error>> {
+    pub async fn parse_feed(&self, rss_url: &str) -> Result<Vec<FetchedAnime>, String> {
         // Download RSS feed with retry logic
         let url = rss_url.to_string();
         let content = retry_with_backoff(
@@ -33,10 +33,12 @@ impl RssParser {
                 }
             },
         )
-        .await?;
+        .await
+        .map_err(|e| format!("Failed to fetch RSS feed: {}", e))?;
 
         // Parse RSS
-        let feed = parser::parse(&content[..])?;
+        let feed = parser::parse(&content[..])
+            .map_err(|e| format!("Failed to parse RSS feed: {}", e))?;
 
         let mut animes_map: HashMap<String, FetchedAnime> = HashMap::new();
 
@@ -59,6 +61,7 @@ impl RssParser {
                     title: title.clone(),
                     url: link,
                     source_hash,
+                    source_rss_url: rss_url.to_string(),
                 };
 
                 // Group by anime title

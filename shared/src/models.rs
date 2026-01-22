@@ -75,6 +75,7 @@ pub struct FetchedLink {
     pub title: String,
     pub url: String,  // magnet/torrent/http 等格式
     pub source_hash: String,
+    pub source_rss_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
