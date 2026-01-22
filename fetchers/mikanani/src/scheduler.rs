@@ -9,6 +9,11 @@ pub struct FetchScheduler {
     interval: Duration,
 }
 
+#[derive(serde::Deserialize)]
+pub struct UrlResponse {
+    pub urls: Vec<String>,
+}
+
 impl FetchScheduler {
     pub fn new(parser: Arc<RssParser>, rss_url: String, interval_secs: u64) -> Self {
         Self {
@@ -35,6 +40,56 @@ impl FetchScheduler {
                 }
             }
         }
+    }
+
+    /// Start scheduler with fetching URLs from core service
+    pub async fn run_with_core(self) {
+        let mut ticker = interval(self.interval);
+
+        loop {
+            ticker.tick().await;
+            tracing::info!("Scheduled fetch triggered - fetching URLs from core service");
+
+            // Fetch URLs from core service
+            match self.fetch_urls_from_core().await {
+                Ok(urls) => {
+                    tracing::info!("Fetched {} URLs from core service", urls.len());
+
+                    for url in urls {
+                        match self.parser.parse_feed(&url).await {
+                            Ok(animes) => {
+                                let count: usize = animes.iter().map(|a| a.links.len()).sum();
+                                tracing::info!("Fetch successful for {}: {} links from {} anime", url, count, animes.len());
+                            }
+                            Err(e) => {
+                                tracing::error!("Fetch failed for {}: {}", url, e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to fetch URLs from core service: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Fetch RSS URLs from core service
+    async fn fetch_urls_from_core(&self) -> anyhow::Result<Vec<String>> {
+        let core_service_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
+
+        let client = reqwest::Client::new();
+        let response = client
+            .get(&format!("{}/subscriptions/urls?source=mikanani", core_service_url))
+            .send()
+            .await?;
+
+        let url_response: UrlResponse = response.json().await?;
+
+        tracing::info!("Received {} URLs from core service", url_response.urls.len());
+
+        Ok(url_response.urls)
     }
 }
 
