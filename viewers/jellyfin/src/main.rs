@@ -1,17 +1,18 @@
 use axum::{
-    response::Json,
-    routing::post,
+    routing::{get, post},
     Router,
 };
-use std::net::SocketAddr;
-use tracing_subscriber;
+use std::sync::Arc;
+use tokio::net::TcpListener;
 
 mod handlers;
 mod file_organizer;
 
+use file_organizer::FileOrganizer;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 初始化日誌
+    // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
@@ -19,20 +20,34 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    tracing::info!("啟動 Jellyfin 顯示服務");
+    tracing::info!("Starting Jellyfin Viewer Service");
 
-    // 註冊到主服務
+    // Register to core service
     register_to_core().await?;
 
-    // 構建應用路由
+    // Initialize file organizer with paths from environment or defaults
+    let source_dir = std::env::var("DOWNLOADS_DIR")
+        .unwrap_or_else(|_| "/downloads".to_string());
+    let library_dir = std::env::var("JELLYFIN_LIBRARY_DIR")
+        .unwrap_or_else(|_| "/media/jellyfin".to_string());
+
+    let organizer = Arc::new(FileOrganizer::new(
+        std::path::PathBuf::from(source_dir),
+        std::path::PathBuf::from(library_dir),
+    ));
+
+    tracing::info!("File organizer initialized");
+
+    // Build application routes
     let app = Router::new()
         .route("/sync", post(handlers::sync))
-        .route("/health", post(handlers::health_check));
+        .route("/health", get(handlers::health_check))
+        .with_state(organizer);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8003));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8003));
+    let listener = TcpListener::bind(addr).await?;
 
-    tracing::info!("Jellyfin 顯示服務監聽於 {}", addr);
+    tracing::info!("Jellyfin Viewer Service listening on {}", addr);
 
     axum::serve(listener, app).await?;
 
@@ -56,13 +71,22 @@ async fn register_to_core() -> anyhow::Result<()> {
     };
 
     let client = reqwest::Client::new();
-    client
+    match client
         .post(&format!("{}/services/register", core_service_url))
         .json(&registration)
         .send()
-        .await?;
-
-    tracing::info!("已向核心服務註冊");
-
-    Ok(())
+        .await
+    {
+        Ok(_) => {
+            tracing::info!("Successfully registered with core service");
+            Ok(())
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Failed to register with core service: {}. Continuing anyway.",
+                e
+            );
+            Ok(())
+        }
+    }
 }
