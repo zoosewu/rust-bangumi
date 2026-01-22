@@ -84,6 +84,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/links", post(handlers::links::create_anime_link))
         .route("/links/:series_id", get(handlers::links::get_anime_links))
 
+        // 訂閱管理
+        .route("/subscriptions", post(handlers::subscriptions::create_subscription))
+        .route("/subscriptions", get(handlers::subscriptions::list_subscriptions))
+        .route("/fetcher-modules/:fetcher_id/subscriptions", get(handlers::subscriptions::get_fetcher_subscriptions))
+        .route("/fetcher-modules", get(handlers::subscriptions::list_fetcher_modules))
+        .route("/subscriptions/:rss_url", delete(handlers::subscriptions::delete_subscription))
+
         // 健康檢查
         .route("/health", get(health_check))
 
