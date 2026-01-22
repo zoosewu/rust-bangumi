@@ -182,3 +182,91 @@ pub struct NewCronLog {
     pub attempt_count: i32,
     pub executed_at: NaiveDateTime,
 }
+
+// ============ FetcherModules ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::fetcher_modules)]
+pub struct FetcherModule {
+    pub fetcher_id: i32,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::fetcher_modules)]
+pub struct NewFetcherModule {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ RssSubscriptions ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::rss_subscriptions)]
+pub struct RssSubscription {
+    pub subscription_id: i32,
+    pub fetcher_id: i32,
+    pub rss_url: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub last_fetched_at: Option<NaiveDateTime>,
+    pub next_fetch_at: Option<NaiveDateTime>,
+    pub fetch_interval_minutes: i32,
+    pub is_active: bool,
+    pub config: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::rss_subscriptions)]
+pub struct NewRssSubscription {
+    pub fetcher_id: i32,
+    pub rss_url: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub last_fetched_at: Option<NaiveDateTime>,
+    pub next_fetch_at: Option<NaiveDateTime>,
+    pub fetch_interval_minutes: i32,
+    pub is_active: bool,
+    pub config: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ SubscriptionConflicts ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::subscription_conflicts)]
+pub struct SubscriptionConflict {
+    pub conflict_id: i32,
+    pub subscription_id: i32,
+    pub conflict_type: String,
+    pub affected_item_id: Option<String>,
+    pub conflict_data: String,
+    pub resolution_status: String,
+    pub resolution_data: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub resolved_at: Option<NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::subscription_conflicts)]
+pub struct NewSubscriptionConflict {
+    pub subscription_id: i32,
+    pub conflict_type: String,
+    pub affected_item_id: Option<String>,
+    pub conflict_data: String,
+    pub resolution_status: String,
+    pub resolution_data: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub resolved_at: Option<NaiveDateTime>,
+}

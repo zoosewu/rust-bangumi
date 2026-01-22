@@ -93,6 +93,50 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    fetcher_modules (fetcher_id) {
+        fetcher_id -> Int4,
+        name -> Varchar,
+        version -> Varchar,
+        description -> Nullable<Text>,
+        is_enabled -> Bool,
+        config_schema -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    rss_subscriptions (subscription_id) {
+        subscription_id -> Int4,
+        fetcher_id -> Int4,
+        rss_url -> Varchar,
+        name -> Nullable<Varchar>,
+        description -> Nullable<Text>,
+        last_fetched_at -> Nullable<Timestamp>,
+        next_fetch_at -> Nullable<Timestamp>,
+        fetch_interval_minutes -> Int4,
+        is_active -> Bool,
+        config -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    subscription_conflicts (conflict_id) {
+        conflict_id -> Int4,
+        subscription_id -> Int4,
+        conflict_type -> Varchar,
+        affected_item_id -> Nullable<Varchar>,
+        conflict_data -> Text,
+        resolution_status -> Varchar,
+        resolution_data -> Nullable<Text>,
+        created_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+    }
+}
+
 // Foreign key relationships
 diesel::allow_tables_to_appear_in_same_query!(
     seasons,
@@ -103,4 +147,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     filter_rules,
     downloads,
     cron_logs,
+    fetcher_modules,
+    rss_subscriptions,
+    subscription_conflicts,
 );
