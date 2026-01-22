@@ -3,6 +3,8 @@ use sha2::{Sha256, Digest};
 use regex::Regex;
 use shared::models::{FetchedAnime, FetchedLink};
 use std::collections::HashMap;
+use crate::retry::retry_with_backoff;
+use std::time::Duration;
 
 pub struct RssParser {
     episode_regex: Regex,
@@ -17,8 +19,21 @@ impl RssParser {
     }
 
     pub async fn parse_feed(&self, rss_url: &str) -> Result<Vec<FetchedAnime>, Box<dyn std::error::Error>> {
-        // Download RSS feed
-        let content = reqwest::get(rss_url).await?.bytes().await?;
+        // Download RSS feed with retry logic
+        let url = rss_url.to_string();
+        let content = retry_with_backoff(
+            3,  // Max 3 attempts
+            Duration::from_secs(2),  // Initial 2s delay
+            || {
+                let url = url.clone();
+                async move {
+                    let resp = reqwest::get(&url).await?;
+                    let resp = resp.error_for_status()?;
+                    resp.bytes().await
+                }
+            },
+        )
+        .await?;
 
         // Parse RSS
         let feed = parser::parse(&content[..])?;
