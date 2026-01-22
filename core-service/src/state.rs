@@ -1,4 +1,4 @@
-use crate::services::ServiceRegistry;
+use crate::services::{ServiceRegistry, SubscriptionBroadcaster};
 use crate::db::DbPool;
 use std::sync::Arc;
 
@@ -6,4 +6,5 @@ use std::sync::Arc;
 pub struct AppState {
     pub db: DbPool,
     pub registry: Arc<ServiceRegistry>,
+    pub subscription_broadcaster: SubscriptionBroadcaster,
 }

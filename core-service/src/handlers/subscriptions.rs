@@ -10,6 +10,7 @@ use diesel::prelude::*;
 use crate::state::AppState;
 use crate::models::{RssSubscription, FetcherModule};
 use crate::schema::{rss_subscriptions, fetcher_modules};
+use crate::services::SubscriptionBroadcast;
 
 // ============ DTOs ============
 
@@ -83,6 +84,17 @@ pub async fn create_subscription(
             {
                 Ok(subscription) => {
                     tracing::info!("Created subscription for URL: {}", subscription.rss_url);
+
+                    // Broadcast subscription event to all fetchers
+                    let broadcast_event = SubscriptionBroadcast {
+                        rss_url: subscription.rss_url.clone(),
+                        subscription_name: subscription.name.clone().unwrap_or_else(|| subscription.rss_url.clone()),
+                    };
+
+                    if let Err(e) = state.subscription_broadcaster.send(broadcast_event) {
+                        tracing::warn!("Failed to broadcast subscription event: {}", e);
+                    }
+
                     let response = SubscriptionResponse {
                         subscription_id: subscription.subscription_id,
                         fetcher_id: subscription.fetcher_id,
