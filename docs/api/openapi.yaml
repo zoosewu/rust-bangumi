@@ -1,0 +1,458 @@
+openapi: 3.0.0
+info:
+  title: Bangumi Core Service API
+  description: Rust Bangumi 核心服務 API 規格
+  version: 0.1.0
+  contact:
+    name: Bangumi Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: 開發環境
+  - url: http://core-service:8000
+    description: 生產環境（Docker）
+
+tags:
+  - name: Services
+    description: 服務管理
+  - name: Anime
+    description: 動畫管理
+  - name: Seasons
+    description: 季度管理
+  - name: AnimeSeries
+    description: 動畫系列管理
+  - name: SubtitleGroups
+    description: 字幕組管理
+  - name: Filters
+    description: 過濾規則管理
+  - name: Links
+    description: 動畫連結管理
+  - name: Subscriptions
+    description: RSS 訂閱管理
+  - name: FetcherResults
+    description: Fetcher 結果接收
+  - name: Conflicts
+    description: 衝突解決
+  - name: Health
+    description: 健康檢查
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: 健康檢查
+      description: 檢查服務是否正常運行
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服務正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /services/register:
+    post:
+      tags:
+        - Services
+      summary: 註冊服務
+      description: 新的 Fetcher/Downloader/Viewer 服務向核心服務註冊
+      operationId: registerService
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRegistration'
+      responses:
+        '201':
+          description: 服務註冊成功
+        '400':
+          description: 請求格式錯誤
+
+  /services:
+    get:
+      tags:
+        - Services
+      summary: 列出所有服務
+      description: 獲取所有已註冊的服務
+      operationId: listServices
+      responses:
+        '200':
+          description: 服務列表
+
+  /anime:
+    post:
+      tags:
+        - Anime
+      summary: 創建動畫
+      operationId: createAnime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnimeRequest'
+      responses:
+        '201':
+          description: 動畫創建成功
+
+    get:
+      tags:
+        - Anime
+      summary: 列出所有動畫
+      operationId: listAnime
+      responses:
+        '200':
+          description: 動畫列表
+
+  /anime/{anime_id}:
+    get:
+      tags:
+        - Anime
+      summary: 獲取動畫詳情
+      operationId: getAnime
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 動畫詳情
+        '404':
+          description: 動畫不存在
+
+    delete:
+      tags:
+        - Anime
+      summary: 刪除動畫
+      operationId: deleteAnime
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 動畫已刪除
+
+  /seasons:
+    post:
+      tags:
+        - Seasons
+      summary: 創建季度
+      operationId: createSeason
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSeasonRequest'
+      responses:
+        '201':
+          description: 季度創建成功
+
+    get:
+      tags:
+        - Seasons
+      summary: 列出所有季度
+      operationId: listSeasons
+      responses:
+        '200':
+          description: 季度列表
+
+  /subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      summary: 創建 RSS 訂閱
+      operationId: createSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: 訂閱創建成功
+
+    get:
+      tags:
+        - Subscriptions
+      summary: 列出所有訂閱
+      operationId: listSubscriptions
+      responses:
+        '200':
+          description: 訂閱列表
+
+  /fetcher-results:
+    post:
+      tags:
+        - FetcherResults
+      summary: 接收 Fetcher 抓取結果
+      description: |
+        接收並存儲 Fetcher 服務的抓取結果。
+
+        核心服務會：
+        1. 驗證 Fetcher 來源
+        2. 建立或更新動畫信息
+        3. 建立或更新季度信息
+        4. 建立或更新字幕組信息
+        5. 建立動畫連結
+        6. 檢測並解決衝突
+      operationId: receiveFetcherResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FetcherResultsPayload'
+            examples:
+              mikananiResult:
+                summary: Mikanani Fetcher 結果
+                value:
+                  fetcher_source: "mikanani"
+                  animes:
+                    - title: "進擊的巨人"
+                      description: "人類最後的希望"
+                      season: "春"
+                      year: 2024
+                      series_no: 1
+                      links:
+                        - episode_no: 1
+                          subtitle_group: "喵萌奶茶屋"
+                          title: "[喵萌奶茶屋&LoliHouse] 進擊的巨人 - 01"
+                          url: "magnet:?xt=urn:btih:xxxxx"
+                          source_hash: "abc123"
+                          source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+      responses:
+        '200':
+          description: 結果已接收並處理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetcherResultsResponse'
+              examples:
+                success:
+                  value:
+                    success: true
+                    animes_created: 1
+                    links_created: 42
+                    message: "Successfully processed fetcher results"
+        '400':
+          description: 請求格式錯誤
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: 服務內部錯誤
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /conflicts:
+    get:
+      tags:
+        - Conflicts
+      summary: 獲取所有待解決的衝突
+      operationId: listConflicts
+      responses:
+        '200':
+          description: 衝突列表
+
+components:
+  schemas:
+    ServiceRegistration:
+      type: object
+      required:
+        - name
+        - service_type
+        - host
+        - port
+      properties:
+        name:
+          type: string
+          example: "mikanani-fetcher"
+        service_type:
+          type: string
+          enum: [fetcher, downloader, viewer]
+        host:
+          type: string
+          example: "localhost"
+        port:
+          type: integer
+          example: 8001
+
+    CreateAnimeRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: "進擊的巨人"
+
+    CreateSeasonRequest:
+      type: object
+      required:
+        - year
+        - season
+      properties:
+        year:
+          type: integer
+          example: 2024
+        season:
+          type: string
+          enum: [spring, summer, fall, winter]
+
+    CreateSubscriptionRequest:
+      type: object
+      required:
+        - fetcher_id
+        - rss_url
+      properties:
+        fetcher_id:
+          type: integer
+        rss_url:
+          type: string
+          format: uri
+        name:
+          type: string
+        fetch_interval_minutes:
+          type: integer
+          example: 60
+
+    FetcherResultsPayload:
+      type: object
+      required:
+        - animes
+        - fetcher_source
+      properties:
+        animes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FetchedAnimePayload'
+          description: 從 Fetcher 接收的動畫數據列表
+        fetcher_source:
+          type: string
+          enum: [mikanani]
+          description: Fetcher 的來源名稱
+          example: "mikanani"
+
+    FetchedAnimePayload:
+      type: object
+      required:
+        - title
+        - description
+        - season
+        - year
+        - series_no
+        - links
+      properties:
+        title:
+          type: string
+          description: 動畫標題
+          example: "進擊的巨人"
+        description:
+          type: string
+          description: 動畫描述
+          example: "人類最後的希望"
+        season:
+          type: string
+          enum: [冬, 春, 夏, 秋]
+          description: 動畫季度
+          example: "春"
+        year:
+          type: integer
+          description: 動畫年份
+          example: 2024
+        series_no:
+          type: integer
+          description: 系列編號
+          example: 1
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/FetchedLinkPayload'
+          description: 動畫連結列表
+
+    FetchedLinkPayload:
+      type: object
+      required:
+        - episode_no
+        - subtitle_group
+        - title
+        - url
+        - source_hash
+        - source_rss_url
+      properties:
+        episode_no:
+          type: integer
+          description: 集數編號
+          example: 1
+        subtitle_group:
+          type: string
+          description: 字幕組名稱
+          example: "喵萌奶茶屋"
+        title:
+          type: string
+          description: 連結標題
+          example: "[喵萌奶茶屋&LoliHouse] 進擊的巨人 - 01 [WebRip 1080p HEVC-10bit AAC][簡繁内封]"
+        url:
+          type: string
+          format: uri
+          description: 連結 URL（支援 magnet/torrent/http）
+          example: "magnet:?xt=urn:btih:xxxxx"
+        source_hash:
+          type: string
+          description: SHA256 去重 hash
+          example: "abc123def456"
+        source_rss_url:
+          type: string
+          format: uri
+          description: 來源 RSS URL
+          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+
+    FetcherResultsResponse:
+      type: object
+      required:
+        - success
+        - animes_created
+        - links_created
+        - message
+      properties:
+        success:
+          type: boolean
+          description: 處理是否成功
+          example: true
+        animes_created:
+          type: integer
+          description: 建立的動畫數量
+          example: 1
+        links_created:
+          type: integer
+          description: 建立的連結數量
+          example: 42
+        message:
+          type: string
+          description: 處理消息
+          example: "Successfully processed fetcher results"
