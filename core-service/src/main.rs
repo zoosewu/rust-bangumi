@@ -18,6 +18,9 @@ mod dto;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // 載入 .env 檔案
+    dotenv::dotenv().ok();
+
     // 初始化日誌
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -30,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 設置數據庫連接池
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_password@localhost:5432/bangumi".to_string());
+        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_dev_password@172.20.0.2:5432/bangumi".to_string());
 
     let pool = db::establish_connection_pool(&database_url)?;
 

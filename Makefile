@@ -1,4 +1,4 @@
-.PHONY: help dev-infra dev-infra-down db-migrate db-migrate-redo db-migrate-list build test lint check fmt cli
+.PHONY: help dev-infra dev-infra-down dev-setup dev-run db-migrate db-migrate-redo db-migrate-list build test lint check fmt cli
 
 # 顏色輸出
 YELLOW := \033[0;33m
@@ -12,6 +12,8 @@ help:
 	@echo "$(BLUE)開發環境:$(NC)"
 	@echo "  $(GREEN)make dev-infra$(NC)      - 啟動開發基礎設施 (PostgreSQL + Adminer)"
 	@echo "  $(GREEN)make dev-infra-down$(NC) - 停止開發基礎設施"
+	@echo "  $(GREEN)make dev-setup$(NC)      - 檢測環境並自動配置（host/container）"
+	@echo "  $(GREEN)make dev-run$(NC)        - 完整開發啟動（環境設定 + 遷移 + 服務）"
 	@echo ""
 	@echo "$(BLUE)資料庫遷移 (Diesel):$(NC)"
 	@echo "  $(GREEN)make db-migrate$(NC)     - 執行所有待執行的遷移"
@@ -42,6 +44,12 @@ dev-infra:
 dev-infra-down:
 	@echo "$(YELLOW)停止開發基礎設施...$(NC)"
 	docker compose -f docker-compose.dev.yaml down
+
+dev-setup:
+	@bash scripts/setup-dev-env.sh
+
+dev-run:
+	@bash scripts/dev-run.sh
 
 # ============================================================================
 # 資料庫遷移 (Diesel)
