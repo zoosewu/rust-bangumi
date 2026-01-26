@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 mod handlers;
 mod subscription_handler;
+mod cors;
 
 use subscription_handler::SubscriptionBroadcastPayload;
 
@@ -71,11 +72,16 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Build router with state
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/fetch", post(handlers::fetch))
         .route("/health", get(handlers::health_check))
         .route("/subscribe", post(handle_subscription_broadcast))
         .with_state(parser);
+
+    // 有條件地應用 CORS 中間件
+    if let Some(cors) = cors::create_cors_layer() {
+        app = app.layer(cors);
+    }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8001));
     let listener = tokio::net::TcpListener::bind(addr).await?;

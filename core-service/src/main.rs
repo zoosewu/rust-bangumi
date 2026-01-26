@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use tracing_subscriber;
 
 mod config;
+mod cors;
 mod handlers;
 mod models;
 mod services;
@@ -53,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // 構建應用路由
-    let app = Router::new()
+    let mut app = Router::new()
         // 服務註冊
         .route("/services/register", post(handlers::services::register))
         .route("/services", get(handlers::services::list_services))
@@ -108,6 +109,11 @@ async fn main() -> anyhow::Result<()> {
 
         // 應用狀態
         .with_state(app_state);
+
+    // 有條件地應用 CORS 中間件
+    if let Some(cors) = cors::create_cors_layer() {
+        app = app.layer(cors);
+    }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
     let listener = tokio::net::TcpListener::bind(addr).await?;
