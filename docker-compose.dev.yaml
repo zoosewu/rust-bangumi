@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
     environment:
       ADMINER_DESIGN: hydra
-      ADMINER_PLUGINS: "tables"
+      ADMINER_PLUGINS: "tables-filter"
     logging:
       driver: "json-file"
       options:

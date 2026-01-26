@@ -10,7 +10,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 安裝必要工具
 cargo install cargo-watch
-cargo install sqlx-cli
+cargo install diesel_cli --no-default-features --features postgres
 
 # 安裝 Docker & Docker Compose
 # 詳見 https://docs.docker.com/get-docker/
@@ -22,17 +22,12 @@ cargo install sqlx-cli
 # 複製環境配置
 cp .env.example .env
 
-# 啟動 PostgreSQL（使用 Docker）
-docker run -d \
-  --name bangumi-postgres \
-  -e POSTGRES_DB=bangumi \
-  -e POSTGRES_USER=bangumi \
-  -e POSTGRES_PASSWORD=bangumi_password \
-  -p 5432:5432 \
-  postgres:15-alpine
+# 啟動 Docker 開發基礎設施（PostgreSQL + Adminer）
+make dev-infra
 
 # 執行數據庫遷移
-sqlx migrate run --database-url "postgresql://bangumi:bangumi_password@localhost:5432/bangumi"
+DATABASE_URL="postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi" \
+diesel migration run
 ```
 
 ## 常用命令
@@ -182,23 +177,38 @@ tracing::error!("錯誤");
 
 ## 數據庫遷移
 
+本專案使用 **Diesel ORM** 進行資料庫遷移管理。
+
 ### 創建新遷移
 
 ```bash
-# 創建帶時間戳的遷移文件
-sqlx migrate add -r my_migration_name
-```
+# 創建新遷移（自動生成時間戳和目錄結構）
+diesel migration generate my_migration_name
 
-編輯 `migrations/TIMESTAMP_my_migration_name.sql`（上升路徑）和 `.down.sql`（下降路徑）
+# 編輯生成的文件
+vim migrations/TIMESTAMP_my_migration_name/up.sql    # 上升路徑
+vim migrations/TIMESTAMP_my_migration_name/down.sql  # 下降路徑
+```
 
 ### 執行遷移
 
 ```bash
 # 執行所有待執行的遷移
-sqlx migrate run
+DATABASE_URL="postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi" \
+diesel migration run
 
-# 恢復最後一個遷移
-sqlx migrate revert
+# 或如果已設置環境變數
+diesel migration run
+```
+
+### 回滾遷移
+
+```bash
+# 回滾最後一個遷移
+diesel migration redo
+
+# 回滾所有遷移
+diesel migration revert --all
 ```
 
 ## 測試

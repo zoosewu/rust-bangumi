@@ -1,5 +1,0 @@
-CREATE TABLE subtitle_groups (
-  group_id SERIAL PRIMARY KEY,
-  group_name VARCHAR(255) NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);

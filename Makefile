@@ -1,4 +1,4 @@
-.PHONY: help dev-infra dev-infra-down build test lint check fmt cli
+.PHONY: help dev-infra dev-infra-down db-migrate db-migrate-redo db-migrate-list build test lint check fmt cli
 
 # 顏色輸出
 YELLOW := \033[0;33m
@@ -12,6 +12,11 @@ help:
 	@echo "$(BLUE)開發環境:$(NC)"
 	@echo "  $(GREEN)make dev-infra$(NC)      - 啟動開發基礎設施 (PostgreSQL + Adminer)"
 	@echo "  $(GREEN)make dev-infra-down$(NC) - 停止開發基礎設施"
+	@echo ""
+	@echo "$(BLUE)資料庫遷移 (Diesel):$(NC)"
+	@echo "  $(GREEN)make db-migrate$(NC)     - 執行所有待執行的遷移"
+	@echo "  $(GREEN)make db-migrate-redo$(NC) - 回滾並重新執行最後一次遷移"
+	@echo "  $(GREEN)make db-migrate-list$(NC) - 查看遷移狀態"
 	@echo ""
 	@echo "$(BLUE)Rust 構建與測試:$(NC)"
 	@echo "  $(GREEN)make build$(NC)          - 構建所有項目"
@@ -37,6 +42,22 @@ dev-infra:
 dev-infra-down:
 	@echo "$(YELLOW)停止開發基礎設施...$(NC)"
 	docker compose -f docker-compose.dev.yaml down
+
+# ============================================================================
+# 資料庫遷移 (Diesel)
+# ============================================================================
+
+db-migrate:
+	@echo "$(YELLOW)執行資料庫遷移...$(NC)"
+	cd core-service && diesel migration run
+
+db-migrate-redo:
+	@echo "$(YELLOW)回滾並重新執行最後一次遷移...$(NC)"
+	cd core-service && diesel migration redo
+
+db-migrate-list:
+	@echo "$(YELLOW)查看遷移狀態...$(NC)"
+	cd core-service && diesel migration list
 
 # ============================================================================
 # Rust 構建與測試
