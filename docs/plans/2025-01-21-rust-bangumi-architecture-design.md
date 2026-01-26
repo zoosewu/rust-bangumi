@@ -46,7 +46,7 @@
 ### 1.2 部署方式
 
 - 使用 **Docker Compose** 定義所有服務及 PostgreSQL 容器
-- `docker-compose up` 一鍵拉起整個系統
+- `docker compose up` 一鍵拉起整個系統
 - 所有服務通過 Docker 內置 DNS 相互通信（如 `core-service:8000`）
 
 ---
@@ -282,7 +282,7 @@ bangumi cron disable <subscription-id>
 
 ### 5.1 調度配置
 
-通過 docker-compose 環境變數或配置文件定義 Cron 任務：
+通過 Docker Compose 環境變數或配置文件定義 Cron 任務：
 
 ```json
 {

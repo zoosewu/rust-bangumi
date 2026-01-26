@@ -69,13 +69,13 @@ Health check endpoint.
 
 ```bash
 # Build the fetcher service
-docker-compose build fetcher-mikanani
+docker compose build fetcher-mikanani
 
 # Start the fetcher service
-docker-compose up fetcher-mikanani
+docker compose up fetcher-mikanani
 
 # Start with core service
-docker-compose up core-service fetcher-mikanani
+docker compose up core-service fetcher-mikanani
 ```
 
 ### Local Development
@@ -186,7 +186,7 @@ cargo test --package fetcher-mikanani
 
 ### Docker Compose Configuration
 
-The service is configured in `docker-compose.yml`:
+The service is configured in `docker compose.yml`:
 
 ```yaml
 fetcher-mikanani:
@@ -239,14 +239,14 @@ CMD ["fetcher-mikanani"]
 
 1. **Build Image**
    ```bash
-   docker-compose build fetcher-mikanani
+   docker compose build fetcher-mikanani
    ```
 
 2. **Verify Health Check**
    ```bash
-   docker-compose up core-service fetcher-mikanani
+   docker compose up core-service fetcher-mikanani
    # Wait for health checks to pass
-   docker-compose ps
+   docker compose ps
    ```
 
 3. **Verify Service Registration**
@@ -277,7 +277,7 @@ CMD ["fetcher-mikanani"]
 
 Check logs:
 ```bash
-docker-compose logs fetcher-mikanani
+docker compose logs fetcher-mikanani
 ```
 
 Verify core service is running:
@@ -323,8 +323,8 @@ When making changes to the fetcher:
 
 1. Add tests for new functionality
 2. Run full test suite: `cargo test --package fetcher-mikanani`
-3. Verify Docker build: `docker-compose build fetcher-mikanani`
-4. Test deployment: `docker-compose up core-service fetcher-mikanani`
+3. Verify Docker build: `docker compose build fetcher-mikanani`
+4. Test deployment: `docker compose up core-service fetcher-mikanani`
 
 ## License
 

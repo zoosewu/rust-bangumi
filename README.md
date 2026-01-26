@@ -69,22 +69,22 @@ rust-bangumi/
 
 - Rust 1.75+ (或使用 Docker)
 - Docker & Docker Compose
-- PostgreSQL 15+ (或使用 docker-compose 自動拉起)
+- PostgreSQL 15+ (或使用 docker compose 自動拉起)
 
 ### 使用 Docker Compose 啟動
 
 ```bash
 # 構建所有服務
-docker-compose build
+docker compose build
 
 # 啟動所有服務
-docker-compose up -d
+docker compose up -d
 
 # 查看日誌
-docker-compose logs -f
+docker compose logs -f
 
 # 停止所有服務
-docker-compose down
+docker compose down
 ```
 
 所有服務將在以下端口監聽：
@@ -159,7 +159,7 @@ cargo run --package bangumi-cli -- status
 - [x] 架構設計與驗證
 - [x] 項目結構與 Cargo workspace 設置
 - [x] 共享庫 (shared) 實現
-- [x] Docker & docker-compose 配置
+- [x] Docker & Docker Compose 配置
 
 ### 進行中
 - [ ] 數據庫 schema 與 migrations

@@ -1,0 +1,106 @@
+version: '3.8'
+
+# ============================================================================
+# 生產環境可選服務
+# ============================================================================
+# 此檔案用於添加可選的外部服務（qBittorrent、Jellyfin）
+# 使用方式：
+#   docker compose -f docker-compose.yaml -f docker-compose.override.yaml up -d
+# ============================================================================
+
+services:
+  # ============================================================================
+  # qBittorrent - 下載管理
+  # ============================================================================
+  qbittorrent:
+    image: qbittorrent:latest
+    container_name: bangumi-qbittorrent
+    environment:
+      WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${QBITTORRENT_WEBUI_PORT:-8080}:8080"
+      - "${QBITTORRENT_DHT_PORT:-6881}:6881"
+      - "${QBITTORRENT_DHT_PORT:-6881}:6881/udp"
+    volumes:
+      - qbittorrent_data:/config
+      - qbittorrent_downloads:/downloads
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.20
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================================================
+  # Jellyfin - 媒體服務器
+  # ============================================================================
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: bangumi-jellyfin
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${JELLYFIN_PORT:-8096}:8096"
+      - "${JELLYFIN_DISCOVERY_PORT:-7359}:7359/udp"
+    volumes:
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      - media_output:/media/output:ro
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.21
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# ============================================================================
+# 可選服務卷
+# ============================================================================
+volumes:
+  qbittorrent_data:
+    driver: local
+  qbittorrent_downloads:
+    driver: local
+  jellyfin_config:
+    driver: local
+  jellyfin_cache:
+    driver: local

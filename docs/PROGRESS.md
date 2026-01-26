@@ -282,16 +282,16 @@ cargo run --package core-service
 
 ```bash
 # 構建所有容器
-docker-compose build
+docker compose build
 
 # 啟動所有服務
-docker-compose up -d
+docker compose up -d
 
 # 查看日誌
-docker-compose logs -f core-service
+docker compose logs -f core-service
 
 # 停止所有服務
-docker-compose down
+docker compose down
 ```
 
 ### Git 操作

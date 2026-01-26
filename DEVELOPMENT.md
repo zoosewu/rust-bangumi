@@ -244,16 +244,16 @@ docker build -f Dockerfile.fetcher-mikanani -t bangumi-fetcher-mikanani .
 
 ```bash
 # 啟動特定服務
-docker-compose up core-service postgres
+docker compose up core-service postgres
 
 # 重建服務鏡像
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # 進入容器 shell
-docker-compose exec core-service bash
+docker compose exec core-service bash
 
 # 查看服務日誌
-docker-compose logs -f core-service
+docker compose logs -f core-service
 ```
 
 ## 常見問題

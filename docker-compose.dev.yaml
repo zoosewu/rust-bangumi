@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL 數據庫（開發環境）
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: bangumi-postgres-dev
+    environment:
+      POSTGRES_DB: bangumi
+      POSTGRES_USER: bangumi
+      POSTGRES_PASSWORD: bangumi_dev_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - bangumi-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bangumi -d bangumi"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+  # ============================================================================
+  # Adminer - PostgreSQL 管理界面（開發輔助工具）
+  # ============================================================================
+  adminer:
+    image: adminer:latest
+    container_name: bangumi-adminer-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    networks:
+      - bangumi-dev-network
+    restart: unless-stopped
+    environment:
+      ADMINER_DESIGN: hydra
+      ADMINER_PLUGINS: "tables"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+# ============================================================================
+# 網絡
+# ============================================================================
+networks:
+  bangumi-dev-network:
+    driver: bridge
+
+# ============================================================================
+# 卷
+# ============================================================================
+volumes:
+  postgres_dev_data:
+    driver: local

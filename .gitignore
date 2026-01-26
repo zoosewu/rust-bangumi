@@ -15,6 +15,7 @@ Cargo.lock
 .env
 .env.local
 .env.*.local
+.env.production.local
 
 # Build
 /dist/
@@ -33,3 +34,5 @@ Thumbs.db
 # Project specific
 /downloads/
 /media/
+.pids/
+.logs/

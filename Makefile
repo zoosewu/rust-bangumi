@@ -1,0 +1,69 @@
+.PHONY: help dev-infra dev-infra-down build test lint check fmt cli
+
+# 顏色輸出
+YELLOW := \033[0;33m
+GREEN := \033[0;32m
+BLUE := \033[0;34m
+NC := \033[0m # No Color
+
+help:
+	@echo "$(YELLOW)Bangumi 開發指令$(NC)"
+	@echo ""
+	@echo "$(BLUE)開發環境:$(NC)"
+	@echo "  $(GREEN)make dev-infra$(NC)      - 啟動開發基礎設施 (PostgreSQL + Adminer)"
+	@echo "  $(GREEN)make dev-infra-down$(NC) - 停止開發基礎設施"
+	@echo ""
+	@echo "$(BLUE)Rust 構建與測試:$(NC)"
+	@echo "  $(GREEN)make build$(NC)          - 構建所有項目"
+	@echo "  $(GREEN)make test$(NC)           - 運行所有測試"
+	@echo "  $(GREEN)make lint$(NC)           - Clippy 靜態檢查"
+	@echo "  $(GREEN)make fmt$(NC)            - 格式化代碼"
+	@echo "  $(GREEN)make check$(NC)          - 運行所有檢查 (fmt + lint + build)"
+	@echo ""
+	@echo "$(BLUE)CLI:$(NC)"
+	@echo "  $(GREEN)make cli$(NC)            - 運行 CLI 工具 (ARGS=\"--help\")"
+	@echo ""
+
+# ============================================================================
+# 開發環境
+# ============================================================================
+
+dev-infra:
+	@echo "$(YELLOW)啟動開發基礎設施...$(NC)"
+	docker compose -f docker-compose.dev.yaml up -d
+	@echo "$(GREEN)✓ PostgreSQL 運行在 localhost:5432$(NC)"
+	@echo "$(GREEN)✓ Adminer 運行在 http://localhost:8081$(NC)"
+
+dev-infra-down:
+	@echo "$(YELLOW)停止開發基礎設施...$(NC)"
+	docker compose -f docker-compose.dev.yaml down
+
+# ============================================================================
+# Rust 構建與測試
+# ============================================================================
+
+build:
+	@echo "$(YELLOW)構建所有項目...$(NC)"
+	cargo build
+
+test:
+	@echo "$(YELLOW)運行測試...$(NC)"
+	cargo test
+
+lint:
+	@echo "$(YELLOW)Clippy 靜態檢查...$(NC)"
+	cargo clippy --all-targets --all-features
+
+fmt:
+	@echo "$(YELLOW)格式化代碼...$(NC)"
+	cargo fmt --all
+
+check: fmt lint build
+	@echo "$(GREEN)✓ 所有檢查通過$(NC)"
+
+# ============================================================================
+# CLI
+# ============================================================================
+
+cli:
+	@cargo run --package bangumi-cli -- $(ARGS)

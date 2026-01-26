@@ -1,0 +1,56 @@
+# Rust
+target/
+Cargo.lock
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+**/*.rs.bk
+test_rss.rs
+fetchers/mikanani/examples/
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+*.log
+.logs/
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Project specific
+/downloads/
+/media/
+.pids/
+
+# Development
+node_modules/
+package-lock.json
+yarn.lock

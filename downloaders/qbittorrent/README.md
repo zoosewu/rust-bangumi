@@ -78,13 +78,13 @@ OK
 
 ```bash
 # Build the downloader service
-docker-compose build downloader-qbittorrent
+docker compose build downloader-qbittorrent
 
 # Start the downloader service with core service
-docker-compose up core-service downloader-qbittorrent
+docker compose up core-service downloader-qbittorrent
 
 # Start with qBittorrent for development
-docker-compose up core-service downloader-qbittorrent qbittorrent
+docker compose up core-service downloader-qbittorrent qbittorrent
 ```
 
 ### Local Development
@@ -210,7 +210,7 @@ cargo test --package downloader-qbittorrent
 
 ### Docker Compose Configuration
 
-The service is configured in `docker-compose.yml`:
+The service is configured in `docker compose.yml`:
 
 ```yaml
 downloader-qbittorrent:
@@ -264,7 +264,7 @@ CMD ["downloader-qbittorrent"]
 
 1. **Build Image**
    ```bash
-   docker-compose build downloader-qbittorrent
+   docker compose build downloader-qbittorrent
    ```
 
 2. **Verify qBittorrent Service**
@@ -274,7 +274,7 @@ CMD ["downloader-qbittorrent"]
 
 3. **Start Service**
    ```bash
-   docker-compose up core-service downloader-qbittorrent
+   docker compose up core-service downloader-qbittorrent
    ```
 
 4. **Verify Health Check**
@@ -331,7 +331,7 @@ All operations include:
 
 Check logs:
 ```bash
-docker-compose logs downloader-qbittorrent
+docker compose logs downloader-qbittorrent
 ```
 
 Verify qBittorrent is running:
@@ -343,14 +343,14 @@ curl http://localhost:8080
 
 Ensure curl is available in the container and the service is responding:
 ```bash
-docker-compose exec downloader-qbittorrent wget -O- http://localhost:8002/health
+docker compose exec downloader-qbittorrent wget -O- http://localhost:8002/health
 ```
 
 ### Registration not working
 
 Verify `CORE_SERVICE_URL` environment variable is set correctly:
 ```bash
-docker-compose exec downloader-qbittorrent env | grep CORE_SERVICE_URL
+docker compose exec downloader-qbittorrent env | grep CORE_SERVICE_URL
 ```
 
 Verify core service is healthy:
@@ -362,7 +362,7 @@ curl http://localhost:8000/health
 
 Check qBittorrent connectivity:
 ```bash
-docker-compose logs qbittorrent
+docker compose logs qbittorrent
 ```
 
 Verify credentials:
@@ -374,7 +374,7 @@ Verify credentials:
 This is normal for transient network failures. The service will retry 3 times before giving up.
 Monitor logs for patterns:
 ```bash
-docker-compose logs downloader-qbittorrent | grep "Attempt"
+docker compose logs downloader-qbittorrent | grep "Attempt"
 ```
 
 ## Error Codes and Handling
@@ -409,9 +409,9 @@ When making changes to the downloader:
 
 1. Add tests for new functionality
 2. Run full test suite: `cargo test --package downloader-qbittorrent`
-3. Verify Docker build: `docker-compose build downloader-qbittorrent`
-4. Test deployment: `docker-compose up core-service downloader-qbittorrent`
-5. Check logs for errors: `docker-compose logs downloader-qbittorrent`
+3. Verify Docker build: `docker compose build downloader-qbittorrent`
+4. Test deployment: `docker compose up core-service downloader-qbittorrent`
+5. Check logs for errors: `docker compose logs downloader-qbittorrent`
 
 ## License
 

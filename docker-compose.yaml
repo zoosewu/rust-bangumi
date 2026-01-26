@@ -1,0 +1,226 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL 數據庫
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: bangumi-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.2
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # 核心服務
+  # ============================================================================
+  core-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    container_name: bangumi-core
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      RUST_LOG: ${RUST_LOG:-core_service=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${CORE_PORT:-8000}:8000"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.10
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================================================
+  # Fetcher - Mikanani
+  # ============================================================================
+  fetcher-mikanani:
+    build:
+      context: .
+      dockerfile: Dockerfile.fetcher-mikanani
+    container_name: bangumi-fetcher-mikanani
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_SERVICE_URL: ${CORE_SERVICE_URL:-http://core-service:8000}
+      RUST_LOG: ${RUST_LOG:-fetcher_mikanani=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${FETCHER_PORT:-8001}:8001"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.11
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================================================
+  # Downloader - qBittorrent
+  # ============================================================================
+  downloader-qbittorrent:
+    build:
+      context: .
+      dockerfile: Dockerfile.downloader-qbittorrent
+    container_name: bangumi-downloader-qbittorrent
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_SERVICE_URL: ${CORE_SERVICE_URL:-http://core-service:8000}
+      QBITTORRENT_URL: ${QBITTORRENT_URL:-http://qbittorrent:8080}
+      RUST_LOG: ${RUST_LOG:-downloader_qbittorrent=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${DOWNLOADER_PORT:-8002}:8002"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.12
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ============================================================================
+  # Viewer - Jellyfin
+  # ============================================================================
+  viewer-jellyfin:
+    build:
+      context: .
+      dockerfile: Dockerfile.viewer-jellyfin
+    container_name: bangumi-viewer-jellyfin
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_SERVICE_URL: ${CORE_SERVICE_URL:-http://core-service:8000}
+      RUST_LOG: ${RUST_LOG:-viewer_jellyfin=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${VIEWER_PORT:-8003}:8003"
+    volumes:
+      - media_output:/media/output
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.13
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# ============================================================================
+# 網絡
+# ============================================================================
+networks:
+  bangumi-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+# ============================================================================
+# 卷
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  media_output:
+    driver: local

@@ -1,17 +1,49 @@
+# 構建階段
 FROM rust:alpine as builder
 
 WORKDIR /app
 
-COPY . .
+# 安裝依賴
+RUN apk add --no-cache musl-dev
 
-RUN cargo build --release --package downloader-qbittorrent
+# 複製 Cargo.toml 和工作區配置以利用層快取
+COPY Cargo.toml Cargo.lock ./
+COPY core-service/Cargo.toml ./core-service/
+COPY fetcher-mikanani/Cargo.toml ./fetcher-mikanani/
+COPY downloader-qbittorrent/Cargo.toml ./downloader-qbittorrent/
+COPY viewer-jellyfin/Cargo.toml ./viewer-jellyfin/
+COPY cli/Cargo.toml ./cli/
 
+# 創建虛擬源碼以預編譯依賴
+RUN mkdir -p downloader-qbittorrent/src && \
+    echo "fn main() {}" > downloader-qbittorrent/src/main.rs && \
+    cargo build --release --package downloader-qbittorrent 2>&1 | grep -v "warning" || true && \
+    rm -rf downloader-qbittorrent/src
+
+# 複製實際源碼
+COPY downloader-qbittorrent/src ./downloader-qbittorrent/src
+
+# 編譯實際應用
+RUN cargo build --release --package downloader-qbittorrent && \
+    strip /app/target/release/downloader-qbittorrent
+
+# 運行階段
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates curl
 
-COPY --from=builder /app/target/release/downloader-qbittorrent /usr/local/bin/
+# 創建非 root 用戶
+RUN addgroup -S bangumi && adduser -S bangumi -G bangumi
+
+# 複製編譯的二進制文件
+COPY --from=builder --chown=bangumi:bangumi /app/target/release/downloader-qbittorrent /usr/local/bin/
+
+# 切換用戶
+USER bangumi
 
 EXPOSE 8002
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8002/health || exit 1
 
 CMD ["downloader-qbittorrent"]
