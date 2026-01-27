@@ -9,7 +9,7 @@ use diesel::prelude::*;
 use tokio::time::{timeout, Duration};
 
 use crate::state::AppState;
-use crate::models::{Subscription, FetcherModule};
+use crate::models::{Subscription, FetcherModule, NewSubscription};
 use crate::schema::{subscriptions, fetcher_modules};
 use crate::services::SubscriptionBroadcast;
 
@@ -90,6 +90,7 @@ pub async fn create_subscription(
             // Check if subscription already exists
             let existing = subscriptions::table
                 .filter(subscriptions::source_url.eq(&payload.source_url))
+                .select(Subscription::as_select())
                 .first::<Subscription>(&mut conn)
                 .optional();
 
@@ -151,33 +152,47 @@ pub async fn create_subscription(
             };
 
             // Manual insert using raw SQL for JSONB compatibility
-            let config_str = payload.config.as_ref().map(|s| s.as_str());
-            let insert_result = diesel::sql_query(
-                "INSERT INTO subscriptions (fetcher_id, source_url, name, description, last_fetched_at, next_fetch_at, \
-                fetch_interval_minutes, is_active, config, created_at, updated_at, source_type, assignment_status, assigned_at, auto_selected) \
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) \
-                RETURNING subscription_id, fetcher_id, source_url, name, description, last_fetched_at, next_fetch_at, \
-                fetch_interval_minutes, is_active, config, created_at, updated_at, source_type, assignment_status, assigned_at, auto_selected"
-            )
-            .bind::<diesel::sql_types::Int4, _>(fetcher_id)
-            .bind::<diesel::sql_types::Varchar, _>(&payload.source_url)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Varchar>, _>(&payload.name)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(&payload.description)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamp>, _>(None::<chrono::NaiveDateTime>)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamp>, _>(Some(now))
-            .bind::<diesel::sql_types::Int4, _>(fetch_interval)
-            .bind::<diesel::sql_types::Bool, _>(true)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(config_str)
-            .bind::<diesel::sql_types::Timestamp, _>(now)
-            .bind::<diesel::sql_types::Timestamp, _>(now)
-            .bind::<diesel::sql_types::Varchar, _>(&source_type)
-            .bind::<diesel::sql_types::Varchar, _>(&assignment_status)
-            .bind::<diesel::sql_types::Nullable<diesel::sql_types::Timestamp>, _>(if auto_selected { None } else { Some(now) })
-            .bind::<diesel::sql_types::Bool, _>(auto_selected)
-            .get_result::<(i32, i32, String, Option<String>, Option<String>, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>, i32, bool, Option<String>, chrono::NaiveDateTime, chrono::NaiveDateTime, String, String, Option<chrono::NaiveDateTime>, bool)>(&mut conn);
+            let new_subscription = NewSubscription {
+                fetcher_id,
+                source_url: payload.source_url.clone(),
+                name: payload.name.clone(),
+                description: payload.description.clone(),
+                last_fetched_at: None,
+                next_fetch_at: Some(now),
+                fetch_interval_minutes: fetch_interval,
+                is_active: true,
+                config: payload.config.clone(),
+                created_at: now,
+                updated_at: now,
+                source_type: source_type.clone(),
+                assignment_status: assignment_status.clone(),
+                assigned_at: if auto_selected { None } else { Some(now) },
+                auto_selected,
+            };
+
+            let insert_result = diesel::insert_into(subscriptions::table)
+                .values(&new_subscription)
+                .returning(Subscription::as_returning())
+                .get_result::<Subscription>(&mut conn);
 
             match insert_result {
-                Ok((sub_id, f_id, src_url, n, d, lf, nf, fi, ia, c, ca, ua, st, ass, aa, aus)) => {
+                Ok(subscription) => {
+                    let sub_id = subscription.subscription_id;
+                    let f_id = subscription.fetcher_id;
+                    let src_url = subscription.source_url.clone();
+                    let n = subscription.name.clone();
+                    let d = subscription.description.clone();
+                    let lf = subscription.last_fetched_at;
+                    let nf = subscription.next_fetch_at;
+                    let fi = subscription.fetch_interval_minutes;
+                    let ia = subscription.is_active;
+                    let c = subscription.config.clone();
+                    let ca = subscription.created_at;
+                    let ua = subscription.updated_at;
+                    let st = subscription.source_type.clone();
+                    let ass = subscription.assignment_status.clone();
+                    let aa = subscription.assigned_at;
+                    let aus = subscription.auto_selected;
                     tracing::info!(
                         "Created subscription for URL: {} (fetcher_id: {}, auto_selected: {})",
                         src_url,
@@ -261,118 +276,132 @@ fn auto_select_fetcher(
     }
 }
 
-/// Broadcast can_handle requests to all fetchers and collect responses with timeout
+/// Broadcast can_handle requests to all enabled fetchers (or specific fetcher if target_fetcher_id is provided)
+/// Returns a sorted list of fetchers that can handle the subscription (sorted by priority DESC)
+/// Empty list means no fetcher can handle it
 pub async fn broadcast_can_handle(
     state: &AppState,
     source_url: &str,
     source_type: &str,
     timeout_secs: u64,
-) -> Vec<CanHandleResponse> {
-    let mut responses = Vec::new();
+    target_fetcher_id: Option<i32>,
+) -> Result<Vec<(i32, i32)>, String> {
+    let mut conn = state.db.get()
+        .map_err(|e| format!("Database connection failed: {}", e))?;
 
-    // Get all enabled fetchers from database
-    match state.db.get() {
-        Ok(mut conn) => {
-            use crate::schema::fetcher_modules::dsl::*;
+    use crate::schema::fetcher_modules::dsl::*;
 
-            let fetcher_list = match fetcher_modules
-                .filter(is_enabled.eq(true))
-                .load::<FetcherModule>(&mut conn)
-            {
-                Ok(list) => list,
-                Err(e) => {
-                    tracing::error!("Failed to load fetchers for broadcast: {}", e);
-                    return responses;
-                }
+    // Build query based on target_fetcher_id
+    let fetcher_list = if let Some(target_id) = target_fetcher_id {
+        // Query specific fetcher
+        fetcher_modules
+            .filter(is_enabled.eq(true))
+            .filter(fetcher_id.eq(target_id))
+            .select(FetcherModule::as_select())
+            .load::<FetcherModule>(&mut conn)
+    } else {
+        // Query all enabled fetchers
+        fetcher_modules
+            .filter(is_enabled.eq(true))
+            .select(FetcherModule::as_select())
+            .load::<FetcherModule>(&mut conn)
+    };
+
+    let fetcher_list = fetcher_list
+        .map_err(|e| format!("Failed to load fetchers: {}", e))?;
+
+    // Edge case 1: No fetchers found
+    if fetcher_list.is_empty() {
+        return if target_fetcher_id.is_some() {
+            Err(format!("Target fetcher {} not found or disabled", target_fetcher_id.unwrap()))
+        } else {
+            Err("No enabled fetchers available".to_string())
+        };
+    }
+
+    // Edge case 2: Validate base_url is configured
+    for fetcher in &fetcher_list {
+        if fetcher.base_url.is_empty() {
+            return Err(format!("Fetcher {} has no base_url configured", fetcher.fetcher_id));
+        }
+    }
+
+    // Spawn concurrent tasks for all fetchers
+    let source_url_str = source_url.to_string();
+    let source_type_str = source_type.to_string();
+    let mut handles = vec![];
+    for fetcher in fetcher_list {
+        let source_url_clone = source_url_str.clone();
+        let source_type_clone = source_type_str.clone();
+        let handle = tokio::spawn(async move {
+            let client = reqwest::Client::new();
+            let url = format!("{}/can-handle-subscription", fetcher.base_url);
+
+            let payload = CanHandleRequest {
+                source_url: source_url_clone.clone(),
+                source_type: source_type_clone,
             };
 
-            // Create async tasks for parallel requests
-            let mut tasks = vec![];
-            for fetcher in fetcher_list {
-                let source_url = source_url.to_string();
-                let source_type = source_type.to_string();
-
-                let task = tokio::spawn(async move {
-                    let client = reqwest::Client::new();
-                    let url = format!(
-                        "http://{}:{}/can-handle-subscription",
-                        fetcher.name, fetcher.fetcher_id
-                    );
-
-                    let payload = CanHandleRequest {
-                        source_url: source_url.clone(),
-                        source_type: source_type.clone(),
-                    };
-
-                    match timeout(
-                        Duration::from_secs(timeout_secs),
-                        client.post(&url).json(&payload).send(),
-                    )
-                    .await
-                    {
-                        Ok(Ok(response)) => {
-                            match response.json::<serde_json::Value>().await {
-                                Ok(json) => {
-                                    if let (Some(can_handle), Some(priority)) = (
-                                        json.get("can_handle").and_then(|v| v.as_bool()),
-                                        json.get("priority").and_then(|v| v.as_i64()),
-                                    ) {
-                                        if can_handle {
-                                            Some(CanHandleResponse {
-                                                fetcher_id: fetcher.fetcher_id,
-                                                can_handle: true,
-                                                priority: priority as i32,
-                                            })
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                }
-                                Err(e) => {
-                                    tracing::warn!(
-                                        "Failed to parse response from fetcher {}: {}",
-                                        fetcher.fetcher_id,
-                                        e
-                                    );
-                                    None
-                                }
-                            }
-                        }
-                        Ok(Err(e)) => {
+            match timeout(
+                Duration::from_secs(timeout_secs),
+                client.post(&url).json(&payload).send(),
+            )
+            .await
+            {
+                Ok(Ok(response)) => {
+                    match response.json::<CanHandleResponse>().await {
+                        Ok(data) if data.can_handle => {
                             tracing::debug!(
-                                "Failed to contact fetcher {}: {}",
+                                "Fetcher {} can handle: {} (priority: {})",
+                                fetcher.fetcher_id,
+                                source_url_clone,
+                                fetcher.priority
+                            );
+                            Some((fetcher.fetcher_id, fetcher.priority))
+                        }
+                        Ok(_) => {
+                            tracing::debug!("Fetcher {} cannot handle: {}", fetcher.fetcher_id, source_url_clone);
+                            None
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Fetcher {} returned invalid response: {}",
                                 fetcher.fetcher_id,
                                 e
                             );
                             None
                         }
-                        Err(_) => {
-                            tracing::debug!("Timeout contacting fetcher {}", fetcher.fetcher_id);
-                            None
-                        }
                     }
-                });
-
-                tasks.push(task);
-            }
-
-            // Wait for all responses
-            for task in tasks {
-                if let Ok(Some(response)) = task.await {
-                    responses.push(response);
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!("Fetcher {} request failed: {}", fetcher.fetcher_id, e);
+                    None
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        "Fetcher {} timeout after {} seconds",
+                        fetcher.fetcher_id,
+                        timeout_secs
+                    );
+                    None
                 }
             }
-        }
-        Err(e) => {
-            tracing::error!("Failed to get database connection for broadcast: {}", e);
+        });
+        handles.push(handle);
+    }
+
+    // Wait for all responses
+    let mut capable_fetchers = vec![];
+    for handle in handles {
+        if let Ok(Some(result)) = handle.await {
+            capable_fetchers.push(result);
         }
     }
 
-    // Sort by priority (highest first)
-    responses.sort_by(|a, b| b.priority.cmp(&a.priority));
-    responses
+    // Sort by priority descending
+    capable_fetchers.sort_by(|a, b| b.1.cmp(&a.1));
+
+    Ok(capable_fetchers)
 }
 
 /// List all active subscriptions
@@ -383,6 +412,7 @@ pub async fn list_subscriptions(
         Ok(mut conn) => {
             match subscriptions::table
                 .filter(subscriptions::is_active.eq(true))
+                .select(Subscription::as_select())
                 .load::<Subscription>(&mut conn)
             {
                 Ok(subs) => {
@@ -447,6 +477,7 @@ pub async fn get_fetcher_subscriptions(
             match subscriptions::table
                 .filter(subscriptions::fetcher_id.eq(fetcher_id))
                 .filter(subscriptions::is_active.eq(true))
+                .select(Subscription::as_select())
                 .load::<Subscription>(&mut conn)
             {
                 Ok(subs) => {
@@ -502,7 +533,7 @@ pub async fn list_fetcher_modules(
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
-            match fetcher_modules::table.load::<FetcherModule>(&mut conn) {
+            match fetcher_modules::table.select(FetcherModule::as_select()).load::<FetcherModule>(&mut conn) {
                 Ok(modules) => {
                     let responses: Vec<FetcherModuleResponse> = modules
                         .into_iter()
