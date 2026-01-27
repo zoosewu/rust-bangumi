@@ -12,6 +12,9 @@ use file_organizer::FileOrganizer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file
+    dotenv::dotenv().ok();
+
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter(
