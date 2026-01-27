@@ -45,7 +45,7 @@ pub async fn register(
                 let fetcher_base_url = format!("http://{}:{}", payload.host, payload.port);
                 let insert_query = diesel::sql_query(
                     "INSERT INTO fetcher_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+                     VALUES ($1, $2, $3, $4, NULL::jsonb, $5, $6, $7, $8)"
                 )
                 .bind::<diesel::sql_types::Varchar, _>(&payload.service_name)
                 .bind::<diesel::sql_types::Varchar, _>("1.0.0")
@@ -53,9 +53,6 @@ pub async fn register(
                     Some(format!("{}:{}:{}", payload.service_name, payload.host, payload.port))
                 )
                 .bind::<diesel::sql_types::Bool, _>(true)
-                .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(
-                    None::<String>
-                )
                 .bind::<diesel::sql_types::Timestamp, _>(naive_now)
                 .bind::<diesel::sql_types::Timestamp, _>(naive_now)
                 .bind::<diesel::sql_types::Int4, _>(50i32) // Default priority
