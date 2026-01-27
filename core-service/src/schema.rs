@@ -54,6 +54,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    downloader_modules (downloader_id) {
+        downloader_id -> Int4,
+        #[max_length = 255]
+        name -> Varchar,
+        #[max_length = 50]
+        version -> Varchar,
+        description -> Nullable<Text>,
+        is_enabled -> Bool,
+        config_schema -> Nullable<Text>,
+        priority -> Int4,
+        #[max_length = 255]
+        base_url -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     downloads (download_id) {
         download_id -> Int4,
         link_id -> Int4,
@@ -162,6 +180,24 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    viewer_modules (viewer_id) {
+        viewer_id -> Int4,
+        #[max_length = 255]
+        name -> Varchar,
+        #[max_length = 50]
+        version -> Varchar,
+        description -> Nullable<Text>,
+        is_enabled -> Bool,
+        config_schema -> Nullable<Text>,
+        priority -> Int4,
+        #[max_length = 255]
+        base_url -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(anime_links -> anime_series (series_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));
 diesel::joinable!(anime_series -> animes (anime_id));
@@ -177,6 +213,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     anime_series,
     animes,
     cron_logs,
+    downloader_modules,
     downloads,
     fetcher_modules,
     filter_rules,
@@ -184,4 +221,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     subscription_conflicts,
     subscriptions,
     subtitle_groups,
+    viewer_modules,
 );

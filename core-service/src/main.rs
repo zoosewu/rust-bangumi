@@ -56,8 +56,8 @@ async fn main() -> anyhow::Result<()> {
         subscription_broadcaster,
     };
 
-    // 啟動時從資料庫載入已有的 Fetcher 模塊
-    load_existing_fetchers(&app_state).await;
+    // 啟動時從資料庫載入已有的所有服務模塊
+    load_existing_services(&app_state).await;
 
     // 構建應用路由
     let mut app = Router::new()
@@ -138,15 +138,16 @@ async fn health_check() -> Json<serde_json::Value> {
     }))
 }
 
-/// Load existing fetcher modules from database and register them in memory
-async fn load_existing_fetchers(app_state: &state::AppState) {
-    use crate::schema::fetcher_modules::dsl::*;
+/// Load all service modules (Fetcher, Downloader, Viewer) from database and register them in memory
+async fn load_existing_services(app_state: &state::AppState) {
+    use crate::schema::{fetcher_modules, downloader_modules, viewer_modules};
     use diesel::prelude::*;
 
     match app_state.db.get() {
         Ok(mut conn) => {
-            match fetcher_modules
-                .filter(is_enabled.eq(true))
+            // Load Fetchers
+            match fetcher_modules::table
+                .filter(fetcher_modules::is_enabled.eq(true))
                 .load::<models::FetcherModule>(&mut conn)
             {
                 Ok(fetchers) => {
@@ -156,17 +157,8 @@ async fn load_existing_fetchers(app_state: &state::AppState) {
                             service_id,
                             service_type: shared::ServiceType::Fetcher,
                             service_name: fetcher.name.clone(),
-                            host: fetcher.base_url
-                                .split("://")
-                                .nth(1)
-                                .and_then(|s| s.split(':').next())
-                                .unwrap_or("unknown")
-                                .to_string(),
-                            port: fetcher.base_url
-                                .split(':')
-                                .last()
-                                .and_then(|s| s.parse::<u16>().ok())
-                                .unwrap_or(0),
+                            host: extract_host(&fetcher.base_url),
+                            port: extract_port(&fetcher.base_url),
                             capabilities: shared::Capabilities {
                                 fetch_endpoint: Some("/fetch".to_string()),
                                 download_endpoint: None,
@@ -179,7 +171,7 @@ async fn load_existing_fetchers(app_state: &state::AppState) {
                         if let Err(e) = app_state.registry.register(service) {
                             tracing::error!("Failed to load fetcher {} into registry: {}", fetcher.name, e);
                         } else {
-                            tracing::info!("Loaded fetcher module from database: {} ({})", fetcher.name, fetcher.base_url);
+                            tracing::info!("Loaded Fetcher module from database: {} ({})", fetcher.name, fetcher.base_url);
                         }
                     }
                 }
@@ -187,9 +179,96 @@ async fn load_existing_fetchers(app_state: &state::AppState) {
                     tracing::warn!("Failed to load fetcher modules from database: {}", e);
                 }
             }
+
+            // Load Downloaders
+            match downloader_modules::table
+                .filter(downloader_modules::is_enabled.eq(true))
+                .load::<models::DownloaderModule>(&mut conn)
+            {
+                Ok(downloaders) => {
+                    for downloader in downloaders {
+                        let service_id = uuid::Uuid::new_v4();
+                        let service = shared::RegisteredService {
+                            service_id,
+                            service_type: shared::ServiceType::Downloader,
+                            service_name: downloader.name.clone(),
+                            host: extract_host(&downloader.base_url),
+                            port: extract_port(&downloader.base_url),
+                            capabilities: shared::Capabilities {
+                                fetch_endpoint: None,
+                                download_endpoint: Some("/download".to_string()),
+                                sync_endpoint: None,
+                            },
+                            is_healthy: true,
+                            last_heartbeat: chrono::Utc::now(),
+                        };
+
+                        if let Err(e) = app_state.registry.register(service) {
+                            tracing::error!("Failed to load downloader {} into registry: {}", downloader.name, e);
+                        } else {
+                            tracing::info!("Loaded Downloader module from database: {} ({})", downloader.name, downloader.base_url);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load downloader modules from database: {}", e);
+                }
+            }
+
+            // Load Viewers
+            match viewer_modules::table
+                .filter(viewer_modules::is_enabled.eq(true))
+                .load::<models::ViewerModule>(&mut conn)
+            {
+                Ok(viewers) => {
+                    for viewer in viewers {
+                        let service_id = uuid::Uuid::new_v4();
+                        let service = shared::RegisteredService {
+                            service_id,
+                            service_type: shared::ServiceType::Viewer,
+                            service_name: viewer.name.clone(),
+                            host: extract_host(&viewer.base_url),
+                            port: extract_port(&viewer.base_url),
+                            capabilities: shared::Capabilities {
+                                fetch_endpoint: None,
+                                download_endpoint: None,
+                                sync_endpoint: Some("/sync".to_string()),
+                            },
+                            is_healthy: true,
+                            last_heartbeat: chrono::Utc::now(),
+                        };
+
+                        if let Err(e) = app_state.registry.register(service) {
+                            tracing::error!("Failed to load viewer {} into registry: {}", viewer.name, e);
+                        } else {
+                            tracing::info!("Loaded Viewer module from database: {} ({})", viewer.name, viewer.base_url);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load viewer modules from database: {}", e);
+                }
+            }
         }
         Err(e) => {
-            tracing::error!("Failed to get database connection for loading fetchers: {}", e);
+            tracing::error!("Failed to get database connection for loading services: {}", e);
         }
     }
+}
+
+/// Extract host from URL (e.g., "http://localhost:8001" -> "localhost")
+fn extract_host(url: &str) -> String {
+    url.split("://")
+        .nth(1)
+        .and_then(|s| s.split(':').next())
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+/// Extract port from URL (e.g., "http://localhost:8001" -> 8001)
+fn extract_port(url: &str) -> u16 {
+    url.split(':')
+        .last()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(0)
 }

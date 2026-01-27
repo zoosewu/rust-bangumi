@@ -37,36 +37,65 @@ pub async fn register(
     if payload.service_type == ServiceType::Fetcher {
         let naive_now = now.naive_utc();
 
-        // Get a connection from the pool and insert the fetcher module
+        // Get a connection from the pool and persist to appropriate table
         match state.db.get() {
             Ok(mut conn) => {
-                use crate::schema::fetcher_modules::dsl::*;
+                let service_base_url = format!("http://{}:{}", payload.host, payload.port);
+                let service_description = format!("{}:{}:{}", payload.service_name, payload.host, payload.port);
 
-                let fetcher_base_url = format!("http://{}:{}", payload.host, payload.port);
                 // Use UPSERT to handle service restart scenarios
-                let upsert_query = diesel::sql_query(
-                    "INSERT INTO fetcher_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
-                     VALUES ($1, $2, $3, $4, NULL::jsonb, $5, $6, $7, $8) \
-                     ON CONFLICT (name) DO UPDATE SET \
-                     is_enabled = EXCLUDED.is_enabled, \
-                     base_url = EXCLUDED.base_url, \
-                     updated_at = EXCLUDED.updated_at"
-                )
-                .bind::<diesel::sql_types::Varchar, _>(&payload.service_name)
-                .bind::<diesel::sql_types::Varchar, _>("1.0.0")
-                .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(
-                    Some(format!("{}:{}:{}", payload.service_name, payload.host, payload.port))
-                )
-                .bind::<diesel::sql_types::Bool, _>(true)
-                .bind::<diesel::sql_types::Timestamp, _>(naive_now)
-                .bind::<diesel::sql_types::Timestamp, _>(naive_now)
-                .bind::<diesel::sql_types::Int4, _>(50i32) // Default priority
-                .bind::<diesel::sql_types::Text, _>(&fetcher_base_url); // base_url
+                let upsert_query = match &payload.service_type {
+                    ServiceType::Fetcher => {
+                        diesel::sql_query(
+                            "INSERT INTO fetcher_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
+                             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8) \
+                             ON CONFLICT (name) DO UPDATE SET \
+                             is_enabled = EXCLUDED.is_enabled, \
+                             base_url = EXCLUDED.base_url, \
+                             updated_at = EXCLUDED.updated_at"
+                        )
+                    }
+                    ServiceType::Downloader => {
+                        diesel::sql_query(
+                            "INSERT INTO downloader_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
+                             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8) \
+                             ON CONFLICT (name) DO UPDATE SET \
+                             is_enabled = EXCLUDED.is_enabled, \
+                             base_url = EXCLUDED.base_url, \
+                             updated_at = EXCLUDED.updated_at"
+                        )
+                    }
+                    ServiceType::Viewer => {
+                        diesel::sql_query(
+                            "INSERT INTO viewer_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
+                             VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8) \
+                             ON CONFLICT (name) DO UPDATE SET \
+                             is_enabled = EXCLUDED.is_enabled, \
+                             base_url = EXCLUDED.base_url, \
+                             updated_at = EXCLUDED.updated_at"
+                        )
+                    }
+                };
+
+                let upsert_query = upsert_query
+                    .bind::<diesel::sql_types::Varchar, _>(&payload.service_name)
+                    .bind::<diesel::sql_types::Varchar, _>("1.0.0")
+                    .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(Some(service_description))
+                    .bind::<diesel::sql_types::Bool, _>(true)
+                    .bind::<diesel::sql_types::Timestamp, _>(naive_now)
+                    .bind::<diesel::sql_types::Timestamp, _>(naive_now)
+                    .bind::<diesel::sql_types::Int4, _>(50i32) // Default priority
+                    .bind::<diesel::sql_types::Text, _>(&service_base_url);
 
                 match upsert_query.execute(&mut conn) {
                     Ok(_) => {
                         tracing::info!(
-                            "Registered/Updated Fetcher service in database: {} ({}:{})",
+                            "Registered/Updated {} service in database: {} ({}:{})",
+                            match payload.service_type {
+                                ServiceType::Fetcher => "Fetcher",
+                                ServiceType::Downloader => "Downloader",
+                                ServiceType::Viewer => "Viewer",
+                            },
                             payload.service_name,
                             payload.host,
                             payload.port
@@ -74,7 +103,12 @@ pub async fn register(
                     }
                     Err(e) => {
                         tracing::error!(
-                            "Failed to register Fetcher module in database: {}",
+                            "Failed to register {} module in database: {}",
+                            match payload.service_type {
+                                ServiceType::Fetcher => "Fetcher",
+                                ServiceType::Downloader => "Downloader",
+                                ServiceType::Viewer => "Viewer",
+                            },
                             e
                         );
                     }

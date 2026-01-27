@@ -211,6 +211,66 @@ pub struct NewFetcherModule {
     pub base_url: String,
 }
 
+// ============ DownloaderModules ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::downloader_modules)]
+pub struct DownloaderModule {
+    pub downloader_id: i32,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::downloader_modules)]
+pub struct NewDownloaderModule {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ ViewerModules ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::viewer_modules)]
+pub struct ViewerModule {
+    pub viewer_id: i32,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::viewer_modules)]
+pub struct NewViewerModule {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
 // ============ Subscriptions (formerly RssSubscriptions) ============
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[diesel(table_name = super::super::schema::subscriptions)]
