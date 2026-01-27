@@ -1,20 +1,18 @@
-// @generated automatically by Diesel CLI. (Manually generated since PostgreSQL not available)
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
-    seasons (season_id) {
-        season_id -> Int4,
-        year -> Int4,
-        season -> Varchar,
+    anime_links (link_id) {
+        link_id -> Int4,
+        series_id -> Int4,
+        group_id -> Int4,
+        episode_no -> Int4,
+        #[max_length = 255]
+        title -> Nullable<Varchar>,
+        url -> Text,
+        #[max_length = 255]
+        source_hash -> Varchar,
+        filtered_flag -> Bool,
         created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    animes (anime_id) {
-        anime_id -> Int4,
-        title -> Varchar,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
     }
 }
 
@@ -33,37 +31,25 @@ diesel::table! {
 }
 
 diesel::table! {
-    subtitle_groups (group_id) {
-        group_id -> Int4,
-        group_name -> Varchar,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    anime_links (link_id) {
-        link_id -> Int4,
-        series_id -> Int4,
-        group_id -> Int4,
-        episode_no -> Int4,
-        title -> Nullable<Varchar>,
-        url -> Text,
-        source_hash -> Varchar,
-        filtered_flag -> Bool,
+    animes (anime_id) {
+        anime_id -> Int4,
+        #[max_length = 255]
+        title -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
 }
 
 diesel::table! {
-    filter_rules (rule_id) {
-        rule_id -> Int4,
-        series_id -> Int4,
-        group_id -> Int4,
-        rule_order -> Int4,
-        rule_type -> Varchar,
-        regex_pattern -> Text,
-        created_at -> Timestamp,
+    cron_logs (log_id) {
+        log_id -> Int4,
+        #[max_length = 50]
+        fetcher_type -> Varchar,
+        #[max_length = 20]
+        status -> Varchar,
+        error_message -> Nullable<Text>,
+        attempt_count -> Int4,
+        executed_at -> Timestamp,
     }
 }
 
@@ -71,9 +57,11 @@ diesel::table! {
     downloads (download_id) {
         download_id -> Int4,
         link_id -> Int4,
+        #[max_length = 50]
         downloader_type -> Varchar,
+        #[max_length = 20]
         status -> Varchar,
-        progress -> Nullable<Float>,
+        progress -> Nullable<Float4>,
         downloaded_bytes -> Nullable<Int8>,
         total_bytes -> Nullable<Int8>,
         error_message -> Nullable<Text>,
@@ -83,34 +71,69 @@ diesel::table! {
 }
 
 diesel::table! {
-    cron_logs (log_id) {
-        log_id -> Int4,
-        fetcher_type -> Varchar,
-        status -> Varchar,
-        error_message -> Nullable<Text>,
-        attempt_count -> Int4,
-        executed_at -> Timestamp,
-    }
-}
-
-diesel::table! {
     fetcher_modules (fetcher_id) {
         fetcher_id -> Int4,
+        #[max_length = 255]
         name -> Varchar,
+        #[max_length = 50]
         version -> Varchar,
         description -> Nullable<Text>,
         is_enabled -> Bool,
         config_schema -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        priority -> Int4,
+        base_url -> Text,
     }
 }
 
 diesel::table! {
-    rss_subscriptions (subscription_id) {
+    filter_rules (rule_id) {
+        rule_id -> Int4,
+        series_id -> Int4,
+        group_id -> Int4,
+        rule_order -> Int4,
+        #[max_length = 20]
+        rule_type -> Varchar,
+        regex_pattern -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    seasons (season_id) {
+        season_id -> Int4,
+        year -> Int4,
+        #[max_length = 10]
+        season -> Varchar,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    subscription_conflicts (conflict_id) {
+        conflict_id -> Int4,
+        subscription_id -> Int4,
+        #[max_length = 50]
+        conflict_type -> Varchar,
+        #[max_length = 255]
+        affected_item_id -> Nullable<Varchar>,
+        conflict_data -> Text,
+        #[max_length = 50]
+        resolution_status -> Varchar,
+        resolution_data -> Nullable<Text>,
+        created_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    subscriptions (subscription_id) {
         subscription_id -> Int4,
         fetcher_id -> Int4,
-        rss_url -> Varchar,
+        #[max_length = 2048]
+        source_url -> Varchar,
+        #[max_length = 255]
         name -> Nullable<Varchar>,
         description -> Nullable<Text>,
         last_fetched_at -> Nullable<Timestamp>,
@@ -120,34 +143,44 @@ diesel::table! {
         config -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        #[max_length = 50]
+        source_type -> Varchar,
+        #[max_length = 20]
+        assignment_status -> Varchar,
+        assigned_at -> Nullable<Timestamp>,
+        auto_selected -> Bool,
     }
 }
 
 diesel::table! {
-    subscription_conflicts (conflict_id) {
-        conflict_id -> Int4,
-        subscription_id -> Int4,
-        conflict_type -> Varchar,
-        affected_item_id -> Nullable<Varchar>,
-        conflict_data -> Text,
-        resolution_status -> Varchar,
-        resolution_data -> Nullable<Text>,
+    subtitle_groups (group_id) {
+        group_id -> Int4,
+        #[max_length = 255]
+        group_name -> Varchar,
         created_at -> Timestamp,
-        resolved_at -> Nullable<Timestamp>,
     }
 }
 
-// Foreign key relationships
+diesel::joinable!(anime_links -> anime_series (series_id));
+diesel::joinable!(anime_links -> subtitle_groups (group_id));
+diesel::joinable!(anime_series -> animes (anime_id));
+diesel::joinable!(anime_series -> seasons (season_id));
+diesel::joinable!(downloads -> anime_links (link_id));
+diesel::joinable!(filter_rules -> anime_series (series_id));
+diesel::joinable!(filter_rules -> subtitle_groups (group_id));
+diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
+diesel::joinable!(subscriptions -> fetcher_modules (fetcher_id));
+
 diesel::allow_tables_to_appear_in_same_query!(
-    seasons,
-    animes,
-    anime_series,
-    subtitle_groups,
     anime_links,
-    filter_rules,
-    downloads,
+    anime_series,
+    animes,
     cron_logs,
+    downloads,
     fetcher_modules,
-    rss_subscriptions,
+    filter_rules,
+    seasons,
     subscription_conflicts,
+    subscriptions,
+    subtitle_groups,
 );

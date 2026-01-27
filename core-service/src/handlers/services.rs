@@ -7,7 +7,6 @@ use serde_json::json;
 use shared::{ServiceRegistration, ServiceRegistrationResponse, ServiceType};
 use uuid::Uuid;
 use crate::state::AppState;
-use crate::models::db::NewFetcherModule;
 use crate::schema::fetcher_modules;
 use diesel::prelude::*;
 
@@ -37,23 +36,32 @@ pub async fn register(
     // If this is a Fetcher service, persist it to the database
     if payload.service_type == ServiceType::Fetcher {
         let naive_now = now.naive_utc();
-        let new_fetcher = NewFetcherModule {
-            name: payload.service_name.clone(),
-            version: "1.0.0".to_string(),
-            description: Some(format!("{}:{}:{}", payload.service_name, payload.host, payload.port)),
-            is_enabled: true,
-            config_schema: None,
-            created_at: naive_now,
-            updated_at: naive_now,
-        };
 
         // Get a connection from the pool and insert the fetcher module
         match state.db.get() {
             Ok(mut conn) => {
-                match diesel::insert_into(fetcher_modules::table)
-                    .values(&new_fetcher)
-                    .execute(&mut conn)
-                {
+                use crate::schema::fetcher_modules::dsl::*;
+
+                let fetcher_base_url = format!("http://{}:{}", payload.host, payload.port);
+                let insert_query = diesel::sql_query(
+                    "INSERT INTO fetcher_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+                )
+                .bind::<diesel::sql_types::Varchar, _>(&payload.service_name)
+                .bind::<diesel::sql_types::Varchar, _>("1.0.0")
+                .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(
+                    Some(format!("{}:{}:{}", payload.service_name, payload.host, payload.port))
+                )
+                .bind::<diesel::sql_types::Bool, _>(true)
+                .bind::<diesel::sql_types::Nullable<diesel::sql_types::Text>, _>(
+                    None::<String>
+                )
+                .bind::<diesel::sql_types::Timestamp, _>(naive_now)
+                .bind::<diesel::sql_types::Timestamp, _>(naive_now)
+                .bind::<diesel::sql_types::Int4, _>(50i32) // Default priority
+                .bind::<diesel::sql_types::Text, _>(&fetcher_base_url); // base_url
+
+                match insert_query.execute(&mut conn) {
                     Ok(_) => {
                         tracing::info!(
                             "Successfully persisted Fetcher service to database: {} ({}:{})",

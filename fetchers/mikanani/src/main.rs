@@ -76,6 +76,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/fetch", post(handlers::fetch))
         .route("/health", get(handlers::health_check))
         .route("/subscribe", post(handle_subscription_broadcast))
+        .route("/can-handle-subscription", post(handlers::can_handle_subscription))
         .with_state(parser);
 
     // 有條件地應用 CORS 中間件

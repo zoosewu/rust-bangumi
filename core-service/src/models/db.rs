@@ -94,7 +94,6 @@ pub struct AnimeLink {
     pub source_hash: String,
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -108,7 +107,6 @@ pub struct NewAnimeLink {
     pub source_hash: String,
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
 }
 
 // ============ FilterRules ============
@@ -195,6 +193,8 @@ pub struct FetcherModule {
     pub config_schema: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub priority: i32,
+    pub base_url: String,
 }
 
 #[derive(Insertable)]
@@ -207,15 +207,17 @@ pub struct NewFetcherModule {
     pub config_schema: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub priority: i32,
+    pub base_url: String,
 }
 
-// ============ RssSubscriptions ============
+// ============ Subscriptions (formerly RssSubscriptions) ============
 #[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::rss_subscriptions)]
-pub struct RssSubscription {
+#[diesel(table_name = super::super::schema::subscriptions)]
+pub struct Subscription {
     pub subscription_id: i32,
     pub fetcher_id: i32,
-    pub rss_url: String,
+    pub source_url: String,
     pub name: Option<String>,
     pub description: Option<String>,
     pub last_fetched_at: Option<NaiveDateTime>,
@@ -225,13 +227,18 @@ pub struct RssSubscription {
     pub config: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub source_type: String,
+    pub assignment_status: String,
+    pub assigned_at: Option<NaiveDateTime>,
+    pub auto_selected: bool,
 }
 
+// For manual inserts, use sql_query with bind parameters instead
 #[derive(Insertable)]
-#[diesel(table_name = super::super::schema::rss_subscriptions)]
-pub struct NewRssSubscription {
+#[diesel(table_name = super::super::schema::subscriptions)]
+pub struct NewSubscription {
     pub fetcher_id: i32,
-    pub rss_url: String,
+    pub source_url: String,
     pub name: Option<String>,
     pub description: Option<String>,
     pub last_fetched_at: Option<NaiveDateTime>,
@@ -241,7 +248,15 @@ pub struct NewRssSubscription {
     pub config: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub source_type: String,
+    pub assignment_status: String,
+    pub assigned_at: Option<NaiveDateTime>,
+    pub auto_selected: bool,
 }
+
+// Compatibility alias for existing code
+pub type RssSubscription = Subscription;
+pub type NewRssSubscription = NewSubscription;
 
 // ============ SubscriptionConflicts ============
 #[derive(Queryable, Selectable, Debug, Clone)]
@@ -258,8 +273,7 @@ pub struct SubscriptionConflict {
     pub resolved_at: Option<NaiveDateTime>,
 }
 
-#[derive(Insertable)]
-#[diesel(table_name = super::super::schema::subscription_conflicts)]
+// For manual inserts, use sql_query with bind parameters instead
 pub struct NewSubscriptionConflict {
     pub subscription_id: i32,
     pub conflict_type: String,

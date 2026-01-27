@@ -4,8 +4,15 @@ use serde::{Serialize, Deserialize};
 /// Event representing a subscription broadcast
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscriptionBroadcast {
-    pub rss_url: String,
+    #[serde(alias = "rss_url")]
+    pub source_url: String,
     pub subscription_name: String,
+    #[serde(default = "default_source_type")]
+    pub source_type: String,
+}
+
+fn default_source_type() -> String {
+    "rss".to_string()
 }
 
 /// Type alias for the broadcast sender

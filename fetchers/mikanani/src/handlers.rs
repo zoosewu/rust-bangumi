@@ -19,6 +19,19 @@ pub struct FetchResponse {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CanHandleRequest {
+    pub source_url: String,
+    pub source_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CanHandleResponse {
+    pub fetcher_id: i32,
+    pub can_handle: bool,
+    pub priority: i32,
+}
+
 pub async fn fetch(
     State(parser): State<Arc<RssParser>>,
     Json(payload): Json<FetchRequest>,
@@ -48,4 +61,37 @@ pub async fn fetch(
 
 pub async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
     (StatusCode::OK, Json(serde_json::json!({"status": "ok"})))
+}
+
+pub async fn can_handle_subscription(
+    Json(payload): Json<CanHandleRequest>,
+) -> (StatusCode, Json<CanHandleResponse>) {
+    tracing::info!(
+        "Checking if can handle subscription: url={}, type={}",
+        payload.source_url,
+        payload.source_type
+    );
+
+    // Mikanani Fetcher handles RSS feeds from mikanani.me domain
+    let can_handle = payload.source_type == "rss" && payload.source_url.contains("mikanani.me");
+
+    let response = CanHandleResponse {
+        fetcher_id: 1, // Mikanani is typically ID 1
+        can_handle,
+        priority: 100, // High priority for Mikanani RSS
+    };
+
+    let status = if can_handle {
+        StatusCode::OK
+    } else {
+        StatusCode::NO_CONTENT
+    };
+
+    tracing::info!(
+        "can_handle_subscription result: can_handle={}, priority={}",
+        can_handle,
+        response.priority
+    );
+
+    (status, Json(response))
 }
