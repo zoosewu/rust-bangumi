@@ -83,7 +83,8 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         priority -> Int4,
-        base_url -> Text,
+        #[max_length = 255]
+        base_url -> Varchar,
     }
 }
 

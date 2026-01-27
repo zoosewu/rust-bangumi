@@ -45,6 +45,7 @@ fn test_parser_creates_multiple_fetched_link_objects() {
                 title: title.to_string(),
                 url: "magnet:?xt=test".to_string(),
                 source_hash,
+                source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
             };
 
             links.push(link);
@@ -71,6 +72,7 @@ fn test_parser_creates_fetched_anime_structure() {
             title: title.to_string(),
             url: "magnet:?xt=test".to_string(),
             source_hash,
+            source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
         };
 
         let anime = FetchedAnime {
@@ -344,6 +346,7 @@ fn test_full_pipeline_parse_to_fetched_anime() {
                 title: title.to_string(),
                 url: "magnet:?xt=test".to_string(),
                 source_hash,
+                source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
             };
 
             anime_map
@@ -392,6 +395,7 @@ fn test_full_pipeline_multiple_series() {
                 title: title.to_string(),
                 url: format!("magnet:?xt=test{}", episode_no),
                 source_hash,
+                source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
             };
 
             anime_map
@@ -435,6 +439,7 @@ fn test_fetched_link_object_completeness() {
             title: title.to_string(),
             url: url.to_string(),
             source_hash: source_hash.clone(),
+            source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
         };
 
         // Verify all fields are populated
@@ -471,6 +476,7 @@ fn test_hash_consistency_in_pipeline() {
             title: title.to_string(),
             url: url.to_string(),
             source_hash: hash1.clone(),
+            source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
         };
 
         let link2 = FetchedLink {
@@ -479,6 +485,7 @@ fn test_hash_consistency_in_pipeline() {
             title: title.to_string(),
             url: url.to_string(),
             source_hash: hash2.clone(),
+            source_rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215".to_string(),
         };
 
         assert_eq!(link1.source_hash, link2.source_hash);

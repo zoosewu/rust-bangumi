@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use chrono::{NaiveDate, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime};
 
 // ============ Seasons ============
 #[derive(Queryable, Selectable, Debug, Clone)]
