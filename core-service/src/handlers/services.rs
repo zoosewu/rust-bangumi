@@ -43,9 +43,14 @@ pub async fn register(
                 use crate::schema::fetcher_modules::dsl::*;
 
                 let fetcher_base_url = format!("http://{}:{}", payload.host, payload.port);
-                let insert_query = diesel::sql_query(
+                // Use UPSERT to handle service restart scenarios
+                let upsert_query = diesel::sql_query(
                     "INSERT INTO fetcher_modules (name, version, description, is_enabled, config_schema, created_at, updated_at, priority, base_url) \
-                     VALUES ($1, $2, $3, $4, NULL::jsonb, $5, $6, $7, $8)"
+                     VALUES ($1, $2, $3, $4, NULL::jsonb, $5, $6, $7, $8) \
+                     ON CONFLICT (name) DO UPDATE SET \
+                     is_enabled = EXCLUDED.is_enabled, \
+                     base_url = EXCLUDED.base_url, \
+                     updated_at = EXCLUDED.updated_at"
                 )
                 .bind::<diesel::sql_types::Varchar, _>(&payload.service_name)
                 .bind::<diesel::sql_types::Varchar, _>("1.0.0")
@@ -58,10 +63,10 @@ pub async fn register(
                 .bind::<diesel::sql_types::Int4, _>(50i32) // Default priority
                 .bind::<diesel::sql_types::Text, _>(&fetcher_base_url); // base_url
 
-                match insert_query.execute(&mut conn) {
+                match upsert_query.execute(&mut conn) {
                     Ok(_) => {
                         tracing::info!(
-                            "Successfully persisted Fetcher service to database: {} ({}:{})",
+                            "Registered/Updated Fetcher service in database: {} ({}:{})",
                             payload.service_name,
                             payload.host,
                             payload.port
@@ -69,7 +74,7 @@ pub async fn register(
                     }
                     Err(e) => {
                         tracing::error!(
-                            "Failed to insert Fetcher module into database: {}",
+                            "Failed to register Fetcher module in database: {}",
                             e
                         );
                     }

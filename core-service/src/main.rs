@@ -6,6 +6,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tracing_subscriber;
+use uuid;
 
 mod config;
 mod cors;
@@ -16,6 +17,8 @@ mod db;
 mod schema;
 mod state;
 mod dto;
+
+use shared;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,9 +52,12 @@ async fn main() -> anyhow::Result<()> {
     let subscription_broadcaster = services::create_subscription_broadcaster();
     let app_state = state::AppState {
         db: pool,
-        registry,
+        registry: registry.clone(),
         subscription_broadcaster,
     };
+
+    // 啟動時從資料庫載入已有的 Fetcher 模塊
+    load_existing_fetchers(&app_state).await;
 
     // 構建應用路由
     let mut app = Router::new()
@@ -130,4 +136,60 @@ async fn health_check() -> Json<serde_json::Value> {
         "status": "ok",
         "service": "core-service"
     }))
+}
+
+/// Load existing fetcher modules from database and register them in memory
+async fn load_existing_fetchers(app_state: &state::AppState) {
+    use crate::schema::fetcher_modules::dsl::*;
+    use diesel::prelude::*;
+
+    match app_state.db.get() {
+        Ok(mut conn) => {
+            match fetcher_modules
+                .filter(is_enabled.eq(true))
+                .load::<models::FetcherModule>(&mut conn)
+            {
+                Ok(fetchers) => {
+                    for fetcher in fetchers {
+                        let service_id = uuid::Uuid::new_v4();
+                        let service = shared::RegisteredService {
+                            service_id,
+                            service_type: shared::ServiceType::Fetcher,
+                            service_name: fetcher.name.clone(),
+                            host: fetcher.base_url
+                                .split("://")
+                                .nth(1)
+                                .and_then(|s| s.split(':').next())
+                                .unwrap_or("unknown")
+                                .to_string(),
+                            port: fetcher.base_url
+                                .split(':')
+                                .last()
+                                .and_then(|s| s.parse::<u16>().ok())
+                                .unwrap_or(0),
+                            capabilities: shared::Capabilities {
+                                fetch_endpoint: Some("/fetch".to_string()),
+                                download_endpoint: None,
+                                sync_endpoint: None,
+                            },
+                            is_healthy: true,
+                            last_heartbeat: chrono::Utc::now(),
+                        };
+
+                        if let Err(e) = app_state.registry.register(service) {
+                            tracing::error!("Failed to load fetcher {} into registry: {}", fetcher.name, e);
+                        } else {
+                            tracing::info!("Loaded fetcher module from database: {} ({})", fetcher.name, fetcher.base_url);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load fetcher modules from database: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to get database connection for loading fetchers: {}", e);
+        }
+    }
 }
