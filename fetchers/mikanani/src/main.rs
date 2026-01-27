@@ -98,10 +98,14 @@ async fn register_to_core() -> anyhow::Result<()> {
     let core_service_url = std::env::var("CORE_SERVICE_URL")
         .unwrap_or_else(|_| "http://core-service:8000".to_string());
 
+    // 本地開發時設為 localhost，Docker 環境使用容器名稱
+    let service_host = std::env::var("SERVICE_HOST")
+        .unwrap_or_else(|_| "fetcher-mikanani".to_string());
+
     let registration = shared::ServiceRegistration {
         service_type: shared::ServiceType::Fetcher,
         service_name: "mikanani".to_string(),
-        host: "fetcher-mikanani".to_string(),
+        host: service_host,
         port: 8001,
         capabilities: shared::Capabilities {
             fetch_endpoint: Some("/fetch".to_string()),

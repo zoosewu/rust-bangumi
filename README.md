@@ -56,8 +56,12 @@ rust-bangumi/
 │   │   ├── main.rs
 │   │   ├── commands.rs
 │   │   └── client.rs
-├── docker-compose.yml                  # Docker 編排
+├── docker-compose.yaml                 # 生產環境 Docker 編排
+├── docker-compose.dev.yaml             # 開發環境（僅 PostgreSQL + Adminer）
 ├── Dockerfile.*                        # 各服務 Dockerfile
+├── .env.example                        # 環境變數範例
+├── .env.dev                            # 開發環境配置模板
+├── .env.prod                           # 生產環境配置模板
 └── docs/
     └── plans/
         └── 2025-01-21-*-design.md      # 架構設計文檔
@@ -96,16 +100,40 @@ docker compose down
 ### 本地開發
 
 ```bash
-# 構建所有項目
-cargo build
+# 1. 啟動開發數據庫（PostgreSQL + Adminer）
+docker compose -f docker-compose.dev.yaml up -d
 
-# 運行特定服務
-cargo run --package core-service
-cargo run --package fetcher-mikanani
+# 2. 使用開發環境配置（已預設，或複製模板）
+cp .env.dev .env
 
-# 運行 CLI
-cargo run --package bangumi-cli -- --help
+# 3. 啟動服務（各開一個終端）
+cargo run -p core-service
+cargo run -p fetcher-mikanani
+
+# 4. 運行 CLI
+cargo run -p bangumi-cli -- --help
 ```
+
+**開發環境服務：**
+- PostgreSQL: `localhost:5432`
+- Adminer (DB 管理介面): `http://localhost:8081`
+
+### 環境配置
+
+| 檔案 | 用途 |
+|------|------|
+| `.env` | 當前使用的配置（已在 .gitignore） |
+| `.env.dev` | 開發環境模板（cargo run） |
+| `.env.prod` | 生產環境模板（docker compose） |
+| `.env.example` | 完整變數說明 |
+
+**關鍵環境變數：**
+
+| 變數 | 開發環境 | 生產環境 (Docker) |
+|------|----------|-------------------|
+| `DATABASE_URL` | `...@localhost:5432/...` | 由 docker-compose 自動構建 |
+| `CORE_SERVICE_URL` | `http://localhost:8000` | `http://core-service:8000` |
+| `SERVICE_HOST` | `localhost` | 不需設定（使用容器名） |
 
 ## CLI 使用範例
 
