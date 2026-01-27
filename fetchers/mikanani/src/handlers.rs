@@ -27,9 +27,7 @@ pub struct CanHandleRequest {
 
 #[derive(Debug, Serialize)]
 pub struct CanHandleResponse {
-    pub fetcher_id: i32,
     pub can_handle: bool,
-    pub priority: i32,
 }
 
 pub async fn fetch(
@@ -76,9 +74,7 @@ pub async fn can_handle_subscription(
     let can_handle = payload.source_type == "rss" && payload.source_url.contains("mikanani.me");
 
     let response = CanHandleResponse {
-        fetcher_id: 1, // Mikanani is typically ID 1
         can_handle,
-        priority: 100, // High priority for Mikanani RSS
     };
 
     let status = if can_handle {
@@ -88,9 +84,8 @@ pub async fn can_handle_subscription(
     };
 
     tracing::info!(
-        "can_handle_subscription result: can_handle={}, priority={}",
-        can_handle,
-        response.priority
+        "can_handle_subscription result: can_handle={}",
+        can_handle
     );
 
     (status, Json(response))

@@ -50,7 +50,7 @@ fn cleanup_test_subscriptions(conn: &mut diesel::PgConnection) -> Result<(), Str
         .map_err(|e| format!("Failed to delete conflicts: {}", e))?;
 
     // Delete subscriptions
-    diesel::delete(rss_subscriptions::table)
+    diesel::delete(subscriptions::table)
         .execute(conn)
         .map_err(|e| format!("Failed to delete subscriptions: {}", e))?;
 
@@ -88,13 +88,13 @@ fn insert_test_fetcher(
 fn insert_test_subscription(
     conn: &mut diesel::PgConnection,
     fetcher_id: i32,
-    rss_url: &str,
+    source_url: &str,
     name: Option<&str>,
 ) -> Result<RssSubscription, String> {
     let now = Utc::now().naive_utc();
     let new_subscription = NewRssSubscription {
         fetcher_id,
-        rss_url: rss_url.to_string(),
+        source_url: source_url.to_string(),
         name: name.map(|s| s.to_string()),
         description: Some("Test subscription".to_string()),
         last_fetched_at: None,
@@ -104,9 +104,13 @@ fn insert_test_subscription(
         config: None,
         created_at: now,
         updated_at: now,
+        source_type: "rss".to_string(),
+        assignment_status: "assigned".to_string(),
+        assigned_at: Some(now),
+        auto_selected: false,
     };
 
-    diesel::insert_into(rss_subscriptions::table)
+    diesel::insert_into(subscriptions::table)
         .values(&new_subscription)
         .get_result::<RssSubscription>(conn)
         .map_err(|e| format!("Failed to insert test subscription: {}", e))
@@ -151,7 +155,7 @@ fn insert_test_conflict(
 /// 1. Setup: Create a test fetcher module in the database
 /// 2. Execute: Attempt to create a new subscription with valid data
 /// 3. Verify:
-///    - Subscription is created with correct fetcher_id and rss_url
+///    - Subscription is created with correct fetcher_id and source_url
 ///    - Response status indicates successful creation (201 Created)
 ///    - Returned subscription has all expected fields populated
 ///    - created_at and updated_at are set
@@ -182,20 +186,20 @@ fn test_create_subscription() -> Result<(), String> {
 
     // Step 4: Verify subscription was created correctly
     assert_eq!(subscription.fetcher_id, test_fetcher.fetcher_id);
-    assert_eq!(subscription.rss_url, test_url);
+    assert_eq!(subscription.source_url, test_url);
     assert_eq!(subscription.name, Some(test_name.to_string()));
     assert!(subscription.is_active);
     assert_eq!(subscription.fetch_interval_minutes, 60);
     tracing::info!("Subscription created successfully: {}", subscription.subscription_id);
 
     // Step 5: Verify we can retrieve the subscription
-    let retrieved = rss_subscriptions::table
-        .filter(rss_subscriptions::subscription_id.eq(subscription.subscription_id))
+    let retrieved = subscriptions::table
+        .filter(subscriptions::subscription_id.eq(subscription.subscription_id))
         .first::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve subscription: {}", e))?;
 
     assert_eq!(retrieved.subscription_id, subscription.subscription_id);
-    assert_eq!(retrieved.rss_url, test_url);
+    assert_eq!(retrieved.source_url, test_url);
 
     // Step 6: Cleanup
     cleanup_test_subscriptions(&mut conn)?;
@@ -249,8 +253,8 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
     // Step 5: Verify duplicate was rejected
     // (In a real integration test, this would verify the HTTP response status)
     // For database test, we verify only one subscription exists with this URL
-    let count = rss_subscriptions::table
-        .filter(rss_subscriptions::rss_url.eq(test_url))
+    let count = subscriptions::table
+        .filter(subscriptions::source_url.eq(test_url))
         .count()
         .get_result::<i64>(&mut conn)
         .map_err(|e| format!("Failed to count subscriptions: {}", e))?;
@@ -307,30 +311,30 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
     tracing::info!("Subscription created for fetcher 2");
 
     // Step 5: Retrieve subscriptions for fetcher 1
-    let fetcher1_subs = rss_subscriptions::table
-        .filter(rss_subscriptions::fetcher_id.eq(fetcher1.fetcher_id))
-        .filter(rss_subscriptions::is_active.eq(true))
+    let fetcher1_subs = subscriptions::table
+        .filter(subscriptions::fetcher_id.eq(fetcher1.fetcher_id))
+        .filter(subscriptions::is_active.eq(true))
         .load::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
 
     // Step 6: Verify results
     assert_eq!(fetcher1_subs.len(), 2, "Fetcher 1 should have 2 subscriptions");
-    let urls: Vec<String> = fetcher1_subs.iter().map(|s| s.rss_url.clone()).collect();
+    let urls: Vec<String> = fetcher1_subs.iter().map(|s| s.source_url.clone()).collect();
     assert!(urls.contains(&sub1_url.to_string()));
     assert!(urls.contains(&sub2_url.to_string()));
     assert!(!urls.contains(&sub3_url.to_string()));
     tracing::info!("Fetcher 1 subscriptions verified: {:?}", urls);
 
     // Step 7: Retrieve subscriptions for fetcher 2
-    let fetcher2_subs = rss_subscriptions::table
-        .filter(rss_subscriptions::fetcher_id.eq(fetcher2.fetcher_id))
-        .filter(rss_subscriptions::is_active.eq(true))
+    let fetcher2_subs = subscriptions::table
+        .filter(subscriptions::fetcher_id.eq(fetcher2.fetcher_id))
+        .filter(subscriptions::is_active.eq(true))
         .load::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
 
     // Step 8: Verify fetcher 2 has only 1 subscription
     assert_eq!(fetcher2_subs.len(), 1, "Fetcher 2 should have 1 subscription");
-    assert_eq!(fetcher2_subs[0].rss_url, sub3_url);
+    assert_eq!(fetcher2_subs[0].source_url, sub3_url);
     tracing::info!("Fetcher 2 subscriptions verified");
 
     // Step 9: Cleanup
@@ -414,10 +418,10 @@ fn test_conflict_resolution() -> Result<(), String> {
 
     // Update subscription with resolved fetcher
     diesel::update(
-        rss_subscriptions::table
-            .filter(rss_subscriptions::subscription_id.eq(subscription.subscription_id))
+        subscriptions::table
+            .filter(subscriptions::subscription_id.eq(subscription.subscription_id))
     )
-    .set(rss_subscriptions::fetcher_id.eq(resolve_to_fetcher))
+    .set(subscriptions::fetcher_id.eq(resolve_to_fetcher))
     .execute(&mut conn)
     .map_err(|e| format!("Failed to update subscription: {}", e))?;
 
@@ -427,13 +431,13 @@ fn test_conflict_resolution() -> Result<(), String> {
     tracing::info!("Conflict resolved with fetcher: {}", resolve_to_fetcher);
 
     // Step 8: Verify subscription was updated
-    let updated_subscription = rss_subscriptions::table
-        .filter(rss_subscriptions::subscription_id.eq(subscription.subscription_id))
+    let updated_subscription = subscriptions::table
+        .filter(subscriptions::subscription_id.eq(subscription.subscription_id))
         .first::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve updated subscription: {}", e))?;
 
     assert_eq!(updated_subscription.fetcher_id, resolve_to_fetcher);
-    assert_eq!(updated_subscription.rss_url, test_url); // Original data preserved
+    assert_eq!(updated_subscription.source_url, test_url); // Original data preserved
     tracing::info!("Subscription fetcher updated to: {}", updated_subscription.fetcher_id);
 
     // Step 9: Cleanup
@@ -570,8 +574,8 @@ fn test_list_all_subscriptions() -> Result<(), String> {
     )?;
 
     // Step 4: Retrieve all active subscriptions
-    let all_active = rss_subscriptions::table
-        .filter(rss_subscriptions::is_active.eq(true))
+    let all_active = subscriptions::table
+        .filter(subscriptions::is_active.eq(true))
         .load::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to list subscriptions: {}", e))?;
 

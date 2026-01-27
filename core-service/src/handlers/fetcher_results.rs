@@ -367,7 +367,6 @@ fn create_anime_link(
         source_hash: fetched_link.source_hash.clone(),
         filtered_flag: false,
         created_at: now,
-        updated_at: now,
     };
 
     diesel::insert_into(anime_links::table)

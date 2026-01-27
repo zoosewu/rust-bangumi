@@ -27,7 +27,6 @@ pub async fn create_anime_link(
         source_hash: payload.source_hash,
         filtered_flag: false, // Default to false
         created_at: now,
-        updated_at: now,
     };
 
     match state.db.get() {
@@ -47,7 +46,6 @@ pub async fn create_anime_link(
                         url: link.url,
                         source_hash: link.source_hash,
                         created_at: link.created_at,
-                        updated_at: link.updated_at,
                     };
                     (StatusCode::CREATED, Json(json!(response)))
                 }
@@ -100,7 +98,6 @@ pub async fn get_anime_links(
                             url: l.url,
                             source_hash: l.source_hash,
                             created_at: l.created_at,
-                            updated_at: l.updated_at,
                         })
                         .collect();
                     tracing::info!(

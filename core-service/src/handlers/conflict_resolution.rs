@@ -9,7 +9,7 @@ use diesel::prelude::*;
 
 use crate::state::AppState;
 use crate::models::{SubscriptionConflict, FetcherModule};
-use crate::schema::{subscription_conflicts, rss_subscriptions, fetcher_modules};
+use crate::schema::{subscription_conflicts, subscriptions, fetcher_modules};
 
 // ============ DTOs ============
 
@@ -52,14 +52,14 @@ pub async fn get_pending_conflicts(
                     let mut conflict_infos = Vec::new();
 
                     for conflict in conflicts {
-                        // Get the subscription's RSS URL
-                        let rss_url_result = rss_subscriptions::table
-                            .filter(rss_subscriptions::subscription_id.eq(conflict.subscription_id))
-                            .select(rss_subscriptions::rss_url)
+                        // Get the subscription's source URL
+                        let source_url_result = subscriptions::table
+                            .filter(subscriptions::subscription_id.eq(conflict.subscription_id))
+                            .select(subscriptions::source_url)
                             .first::<String>(&mut conn)
                             .optional();
 
-                        let rss_url = match rss_url_result {
+                        let source_url = match source_url_result {
                             Ok(Some(url)) => url,
                             _ => "unknown".to_string(),
                         };
@@ -74,7 +74,7 @@ pub async fn get_pending_conflicts(
                         conflict_infos.push(ConflictInfo {
                             conflict_id: conflict.conflict_id,
                             subscription_id: conflict.subscription_id,
-                            rss_url,
+                            rss_url: source_url,
                             conflict_type: conflict.conflict_type,
                             conflict_data,
                             candidate_fetchers,
@@ -187,12 +187,12 @@ pub async fn resolve_conflict(
                 );
             }
 
-            // 4. Update rss_subscriptions table with the resolved fetcher
+            // 4. Update subscriptions table with the resolved fetcher
             let update_subscription_result = diesel::update(
-                rss_subscriptions::table
-                    .filter(rss_subscriptions::subscription_id.eq(conflict.subscription_id))
+                subscriptions::table
+                    .filter(subscriptions::subscription_id.eq(conflict.subscription_id))
             )
-            .set(rss_subscriptions::fetcher_id.eq(payload.fetcher_id))
+            .set(subscriptions::fetcher_id.eq(payload.fetcher_id))
             .execute(&mut conn);
 
             if let Err(e) = update_subscription_result {

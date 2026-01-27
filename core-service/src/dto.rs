@@ -116,5 +116,4 @@ pub struct AnimeLinkResponse {
     pub url: String,
     pub source_hash: String,
     pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
 }
