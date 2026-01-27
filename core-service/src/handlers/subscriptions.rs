@@ -121,125 +121,110 @@ pub async fn create_subscription(
                 _ => {} // OK - no existing subscription
             }
 
-            // Determine assignment strategy
-            let (fetcher_id, auto_selected, assignment_status) = if let Some(explicit_id) = payload.fetcher_id {
-                // Explicit assignment
-                (explicit_id, false, "assigned".to_string())
-            } else {
-                // Auto-selection: query fetchers and pick by highest priority
-                match auto_select_fetcher(&mut conn) {
-                    Ok(Some((id, _))) => (id, true, "auto_assigned".to_string()),
-                    Ok(None) => {
-                        return (
-                            StatusCode::BAD_REQUEST,
-                            Json(json!({
-                                "error": "no_fetchers",
-                                "message": "No active fetchers available for auto-selection"
-                            })),
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to auto-select fetcher: {}", e);
-                        return (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(json!({
-                                "error": "selection_error",
-                                "message": format!("Failed to select fetcher: {}", e)
-                            })),
-                        );
-                    }
-                }
-            };
+            // Drop the connection before async broadcast
+            drop(conn);
 
-            // Manual insert using raw SQL for JSONB compatibility
-            let new_subscription = NewSubscription {
-                fetcher_id,
-                source_url: payload.source_url.clone(),
-                name: payload.name.clone(),
-                description: payload.description.clone(),
-                last_fetched_at: None,
-                next_fetch_at: Some(now),
-                fetch_interval_minutes: fetch_interval,
-                is_active: true,
-                config: payload.config.clone(),
-                created_at: now,
-                updated_at: now,
-                source_type: source_type.clone(),
-                assignment_status: assignment_status.clone(),
-                assigned_at: if auto_selected { None } else { Some(now) },
-                auto_selected,
-            };
+            // Broadcast to determine fetcher capability
+            match broadcast_can_handle(
+                &state,
+                &payload.source_url,
+                &source_type,
+                60,
+                payload.fetcher_id,  // None for auto-select, Some(id) for explicit
+            )
+            .await
+            {
+                Ok(capable_fetchers) if !capable_fetchers.is_empty() => {
+                    // Select highest priority fetcher
+                    let (fetcher_id, _priority) = capable_fetchers[0];
+                    let auto_selected = payload.fetcher_id.is_none();
+                    let assignment_status = if auto_selected {
+                        "auto_assigned"
+                    } else {
+                        "assigned"
+                    };
 
-            let insert_result = diesel::insert_into(subscriptions::table)
-                .values(&new_subscription)
-                .returning(Subscription::as_returning())
-                .get_result::<Subscription>(&mut conn);
+                    // Get connection again for database insert
+                    let mut conn = match state.db.get() {
+                        Ok(conn) => conn,
+                        Err(e) => {
+                            tracing::error!("Failed to get database connection: {}", e);
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({"error": "database_error"})),
+                            );
+                        }
+                    };
 
-            match insert_result {
-                Ok(subscription) => {
-                    let sub_id = subscription.subscription_id;
-                    let f_id = subscription.fetcher_id;
-                    let src_url = subscription.source_url.clone();
-                    let n = subscription.name.clone();
-                    let d = subscription.description.clone();
-                    let lf = subscription.last_fetched_at;
-                    let nf = subscription.next_fetch_at;
-                    let fi = subscription.fetch_interval_minutes;
-                    let ia = subscription.is_active;
-                    let c = subscription.config.clone();
-                    let ca = subscription.created_at;
-                    let ua = subscription.updated_at;
-                    let st = subscription.source_type.clone();
-                    let ass = subscription.assignment_status.clone();
-                    let aa = subscription.assigned_at;
-                    let aus = subscription.auto_selected;
-                    tracing::info!(
-                        "Created subscription for URL: {} (fetcher_id: {}, auto_selected: {})",
-                        src_url,
-                        f_id,
-                        aus
-                    );
+                    // Create subscription record
+                    let new_subscription = NewSubscription {
+                        fetcher_id,
+                        source_url: payload.source_url.clone(),
+                        name: payload.name.clone(),
+                        description: payload.description.clone(),
+                        last_fetched_at: None,
+                        next_fetch_at: Some(now),
+                        fetch_interval_minutes: fetch_interval,
+                        is_active: true,
+                        config: payload.config.clone(),
+                        created_at: now,
+                        updated_at: now,
+                        source_type: source_type.clone(),
+                        assignment_status: assignment_status.to_string(),
+                        assigned_at: if auto_selected { None } else { Some(now) },
+                        auto_selected,
+                    };
 
-                    // Broadcast subscription event to all fetchers (for auto-selection if not explicit)
-                    if payload.fetcher_id.is_none() {
-                        let broadcast_event = SubscriptionBroadcast {
-                            source_url: src_url.clone(),
-                            subscription_name: n.clone().unwrap_or_else(|| src_url.clone()),
-                            source_type: st.clone(),
-                        };
+                    let insert_result = diesel::insert_into(subscriptions::table)
+                        .values(&new_subscription)
+                        .returning(Subscription::as_returning())
+                        .get_result::<Subscription>(&mut conn);
 
-                        if let Err(e) = state.subscription_broadcaster.send(broadcast_event) {
-                            tracing::warn!("Failed to broadcast subscription event: {}", e);
+                    match insert_result {
+                        Ok(subscription) => {
+                            tracing::info!(
+                                "Created subscription {} for URL {} with fetcher {} ({})",
+                                subscription.subscription_id,
+                                subscription.source_url,
+                                fetcher_id,
+                                assignment_status
+                            );
+                            (StatusCode::CREATED, Json(json!(subscription)))
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create subscription: {}", e);
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({
+                                    "error": "creation_failed",
+                                    "message": format!("Failed to create subscription: {}", e)
+                                })),
+                            )
                         }
                     }
-
-                    let response = SubscriptionResponse {
-                        subscription_id: sub_id,
-                        fetcher_id: f_id,
-                        source_url: src_url,
-                        name: n,
-                        description: d,
-                        last_fetched_at: lf,
-                        next_fetch_at: nf,
-                        fetch_interval_minutes: fi,
-                        is_active: ia,
-                        config: c,
-                        source_type: st,
-                        assignment_status: ass,
-                        assigned_at: aa,
-                        auto_selected: aus,
-                        created_at: ca,
-                        updated_at: ua,
-                    };
-                    (StatusCode::CREATED, Json(json!(response)))
+                }
+                Ok(_) => {
+                    // No fetcher can handle this subscription (strict mode)
+                    tracing::warn!(
+                        "No fetcher can handle subscription for URL: {} (type: {})",
+                        payload.source_url,
+                        source_type
+                    );
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({
+                            "error": "no_capable_fetcher",
+                            "message": "No fetcher can handle this subscription request"
+                        })),
+                    )
                 }
                 Err(e) => {
-                    tracing::error!("Failed to create subscription: {}", e);
+                    tracing::error!("Broadcast failed: {}", e);
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to create subscription: {}", e)
+                            "error": "broadcast_failed",
+                            "message": e
                         })),
                     )
                 }

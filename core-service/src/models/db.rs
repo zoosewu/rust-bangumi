@@ -212,7 +212,7 @@ pub struct NewFetcherModule {
 }
 
 // ============ Subscriptions (formerly RssSubscriptions) ============
-#[derive(Queryable, Selectable, Debug, Clone)]
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[diesel(table_name = super::super::schema::subscriptions)]
 pub struct Subscription {
     pub subscription_id: i32,
