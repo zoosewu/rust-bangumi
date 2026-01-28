@@ -1,5 +1,57 @@
 use diesel::prelude::*;
 use chrono::{NaiveDate, NaiveDateTime};
+use std::io::Write;
+
+// ============ ModuleType ENUM ============
+#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[diesel(sql_type = crate::schema::sql_types::ModuleType)]
+pub enum ModuleTypeEnum {
+    Fetcher,
+    Downloader,
+    Viewer,
+}
+
+impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg> for ModuleTypeEnum {
+    fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"fetcher" => Ok(ModuleTypeEnum::Fetcher),
+            b"downloader" => Ok(ModuleTypeEnum::Downloader),
+            b"viewer" => Ok(ModuleTypeEnum::Viewer),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
+}
+
+impl diesel::serialize::ToSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg> for ModuleTypeEnum {
+    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+        match *self {
+            ModuleTypeEnum::Fetcher => out.write_all(b"fetcher")?,
+            ModuleTypeEnum::Downloader => out.write_all(b"downloader")?,
+            ModuleTypeEnum::Viewer => out.write_all(b"viewer")?,
+        }
+        Ok(diesel::serialize::IsNull::No)
+    }
+}
+
+impl std::fmt::Display for ModuleTypeEnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleTypeEnum::Fetcher => write!(f, "fetcher"),
+            ModuleTypeEnum::Downloader => write!(f, "downloader"),
+            ModuleTypeEnum::Viewer => write!(f, "viewer"),
+        }
+    }
+}
+
+impl From<&shared::ServiceType> for ModuleTypeEnum {
+    fn from(service_type: &shared::ServiceType) -> Self {
+        match service_type {
+            shared::ServiceType::Fetcher => ModuleTypeEnum::Fetcher,
+            shared::ServiceType::Downloader => ModuleTypeEnum::Downloader,
+            shared::ServiceType::Viewer => ModuleTypeEnum::Viewer,
+        }
+    }
+}
 
 // ============ Seasons ============
 #[derive(Queryable, Selectable, Debug, Clone)]
@@ -260,6 +312,38 @@ pub struct ViewerModule {
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::viewer_modules)]
 pub struct NewViewerModule {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ ServiceModules ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = crate::schema::service_modules)]
+pub struct ServiceModule {
+    pub module_id: i32,
+    pub module_type: ModuleTypeEnum,
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+    pub is_enabled: bool,
+    pub config_schema: Option<String>,
+    pub priority: i32,
+    pub base_url: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::service_modules)]
+pub struct NewServiceModule {
+    pub module_type: ModuleTypeEnum,
     pub name: String,
     pub version: String,
     pub description: Option<String>,
