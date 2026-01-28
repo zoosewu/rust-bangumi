@@ -1,31 +1,74 @@
 use axum::{
-    extract::{State, Path},
+    extract::{State, Path, Query},
     http::StatusCode,
     Json,
 };
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use diesel::prelude::*;
 
 use crate::state::AppState;
 use crate::dto::{FilterRuleRequest, FilterRuleResponse};
-use crate::models::{NewFilterRule, FilterRule};
+use crate::models::{NewFilterRule, FilterRule, FilterTargetType};
 use crate::schema::filter_rules;
+
+/// Query parameters for filter rules
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FilterRulesQuery {
+    pub target_type: String,
+    pub target_id: Option<i32>,
+}
 
 /// Create a new filter rule
 pub async fn create_filter_rule(
     State(state): State<AppState>,
     Json(payload): Json<FilterRuleRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // Parse and validate target_type
+    let target_type: FilterTargetType = match payload.target_type.parse() {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": "invalid_target_type",
+                    "message": e
+                })),
+            );
+        }
+    };
+
+    // Validate: global rules must have null target_id, others must have a target_id
+    if target_type == FilterTargetType::Global && payload.target_id.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "invalid_target_id",
+                "message": "Global rules must not have a target_id"
+            })),
+        );
+    }
+
+    if target_type != FilterTargetType::Global && payload.target_id.is_none() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "missing_target_id",
+                "message": "Non-global rules must have a target_id"
+            })),
+        );
+    }
+
     let now = Utc::now().naive_utc();
     let new_rule = NewFilterRule {
-        series_id: payload.series_id,
-        group_id: payload.group_id,
         rule_order: payload.rule_order,
         is_positive: payload.is_positive,
         regex_pattern: payload.regex_pattern,
         created_at: now,
         updated_at: now,
+        target_type,
+        target_id: payload.target_id,
     };
 
     match state.db.get() {
@@ -38,8 +81,8 @@ pub async fn create_filter_rule(
                     tracing::info!("Created filter rule: {}", rule.rule_id);
                     let response = FilterRuleResponse {
                         rule_id: rule.rule_id,
-                        series_id: rule.series_id,
-                        group_id: rule.group_id,
+                        target_type: rule.target_type.to_string(),
+                        target_id: rule.target_id,
                         rule_order: rule.rule_order,
                         is_positive: rule.is_positive,
                         regex_pattern: rule.regex_pattern,
@@ -73,26 +116,50 @@ pub async fn create_filter_rule(
     }
 }
 
-/// Get filter rules by series_id and group_id, sorted by rule_order
+/// Get filter rules by target_type and target_id, sorted by rule_order
 pub async fn get_filter_rules(
     State(state): State<AppState>,
-    Path((series_id, group_id)): Path<(i32, i32)>,
+    Query(query): Query<FilterRulesQuery>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // Parse and validate target_type
+    let target_type: FilterTargetType = match query.target_type.parse() {
+        Ok(t) => t,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": "invalid_target_type",
+                    "message": e,
+                    "rules": []
+                })),
+            );
+        }
+    };
+
     match state.db.get() {
         Ok(mut conn) => {
-            match filter_rules::table
-                .filter(filter_rules::series_id.eq(series_id))
-                .filter(filter_rules::group_id.eq(group_id))
-                .order(filter_rules::rule_order.asc())
-                .load::<FilterRule>(&mut conn)
-            {
+            let result = if query.target_id.is_some() {
+                filter_rules::table
+                    .filter(filter_rules::target_type.eq(target_type))
+                    .filter(filter_rules::target_id.eq(query.target_id))
+                    .order(filter_rules::rule_order.asc())
+                    .load::<FilterRule>(&mut conn)
+            } else {
+                filter_rules::table
+                    .filter(filter_rules::target_type.eq(target_type))
+                    .filter(filter_rules::target_id.is_null())
+                    .order(filter_rules::rule_order.asc())
+                    .load::<FilterRule>(&mut conn)
+            };
+
+            match result {
                 Ok(rules) => {
                     let responses: Vec<FilterRuleResponse> = rules
                         .into_iter()
                         .map(|r| FilterRuleResponse {
                             rule_id: r.rule_id,
-                            series_id: r.series_id,
-                            group_id: r.group_id,
+                            target_type: r.target_type.to_string(),
+                            target_id: r.target_id,
                             rule_order: r.rule_order,
                             is_positive: r.is_positive,
                             regex_pattern: r.regex_pattern,
@@ -101,10 +168,10 @@ pub async fn get_filter_rules(
                         })
                         .collect();
                     tracing::info!(
-                        "Retrieved {} filter rules for series_id={}, group_id={}",
+                        "Retrieved {} filter rules for target_type={}, target_id={:?}",
                         responses.len(),
-                        series_id,
-                        group_id
+                        query.target_type,
+                        query.target_id
                     );
                     (StatusCode::OK, Json(json!({ "rules": responses })))
                 }

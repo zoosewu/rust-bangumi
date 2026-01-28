@@ -2,6 +2,10 @@
 
 pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, Clone, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "filter_target_type"))]
+    pub struct FilterTargetType;
+
+    #[derive(diesel::query_builder::QueryId, Clone, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "module_type"))]
     pub struct ModuleType;
 }
@@ -77,15 +81,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::FilterTargetType;
+
     filter_rules (rule_id) {
         rule_id -> Int4,
-        series_id -> Int4,
-        group_id -> Int4,
         rule_order -> Int4,
+        is_positive -> Bool,
         regex_pattern -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        is_positive -> Bool,
+        target_type -> FilterTargetType,
+        target_id -> Nullable<Int4>,
     }
 }
 
@@ -180,8 +187,6 @@ diesel::joinable!(anime_links -> subtitle_groups (group_id));
 diesel::joinable!(anime_series -> animes (anime_id));
 diesel::joinable!(anime_series -> seasons (season_id));
 diesel::joinable!(downloads -> anime_links (link_id));
-diesel::joinable!(filter_rules -> anime_series (series_id));
-diesel::joinable!(filter_rules -> subtitle_groups (group_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
 
 diesel::allow_tables_to_appear_in_same_query!(

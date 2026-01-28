@@ -367,25 +367,35 @@ pub fn get_anime_links_by_series(
 
 // ============ FilterRules CRUD ============
 
-pub fn get_filter_rules(
+pub fn get_filter_rules_by_target(
     pool: &DbPool,
-    series_id: i32,
-    group_id: i32,
+    target_type: FilterTargetType,
+    target_id: Option<i32>,
 ) -> Result<Vec<FilterRule>, String> {
     let mut conn = pool.get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    filter_rules::table
-        .filter(filter_rules::series_id.eq(series_id))
-        .filter(filter_rules::group_id.eq(group_id))
-        .load::<FilterRule>(&mut conn)
-        .map_err(|e| format!("Failed to get filter rules: {}", e))
+    if target_id.is_some() {
+        filter_rules::table
+            .filter(filter_rules::target_type.eq(target_type))
+            .filter(filter_rules::target_id.eq(target_id))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get filter rules: {}", e))
+    } else {
+        filter_rules::table
+            .filter(filter_rules::target_type.eq(target_type))
+            .filter(filter_rules::target_id.is_null())
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get filter rules: {}", e))
+    }
 }
 
 pub fn create_filter_rule(
     pool: &DbPool,
-    series_id: i32,
-    group_id: i32,
+    target_type: FilterTargetType,
+    target_id: Option<i32>,
     rule_order: i32,
     is_positive: bool,
     regex_pattern: String,
@@ -395,13 +405,13 @@ pub fn create_filter_rule(
 
     let now = Utc::now().naive_utc();
     let new_rule = NewFilterRule {
-        series_id,
-        group_id,
         rule_order,
         is_positive,
         regex_pattern,
         created_at: now,
         updated_at: now,
+        target_type,
+        target_id,
     };
 
     diesel::insert_into(filter_rules::table)

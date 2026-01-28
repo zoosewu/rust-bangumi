@@ -1,5 +1,5 @@
 use regex::Regex;
-use crate::models::FilterRule;
+use crate::models::{FilterRule, FilterTargetType};
 
 pub struct FilterEngine {
     rules: Vec<FilterRule>,
@@ -8,6 +8,28 @@ pub struct FilterEngine {
 impl FilterEngine {
     pub fn new(rules: Vec<FilterRule>) -> Self {
         Self { rules }
+    }
+
+    /// Create a FilterEngine with rules sorted by target_type priority and rule_order.
+    /// Priority: global < fetcher < anime_series < anime < subtitle_group
+    pub fn with_priority_sorted(mut rules: Vec<FilterRule>) -> Self {
+        rules.sort_by(|a, b| {
+            let priority_a = Self::target_type_priority(&a.target_type);
+            let priority_b = Self::target_type_priority(&b.target_type);
+            priority_a.cmp(&priority_b).then(a.rule_order.cmp(&b.rule_order))
+        });
+        Self { rules }
+    }
+
+    /// Get priority for target_type (lower = earlier in chain)
+    fn target_type_priority(target_type: &FilterTargetType) -> u8 {
+        match target_type {
+            FilterTargetType::Global => 0,
+            FilterTargetType::Fetcher => 1,
+            FilterTargetType::AnimeSeries => 2,
+            FilterTargetType::Anime => 3,
+            FilterTargetType::SubtitleGroup => 4,
+        }
     }
 
     /// Apply filter rules to determine if content should be included
@@ -36,6 +58,11 @@ impl FilterEngine {
 
         included
     }
+
+    /// Get the target_type of the rules in this engine
+    pub fn target_types(&self) -> Vec<FilterTargetType> {
+        self.rules.iter().map(|r| r.target_type).collect()
+    }
 }
 
 #[cfg(test)]
@@ -47,13 +74,27 @@ mod tests {
         let now = Utc::now().naive_utc();
         FilterRule {
             rule_id: id,
-            series_id: 1,
-            group_id: 1,
             rule_order: id,
+            is_positive,
             regex_pattern: pattern.to_string(),
             created_at: now,
             updated_at: now,
+            target_type: FilterTargetType::AnimeSeries,
+            target_id: Some(1),
+        }
+    }
+
+    fn create_rule_with_type(id: i32, is_positive: bool, pattern: &str, target_type: FilterTargetType, target_id: Option<i32>) -> FilterRule {
+        let now = Utc::now().naive_utc();
+        FilterRule {
+            rule_id: id,
+            rule_order: id,
             is_positive,
+            regex_pattern: pattern.to_string(),
+            created_at: now,
+            updated_at: now,
+            target_type,
+            target_id,
         }
     }
 
@@ -111,5 +152,22 @@ mod tests {
 
         assert!(engine.should_include("1080p"));
         assert!(!engine.should_include("1080P")); // Case sensitive by default
+    }
+
+    #[test]
+    fn test_priority_sorting() {
+        let rules = vec![
+            create_rule_with_type(3, true, "anime", FilterTargetType::AnimeSeries, Some(1)),
+            create_rule_with_type(1, false, "trash", FilterTargetType::Global, None),
+            create_rule_with_type(2, true, "1080p", FilterTargetType::Fetcher, Some(1)),
+        ];
+
+        let engine = FilterEngine::with_priority_sorted(rules);
+        let target_types = engine.target_types();
+
+        // Global should come first, then Fetcher, then AnimeSeries
+        assert_eq!(target_types[0], FilterTargetType::Global);
+        assert_eq!(target_types[1], FilterTargetType::Fetcher);
+        assert_eq!(target_types[2], FilterTargetType::AnimeSeries);
     }
 }

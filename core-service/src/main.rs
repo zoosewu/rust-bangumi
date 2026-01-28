@@ -89,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
 
         // 過濾規則
         .route("/filters", post(handlers::filters::create_filter_rule))
-        .route("/filters/:series_id/:group_id", get(handlers::filters::get_filter_rules))
+        .route("/filters", get(handlers::filters::get_filter_rules))
         .route("/filters/:rule_id", delete(handlers::filters::delete_filter_rule))
 
         // 動畫連結

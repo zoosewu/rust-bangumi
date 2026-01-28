@@ -2,6 +2,70 @@ use diesel::prelude::*;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::io::Write;
 
+// ============ FilterTargetType ENUM ============
+#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[diesel(sql_type = crate::schema::sql_types::FilterTargetType)]
+pub enum FilterTargetType {
+    Global,
+    Anime,
+    SubtitleGroup,
+    AnimeSeries,
+    Fetcher,
+}
+
+impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg> for FilterTargetType {
+    fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"global" => Ok(FilterTargetType::Global),
+            b"anime" => Ok(FilterTargetType::Anime),
+            b"subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
+            b"anime_series" => Ok(FilterTargetType::AnimeSeries),
+            b"fetcher" => Ok(FilterTargetType::Fetcher),
+            _ => Err("Unrecognized filter_target_type variant".into()),
+        }
+    }
+}
+
+impl diesel::serialize::ToSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg> for FilterTargetType {
+    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+        match *self {
+            FilterTargetType::Global => out.write_all(b"global")?,
+            FilterTargetType::Anime => out.write_all(b"anime")?,
+            FilterTargetType::SubtitleGroup => out.write_all(b"subtitle_group")?,
+            FilterTargetType::AnimeSeries => out.write_all(b"anime_series")?,
+            FilterTargetType::Fetcher => out.write_all(b"fetcher")?,
+        }
+        Ok(diesel::serialize::IsNull::No)
+    }
+}
+
+impl std::fmt::Display for FilterTargetType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FilterTargetType::Global => write!(f, "global"),
+            FilterTargetType::Anime => write!(f, "anime"),
+            FilterTargetType::SubtitleGroup => write!(f, "subtitle_group"),
+            FilterTargetType::AnimeSeries => write!(f, "anime_series"),
+            FilterTargetType::Fetcher => write!(f, "fetcher"),
+        }
+    }
+}
+
+impl std::str::FromStr for FilterTargetType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "global" => Ok(FilterTargetType::Global),
+            "anime" => Ok(FilterTargetType::Anime),
+            "subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
+            "anime_series" => Ok(FilterTargetType::AnimeSeries),
+            "fetcher" => Ok(FilterTargetType::Fetcher),
+            _ => Err(format!("Unknown filter target type: {}", s)),
+        }
+    }
+}
+
 // ============ ModuleType ENUM ============
 #[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
 #[diesel(sql_type = crate::schema::sql_types::ModuleType)]
@@ -166,25 +230,25 @@ pub struct NewAnimeLink {
 #[diesel(table_name = super::super::schema::filter_rules)]
 pub struct FilterRule {
     pub rule_id: i32,
-    pub series_id: i32,
-    pub group_id: i32,
     pub rule_order: i32,
+    pub is_positive: bool,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    pub is_positive: bool,
+    pub target_type: FilterTargetType,
+    pub target_id: Option<i32>,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::filter_rules)]
 pub struct NewFilterRule {
-    pub series_id: i32,
-    pub group_id: i32,
     pub rule_order: i32,
+    pub is_positive: bool,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    pub is_positive: bool,
+    pub target_type: FilterTargetType,
+    pub target_id: Option<i32>,
 }
 
 // ============ Downloads ============
