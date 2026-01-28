@@ -1,5 +1,11 @@
 // @generated automatically by Diesel CLI.
 
+pub mod sql_types {
+    #[derive(diesel::query_builder::QueryId, Clone, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "module_type"))]
+    pub struct ModuleType;
+}
+
 diesel::table! {
     anime_links (link_id) {
         link_id -> Int4,
@@ -97,7 +103,7 @@ diesel::table! {
         version -> Varchar,
         description -> Nullable<Text>,
         is_enabled -> Bool,
-        config_schema -> Nullable<Text>,
+        config_schema -> Nullable<Jsonb>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         priority -> Int4,
@@ -130,6 +136,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ModuleType;
+
+    service_modules (module_id) {
+        module_id -> Int4,
+        module_type -> ModuleType,
+        #[max_length = 255]
+        name -> Varchar,
+        #[max_length = 50]
+        version -> Varchar,
+        description -> Nullable<Text>,
+        is_enabled -> Bool,
+        config_schema -> Nullable<Text>,
+        priority -> Int4,
+        #[max_length = 255]
+        base_url -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     subscription_conflicts (conflict_id) {
         conflict_id -> Int4,
         subscription_id -> Int4,
@@ -137,10 +165,10 @@ diesel::table! {
         conflict_type -> Varchar,
         #[max_length = 255]
         affected_item_id -> Nullable<Varchar>,
-        conflict_data -> Text,
+        conflict_data -> Jsonb,
         #[max_length = 50]
         resolution_status -> Varchar,
-        resolution_data -> Nullable<Text>,
+        resolution_data -> Nullable<Jsonb>,
         created_at -> Timestamp,
         resolved_at -> Nullable<Timestamp>,
     }
@@ -159,7 +187,7 @@ diesel::table! {
         next_fetch_at -> Nullable<Timestamp>,
         fetch_interval_minutes -> Int4,
         is_active -> Bool,
-        config -> Nullable<Text>,
+        config -> Nullable<Jsonb>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         #[max_length = 50]
@@ -218,6 +246,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     fetcher_modules,
     filter_rules,
     seasons,
+    service_modules,
     subscription_conflicts,
     subscriptions,
     subtitle_groups,
