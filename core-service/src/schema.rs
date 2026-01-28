@@ -60,24 +60,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    downloader_modules (downloader_id) {
-        downloader_id -> Int4,
-        #[max_length = 255]
-        name -> Varchar,
-        #[max_length = 50]
-        version -> Varchar,
-        description -> Nullable<Text>,
-        is_enabled -> Bool,
-        config_schema -> Nullable<Text>,
-        priority -> Int4,
-        #[max_length = 255]
-        base_url -> Varchar,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
     downloads (download_id) {
         download_id -> Int4,
         link_id -> Int4,
@@ -91,26 +73,6 @@ diesel::table! {
         error_message -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    fetcher_modules (fetcher_id) {
-        fetcher_id -> Int4,
-        #[max_length = 255]
-        name -> Varchar,
-        #[max_length = 50]
-        version -> Varchar,
-        description -> Nullable<Text>,
-        is_enabled -> Bool,
-        // Note: Database has JSONB but using Text for String compatibility
-        // This table will be removed in favor of service_modules
-        config_schema -> Nullable<Text>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-        priority -> Int4,
-        #[max_length = 255]
-        base_url -> Varchar,
     }
 }
 
@@ -167,12 +129,10 @@ diesel::table! {
         conflict_type -> Varchar,
         #[max_length = 255]
         affected_item_id -> Nullable<Varchar>,
-        // Note: Database has JSONB but using Text for String compatibility
-        conflict_data -> Text,
+        conflict_data -> Jsonb,
         #[max_length = 50]
         resolution_status -> Varchar,
-        // Note: Database has JSONB but using Text for String compatibility
-        resolution_data -> Nullable<Text>,
+        resolution_data -> Nullable<Jsonb>,
         created_at -> Timestamp,
         resolved_at -> Nullable<Timestamp>,
     }
@@ -191,8 +151,7 @@ diesel::table! {
         next_fetch_at -> Nullable<Timestamp>,
         fetch_interval_minutes -> Int4,
         is_active -> Bool,
-        // Note: Database has JSONB but using Text for String compatibility
-        config -> Nullable<Text>,
+        config -> Nullable<Jsonb>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         #[max_length = 50]
@@ -213,24 +172,6 @@ diesel::table! {
     }
 }
 
-diesel::table! {
-    viewer_modules (viewer_id) {
-        viewer_id -> Int4,
-        #[max_length = 255]
-        name -> Varchar,
-        #[max_length = 50]
-        version -> Varchar,
-        description -> Nullable<Text>,
-        is_enabled -> Bool,
-        config_schema -> Nullable<Text>,
-        priority -> Int4,
-        #[max_length = 255]
-        base_url -> Varchar,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
 diesel::joinable!(anime_links -> anime_series (series_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));
 diesel::joinable!(anime_series -> animes (anime_id));
@@ -239,21 +180,17 @@ diesel::joinable!(downloads -> anime_links (link_id));
 diesel::joinable!(filter_rules -> anime_series (series_id));
 diesel::joinable!(filter_rules -> subtitle_groups (group_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
-diesel::joinable!(subscriptions -> fetcher_modules (fetcher_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     anime_links,
     anime_series,
     animes,
     cron_logs,
-    downloader_modules,
     downloads,
-    fetcher_modules,
     filter_rules,
     seasons,
     service_modules,
     subscription_conflicts,
     subscriptions,
     subtitle_groups,
-    viewer_modules,
 );
