@@ -64,21 +64,24 @@ fn insert_test_fetcher(
     conn: &mut diesel::PgConnection,
     name: &str,
     version: &str,
-) -> Result<FetcherModule, String> {
+) -> Result<ServiceModule, String> {
     let now = Utc::now().naive_utc();
-    let new_fetcher = NewFetcherModule {
+    let new_fetcher = NewServiceModule {
+        module_type: ModuleTypeEnum::Fetcher,
         name: name.to_string(),
         version: version.to_string(),
         description: Some(format!("Test fetcher: {}", name)),
         is_enabled: true,
         config_schema: None,
+        priority: 0,
+        base_url: "http://localhost:8000".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    diesel::insert_into(fetcher_modules::table)
+    diesel::insert_into(service_modules::table)
         .values(&new_fetcher)
-        .get_result::<FetcherModule>(conn)
+        .get_result::<ServiceModule>(conn)
         .map_err(|e| format!("Failed to insert test fetcher: {}", e))
 }
 
@@ -172,20 +175,20 @@ fn test_create_subscription() -> Result<(), String> {
 
     // Step 2: Create test fetcher
     let test_fetcher = insert_test_fetcher(&mut conn, "test-fetcher", "1.0.0")?;
-    tracing::info!("Test fetcher created with ID: {}", test_fetcher.fetcher_id);
+    tracing::info!("Test fetcher created with ID: {}", test_fetcher.module_id);
 
     // Step 3: Create test subscription
     let test_url = "https://example.com/rss/test.xml";
     let test_name = "Test RSS Feed";
     let subscription = insert_test_subscription(
         &mut conn,
-        test_fetcher.fetcher_id,
+        test_fetcher.module_id,
         test_url,
         Some(test_name),
     )?;
 
     // Step 4: Verify subscription was created correctly
-    assert_eq!(subscription.fetcher_id, test_fetcher.fetcher_id);
+    assert_eq!(subscription.fetcher_id, test_fetcher.module_id);
     assert_eq!(subscription.source_url, test_url);
     assert_eq!(subscription.name, Some(test_name.to_string()));
     assert!(subscription.is_active);
@@ -236,7 +239,7 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
     let test_url = "https://example.com/rss/unique.xml";
     let first_subscription = insert_test_subscription(
         &mut conn,
-        test_fetcher.fetcher_id,
+        test_fetcher.module_id,
         test_url,
         Some("First"),
     )?;
@@ -245,7 +248,7 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
     // Step 4: Attempt to create duplicate subscription with same URL
     let _result = insert_test_subscription(
         &mut conn,
-        test_fetcher.fetcher_id,
+        test_fetcher.module_id,
         test_url,
         Some("Duplicate"),
     );
@@ -296,23 +299,23 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
     // Step 2: Create multiple test fetchers
     let fetcher1 = insert_test_fetcher(&mut conn, "fetcher-1", "1.0.0")?;
     let fetcher2 = insert_test_fetcher(&mut conn, "fetcher-2", "1.0.0")?;
-    tracing::info!("Test fetchers created: {} and {}", fetcher1.fetcher_id, fetcher2.fetcher_id);
+    tracing::info!("Test fetchers created: {} and {}", fetcher1.module_id, fetcher2.module_id);
 
     // Step 3: Create subscriptions for fetcher 1
     let sub1_url = "https://example.com/rss/anime1.xml";
     let sub2_url = "https://example.com/rss/anime2.xml";
-    let _sub1 = insert_test_subscription(&mut conn, fetcher1.fetcher_id, sub1_url, Some("Anime 1"))?;
-    let _sub2 = insert_test_subscription(&mut conn, fetcher1.fetcher_id, sub2_url, Some("Anime 2"))?;
+    let _sub1 = insert_test_subscription(&mut conn, fetcher1.module_id, sub1_url, Some("Anime 1"))?;
+    let _sub2 = insert_test_subscription(&mut conn, fetcher1.module_id, sub2_url, Some("Anime 2"))?;
     tracing::info!("Subscriptions created for fetcher 1");
 
     // Step 4: Create subscription for fetcher 2
     let sub3_url = "https://example.com/rss/anime3.xml";
-    let _sub3 = insert_test_subscription(&mut conn, fetcher2.fetcher_id, sub3_url, Some("Anime 3"))?;
+    let _sub3 = insert_test_subscription(&mut conn, fetcher2.module_id, sub3_url, Some("Anime 3"))?;
     tracing::info!("Subscription created for fetcher 2");
 
     // Step 5: Retrieve subscriptions for fetcher 1
     let fetcher1_subs = subscriptions::table
-        .filter(subscriptions::fetcher_id.eq(fetcher1.fetcher_id))
+        .filter(subscriptions::fetcher_id.eq(fetcher1.module_id))
         .filter(subscriptions::is_active.eq(true))
         .load::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
@@ -327,7 +330,7 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
 
     // Step 7: Retrieve subscriptions for fetcher 2
     let fetcher2_subs = subscriptions::table
-        .filter(subscriptions::fetcher_id.eq(fetcher2.fetcher_id))
+        .filter(subscriptions::fetcher_id.eq(fetcher2.module_id))
         .filter(subscriptions::is_active.eq(true))
         .load::<RssSubscription>(&mut conn)
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
@@ -371,13 +374,13 @@ fn test_conflict_resolution() -> Result<(), String> {
     let fetcher2 = insert_test_fetcher(&mut conn, "fetcher-2", "1.0.0")?;
     let fetcher3 = insert_test_fetcher(&mut conn, "fetcher-3", "1.0.0")?;
     tracing::info!("Test fetchers created: {}, {}, {}",
-        fetcher1.fetcher_id, fetcher2.fetcher_id, fetcher3.fetcher_id);
+        fetcher1.module_id, fetcher2.module_id, fetcher3.module_id);
 
     // Step 3: Create subscription with unresolved fetcher
     let test_url = "https://example.com/rss/conflict-test.xml";
     let subscription = insert_test_subscription(
         &mut conn,
-        fetcher1.fetcher_id,
+        fetcher1.module_id,
         test_url,
         Some("Conflict Test"),
     )?;
@@ -387,7 +390,7 @@ fn test_conflict_resolution() -> Result<(), String> {
     let conflict = insert_test_conflict(
         &mut conn,
         subscription.subscription_id,
-        vec![fetcher1.fetcher_id, fetcher2.fetcher_id, fetcher3.fetcher_id],
+        vec![fetcher1.module_id, fetcher2.module_id, fetcher3.module_id],
     )?;
     tracing::info!("Test conflict created: {}", conflict.conflict_id);
 
@@ -396,7 +399,7 @@ fn test_conflict_resolution() -> Result<(), String> {
     assert!(conflict.resolved_at.is_none());
 
     // Step 6: Simulate conflict resolution by assigning to fetcher2
-    let resolve_to_fetcher = fetcher2.fetcher_id;
+    let resolve_to_fetcher = fetcher2.module_id;
     let now = Utc::now().naive_utc();
     let resolution_data = json!({
         "resolved_fetcher_id": resolve_to_fetcher,
@@ -478,7 +481,7 @@ fn test_invalid_conflict_resolution() -> Result<(), String> {
     // Step 3: Create subscription and conflict
     let subscription = insert_test_subscription(
         &mut conn,
-        fetcher1.fetcher_id,
+        fetcher1.module_id,
         "https://example.com/rss/invalid-test.xml",
         Some("Invalid Test"),
     )?;
@@ -487,7 +490,7 @@ fn test_invalid_conflict_resolution() -> Result<(), String> {
     let conflict = insert_test_conflict(
         &mut conn,
         subscription.subscription_id,
-        vec![fetcher1.fetcher_id, fetcher2.fetcher_id],
+        vec![fetcher1.module_id, fetcher2.module_id],
     )?;
     tracing::info!("Conflict created with limited candidates");
 
@@ -508,7 +511,7 @@ fn test_invalid_conflict_resolution() -> Result<(), String> {
         .unwrap_or_default();
 
     // Verify non_candidate_fetcher is not in the list
-    assert!(!candidates.contains(&non_candidate_fetcher.fetcher_id));
+    assert!(!candidates.contains(&non_candidate_fetcher.module_id));
     tracing::info!("Non-candidate fetcher correctly identified as invalid");
 
     // Step 5: Verify conflict still unresolved
@@ -556,19 +559,19 @@ fn test_list_all_subscriptions() -> Result<(), String> {
     // Step 3: Create multiple subscriptions
     let sub1 = insert_test_subscription(
         &mut conn,
-        fetcher1.fetcher_id,
+        fetcher1.module_id,
         "https://example.com/rss/feed1.xml",
         Some("Feed 1"),
     )?;
     let sub2 = insert_test_subscription(
         &mut conn,
-        fetcher1.fetcher_id,
+        fetcher1.module_id,
         "https://example.com/rss/feed2.xml",
         Some("Feed 2"),
     )?;
     let sub3 = insert_test_subscription(
         &mut conn,
-        fetcher2.fetcher_id,
+        fetcher2.module_id,
         "https://example.com/rss/feed3.xml",
         Some("Feed 3"),
     )?;
@@ -618,22 +621,23 @@ fn test_list_fetcher_modules() -> Result<(), String> {
     // Step 1: Create test fetchers
     let fetcher1 = insert_test_fetcher(&mut conn, "test-fetcher-1", "1.0.0")?;
     let fetcher2 = insert_test_fetcher(&mut conn, "test-fetcher-2", "2.0.0")?;
-    tracing::info!("Test fetchers created: {}, {}", fetcher1.fetcher_id, fetcher2.fetcher_id);
+    tracing::info!("Test fetchers created: {}, {}", fetcher1.module_id, fetcher2.module_id);
 
     // Step 2: Retrieve all fetcher modules
-    let all_fetchers = fetcher_modules::table
-        .load::<FetcherModule>(&mut conn)
+    let all_fetchers = service_modules::table
+        .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+        .load::<ServiceModule>(&mut conn)
         .map_err(|e| format!("Failed to list fetchers: {}", e))?;
 
     // Step 3: Verify fetchers are in the list
-    let fetcher_ids: Vec<i32> = all_fetchers.iter().map(|f| f.fetcher_id).collect();
-    assert!(fetcher_ids.contains(&fetcher1.fetcher_id));
-    assert!(fetcher_ids.contains(&fetcher2.fetcher_id));
+    let fetcher_ids: Vec<i32> = all_fetchers.iter().map(|f| f.module_id).collect();
+    assert!(fetcher_ids.contains(&fetcher1.module_id));
+    assert!(fetcher_ids.contains(&fetcher2.module_id));
     tracing::info!("Listed {} fetcher modules", all_fetchers.len());
 
     // Step 4: Verify metadata
     for fetcher in all_fetchers.iter() {
-        if fetcher.fetcher_id == fetcher1.fetcher_id {
+        if fetcher.module_id == fetcher1.module_id {
             assert_eq!(fetcher.name, "test-fetcher-1");
             assert_eq!(fetcher.version, "1.0.0");
             assert!(fetcher.is_enabled);

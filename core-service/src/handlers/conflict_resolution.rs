@@ -8,8 +8,8 @@ use serde_json::json;
 use diesel::prelude::*;
 
 use crate::state::AppState;
-use crate::models::{SubscriptionConflict, FetcherModule};
-use crate::schema::{subscription_conflicts, subscriptions, fetcher_modules};
+use crate::models::{SubscriptionConflict, ServiceModule, ModuleTypeEnum};
+use crate::schema::{subscription_conflicts, subscriptions, service_modules};
 
 // ============ DTOs ============
 
@@ -169,8 +169,9 @@ pub async fn resolve_conflict(
             }
 
             // 3. Verify fetcher exists
-            let fetcher_exists = fetcher_modules::table
-                .filter(fetcher_modules::fetcher_id.eq(payload.fetcher_id))
+            let fetcher_exists = service_modules::table
+                .filter(service_modules::module_id.eq(payload.fetcher_id))
+                .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
                 .count()
                 .get_result::<i64>(&mut conn)
                 .map(|count| count > 0)
@@ -278,9 +279,10 @@ fn parse_candidate_fetchers(conflict_data: &str, conn: &mut diesel::PgConnection
                 if let Some(fetcher_id) = fetcher_id_val.as_i64() {
                     let fetcher_id = fetcher_id as i32;
                     // Get fetcher name from database
-                    if let Ok(name) = fetcher_modules::table
-                        .filter(fetcher_modules::fetcher_id.eq(fetcher_id))
-                        .select(fetcher_modules::name)
+                    if let Ok(name) = service_modules::table
+                        .filter(service_modules::module_id.eq(fetcher_id))
+                        .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+                        .select(service_modules::name)
                         .first::<String>(conn)
                         .optional()
                     {

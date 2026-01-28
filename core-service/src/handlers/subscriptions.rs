@@ -9,8 +9,8 @@ use diesel::prelude::*;
 use tokio::time::{timeout, Duration};
 
 use crate::state::AppState;
-use crate::models::{Subscription, FetcherModule, NewSubscription};
-use crate::schema::{subscriptions, fetcher_modules};
+use crate::models::{Subscription, ServiceModule, ModuleTypeEnum, NewSubscription};
+use crate::schema::{subscriptions, service_modules};
 use crate::services::SubscriptionBroadcast;
 
 // ============ DTOs ============
@@ -50,7 +50,7 @@ pub struct SubscriptionResponse {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct FetcherModuleResponse {
-    pub fetcher_id: i32,
+    pub module_id: i32,
     pub name: String,
     pub version: String,
     pub description: Option<String>,
@@ -247,12 +247,13 @@ pub async fn create_subscription(
 fn auto_select_fetcher(
     conn: &mut PgConnection,
 ) -> Result<Option<(i32, i32)>, String> {
-    use crate::schema::fetcher_modules::dsl::*;
+    use crate::schema::service_modules::dsl::*;
 
-    match fetcher_modules
+    match service_modules
         .filter(is_enabled.eq(true))
+        .filter(module_type.eq(ModuleTypeEnum::Fetcher))
         .order_by(priority.desc())
-        .select((fetcher_id, priority))
+        .select((module_id, priority))
         .first::<(i32, i32)>(conn)
     {
         Ok(result) => Ok(Some(result)),
@@ -274,22 +275,24 @@ pub async fn broadcast_can_handle(
     let mut conn = state.db.get()
         .map_err(|e| format!("Database connection failed: {}", e))?;
 
-    use crate::schema::fetcher_modules::dsl::*;
+    use crate::schema::service_modules::dsl::*;
 
     // Build query based on target_fetcher_id
     let fetcher_list = if let Some(target_id) = target_fetcher_id {
         // Query specific fetcher
-        fetcher_modules
+        service_modules
             .filter(is_enabled.eq(true))
-            .filter(fetcher_id.eq(target_id))
-            .select(FetcherModule::as_select())
-            .load::<FetcherModule>(&mut conn)
+            .filter(module_type.eq(ModuleTypeEnum::Fetcher))
+            .filter(module_id.eq(target_id))
+            .select(ServiceModule::as_select())
+            .load::<ServiceModule>(&mut conn)
     } else {
         // Query all enabled fetchers
-        fetcher_modules
+        service_modules
             .filter(is_enabled.eq(true))
-            .select(FetcherModule::as_select())
-            .load::<FetcherModule>(&mut conn)
+            .filter(module_type.eq(ModuleTypeEnum::Fetcher))
+            .select(ServiceModule::as_select())
+            .load::<ServiceModule>(&mut conn)
     };
 
     let fetcher_list = fetcher_list
@@ -307,7 +310,7 @@ pub async fn broadcast_can_handle(
     // Edge case 2: Validate base_url is configured
     for fetcher in &fetcher_list {
         if fetcher.base_url.is_empty() {
-            return Err(format!("Fetcher {} has no base_url configured", fetcher.fetcher_id));
+            return Err(format!("Fetcher {} has no base_url configured", fetcher.module_id));
         }
     }
 
@@ -338,20 +341,20 @@ pub async fn broadcast_can_handle(
                         Ok(data) if data.can_handle => {
                             tracing::debug!(
                                 "Fetcher {} can handle: {} (priority: {})",
-                                fetcher.fetcher_id,
+                                fetcher.module_id,
                                 source_url_clone,
                                 fetcher.priority
                             );
-                            Some((fetcher.fetcher_id, fetcher.priority))
+                            Some((fetcher.module_id, fetcher.priority))
                         }
                         Ok(_) => {
-                            tracing::debug!("Fetcher {} cannot handle: {}", fetcher.fetcher_id, source_url_clone);
+                            tracing::debug!("Fetcher {} cannot handle: {}", fetcher.module_id, source_url_clone);
                             None
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Fetcher {} returned invalid response: {}",
-                                fetcher.fetcher_id,
+                                fetcher.module_id,
                                 e
                             );
                             None
@@ -359,13 +362,13 @@ pub async fn broadcast_can_handle(
                     }
                 }
                 Ok(Err(e)) => {
-                    tracing::warn!("Fetcher {} request failed: {}", fetcher.fetcher_id, e);
+                    tracing::warn!("Fetcher {} request failed: {}", fetcher.module_id, e);
                     None
                 }
                 Err(_) => {
                     tracing::warn!(
                         "Fetcher {} timeout after {} seconds",
-                        fetcher.fetcher_id,
+                        fetcher.module_id,
                         timeout_secs
                     );
                     None
@@ -518,12 +521,16 @@ pub async fn list_fetcher_modules(
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
-            match fetcher_modules::table.select(FetcherModule::as_select()).load::<FetcherModule>(&mut conn) {
+            match service_modules::table
+                .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+                .select(ServiceModule::as_select())
+                .load::<ServiceModule>(&mut conn)
+            {
                 Ok(modules) => {
                     let responses: Vec<FetcherModuleResponse> = modules
                         .into_iter()
                         .map(|m| FetcherModuleResponse {
-                            fetcher_id: m.fetcher_id,
+                            module_id: m.module_id,
                             name: m.name,
                             version: m.version,
                             description: m.description,

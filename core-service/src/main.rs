@@ -140,113 +140,68 @@ async fn health_check() -> Json<serde_json::Value> {
 
 /// Load all service modules (Fetcher, Downloader, Viewer) from database and register them in memory
 async fn load_existing_services(app_state: &state::AppState) {
-    use crate::schema::{fetcher_modules, downloader_modules, viewer_modules};
+    use crate::schema::service_modules;
+    use crate::models::{ServiceModule, ModuleTypeEnum};
     use diesel::prelude::*;
 
     match app_state.db.get() {
         Ok(mut conn) => {
-            // Load Fetchers
-            match fetcher_modules::table
-                .filter(fetcher_modules::is_enabled.eq(true))
-                .load::<models::FetcherModule>(&mut conn)
+            // Load all enabled service modules
+            match service_modules::table
+                .filter(service_modules::is_enabled.eq(true))
+                .select(ServiceModule::as_select())
+                .load::<ServiceModule>(&mut conn)
             {
-                Ok(fetchers) => {
-                    for fetcher in fetchers {
+                Ok(modules) => {
+                    for module in modules {
                         let service_id = uuid::Uuid::new_v4();
+                        let (service_type, capabilities) = match module.module_type {
+                            ModuleTypeEnum::Fetcher => (
+                                shared::ServiceType::Fetcher,
+                                shared::Capabilities {
+                                    fetch_endpoint: Some("/fetch".to_string()),
+                                    download_endpoint: None,
+                                    sync_endpoint: None,
+                                },
+                            ),
+                            ModuleTypeEnum::Downloader => (
+                                shared::ServiceType::Downloader,
+                                shared::Capabilities {
+                                    fetch_endpoint: None,
+                                    download_endpoint: Some("/download".to_string()),
+                                    sync_endpoint: None,
+                                },
+                            ),
+                            ModuleTypeEnum::Viewer => (
+                                shared::ServiceType::Viewer,
+                                shared::Capabilities {
+                                    fetch_endpoint: None,
+                                    download_endpoint: None,
+                                    sync_endpoint: Some("/sync".to_string()),
+                                },
+                            ),
+                        };
+
                         let service = shared::RegisteredService {
                             service_id,
-                            service_type: shared::ServiceType::Fetcher,
-                            service_name: fetcher.name.clone(),
-                            host: extract_host(&fetcher.base_url),
-                            port: extract_port(&fetcher.base_url),
-                            capabilities: shared::Capabilities {
-                                fetch_endpoint: Some("/fetch".to_string()),
-                                download_endpoint: None,
-                                sync_endpoint: None,
-                            },
+                            service_type: service_type.clone(),
+                            service_name: module.name.clone(),
+                            host: extract_host(&module.base_url),
+                            port: extract_port(&module.base_url),
+                            capabilities,
                             is_healthy: true,
                             last_heartbeat: chrono::Utc::now(),
                         };
 
                         if let Err(e) = app_state.registry.register(service) {
-                            tracing::error!("Failed to load fetcher {} into registry: {}", fetcher.name, e);
+                            tracing::error!("Failed to load {} {} into registry: {}", module.module_type, module.name, e);
                         } else {
-                            tracing::info!("Loaded Fetcher module from database: {} ({})", fetcher.name, fetcher.base_url);
+                            tracing::info!("Loaded {} module from database: {} ({})", module.module_type, module.name, module.base_url);
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Failed to load fetcher modules from database: {}", e);
-                }
-            }
-
-            // Load Downloaders
-            match downloader_modules::table
-                .filter(downloader_modules::is_enabled.eq(true))
-                .load::<models::DownloaderModule>(&mut conn)
-            {
-                Ok(downloaders) => {
-                    for downloader in downloaders {
-                        let service_id = uuid::Uuid::new_v4();
-                        let service = shared::RegisteredService {
-                            service_id,
-                            service_type: shared::ServiceType::Downloader,
-                            service_name: downloader.name.clone(),
-                            host: extract_host(&downloader.base_url),
-                            port: extract_port(&downloader.base_url),
-                            capabilities: shared::Capabilities {
-                                fetch_endpoint: None,
-                                download_endpoint: Some("/download".to_string()),
-                                sync_endpoint: None,
-                            },
-                            is_healthy: true,
-                            last_heartbeat: chrono::Utc::now(),
-                        };
-
-                        if let Err(e) = app_state.registry.register(service) {
-                            tracing::error!("Failed to load downloader {} into registry: {}", downloader.name, e);
-                        } else {
-                            tracing::info!("Loaded Downloader module from database: {} ({})", downloader.name, downloader.base_url);
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load downloader modules from database: {}", e);
-                }
-            }
-
-            // Load Viewers
-            match viewer_modules::table
-                .filter(viewer_modules::is_enabled.eq(true))
-                .load::<models::ViewerModule>(&mut conn)
-            {
-                Ok(viewers) => {
-                    for viewer in viewers {
-                        let service_id = uuid::Uuid::new_v4();
-                        let service = shared::RegisteredService {
-                            service_id,
-                            service_type: shared::ServiceType::Viewer,
-                            service_name: viewer.name.clone(),
-                            host: extract_host(&viewer.base_url),
-                            port: extract_port(&viewer.base_url),
-                            capabilities: shared::Capabilities {
-                                fetch_endpoint: None,
-                                download_endpoint: None,
-                                sync_endpoint: Some("/sync".to_string()),
-                            },
-                            is_healthy: true,
-                            last_heartbeat: chrono::Utc::now(),
-                        };
-
-                        if let Err(e) = app_state.registry.register(service) {
-                            tracing::error!("Failed to load viewer {} into registry: {}", viewer.name, e);
-                        } else {
-                            tracing::info!("Loaded Viewer module from database: {} ({})", viewer.name, viewer.base_url);
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load viewer modules from database: {}", e);
+                    tracing::warn!("Failed to load service modules from database: {}", e);
                 }
             }
         }

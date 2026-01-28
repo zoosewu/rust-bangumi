@@ -233,96 +233,6 @@ pub struct NewCronLog {
     pub executed_at: NaiveDateTime,
 }
 
-// ============ FetcherModules ============
-#[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::fetcher_modules)]
-pub struct FetcherModule {
-    pub fetcher_id: i32,
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-    pub priority: i32,
-    pub base_url: String,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = super::super::schema::fetcher_modules)]
-pub struct NewFetcherModule {
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-    pub priority: i32,
-    pub base_url: String,
-}
-
-// ============ DownloaderModules ============
-#[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::downloader_modules)]
-pub struct DownloaderModule {
-    pub downloader_id: i32,
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub priority: i32,
-    pub base_url: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = super::super::schema::downloader_modules)]
-pub struct NewDownloaderModule {
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub priority: i32,
-    pub base_url: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-// ============ ViewerModules ============
-#[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::viewer_modules)]
-pub struct ViewerModule {
-    pub viewer_id: i32,
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub priority: i32,
-    pub base_url: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = super::super::schema::viewer_modules)]
-pub struct NewViewerModule {
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub priority: i32,
-    pub base_url: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
 // ============ ServiceModules ============
 #[derive(Queryable, Selectable, Debug, Clone)]
 #[diesel(table_name = crate::schema::service_modules)]
@@ -418,6 +328,8 @@ pub struct SubscriptionConflict {
 }
 
 // For manual inserts, use sql_query with bind parameters instead
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::subscription_conflicts)]
 pub struct NewSubscriptionConflict {
     pub subscription_id: i32,
     pub conflict_type: String,
