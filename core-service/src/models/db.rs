@@ -169,9 +169,10 @@ pub struct FilterRule {
     pub series_id: i32,
     pub group_id: i32,
     pub rule_order: i32,
-    pub rule_type: String,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub is_positive: bool,
 }
 
 #[derive(Insertable)]
@@ -180,9 +181,10 @@ pub struct NewFilterRule {
     pub series_id: i32,
     pub group_id: i32,
     pub rule_order: i32,
-    pub rule_type: String,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub is_positive: bool,
 }
 
 // ============ Downloads ============

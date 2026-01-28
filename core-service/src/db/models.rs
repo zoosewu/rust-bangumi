@@ -387,19 +387,21 @@ pub fn create_filter_rule(
     series_id: i32,
     group_id: i32,
     rule_order: i32,
-    rule_type: String,
+    is_positive: bool,
     regex_pattern: String,
 ) -> Result<FilterRule, String> {
     let mut conn = pool.get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
+    let now = Utc::now().naive_utc();
     let new_rule = NewFilterRule {
         series_id,
         group_id,
         rule_order,
-        rule_type,
+        is_positive,
         regex_pattern,
-        created_at: Utc::now().naive_utc(),
+        created_at: now,
+        updated_at: now,
     };
 
     diesel::insert_into(filter_rules::table)

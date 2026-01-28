@@ -82,10 +82,10 @@ diesel::table! {
         series_id -> Int4,
         group_id -> Int4,
         rule_order -> Int4,
-        #[max_length = 20]
-        rule_type -> Varchar,
         regex_pattern -> Text,
         created_at -> Timestamp,
+        updated_at -> Timestamp,
+        is_positive -> Bool,
     }
 }
 

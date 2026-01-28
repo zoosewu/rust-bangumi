@@ -80,7 +80,7 @@ pub struct FilterRuleRequest {
     pub series_id: i32,
     pub group_id: i32,
     pub rule_order: i32,
-    pub rule_type: String,
+    pub is_positive: bool,
     pub regex_pattern: String,
 }
 
@@ -90,9 +90,10 @@ pub struct FilterRuleResponse {
     pub series_id: i32,
     pub group_id: i32,
     pub rule_order: i32,
-    pub rule_type: String,
+    pub is_positive: bool,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 // ============ AnimeLink DTO ============

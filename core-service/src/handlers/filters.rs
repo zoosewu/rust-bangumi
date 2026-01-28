@@ -17,29 +17,15 @@ pub async fn create_filter_rule(
     State(state): State<AppState>,
     Json(payload): Json<FilterRuleRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    // Validate rule_type
-    if payload.rule_type != "Positive" && payload.rule_type != "Negative" {
-        tracing::warn!(
-            "Invalid rule_type: {}. Must be 'Positive' or 'Negative'",
-            payload.rule_type
-        );
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "error": "invalid_rule_type",
-                "message": "rule_type must be 'Positive' or 'Negative'"
-            })),
-        );
-    }
-
     let now = Utc::now().naive_utc();
     let new_rule = NewFilterRule {
         series_id: payload.series_id,
         group_id: payload.group_id,
         rule_order: payload.rule_order,
-        rule_type: payload.rule_type,
+        is_positive: payload.is_positive,
         regex_pattern: payload.regex_pattern,
         created_at: now,
+        updated_at: now,
     };
 
     match state.db.get() {
@@ -55,9 +41,10 @@ pub async fn create_filter_rule(
                         series_id: rule.series_id,
                         group_id: rule.group_id,
                         rule_order: rule.rule_order,
-                        rule_type: rule.rule_type,
+                        is_positive: rule.is_positive,
                         regex_pattern: rule.regex_pattern,
                         created_at: rule.created_at,
+                        updated_at: rule.updated_at,
                     };
                     (StatusCode::CREATED, Json(json!(response)))
                 }
@@ -107,9 +94,10 @@ pub async fn get_filter_rules(
                             series_id: r.series_id,
                             group_id: r.group_id,
                             rule_order: r.rule_order,
-                            rule_type: r.rule_type,
+                            is_positive: r.is_positive,
                             regex_pattern: r.regex_pattern,
                             created_at: r.created_at,
+                            updated_at: r.updated_at,
                         })
                         .collect();
                     tracing::info!(
