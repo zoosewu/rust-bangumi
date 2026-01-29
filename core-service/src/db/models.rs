@@ -429,6 +429,77 @@ pub fn delete_filter_rule(pool: &DbPool, rule_id: i32) -> Result<usize, String> 
         .map_err(|e| format!("Failed to delete filter rule: {}", e))
 }
 
+/// Get all applicable filter rules for a given context.
+/// Rules are collected from all relevant target types and sorted by priority.
+/// Priority order: global < fetcher < anime_series < anime < subtitle_group
+pub fn get_all_applicable_filter_rules(
+    pool: &DbPool,
+    anime_id: Option<i32>,
+    series_id: Option<i32>,
+    group_id: Option<i32>,
+    fetcher_id: Option<i32>,
+) -> Result<Vec<FilterRule>, String> {
+    let mut conn = pool.get()
+        .map_err(|e| format!("Failed to get connection: {}", e))?;
+
+    let mut all_rules: Vec<FilterRule> = Vec::new();
+
+    // 1. Global rules (always apply)
+    let global_rules = filter_rules::table
+        .filter(filter_rules::target_type.eq(FilterTargetType::Global))
+        .filter(filter_rules::target_id.is_null())
+        .order(filter_rules::rule_order.asc())
+        .load::<FilterRule>(&mut conn)
+        .map_err(|e| format!("Failed to get global filter rules: {}", e))?;
+    all_rules.extend(global_rules);
+
+    // 2. Fetcher rules
+    if let Some(fid) = fetcher_id {
+        let fetcher_rules = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::Fetcher))
+            .filter(filter_rules::target_id.eq(fid))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get fetcher filter rules: {}", e))?;
+        all_rules.extend(fetcher_rules);
+    }
+
+    // 3. Anime series rules
+    if let Some(sid) = series_id {
+        let series_rules = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::AnimeSeries))
+            .filter(filter_rules::target_id.eq(sid))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get anime series filter rules: {}", e))?;
+        all_rules.extend(series_rules);
+    }
+
+    // 4. Anime rules
+    if let Some(aid) = anime_id {
+        let anime_rules = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::Anime))
+            .filter(filter_rules::target_id.eq(aid))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get anime filter rules: {}", e))?;
+        all_rules.extend(anime_rules);
+    }
+
+    // 5. Subtitle group rules
+    if let Some(gid) = group_id {
+        let group_rules = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::SubtitleGroup))
+            .filter(filter_rules::target_id.eq(gid))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get subtitle group filter rules: {}", e))?;
+        all_rules.extend(group_rules);
+    }
+
+    Ok(all_rules)
+}
+
 // ============ Download CRUD ============
 
 pub fn create_download(

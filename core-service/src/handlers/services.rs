@@ -51,6 +51,7 @@ pub async fn register(
                  is_enabled = EXCLUDED.is_enabled, \
                  base_url = EXCLUDED.base_url, \
                  module_type = EXCLUDED.module_type, \
+                 version = EXCLUDED.version, \
                  updated_at = EXCLUDED.updated_at"
             )
             .bind::<diesel::sql_types::Text, _>(&module_type_str)
