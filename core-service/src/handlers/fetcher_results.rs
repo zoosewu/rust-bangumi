@@ -11,9 +11,9 @@ use diesel::prelude::*;
 use crate::state::AppState;
 use crate::models::{
     NewAnime, NewSeason, NewAnimeSeries, NewSubtitleGroup, NewAnimeLink,
-    Anime, Season, AnimeSeries, SubtitleGroup, AnimeLink,
+    Anime, Season, AnimeSeries, SubtitleGroup, AnimeLink, Subscription,
 };
-use crate::schema::{animes, seasons, anime_series, subtitle_groups, anime_links};
+use crate::schema::{animes, seasons, anime_series, subtitle_groups, anime_links, subscriptions};
 
 // ============ DTOs for Fetcher Results ============
 
@@ -39,8 +39,11 @@ pub struct FetchedAnimePayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FetcherResultsPayload {
+    pub subscription_id: Option<i32>,  // 可選，向後相容
     pub animes: Vec<FetchedAnimePayload>,
     pub fetcher_source: String,  // e.g., "mikanani"
+    pub success: Option<bool>,         // 抓取是否成功
+    pub error_message: Option<String>, // 錯誤訊息
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,10 +62,18 @@ pub async fn receive_fetcher_results(
     Json(payload): Json<FetcherResultsPayload>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     tracing::info!(
-        "Received fetcher results from {}: {} animes",
+        "Received fetcher results from {}: {} animes, subscription_id: {:?}",
         payload.fetcher_source,
-        payload.animes.len()
+        payload.animes.len(),
+        payload.subscription_id
     );
+
+    // 更新訂閱的 last_fetched_at
+    if let Some(sub_id) = payload.subscription_id {
+        if let Err(e) = update_subscription_after_fetch(&state, sub_id, payload.success.unwrap_or(true)).await {
+            tracing::error!("Failed to update subscription {}: {}", sub_id, e);
+        }
+    }
 
     let mut animes_created = 0;
     let mut links_created = 0;
@@ -373,4 +384,41 @@ fn create_anime_link(
         .values(&new_link)
         .get_result::<AnimeLink>(conn)
         .map_err(|e| format!("Failed to create anime link: {}", e))
+}
+
+/// 更新訂閱的 last_fetched_at 和 next_fetch_at
+async fn update_subscription_after_fetch(
+    state: &AppState,
+    subscription_id: i32,
+    _success: bool,
+) -> Result<(), String> {
+    let mut conn = state.db.get().map_err(|e| e.to_string())?;
+    let now = Utc::now().naive_utc();
+
+    // 先取得訂閱資訊
+    let subscription = subscriptions::table
+        .filter(subscriptions::subscription_id.eq(subscription_id))
+        .first::<Subscription>(&mut conn)
+        .map_err(|e| format!("Subscription not found: {}", e))?;
+
+    // 計算下次抓取時間
+    let next_fetch = now + chrono::Duration::minutes(subscription.fetch_interval_minutes as i64);
+
+    diesel::update(subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)))
+        .set((
+            subscriptions::last_fetched_at.eq(Some(now)),
+            subscriptions::next_fetch_at.eq(Some(next_fetch)),
+            subscriptions::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update subscription: {}", e))?;
+
+    tracing::info!(
+        "Updated subscription {}: last_fetched_at={}, next_fetch_at={}",
+        subscription_id,
+        now,
+        next_fetch
+    );
+
+    Ok(())
 }

@@ -219,3 +219,18 @@ pub struct CronStatus {
     pub last_execution: Option<DateTime<Utc>>,
     pub next_execution: Option<DateTime<Utc>>,
 }
+
+// ============ Fetch Trigger (Core -> Fetcher) ============
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchTriggerRequest {
+    pub subscription_id: i32,
+    pub rss_url: String,
+    pub callback_url: String,  // Core 的 /fetcher-results endpoint
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchTriggerResponse {
+    pub accepted: bool,
+    pub message: String,
+}

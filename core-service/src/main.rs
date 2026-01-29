@@ -1,5 +1,4 @@
 use axum::{
-    http::StatusCode,
     response::Json,
     routing::{get, post, delete},
     Router,
@@ -58,6 +57,14 @@ async fn main() -> anyhow::Result<()> {
 
     // 啟動時從資料庫載入已有的所有服務模塊
     load_existing_services(&app_state).await;
+
+    // 啟動 FetchScheduler
+    let scheduler = std::sync::Arc::new(services::FetchScheduler::new(app_state.db.clone()));
+    let scheduler_clone = scheduler.clone();
+    tokio::spawn(async move {
+        scheduler_clone.start().await;
+    });
+    tracing::info!("FetchScheduler started");
 
     // 構建應用路由
     let mut app = Router::new()

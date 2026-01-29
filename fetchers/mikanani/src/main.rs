@@ -5,7 +5,7 @@ use axum::{
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber;
-use fetcher_mikanani::{RssParser, FetchScheduler};
+use fetcher_mikanani::RssParser;
 use serde::{Deserialize, Serialize};
 
 mod handlers;
@@ -55,24 +55,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Register to core service
     register_to_core().await?;
-
-    // Optional: Start scheduler in background if RSS_URL is configured
-    if let Ok(rss_url) = std::env::var("FETCH_RSS_URL") {
-        let scheduler = FetchScheduler::new(
-            parser.clone(),
-            rss_url.clone(),
-            std::env::var("FETCH_INTERVAL_SECS")
-                .unwrap_or_else(|_| "3600".to_string())
-                .parse()
-                .unwrap_or(3600),
-        );
-
-        tokio::spawn(async move {
-            scheduler.start().await;
-        });
-
-        tracing::info!("RSS fetch scheduler started");
-    }
 
     // Build router with state
     let mut app = Router::new()

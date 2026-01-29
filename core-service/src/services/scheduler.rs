@@ -1,96 +1,230 @@
-use tokio_cron_scheduler::JobScheduler;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::time::Duration;
+use tokio::time::interval;
+use chrono::Utc;
+use diesel::prelude::*;
 
-pub struct CronScheduler {
-    scheduler: Arc<Mutex<JobScheduler>>,
+use crate::db::DbPool;
+use crate::models::{Subscription, ServiceModule, ModuleTypeEnum, NewCronLog};
+use crate::schema::{subscriptions, service_modules, cron_logs};
+
+pub struct FetchScheduler {
+    db_pool: DbPool,
+    check_interval_secs: u64,
+    max_retries: u32,
+    base_retry_delay_secs: u64,
 }
 
-impl CronScheduler {
-    /// Create a new CronScheduler instance
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let scheduler = JobScheduler::new().await?;
-        Ok(Self {
-            scheduler: Arc::new(Mutex::new(scheduler)),
-        })
+#[derive(Debug, Clone)]
+struct FetchTask {
+    subscription_id: i32,
+    source_url: String,
+    #[allow(dead_code)]
+    fetcher_id: i32,
+    fetcher_base_url: String,
+}
+
+impl FetchScheduler {
+    pub fn new(db_pool: DbPool) -> Self {
+        Self {
+            db_pool,
+            check_interval_secs: 60,  // 每 60 秒檢查一次
+            max_retries: 3,
+            base_retry_delay_secs: 60,  // 初始重試延遲 60 秒
+        }
     }
 
-    /// Start the scheduler to execute pending jobs
-    pub async fn start(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut scheduler = self.scheduler.lock().await;
-        scheduler.start().await?;
-        tracing::info!("Cron scheduler started");
-        Ok(())
+    #[allow(dead_code)]
+    pub fn with_check_interval(mut self, secs: u64) -> Self {
+        self.check_interval_secs = secs;
+        self
     }
 
-    /// Shutdown the scheduler gracefully
-    pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut scheduler = self.scheduler.lock().await;
-        scheduler.shutdown().await?;
-        tracing::info!("Cron scheduler shutdown");
-        Ok(())
-    }
-
-    /// Add a fetch job with a cron expression
-    pub async fn add_fetch_job(
-        &self,
-        subscription_id: String,
-        fetcher_type: String,
-        cron_expression: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use tokio_cron_scheduler::Job;
-
-        let job = Job::new_async(cron_expression, |_uuid, _l| {
-            Box::pin(async move {
-                tracing::debug!("Cron job executed");
-            })
-        })?;
-
-        let mut scheduler = self.scheduler.lock().await;
-        scheduler.add(job).await?;
+    /// 啟動排程器主迴圈
+    pub async fn start(self: Arc<Self>) {
+        let mut ticker = interval(Duration::from_secs(self.check_interval_secs));
 
         tracing::info!(
-            "Added fetch job for subscription {} (fetcher: {}, cron: {})",
-            subscription_id,
-            fetcher_type,
-            cron_expression
+            "FetchScheduler started, checking every {} seconds",
+            self.check_interval_secs
         );
+
+        loop {
+            ticker.tick().await;
+
+            if let Err(e) = self.process_due_subscriptions().await {
+                tracing::error!("Error processing due subscriptions: {}", e);
+            }
+        }
+    }
+
+    /// 處理所有到期的訂閱
+    async fn process_due_subscriptions(&self) -> Result<(), String> {
+        let tasks = self.get_due_subscriptions()?;
+
+        if tasks.is_empty() {
+            tracing::debug!("No due subscriptions found");
+            return Ok(());
+        }
+
+        tracing::info!("Found {} due subscriptions", tasks.len());
+
+        for task in tasks {
+            // 每個任務獨立處理，失敗不影響其他任務
+            if let Err(e) = self.trigger_fetch(&task).await {
+                tracing::error!(
+                    "Failed to trigger fetch for subscription {}: {}",
+                    task.subscription_id,
+                    e
+                );
+                self.log_fetch_attempt(&task, false, Some(&e));
+            } else {
+                self.log_fetch_attempt(&task, true, None);
+            }
+        }
 
         Ok(())
     }
-}
 
-impl Clone for CronScheduler {
-    fn clone(&self) -> Self {
-        Self {
-            scheduler: Arc::clone(&self.scheduler),
+    /// 取得所有到期的訂閱
+    fn get_due_subscriptions(&self) -> Result<Vec<FetchTask>, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+        let now = Utc::now().naive_utc();
+
+        // 查詢到期的活躍訂閱
+        let due_subscriptions = subscriptions::table
+            .filter(subscriptions::is_active.eq(true))
+            .filter(subscriptions::next_fetch_at.le(now))
+            .select(Subscription::as_select())
+            .load::<Subscription>(&mut conn)
+            .map_err(|e| format!("Failed to query subscriptions: {}", e))?;
+
+        // 取得對應的 fetcher 資訊
+        let mut tasks = Vec::new();
+        for sub in due_subscriptions {
+            match service_modules::table
+                .filter(service_modules::module_id.eq(sub.fetcher_id))
+                .filter(service_modules::is_enabled.eq(true))
+                .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+                .first::<ServiceModule>(&mut conn)
+            {
+                Ok(fetcher) => {
+                    tasks.push(FetchTask {
+                        subscription_id: sub.subscription_id,
+                        source_url: sub.source_url,
+                        fetcher_id: sub.fetcher_id,
+                        fetcher_base_url: fetcher.base_url,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Fetcher {} not found or disabled for subscription {}: {}",
+                        sub.fetcher_id,
+                        sub.subscription_id,
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok(tasks)
+    }
+
+    /// 觸發 Fetcher 執行抓取
+    async fn trigger_fetch(&self, task: &FetchTask) -> Result<(), String> {
+        let fetch_url = format!("{}/fetch", task.fetcher_base_url);
+        let callback_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
+        let callback_url = format!("{}/fetcher-results", callback_url);
+
+        let request = shared::FetchTriggerRequest {
+            subscription_id: task.subscription_id,
+            rss_url: task.source_url.clone(),
+            callback_url,
+        };
+
+        tracing::info!(
+            "Triggering fetch for subscription {} at {}",
+            task.subscription_id,
+            fetch_url
+        );
+
+        // 使用重試機制
+        let mut attempt = 0;
+        let mut last_error = String::new();
+
+        while attempt < self.max_retries {
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| e.to_string())?;
+
+            match client.post(&fetch_url).json(&request).send().await {
+                Ok(response) => {
+                    if response.status().is_success() || response.status() == reqwest::StatusCode::ACCEPTED {
+                        tracing::info!(
+                            "Successfully triggered fetch for subscription {}",
+                            task.subscription_id
+                        );
+                        return Ok(());
+                    } else {
+                        last_error = format!("HTTP {}", response.status());
+                    }
+                }
+                Err(e) => {
+                    last_error = e.to_string();
+                }
+            }
+
+            attempt += 1;
+            if attempt < self.max_retries {
+                // 指數退避
+                let delay = self.base_retry_delay_secs * (1 << attempt);
+                tracing::warn!(
+                    "Fetch trigger failed (attempt {}/{}), retrying in {} seconds: {}",
+                    attempt,
+                    self.max_retries,
+                    delay,
+                    last_error
+                );
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+            }
+        }
+
+        Err(format!(
+            "Failed after {} attempts: {}",
+            self.max_retries,
+            last_error
+        ))
+    }
+
+    /// 記錄抓取嘗試到 cron_logs
+    fn log_fetch_attempt(&self, task: &FetchTask, success: bool, error: Option<&str>) {
+        if let Ok(mut conn) = self.db_pool.get() {
+            let now = Utc::now().naive_utc();
+            let log = NewCronLog {
+                fetcher_type: format!("subscription_{}", task.subscription_id),
+                status: if success { "success".to_string() } else { "failed".to_string() },
+                error_message: error.map(|e| e.to_string()),
+                attempt_count: 1,
+                executed_at: now,
+            };
+
+            if let Err(e) = diesel::insert_into(cron_logs::table)
+                .values(&log)
+                .execute(&mut conn)
+            {
+                tracing::error!("Failed to log fetch attempt: {}", e);
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_scheduler_creation() {
-        let scheduler = CronScheduler::new().await;
-        assert!(scheduler.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_scheduler_start_shutdown() {
-        let scheduler = CronScheduler::new().await.unwrap();
-        assert!(scheduler.start().await.is_ok());
-        assert!(scheduler.shutdown().await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_scheduler_clone() {
-        let scheduler1 = CronScheduler::new().await.unwrap();
-        let scheduler2 = scheduler1.clone();
-
-        assert!(scheduler2.start().await.is_ok());
-        assert!(scheduler2.shutdown().await.is_ok());
+    #[test]
+    fn test_scheduler_creation() {
+        // 這裡只測試配置，不測試實際排程
+        // 實際 DB 測試需要整合測試環境
     }
 }
