@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use crate::RssParser;
+use fetcher_mikanani::RssParser;
 use tokio::sync::Mutex;
 use std::collections::VecDeque;
 
@@ -37,29 +37,6 @@ impl SubscriptionHandler {
     /// Returns true if URL contains "mikanani.me"
     pub fn can_handle_url(&self, url: &str) -> bool {
         url.contains("mikanani.me")
-    }
-
-    /// Register subscription with core service
-    pub async fn register_subscription_with_core(&self, payload: &SubscriptionBroadcastPayload) -> anyhow::Result<()> {
-        let core_service_url = std::env::var("CORE_SERVICE_URL")
-            .unwrap_or_else(|_| "http://core-service:8000".to_string());
-
-        // Validate the URL
-        if !self.can_handle_url(&payload.rss_url) {
-            return Err(anyhow::anyhow!("URL does not contain mikanani.me"));
-        }
-
-        // Register with core service
-        let client = reqwest::Client::new();
-        client
-            .post(&format!("{}/subscriptions/register", core_service_url))
-            .json(payload)
-            .send()
-            .await?;
-
-        tracing::info!("Successfully registered subscription for: {}", payload.rss_url);
-
-        Ok(())
     }
 
     /// Add a pending subscription to the queue
