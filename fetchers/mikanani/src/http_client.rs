@@ -81,7 +81,6 @@ impl HttpClient for RealHttpClient {
     }
 }
 
-#[cfg(test)]
 pub mod mock {
     use super::*;
     use std::sync::Mutex;
