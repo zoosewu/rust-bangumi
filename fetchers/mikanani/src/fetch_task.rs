@@ -1,15 +1,14 @@
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
-use shared::FetchedAnime;
+use shared::models::{RawAnimeItem, RawFetcherResultsPayload};
 
 use crate::http_client::{HttpClient, HttpError};
 use crate::RssParser;
 
-/// Fetch 任務的結果 payload
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Legacy payload for backwards compatibility with old handler
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FetcherResultsPayload {
     pub subscription_id: i32,
-    pub animes: Vec<FetchedAnime>,
+    pub animes: Vec<shared::FetchedAnime>,
     pub fetcher_source: String,
     pub success: bool,
     pub error_message: Option<String>,
@@ -40,32 +39,29 @@ impl<C: HttpClient> FetchTask<C> {
         }
     }
 
-    /// 執行 RSS 抓取並回傳 payload（不送出）
-    pub async fn fetch_rss(&self, rss_url: &str, subscription_id: i32) -> FetcherResultsPayload {
-        match self.parser.parse_feed(rss_url).await {
-            Ok(animes) => {
+    /// 執行新架構的 RSS 抓取並回傳原始項目 payload
+    pub async fn execute(&self, rss_url: &str, subscription_id: i32) -> Result<RawFetcherResultsPayload, FetchTaskError> {
+        match self.parser.fetch_raw_items(rss_url).await {
+            Ok(items) => {
                 tracing::info!(
-                    "Fetch successful: {} anime with {} total links",
-                    animes.len(),
-                    animes.iter().map(|a| a.links.len()).sum::<usize>()
+                    "Fetch successful: {} raw items",
+                    items.len()
                 );
-                FetcherResultsPayload {
+                Ok(RawFetcherResultsPayload {
                     subscription_id,
-                    animes,
-                    fetcher_source: self.fetcher_source.clone(),
+                    items,
                     success: true,
                     error_message: None,
-                }
+                })
             }
             Err(e) => {
                 tracing::error!("Fetch failed: {}", e);
-                FetcherResultsPayload {
+                Ok(RawFetcherResultsPayload {
                     subscription_id,
-                    animes: vec![],
-                    fetcher_source: self.fetcher_source.clone(),
+                    items: vec![],
                     success: false,
                     error_message: Some(e.to_string()),
-                }
+                })
             }
         }
     }
@@ -74,12 +70,12 @@ impl<C: HttpClient> FetchTask<C> {
     pub async fn send_callback(
         &self,
         callback_url: &str,
-        payload: &FetcherResultsPayload,
+        payload: &RawFetcherResultsPayload,
     ) -> Result<(), FetchTaskError> {
         let response = self.http_client.post_json(callback_url, payload).await?;
 
         if response.status.is_success() {
-            tracing::info!("Successfully sent results to core service");
+            tracing::info!("Successfully sent raw results to core service");
             Ok(())
         } else {
             let err_msg = format!("Core service returned error: {}", response.status);
@@ -88,14 +84,14 @@ impl<C: HttpClient> FetchTask<C> {
         }
     }
 
-    /// 執行完整的 fetch + callback 流程
-    pub async fn execute(
+    /// 執行完整的 fetch + callback 流程（新架構）
+    pub async fn execute_and_send(
         &self,
         subscription_id: i32,
         rss_url: &str,
         callback_url: &str,
-    ) -> Result<FetcherResultsPayload, FetchTaskError> {
-        let payload = self.fetch_rss(rss_url, subscription_id).await;
+    ) -> Result<RawFetcherResultsPayload, FetchTaskError> {
+        let payload = self.execute(rss_url, subscription_id).await?;
         self.send_callback(callback_url, &payload).await?;
         Ok(payload)
     }
@@ -114,11 +110,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_fetch_rss_creates_payload_on_parse_error() {
+    async fn test_execute_creates_payload_on_parse_error() {
         // 使用無效 URL 觸發解析錯誤
         let task = create_test_task(MockHttpClient::new());
 
-        let payload = task.fetch_rss("invalid://url", 123).await;
+        let payload = task.execute("invalid://url", 123).await.unwrap();
 
         assert_eq!(payload.subscription_id, 123);
         assert!(!payload.success);
@@ -131,22 +127,21 @@ mod tests {
         let mock_client = MockHttpClient::with_response(StatusCode::OK, "{}");
         let task = create_test_task(mock_client);
 
-        let payload = FetcherResultsPayload {
+        let payload = RawFetcherResultsPayload {
             subscription_id: 1,
-            animes: vec![],
-            fetcher_source: "test".to_string(),
+            items: vec![],
             success: true,
             error_message: None,
         };
 
-        let result = task.send_callback("http://core/fetcher-results", &payload).await;
+        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
 
         assert!(result.is_ok());
 
         // 驗證請求被正確發送
         let requests = task.http_client.get_requests();
         assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].0, "http://core/fetcher-results");
+        assert_eq!(requests[0].0, "http://core/raw-fetcher-results");
         assert!(requests[0].1.contains("subscription_id"));
     }
 
@@ -158,15 +153,14 @@ mod tests {
         );
         let task = create_test_task(mock_client);
 
-        let payload = FetcherResultsPayload {
+        let payload = RawFetcherResultsPayload {
             subscription_id: 1,
-            animes: vec![],
-            fetcher_source: "test".to_string(),
+            items: vec![],
             success: false,
             error_message: Some("parse error".to_string()),
         };
 
-        let result = task.send_callback("http://core/fetcher-results", &payload).await;
+        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
 
         assert!(result.is_err());
     }
@@ -178,15 +172,14 @@ mod tests {
         );
         let task = create_test_task(mock_client);
 
-        let payload = FetcherResultsPayload {
+        let payload = RawFetcherResultsPayload {
             subscription_id: 1,
-            animes: vec![],
-            fetcher_source: "test".to_string(),
+            items: vec![],
             success: true,
             error_message: None,
         };
 
-        let result = task.send_callback("http://core/fetcher-results", &payload).await;
+        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
 
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -197,10 +190,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_payload_serialization() {
-        let payload = FetcherResultsPayload {
+        let payload = RawFetcherResultsPayload {
             subscription_id: 42,
-            animes: vec![],
-            fetcher_source: "mikanani".to_string(),
+            items: vec![],
             success: true,
             error_message: None,
         };
@@ -208,7 +200,6 @@ mod tests {
         let json = serde_json::to_string(&payload).unwrap();
 
         assert!(json.contains("42"));
-        assert!(json.contains("mikanani"));
         assert!(json.contains("true"));
     }
 }

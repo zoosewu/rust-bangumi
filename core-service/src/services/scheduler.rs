@@ -135,7 +135,7 @@ impl FetchScheduler {
         let fetch_url = format!("{}/fetch", task.fetcher_base_url);
         let callback_url = std::env::var("CORE_SERVICE_URL")
             .unwrap_or_else(|_| "http://core-service:8000".to_string());
-        let callback_url = format!("{}/fetcher-results", callback_url);
+        let callback_url = format!("{}/raw-fetcher-results", callback_url);
 
         let request = shared::FetchTriggerRequest {
             subscription_id: task.subscription_id,

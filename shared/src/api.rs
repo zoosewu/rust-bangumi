@@ -25,6 +25,15 @@ pub mod routes {
     pub const CRON_DISABLE: &str = "/cron/jobs/:subscription_id/disable";
 
     pub const LOGS: &str = "/logs";
+
+    // New Architecture Routes
+    pub const RAW_FETCHER_RESULTS: &str = "/raw-fetcher-results";
+    pub const PARSERS: &str = "/parsers";
+    pub const PARSERS_BY_ID: &str = "/parsers/:parser_id";
+    pub const RAW_ITEMS: &str = "/raw-items";
+    pub const RAW_ITEMS_BY_ID: &str = "/raw-items/:item_id";
+    pub const RAW_ITEMS_REPARSE: &str = "/raw-items/:item_id/reparse";
+    pub const RAW_ITEMS_SKIP: &str = "/raw-items/:item_id/skip";
 }
 
 // HTTP 頭部常數

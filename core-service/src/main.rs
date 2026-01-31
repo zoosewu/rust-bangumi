@@ -112,6 +112,17 @@ async fn main() -> anyhow::Result<()> {
 
         // Fetcher 結果接收
         .route("/fetcher-results", post(handlers::fetcher_results::receive_fetcher_results))
+        .route("/raw-fetcher-results", post(handlers::fetcher_results::receive_raw_fetcher_results))
+
+        // 解析器管理
+        .route("/parsers", get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser))
+        .route("/parsers/:parser_id", get(handlers::parsers::get_parser).delete(handlers::parsers::delete_parser))
+
+        // 原始資料管理
+        .route("/raw-items", get(handlers::raw_items::list_raw_items))
+        .route("/raw-items/:item_id", get(handlers::raw_items::get_raw_item))
+        .route("/raw-items/:item_id/reparse", post(handlers::raw_items::reparse_item))
+        .route("/raw-items/:item_id/skip", post(handlers::raw_items::skip_item))
 
         // 衝突解決
         .route("/conflicts", get(handlers::conflict_resolution::get_pending_conflicts))

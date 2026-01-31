@@ -1,40 +1,16 @@
 use axum::{
     routing::{get, post},
-    Router, Json, http::StatusCode,
+    Router,
 };
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber;
 use fetcher_mikanani::{FetcherConfig, RealHttpClient, HttpClient};
-use serde::{Deserialize, Serialize};
 
 mod handlers;
-mod subscription_handler;
 mod cors;
 
 use handlers::AppState;
-use subscription_handler::SubscriptionBroadcastPayload;
-
-/// Response for subscription broadcast
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SubscriptionBroadcastResponse {
-    pub status: String,
-    pub message: String,
-}
-
-/// Handle subscription broadcast from core service
-async fn handle_subscription_broadcast(
-    Json(payload): Json<SubscriptionBroadcastPayload>,
-) -> (StatusCode, Json<SubscriptionBroadcastResponse>) {
-    tracing::info!("Received subscription broadcast: {:?}", payload);
-
-    let response = SubscriptionBroadcastResponse {
-        status: "received".to_string(),
-        message: format!("Subscription received for {}", payload.rss_url),
-    };
-
-    (StatusCode::OK, Json(response))
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -67,7 +43,6 @@ async fn main() -> anyhow::Result<()> {
     let mut app = Router::new()
         .route("/fetch", post(handlers::fetch))
         .route("/health", get(handlers::health_check))
-        .route("/subscribe", post(handle_subscription_broadcast))
         .route("/can-handle-subscription", post(handlers::can_handle_subscription))
         .with_state(app_state);
 

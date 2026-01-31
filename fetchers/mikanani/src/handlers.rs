@@ -69,7 +69,7 @@ pub async fn fetch(
 
         let task = FetchTask::new(parser, http_client, "mikanani".to_string());
 
-        if let Err(e) = task.execute(subscription_id, &rss_url, &callback_url).await {
+        if let Err(e) = task.execute_and_send(subscription_id, &rss_url, &callback_url).await {
             tracing::error!("Background fetch task failed: {}", e);
         }
     });

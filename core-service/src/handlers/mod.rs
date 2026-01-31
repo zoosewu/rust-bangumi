@@ -5,3 +5,5 @@ pub mod links;
 pub mod subscriptions;
 pub mod fetcher_results;
 pub mod conflict_resolution;
+pub mod parsers;
+pub mod raw_items;

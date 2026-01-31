@@ -11,9 +11,12 @@ use diesel::prelude::*;
 use crate::state::AppState;
 use crate::models::{
     NewAnime, NewSeason, NewAnimeSeries, NewSubtitleGroup, NewAnimeLink,
-    Anime, Season, AnimeSeries, SubtitleGroup, AnimeLink, Subscription,
+    Anime, Season, AnimeSeries, SubtitleGroup, AnimeLink, Subscription, RawAnimeItem,
 };
 use crate::schema::{animes, seasons, anime_series, subtitle_groups, anime_links, subscriptions};
+use crate::services::TitleParserService;
+use crate::services::title_parser::ParseStatus;
+use shared::models::{RawAnimeItem as SharedRawAnimeItem, RawFetcherResultsPayload, RawFetcherResultsResponse};
 
 // ============ DTOs for Fetcher Results ============
 
@@ -378,6 +381,7 @@ fn create_anime_link(
         source_hash: fetched_link.source_hash.clone(),
         filtered_flag: false,
         created_at: now,
+        raw_item_id: None,
     };
 
     diesel::insert_into(anime_links::table)
@@ -419,6 +423,202 @@ async fn update_subscription_after_fetch(
         now,
         next_fetch
     );
+
+    Ok(())
+}
+
+// ============ Raw Fetcher Results Handler (New Architecture) ============
+
+/// 處理新架構的原始 fetcher 結果
+pub async fn receive_raw_fetcher_results(
+    State(state): State<AppState>,
+    Json(payload): Json<RawFetcherResultsPayload>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    tracing::info!(
+        "Received raw fetcher results: {} items, subscription_id: {}",
+        payload.items.len(),
+        payload.subscription_id
+    );
+
+    // 更新訂閱的 last_fetched_at
+    if let Err(e) = update_subscription_after_fetch(&state, payload.subscription_id, payload.success).await {
+        tracing::error!("Failed to update subscription {}: {}", payload.subscription_id, e);
+    }
+
+    let mut items_received = 0;
+    let mut items_parsed = 0;
+    let mut items_failed = 0;
+    let mut errors = Vec::new();
+
+    match state.db.get() {
+        Ok(mut conn) => {
+            for raw_item in payload.items {
+                items_received += 1;
+
+                // 轉換 pub_date
+                let pub_date = raw_item.pub_date.map(|dt| dt.naive_utc());
+
+                // 儲存原始項目
+                let saved_item = match TitleParserService::save_raw_item(
+                    &mut conn,
+                    &raw_item.title,
+                    raw_item.description.as_deref(),
+                    &raw_item.download_url,
+                    pub_date,
+                    payload.subscription_id,
+                ) {
+                    Ok(item) => item,
+                    Err(e) => {
+                        // 可能是重複項目（UNIQUE 違反），跳過
+                        tracing::debug!("Skipped item (possibly duplicate): {}", e);
+                        continue;
+                    }
+                };
+
+                // 嘗試解析標題
+                match TitleParserService::parse_title(&mut conn, &raw_item.title) {
+                    Ok(Some(parsed)) => {
+                        // 解析成功，建立相關記錄
+                        match process_parsed_result(&mut conn, &saved_item, &parsed) {
+                            Ok(_) => {
+                                TitleParserService::update_raw_item_status(
+                                    &mut conn,
+                                    saved_item.item_id,
+                                    ParseStatus::Parsed,
+                                    Some(parsed.parser_id),
+                                    None,
+                                ).ok();
+                                items_parsed += 1;
+                                tracing::debug!(
+                                    "Parsed: {} -> {} EP{}",
+                                    raw_item.title,
+                                    parsed.anime_title,
+                                    parsed.episode_no
+                                );
+                            }
+                            Err(e) => {
+                                TitleParserService::update_raw_item_status(
+                                    &mut conn,
+                                    saved_item.item_id,
+                                    ParseStatus::Failed,
+                                    Some(parsed.parser_id),
+                                    Some(&e),
+                                ).ok();
+                                items_failed += 1;
+                                errors.push(e);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        // 無匹配解析器
+                        TitleParserService::update_raw_item_status(
+                            &mut conn,
+                            saved_item.item_id,
+                            ParseStatus::NoMatch,
+                            None,
+                            Some("No matching parser found"),
+                        ).ok();
+                        items_failed += 1;
+                        tracing::warn!("No parser matched for: {}", raw_item.title);
+                    }
+                    Err(e) => {
+                        TitleParserService::update_raw_item_status(
+                            &mut conn,
+                            saved_item.item_id,
+                            ParseStatus::Failed,
+                            None,
+                            Some(&e),
+                        ).ok();
+                        items_failed += 1;
+                        errors.push(e);
+                    }
+                }
+            }
+
+            let response = RawFetcherResultsResponse {
+                success: items_failed == 0,
+                items_received,
+                items_parsed,
+                items_failed,
+                message: if errors.is_empty() {
+                    format!("Processed {} items: {} parsed, {} failed", items_received, items_parsed, items_failed)
+                } else {
+                    format!("Processed {} items with errors: {:?}", items_received, errors)
+                },
+            };
+
+            (StatusCode::OK, Json(json!(response)))
+        }
+        Err(e) => {
+            tracing::error!("Failed to get database connection: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!(RawFetcherResultsResponse {
+                    success: false,
+                    items_received: 0,
+                    items_parsed: 0,
+                    items_failed: 0,
+                    message: format!("Database connection error: {}", e),
+                })),
+            )
+        }
+    }
+}
+
+/// 處理解析成功的結果，建立 anime, series, group, link 記錄
+fn process_parsed_result(
+    conn: &mut PgConnection,
+    raw_item: &RawAnimeItem,
+    parsed: &crate::services::title_parser::ParsedResult,
+) -> Result<(), String> {
+    use sha2::{Sha256, Digest};
+
+    // 1. 建立或取得 anime
+    let anime = create_or_get_anime(conn, &parsed.anime_title)?;
+
+    // 2. 建立或取得 season（使用預設值）
+    let year = parsed.year.as_ref()
+        .and_then(|y| y.parse::<i32>().ok())
+        .unwrap_or(2025);
+    let season_name = parsed.season.as_deref().unwrap_or("unknown");
+    let season = create_or_get_season(conn, year, season_name)?;
+
+    // 3. 建立或取得 series
+    let series = create_or_get_series(
+        conn,
+        anime.anime_id,
+        parsed.series_no,
+        season.season_id,
+        "",  // description
+    )?;
+
+    // 4. 建立或取得 subtitle_group
+    let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
+    let group = create_or_get_subtitle_group(conn, group_name)?;
+
+    // 5. 生成 source_hash
+    let mut hasher = Sha256::new();
+    hasher.update(raw_item.download_url.as_bytes());
+    let source_hash = format!("{:x}", hasher.finalize());
+
+    // 6. 建立 anime_link
+    let now = Utc::now().naive_utc();
+    let new_link = NewAnimeLink {
+        series_id: series.series_id,
+        group_id: group.group_id,
+        episode_no: parsed.episode_no,
+        title: Some(raw_item.title.clone()),
+        url: raw_item.download_url.clone(),
+        source_hash,
+        filtered_flag: false,
+        created_at: now,
+        raw_item_id: Some(raw_item.item_id),
+    };
+
+    diesel::insert_into(anime_links::table)
+        .values(&new_link)
+        .execute(conn)
+        .map_err(|e| format!("Failed to create anime link: {}", e))?;
 
     Ok(())
 }

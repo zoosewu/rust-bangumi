@@ -27,6 +27,7 @@ pub async fn create_anime_link(
         source_hash: payload.source_hash,
         filtered_flag: false, // Default to false
         created_at: now,
+        raw_item_id: None,
     };
 
     match state.db.get() {

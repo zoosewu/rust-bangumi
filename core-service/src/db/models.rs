@@ -344,6 +344,7 @@ pub fn create_anime_link(
         source_hash,
         filtered_flag,
         created_at: now,
+        raw_item_id: None,
     };
 
     diesel::insert_into(anime_links::table)

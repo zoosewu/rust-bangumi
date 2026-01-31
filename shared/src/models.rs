@@ -234,3 +234,33 @@ pub struct FetchTriggerResponse {
     pub accepted: bool,
     pub message: String,
 }
+
+// ============ Raw Anime Item (New Architecture) ============
+
+/// 原始動畫項目（單集）- 來自 Fetcher 的原始資料
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawAnimeItem {
+    pub title: String,                      // RSS <title>
+    pub description: Option<String>,        // RSS <description>
+    pub download_url: String,               // RSS <enclosure> url
+    pub pub_date: Option<DateTime<Utc>>,    // RSS <pubDate>
+}
+
+/// Fetcher 回傳的原始結果（新架構）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawFetcherResultsPayload {
+    pub subscription_id: i32,
+    pub items: Vec<RawAnimeItem>,
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
+/// Core 處理原始結果的回應
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawFetcherResultsResponse {
+    pub success: bool,
+    pub items_received: usize,
+    pub items_parsed: usize,
+    pub items_failed: usize,
+    pub message: String,
+}

@@ -210,6 +210,7 @@ pub struct AnimeLink {
     pub source_hash: String,
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
+    pub raw_item_id: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -223,6 +224,7 @@ pub struct NewAnimeLink {
     pub source_hash: String,
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
+    pub raw_item_id: Option<i32>,
 }
 
 // ============ FilterRules ============
@@ -231,10 +233,10 @@ pub struct NewAnimeLink {
 pub struct FilterRule {
     pub rule_id: i32,
     pub rule_order: i32,
-    pub is_positive: bool,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
 }
@@ -243,10 +245,10 @@ pub struct FilterRule {
 #[diesel(table_name = super::super::schema::filter_rules)]
 pub struct NewFilterRule {
     pub rule_order: i32,
-    pub is_positive: bool,
     pub regex_pattern: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
 }
@@ -405,4 +407,129 @@ pub struct NewSubscriptionConflict {
     pub resolution_data: Option<String>,
     pub created_at: NaiveDateTime,
     pub resolved_at: Option<NaiveDateTime>,
+}
+
+// ============ ParserSourceType ENUM ============
+#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[diesel(sql_type = crate::schema::sql_types::ParserSourceType)]
+pub enum ParserSourceType {
+    Regex,
+    Static,
+}
+
+impl diesel::deserialize::FromSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg> for ParserSourceType {
+    fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"regex" => Ok(ParserSourceType::Regex),
+            b"static" => Ok(ParserSourceType::Static),
+            _ => Err("Unrecognized parser_source_type variant".into()),
+        }
+    }
+}
+
+impl diesel::serialize::ToSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg> for ParserSourceType {
+    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+        match *self {
+            ParserSourceType::Regex => out.write_all(b"regex")?,
+            ParserSourceType::Static => out.write_all(b"static")?,
+        }
+        Ok(diesel::serialize::IsNull::No)
+    }
+}
+
+impl std::fmt::Display for ParserSourceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParserSourceType::Regex => write!(f, "regex"),
+            ParserSourceType::Static => write!(f, "static"),
+        }
+    }
+}
+
+// ============ TitleParsers ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = crate::schema::title_parsers)]
+pub struct TitleParser {
+    pub parser_id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub priority: i32,
+    pub is_enabled: bool,
+    pub condition_regex: String,
+    pub parse_regex: String,
+    pub anime_title_source: ParserSourceType,
+    pub anime_title_value: String,
+    pub episode_no_source: ParserSourceType,
+    pub episode_no_value: String,
+    pub series_no_source: Option<ParserSourceType>,
+    pub series_no_value: Option<String>,
+    pub subtitle_group_source: Option<ParserSourceType>,
+    pub subtitle_group_value: Option<String>,
+    pub resolution_source: Option<ParserSourceType>,
+    pub resolution_value: Option<String>,
+    pub season_source: Option<ParserSourceType>,
+    pub season_value: Option<String>,
+    pub year_source: Option<ParserSourceType>,
+    pub year_value: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::title_parsers)]
+pub struct NewTitleParser {
+    pub name: String,
+    pub description: Option<String>,
+    pub priority: i32,
+    pub is_enabled: bool,
+    pub condition_regex: String,
+    pub parse_regex: String,
+    pub anime_title_source: ParserSourceType,
+    pub anime_title_value: String,
+    pub episode_no_source: ParserSourceType,
+    pub episode_no_value: String,
+    pub series_no_source: Option<ParserSourceType>,
+    pub series_no_value: Option<String>,
+    pub subtitle_group_source: Option<ParserSourceType>,
+    pub subtitle_group_value: Option<String>,
+    pub resolution_source: Option<ParserSourceType>,
+    pub resolution_value: Option<String>,
+    pub season_source: Option<ParserSourceType>,
+    pub season_value: Option<String>,
+    pub year_source: Option<ParserSourceType>,
+    pub year_value: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ RawAnimeItems ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = crate::schema::raw_anime_items)]
+pub struct RawAnimeItem {
+    pub item_id: i32,
+    pub title: String,
+    pub description: Option<String>,
+    pub download_url: String,
+    pub pub_date: Option<NaiveDateTime>,
+    pub subscription_id: i32,
+    pub status: String,
+    pub parser_id: Option<i32>,
+    pub error_message: Option<String>,
+    pub parsed_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::raw_anime_items)]
+pub struct NewRawAnimeItem {
+    pub title: String,
+    pub description: Option<String>,
+    pub download_url: String,
+    pub pub_date: Option<NaiveDateTime>,
+    pub subscription_id: i32,
+    pub status: String,
+    pub parser_id: Option<i32>,
+    pub error_message: Option<String>,
+    pub parsed_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
 }
