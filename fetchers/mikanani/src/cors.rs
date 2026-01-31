@@ -38,19 +38,28 @@ pub fn create_cors_layer() -> Option<CorsLayer> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // 使用 mutex 確保測試不會並行執行（避免環境變數競爭）
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_cors_disabled() {
+        let _lock = ENV_MUTEX.lock().unwrap();
         std::env::set_var("ENABLE_CORS", "false");
         let cors = create_cors_layer();
+        std::env::remove_var("ENABLE_CORS");
         assert!(cors.is_none());
     }
 
     #[test]
     fn test_cors_enabled() {
+        let _lock = ENV_MUTEX.lock().unwrap();
         std::env::set_var("ENABLE_CORS", "true");
         std::env::set_var("CORS_ALLOWED_ORIGINS", "*");
         let cors = create_cors_layer();
+        std::env::remove_var("ENABLE_CORS");
+        std::env::remove_var("CORS_ALLOWED_ORIGINS");
         assert!(cors.is_some());
     }
 }

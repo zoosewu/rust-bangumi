@@ -251,6 +251,7 @@ pub struct RawAnimeItem {
 pub struct RawFetcherResultsPayload {
     pub subscription_id: i32,
     pub items: Vec<RawAnimeItem>,
+    pub fetcher_source: String,
     pub success: bool,
     pub error_message: Option<String>,
 }

@@ -50,6 +50,7 @@ impl<C: HttpClient> FetchTask<C> {
                 Ok(RawFetcherResultsPayload {
                     subscription_id,
                     items,
+                    fetcher_source: self.fetcher_source.clone(),
                     success: true,
                     error_message: None,
                 })
@@ -59,6 +60,7 @@ impl<C: HttpClient> FetchTask<C> {
                 Ok(RawFetcherResultsPayload {
                     subscription_id,
                     items: vec![],
+                    fetcher_source: self.fetcher_source.clone(),
                     success: false,
                     error_message: Some(e.to_string()),
                 })
@@ -130,6 +132,7 @@ mod tests {
         let payload = RawFetcherResultsPayload {
             subscription_id: 1,
             items: vec![],
+            fetcher_source: "test-fetcher".to_string(),
             success: true,
             error_message: None,
         };
@@ -156,6 +159,7 @@ mod tests {
         let payload = RawFetcherResultsPayload {
             subscription_id: 1,
             items: vec![],
+            fetcher_source: "test-fetcher".to_string(),
             success: false,
             error_message: Some("parse error".to_string()),
         };
@@ -175,6 +179,7 @@ mod tests {
         let payload = RawFetcherResultsPayload {
             subscription_id: 1,
             items: vec![],
+            fetcher_source: "test-fetcher".to_string(),
             success: true,
             error_message: None,
         };
@@ -193,6 +198,7 @@ mod tests {
         let payload = RawFetcherResultsPayload {
             subscription_id: 42,
             items: vec![],
+            fetcher_source: "test-fetcher".to_string(),
             success: true,
             error_message: None,
         };
@@ -201,5 +207,6 @@ mod tests {
 
         assert!(json.contains("42"));
         assert!(json.contains("true"));
+        assert!(json.contains("test-fetcher"));
     }
 }
