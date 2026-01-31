@@ -1,5 +1,4 @@
 use tower_http::cors::CorsLayer;
-use axum::http::Method;
 
 /// 建立 CORS 層
 ///

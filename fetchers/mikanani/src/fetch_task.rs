@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use shared::models::{RawAnimeItem, RawFetcherResultsPayload};
+use shared::models::RawFetcherResultsPayload;
 
 use crate::http_client::{HttpClient, HttpError};
 use crate::RssParser;

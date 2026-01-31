@@ -102,8 +102,10 @@ mod tests {
         use std::time::Instant;
 
         let start = Instant::now();
+        // 3 retries: fail -> wait 10ms -> fail -> wait 20ms -> fail -> return
+        // Total delay should be at least 30ms (10 + 20)
         let result = retry_with_backoff::<_, _, i32, String>(
-            2,
+            3,
             Duration::from_millis(10),
             || async { Err("Always fails".to_string()) },
         )
@@ -111,8 +113,12 @@ mod tests {
 
         let elapsed = start.elapsed();
         assert!(result.is_err());
-        // Should take at least 10ms (first backoff) - be lenient with timing
-        assert!(elapsed.as_millis() >= 5);
+        // Verify exponential backoff: 10ms + 20ms = 30ms minimum
+        assert!(
+            elapsed.as_millis() >= 25,
+            "Expected at least 25ms delay for exponential backoff, got {}ms",
+            elapsed.as_millis()
+        );
     }
 
     #[tokio::test]

@@ -109,43 +109,66 @@ pub async fn can_handle_subscription(
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_can_handle_mikanani_rss() {
-        let request = CanHandleRequest {
+    #[tokio::test]
+    async fn test_health_check_returns_ok() {
+        let (status, body) = health_check().await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.0["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_can_handle_mikanani_rss() {
+        let payload = Json(CanHandleRequest {
             source_url: "https://mikanani.me/rss/bangumi".to_string(),
             source_type: "rss".to_string(),
-        };
+        });
 
-        let can_handle = request.source_type == "rss" && request.source_url.contains("mikanani.me");
-        assert!(can_handle);
+        let (status, response) = can_handle_subscription(payload).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert!(response.can_handle);
     }
 
-    #[test]
-    fn test_cannot_handle_other_rss() {
-        let request = CanHandleRequest {
+    #[tokio::test]
+    async fn test_cannot_handle_other_rss() {
+        let payload = Json(CanHandleRequest {
             source_url: "https://example.com/rss".to_string(),
             source_type: "rss".to_string(),
-        };
+        });
 
-        let can_handle = request.source_type == "rss" && request.source_url.contains("mikanani.me");
-        assert!(!can_handle);
+        let (status, response) = can_handle_subscription(payload).await;
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(!response.can_handle);
     }
 
-    #[test]
-    fn test_cannot_handle_non_rss_type() {
-        let request = CanHandleRequest {
+    #[tokio::test]
+    async fn test_cannot_handle_non_rss_type() {
+        let payload = Json(CanHandleRequest {
             source_url: "https://mikanani.me/api".to_string(),
             source_type: "api".to_string(),
-        };
+        });
 
-        let can_handle = request.source_type == "rss" && request.source_url.contains("mikanani.me");
-        assert!(!can_handle);
+        let (status, response) = can_handle_subscription(payload).await;
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(!response.can_handle);
     }
 
-    #[test]
-    fn test_app_state_creation() {
+    #[tokio::test]
+    async fn test_fetch_returns_202_accepted() {
         let state = AppState::new();
-        // 確保可以建立狀態
-        assert!(Arc::strong_count(&state.parser) >= 1);
+        let payload = Json(FetchTriggerRequest {
+            subscription_id: 123,
+            rss_url: "https://mikanani.me/rss/test".to_string(),
+            callback_url: "http://core/callback".to_string(),
+        });
+
+        let (status, response) = fetch(State(state), payload).await;
+
+        assert_eq!(status, StatusCode::ACCEPTED);
+        assert!(response.accepted);
+        assert!(response.message.contains("123"));
     }
 }

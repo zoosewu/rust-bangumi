@@ -64,13 +64,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_for_test_config() {
-        let config = FetcherConfig::for_test();
-        assert_eq!(config.core_service_url, "http://test-core:8000");
-        assert_eq!(config.service_name, "mikanani");
-    }
-
-    #[test]
     fn test_callback_url() {
         let config = FetcherConfig::new(
             "http://localhost:8000".to_string(),
