@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Bangumi Fetcher Service API
   description: Fetcher 服務 API 規格 - 用於爬取和解析動畫 RSS 源
-  version: 0.1.0
+  version: 0.2.0
   contact:
     name: Bangumi Project
   license:
@@ -19,8 +19,8 @@ tags:
     description: 服務健康檢查
   - name: Fetch
     description: RSS 爬取功能
-  - name: Subscription
-    description: 訂閱管理
+  - name: Ownership
+    description: URL 歸屬檢查
 
 paths:
   /health:
@@ -46,150 +46,153 @@ paths:
     post:
       tags:
         - Fetch
-      summary: 爬取 RSS 源
-      description: 從指定的 RSS URL 爬取動畫數據並進行解析
-      operationId: fetchRss
+      summary: 觸發 RSS 爬取
+      description: |
+        觸發 RSS 爬取任務。此端點為非同步操作：
+        1. 立即回傳 202 Accepted
+        2. 在背景執行爬取任務
+        3. 完成後回呼到指定的 callback_url
+      operationId: triggerFetch
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/FetchRequest'
+              $ref: '#/components/schemas/FetchTriggerRequest'
             examples:
               mikanani:
                 summary: Mikanani RSS 源
                 value:
+                  subscription_id: 123
                   rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+                  callback_url: "http://core-service:8000/raw-fetcher-results"
       responses:
-        '200':
-          description: 爬取成功
+        '202':
+          description: 爬取任務已接受
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FetchResponse'
+                $ref: '#/components/schemas/FetchTriggerResponse'
               examples:
-                success:
-                  summary: 成功的爬取結果
+                accepted:
+                  summary: 任務已接受
                   value:
-                    status: "success"
-                    count: 42
-                    error: null
+                    accepted: true
+                    message: "Fetch task accepted for subscription 123"
         '400':
           description: 請求格式錯誤
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                invalidUrl:
-                  value:
-                    status: "error"
-                    error: "Invalid RSS URL format"
-        '500':
-          description: 服務內部錯誤
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FetchResponse'
-              examples:
-                networkError:
-                  value:
-                    status: "error"
-                    count: 0
-                    error: "Connection refused"
 
-  /subscribe:
+  /can-handle-subscription:
     post:
       tags:
-        - Subscription
-      summary: 接收訂閱廣播
-      description: 接收核心服務發送的訂閱廣播，建立新的 RSS 訂閱
-      operationId: handleSubscription
+        - Ownership
+      summary: 檢查 URL 歸屬
+      description: |
+        檢查此 Fetcher 是否可以處理指定的訂閱 URL。
+        Core Service 使用此端點來路由訂閱到正確的 Fetcher。
+      operationId: canHandleSubscription
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubscriptionBroadcastPayload'
+              $ref: '#/components/schemas/CanHandleRequest'
+            examples:
+              mikanani:
+                summary: Mikanani RSS URL
+                value:
+                  source_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+                  source_type: "rss"
       responses:
         '200':
-          description: 訂閱已接收
+          description: 可以處理此 URL
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionBroadcastResponse'
-        '400':
-          description: 請求格式錯誤或 URL 不支持
+                $ref: '#/components/schemas/CanHandleResponse'
+              examples:
+                canHandle:
+                  value:
+                    can_handle: true
+        '204':
+          description: 無法處理此 URL
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/CanHandleResponse'
+              examples:
+                cannotHandle:
+                  value:
+                    can_handle: false
 
 components:
   schemas:
-    FetchRequest:
+    FetchTriggerRequest:
       type: object
       required:
+        - subscription_id
         - rss_url
+        - callback_url
       properties:
+        subscription_id:
+          type: integer
+          description: 訂閱 ID
+          example: 123
         rss_url:
           type: string
           format: uri
           description: RSS 源的完整 URL
           example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-
-    FetchResponse:
-      type: object
-      required:
-        - status
-        - count
-      properties:
-        status:
-          type: string
-          enum: [success, error]
-          description: 爬取狀態
-          example: "success"
-        count:
-          type: integer
-          minimum: 0
-          description: 成功解析的動畫連結數量
-          example: 42
-        error:
-          type: string
-          nullable: true
-          description: 錯誤信息（成功時為 null）
-          example: null
-
-    SubscriptionBroadcastPayload:
-      type: object
-      required:
-        - rss_url
-        - service_name
-      properties:
-        rss_url:
+        callback_url:
           type: string
           format: uri
-          description: RSS 源 URL
-          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-        service_name:
-          type: string
-          description: 發送此訂閱的 Fetcher 服務名稱
-          example: "mikanani"
+          description: 爬取完成後的回呼 URL
+          example: "http://core-service:8000/raw-fetcher-results"
 
-    SubscriptionBroadcastResponse:
+    FetchTriggerResponse:
       type: object
       required:
-        - status
+        - accepted
         - message
       properties:
-        status:
-          type: string
-          description: 訂閱處理狀態
-          example: "received"
+        accepted:
+          type: boolean
+          description: 任務是否被接受
+          example: true
         message:
           type: string
-          description: 狀態消息
-          example: "Subscription received for https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+          description: 狀態訊息
+          example: "Fetch task accepted for subscription 123"
+
+    CanHandleRequest:
+      type: object
+      required:
+        - source_url
+        - source_type
+      properties:
+        source_url:
+          type: string
+          format: uri
+          description: 訂閱來源 URL
+          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+        source_type:
+          type: string
+          description: 訂閱類型（例如 "rss"）
+          example: "rss"
+
+    CanHandleResponse:
+      type: object
+      required:
+        - can_handle
+      properties:
+        can_handle:
+          type: boolean
+          description: 是否可以處理此訂閱
+          example: true
 
     ErrorResponse:
       type: object
@@ -204,7 +207,7 @@ components:
         error:
           type: string
           description: 錯誤詳細信息
-          example: "Connection refused"
+          example: "Invalid request format"
 
   responses:
     HealthCheck:
@@ -218,36 +221,15 @@ components:
                 type: string
                 example: "ok"
 
-    FetchSuccess:
-      description: RSS 爬取成功
+    FetchAccepted:
+      description: RSS 爬取任務已接受
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/FetchResponse'
-
-    FetchError:
-      description: RSS 爬取失敗
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/FetchResponse'
-
-    SubscriptionReceived:
-      description: 訂閱已接收
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/SubscriptionBroadcastResponse'
+            $ref: '#/components/schemas/FetchTriggerResponse'
 
     BadRequest:
       description: 請求格式錯誤
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-
-    InternalError:
-      description: 服務內部錯誤
       content:
         application/json:
           schema:

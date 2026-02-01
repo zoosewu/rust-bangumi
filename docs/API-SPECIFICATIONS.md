@@ -15,7 +15,7 @@
 - ✅ 過濾規則管理
 - ✅ 動畫連結管理
 - ✅ RSS 訂閱管理
-- ✅ **Fetcher 結果接收** (`POST /fetcher-results`)
+- ✅ **Fetcher 結果接收** (`POST /fetcher-results`, `POST /raw-fetcher-results`)
 - ✅ 衝突解決
 - ✅ 健康檢查
 
@@ -33,9 +33,9 @@
 **目的：** 定義所有 Fetcher 服務的標準 API 介面
 
 **涵蓋範圍：**
-- ✅ 健康檢查
-- ✅ RSS 爬取功能
-- ✅ 訂閱管理
+- ✅ 健康檢查 (`GET /health`)
+- ✅ RSS 爬取功能 (`POST /fetch`)
+- ✅ URL 歸屬檢查 (`POST /can-handle-subscription`)
 
 **特點：**
 - 通用的請求/響應格式
@@ -51,10 +51,9 @@
 **目的：** 定義 Mikanani 特化 Fetcher 服務的詳細 API 規格
 
 **涵蓋範圍：**
-- ✅ 健康檢查
-- ✅ Mikanani 專用的 RSS 爬取
-- ✅ 訂閱廣播處理
-- ✅ 服務信息端點
+- ✅ 健康檢查 (`GET /health`)
+- ✅ Mikanani 專用的 RSS 爬取 (`POST /fetch`)
+- ✅ URL 歸屬檢查 (`POST /can-handle-subscription`)
 
 **特點：**
 - 詳細的文檔和範例
@@ -67,10 +66,9 @@
 - 本地開發環境：`http://localhost:8001`
 
 **Mikanani 特性：**
-- 支援多種標題格式檢測（[01]、第01話、EP01）
-- 自動 SHA256 去重
+- 支援 Mikanani RSS 格式解析
 - 指數退避重試機制（最多 3 次）
-- 字幕組信息提取
+- 非同步爬取（回呼模式）
 
 ## API 規格之間的關係
 
@@ -79,68 +77,72 @@
 │         核心服務 (Core Service)                 │
 │         Port: 8000                              │
 │  ┌─────────────────────────────────────────┐   │
-│  │ POST /fetcher-results                   │   │
-│  │ 接收來自 Fetcher 的爬取結果             │   │
-│  │ Request: FetcherResultsPayload          │   │
-│  │ Response: FetcherResultsResponse        │   │
+│  │ POST /raw-fetcher-results               │   │
+│  │ 接收來自 Fetcher 的原始爬取結果         │   │
+│  │ Request: RawFetcherResultsPayload       │   │
+│  └─────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────┐   │
+│  │ FetchScheduler                          │   │
+│  │ 排程並觸發 Fetcher 爬取                 │   │
+│  │ 調用: POST /fetch on Fetcher            │   │
 │  └─────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
-                       ↑
-                       │ 發送爬取結果
-                       │
+         │                           ↑
+         │ 1. 觸發爬取               │ 4. 回呼結果
+         │ POST /fetch               │ POST /raw-fetcher-results
+         ↓                           │
 ┌─────────────────────────────────────────────────┐
 │      Mikanani Fetcher Service                   │
 │      Port: 8001                                 │
 │  ┌─────────────────────────────────────────┐   │
 │  │ GET /health                             │   │
 │  │ POST /fetch                             │   │
-│  │ POST /subscribe                         │   │
-│  │ GET /info                               │   │
+│  │ POST /can-handle-subscription           │   │
 │  └─────────────────────────────────────────┘   │
 │                                                 │
-│  遵守通用 Fetcher API 規格                      │
-│  + Mikanani 特化功能                            │
+│  2. 回傳 202 Accepted                          │
+│  3. 背景執行爬取並回呼                         │
 └─────────────────────────────────────────────────┘
 ```
 
 ## API 數據流
 
-### 1. Fetcher 爬取流程
+### 1. Fetcher 爬取流程（Core-Driven）
 
 ```
 1. 核心服務：POST /subscriptions
    → 建立新的 RSS 訂閱
 
-2. 核心服務：POST /services/register (Fetcher 自動執行)
-   → Fetcher 向核心服務註冊
+2. 核心服務：FetchScheduler 定期檢查到期訂閱
+   → 每 60 秒檢查一次
 
-3. 核心服務：POST /subscribe (廣播訂閱信息)
-   → 通知 Fetcher 新的訂閱
+3. 核心服務：POST /fetch (發送到 Fetcher)
+   → 觸發 Fetcher 爬取
+   → Request: { subscription_id, rss_url, callback_url }
 
-4. Mikanani Fetcher：POST /subscribe (接收)
-   → Fetcher 接收訂閱信息
+4. Mikanani Fetcher：回傳 202 Accepted
+   → 立即回應，不阻塞
 
-5. Mikanani Fetcher：POST /fetch (內部或定期執行)
-   → Fetcher 爬取 RSS 源
+5. Mikanani Fetcher：背景執行爬取任務
+   → 抓取 RSS、解析項目
 
-6. Mikanani Fetcher：計算結果
-   → 解析 RSS、提取元數據、生成結果
+6. Mikanani Fetcher：POST /raw-fetcher-results (回呼核心服務)
+   → 提交原始爬取結果
+   → Request: { subscription_id, items, fetcher_source, success, error_message }
 
-7. Mikanani Fetcher：POST /fetcher-results (提交到核心服務)
-   → 提交爬取結果
-
-8. 核心服務：處理和存儲結果
-   → 建立動畫、季度、字幕組、連結等
+7. 核心服務：處理和存儲結果
+   → 解析標題、建立動畫、季度、字幕組、連結等
 ```
 
 ### 2. 結果結構對應
 
 **Fetcher 端：**
-- Mikanani Fetcher 內部處理
-- 生成 `FetchedAnime` 和 `FetchedLink` 結構
+- 產生 `RawFetcherResultsPayload`
+- 包含 `RawAnimeItem` 陣列（原始 RSS 項目）
 
 **核心服務端：**
-- 接收 `FetcherResultsPayload`（包含數組的 `FetchedAnime`）
+- 接收 `RawFetcherResultsPayload`
+- 使用 `TitleParser` 解析標題
 - 轉換為數據庫模型（`Anime`、`AnimeSeries`、`AnimeLink` 等）
 - 存儲到 PostgreSQL
 
@@ -149,21 +151,23 @@
 ### 開發 Fetcher 服務時
 
 1. 實現通用 Fetcher API (`fetcher-openapi.yaml`) 中的所有端點
-2. 如需特化功能，在 Mikanani 規格中補充說明
-3. 確保響應格式符合規格定義
+2. 實現 `POST /can-handle-subscription` 來聲明 URL 歸屬
+3. 確保 `POST /fetch` 為非同步操作（立即回傳 202，背景執行）
+4. 完成後回呼到 `callback_url`
 
 ### 使用 Fetcher 時
 
 1. 查看 `/health` 檢查服務健康狀態
-2. 調用 `POST /fetch` 爬取 RSS 源
-3. Fetcher 自動向核心服務提交結果
+2. 核心服務的 FetchScheduler 自動調用 `POST /fetch`
+3. Fetcher 自動向核心服務回呼結果
 
 ### 整合新的 Fetcher 服務
 
 1. 建立新的 Fetcher 服務目錄
 2. 實現通用 Fetcher API 規格
 3. 建立特化的 OpenAPI 規格文件
-4. 更新核心服務支持的 fetcher_source 列表
+4. 向核心服務註冊 (`POST /services/register`)
+5. 實現 `POST /can-handle-subscription` 來聲明支援的 URL 模式
 
 ## 規格驗證
 
@@ -200,17 +204,17 @@ swagger-cli validate docs/api/fetcher-openapi.yaml
 
 | 服務 | 端點數量 | 主要端點 |
 |------|---------|---------|
-| 核心服務 | 30+ | `/services`, `/anime`, `/fetcher-results` |
-| Fetcher (通用) | 3 | `/health`, `/fetch`, `/subscribe` |
-| Mikanani Fetcher | 4 | `/health`, `/fetch`, `/subscribe`, `/info` |
+| 核心服務 | 30+ | `/services`, `/anime`, `/raw-fetcher-results` |
+| Fetcher (通用) | 3 | `/health`, `/fetch`, `/can-handle-subscription` |
+| Mikanani Fetcher | 3 | `/health`, `/fetch`, `/can-handle-subscription` |
 
 ## 版本管理
 
 - **核心服務版本：** 0.1.0
-- **Fetcher API 版本：** 0.1.0
-- **Mikanani Fetcher 版本：** 0.1.0
+- **Fetcher API 版本：** 0.2.0
+- **Mikanani Fetcher 版本：** 0.2.0
 
 ---
 
-**最後更新：** 2026-01-26
+**最後更新：** 2026-02-01
 **維護者：** Bangumi Project

@@ -6,40 +6,31 @@ Microservice for parsing Mikanani anime RSS feeds and extracting anime metadata.
 
 - **RSS Parsing**: Extract anime data from Mikanani RSS feeds using the feed-rs library
 - **Retry Logic**: Exponential backoff for transient failures (maximum 3 attempts)
-- **Scheduled Fetching**: Optional periodic RSS fetching via cron-like scheduling
-- **Title Parsing**: Support for multiple title formats ([01], 第01話, EP01)
-- **Hash Generation**: SHA256 deduplication keys for links
+- **Async Fetch**: Non-blocking fetch with background task execution
 - **Error Handling**: Comprehensive error logging and recovery
 - **Service Registration**: Automatic registration with core service
 - **Health Checks**: Built-in health check endpoint
+- **URL Ownership**: Can-handle-subscription endpoint for URL routing
 
 ## API Endpoints
 
 ### POST /fetch
-Fetch and parse RSS feed.
+Trigger RSS feed fetch (async). Returns immediately with 202 Accepted, then fetches in background and calls back to core service.
 
 **Request:**
 ```json
 {
-  "rss_url": "https://mikanani.me/RSS/Bangumi?bangumiId=xxx"
+  "subscription_id": 123,
+  "rss_url": "https://mikanani.me/RSS/Bangumi?bangumiId=xxx",
+  "callback_url": "http://core-service:8000/raw-fetcher-results"
 }
 ```
 
-**Response (200 OK):**
+**Response (202 Accepted):**
 ```json
 {
-  "status": "success",
-  "count": 42,
-  "error": null
-}
-```
-
-**Response (500 Error):**
-```json
-{
-  "status": "error",
-  "count": 0,
-  "error": "Connection refused"
+  "accepted": true,
+  "message": "Fetch task accepted for subscription 123"
 }
 ```
 
@@ -53,15 +44,40 @@ Health check endpoint.
 }
 ```
 
+### POST /can-handle-subscription
+Check if this fetcher can handle a given subscription URL.
+
+**Request:**
+```json
+{
+  "source_url": "https://mikanani.me/RSS/Bangumi?bangumiId=xxx",
+  "source_type": "rss"
+}
+```
+
+**Response (200 OK - can handle):**
+```json
+{
+  "can_handle": true
+}
+```
+
+**Response (204 No Content - cannot handle):**
+```json
+{
+  "can_handle": false
+}
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CORE_SERVICE_URL` | `http://core-service:8000` | Core service address for service registration |
-| `FETCH_RSS_URL` | (optional) | RSS feed URL for scheduled fetching |
-| `FETCH_INTERVAL_SECS` | `3600` | Fetch interval in seconds (1 hour) |
+| `SERVICE_HOST` | `fetcher-mikanani` | This service's hostname |
+| `SERVICE_PORT` | `8001` | This service's port |
+| `ENABLE_CORS` | `true` | Enable CORS middleware |
 | `RUST_LOG` | `fetcher_mikanani=debug` | Log level configuration |
-| `RUST_BACKTRACE` | `1` | Enable backtrace in error logs |
 
 ## Usage
 
@@ -87,11 +103,6 @@ export RUST_LOG=fetcher_mikanani=debug
 
 # Run the service
 cargo run --package fetcher-mikanani
-
-# Run with specific RSS URL
-export FETCH_RSS_URL="https://mikanani.me/RSS/Bangumi?bangumiId=123"
-export FETCH_INTERVAL_SECS=300
-cargo run --package fetcher-mikanani
 ```
 
 ### Testing
@@ -104,32 +115,40 @@ cargo test --package fetcher-mikanani
 cargo test --package fetcher-mikanani -- --nocapture
 
 # Run specific test module
-cargo test --package fetcher-mikanani rss_parser
+cargo test --package fetcher-mikanani handlers
 ```
 
 ## Architecture
 
-The fetcher block consists of:
+The fetcher service consists of:
 
 - **rss_parser.rs**: Core RSS parsing logic using feed-rs
   - Parses RSS feed items
-  - Extracts anime metadata
-  - Handles multiple title formats
+  - Extracts raw anime item data
 
 - **retry.rs**: Generic retry mechanism with exponential backoff
-  - Configurable retry attempts (max 3)
-  - Exponential backoff with jitter
-  - Transient failure handling
+  - Configurable retry attempts
+  - Exponential backoff
 
-- **scheduler.rs**: Cron-like periodic fetch scheduling
-  - Interval-based scheduling
-  - Background task management
-  - Graceful shutdown handling
+- **fetch_task.rs**: Background fetch task execution
+  - Async fetch execution
+  - Callback to core service
 
 - **handlers.rs**: HTTP request/response handlers
   - POST /fetch endpoint
   - GET /health endpoint
-  - JSON serialization/deserialization
+  - POST /can-handle-subscription endpoint
+
+- **http_client.rs**: HTTP client abstraction
+  - Trait-based design for testability
+  - Mock client for unit tests
+
+- **config.rs**: Service configuration
+  - Environment variable loading
+  - URL construction helpers
+
+- **cors.rs**: CORS middleware configuration
+  - Configurable via environment variables
 
 - **main.rs**: Service initialization and registration
   - Service startup
@@ -141,46 +160,66 @@ The fetcher block consists of:
 | Crate | Version | Purpose |
 |-------|---------|---------|
 | feed-rs | 2.3 | RSS feed parsing |
-| sha2 | 0.10 | Hash generation |
-| regex | 1.10 | Title pattern matching |
 | reqwest | - | Async HTTP client |
 | axum | - | Web framework |
 | tokio | - | Async runtime |
 | serde | - | Serialization |
 | serde_json | - | JSON handling |
+| tower-http | - | CORS middleware |
 
 ## Testing
 
 Test coverage includes:
 
-### Unit Tests
-- **RSS Parser Tests** (5 tests)
-  - Basic RSS parsing
-  - Multiple title format handling
-  - Metadata extraction
-  - Error handling
+### Unit Tests (24 tests)
 
-- **Retry Mechanism Tests** (4 tests)
-  - Exponential backoff calculation
-  - Retry attempts
-  - Transient vs permanent failures
+- **Config Tests** (2 tests)
+  - URL construction (callback_url, register_url)
 
-- **Scheduler Tests** (2 tests)
-  - Interval-based scheduling
-  - Task execution
+- **HTTP Client Tests** (3 tests)
+  - Mock client request recording
+  - Response configuration
+  - Error simulation
 
-### Integration Tests (19 tests)
-- HTTP endpoint functionality
-- Service registration
-- Full request/response cycles
-- Error scenarios
+- **Retry Tests** (5 tests)
+  - First attempt success
+  - Second attempt success
+  - Retry exhaustion
+  - Exponential backoff verification
+  - Multiple failure recovery
 
-**Total: 30+ tests with comprehensive coverage**
+- **Fetch Task Tests** (5 tests)
+  - Payload serialization
+  - Callback success/error handling
+  - Parse error handling
+
+- **Handler Tests** (5 tests)
+  - Health check returns OK
+  - Can handle mikanani RSS
+  - Cannot handle other RSS
+  - Cannot handle non-RSS types
+  - Fetch returns 202 Accepted
+
+- **CORS Tests** (2 tests)
+  - CORS enabled/disabled
+
+- **Main Tests** (2 tests)
+  - Service registration
+  - Registration error handling
 
 Run tests with:
 ```bash
 cargo test --package fetcher-mikanani
 ```
+
+## Data Flow
+
+1. **Core Service** schedules a fetch and calls `POST /fetch` on fetcher
+2. **Fetcher** returns 202 Accepted immediately
+3. **Fetcher** spawns background task to fetch RSS
+4. **Fetcher** parses RSS and extracts raw items
+5. **Fetcher** calls back to core service at `POST /raw-fetcher-results`
+6. **Core Service** processes and stores the results
 
 ## Deployment
 
@@ -198,10 +237,9 @@ fetcher-mikanani:
     - "8001:8001"
   environment:
     - CORE_SERVICE_URL=http://core-service:8000
-    - FETCH_RSS_URL=${FETCH_RSS_URL}
-    - FETCH_INTERVAL_SECS=${FETCH_INTERVAL_SECS:-3600}
+    - SERVICE_HOST=fetcher-mikanani
+    - SERVICE_PORT=8001
     - RUST_LOG=fetcher_mikanani=debug
-    - RUST_BACKTRACE=1
   depends_on:
     core-service:
       condition: service_healthy
@@ -215,61 +253,6 @@ fetcher-mikanani:
     retries: 3
     start_period: 10s
 ```
-
-### Dockerfile
-
-The service uses a multi-stage build for minimal image size:
-
-```dockerfile
-# Build stage: Compiles Rust code
-FROM rust:alpine as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release --package fetcher-mikanani
-
-# Runtime stage: Minimal Alpine image
-FROM alpine:latest
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /app/target/release/fetcher-mikanani /usr/local/bin/
-EXPOSE 8001
-CMD ["fetcher-mikanani"]
-```
-
-### Deployment Steps
-
-1. **Build Image**
-   ```bash
-   docker compose build fetcher-mikanani
-   ```
-
-2. **Verify Health Check**
-   ```bash
-   docker compose up core-service fetcher-mikanani
-   # Wait for health checks to pass
-   docker compose ps
-   ```
-
-3. **Verify Service Registration**
-   ```bash
-   curl http://localhost:8000/services
-   ```
-   Should see fetcher-mikanani in the response.
-
-4. **Test Fetch Endpoint**
-   ```bash
-   curl -X POST http://localhost:8001/fetch \
-     -H "Content-Type: application/json" \
-     -d '{"rss_url": "https://mikanani.me/RSS/Bangumi?bangumiId=123"}'
-   ```
-
-## Performance Characteristics
-
-- **Async**: Full async/await implementation with Tokio runtime
-- **Resilient**: 3-attempt retry with exponential backoff (1s, 2s, 4s)
-- **Efficient**: SHA256 hashing for link deduplication
-- **Scalable**: Can process multiple RSS feeds concurrently
-- **Memory**: Minimal image size (~30MB) using Alpine Linux
-- **Latency**: Health check response time < 100ms
 
 ## Troubleshooting
 
@@ -287,29 +270,22 @@ curl http://localhost:8000/health
 
 ### Health check failing
 
-Ensure curl is available in the container. The Dockerfile includes `ca-certificates` for HTTPS support.
+Ensure curl is available in the container.
 
 ### Registration not working
 
 Verify `CORE_SERVICE_URL` environment variable is set correctly and core service is healthy.
 
-### High memory usage
-
-- Monitor concurrent RSS feed fetches
-- Adjust `FETCH_INTERVAL_SECS` to reduce frequency
-- Check for RSS feeds with extremely large item counts
-
 ## Status
 
 ✅ **Production Ready**
-- All 30+ tests passing
+- All 24 tests passing
 - Comprehensive error handling
 - Full API documentation
 - Docker deployment verified
 - Service registration working
 - Health checks operational
 - Retry logic tested
-- Scheduled fetching functional
 
 ## Related Services
 

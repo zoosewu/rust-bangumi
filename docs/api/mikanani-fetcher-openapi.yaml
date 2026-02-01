@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Bangumi Mikanani Fetcher API
   description: Mikanani 特化 Fetcher 服務 API 規格 - 用於爬取和解析 Mikanani 動畫 RSS 源
-  version: 0.1.0
+  version: 0.2.0
   contact:
     name: Bangumi Project
     url: https://mikanani.me
@@ -23,10 +23,8 @@ tags:
     description: 服務健康檢查和狀態監控
   - name: Fetch
     description: RSS 爬取功能 - Mikanani 專用
-  - name: Subscription
-    description: 訂閱管理和通知
-  - name: Information
-    description: 服務信息和能力
+  - name: Ownership
+    description: URL 歸屬檢查
 
 paths:
   /health:
@@ -48,56 +46,56 @@ paths:
     post:
       tags:
         - Fetch
-      summary: 爬取 Mikanani RSS 源
+      summary: 觸發 Mikanani RSS 爬取
       description: |
-        從指定的 Mikanani RSS URL 爬取動畫數據並進行解析
+        觸發 Mikanani RSS 爬取任務。此端點為非同步操作：
+        1. 立即回傳 202 Accepted
+        2. 在背景執行爬取任務
+        3. 完成後回呼到指定的 callback_url
 
         ## 特性
-        - 支援多種標題格式：[01]、第01話、EP01
-        - 自動去重（使用 SHA256 hash）
+        - 支援 Mikanani RSS 格式解析
         - 指數退避重試（最多3次）
-        - 自動提取字幕組信息
-        - RSS 源的分段支持
+        - 自動提取原始 RSS 項目資料
 
         ## 支持的 Mikanani URL 格式
         - `https://mikanani.me/RSS/Bangumi?bangumiId=<id>`
         - `https://mikanani.me/RSS/Bangumi?status=2&subgroupid=<id>`
-      operationId: fetchMikananiRss
+      operationId: triggerMikananiFetch
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MikananiRssFetchRequest'
+              $ref: '#/components/schemas/FetchTriggerRequest'
             examples:
               byBangumiId:
                 summary: 使用 Bangumi ID 爬取
                 value:
+                  subscription_id: 123
                   rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+                  callback_url: "http://core-service:8000/raw-fetcher-results"
               bySubgroup:
                 summary: 使用字幕組 ID 爬取
                 value:
+                  subscription_id: 456
                   rss_url: "https://mikanani.me/RSS/Bangumi?status=2&subgroupid=583"
+                  callback_url: "http://core-service:8000/raw-fetcher-results"
       responses:
-        '200':
-          description: 爬取成功
+        '202':
+          description: 爬取任務已接受
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MikananiRssFetchResponse'
+                $ref: '#/components/schemas/FetchTriggerResponse'
               examples:
-                success:
-                  summary: 成功的爬取結果
+                accepted:
+                  summary: 任務已接受
                   value:
-                    status: "success"
-                    count: 42
-                    error: null
-                    details:
-                      anime_series_parsed: 1
-                      total_links_extracted: 42
-                      unique_episodes: 12
+                    accepted: true
+                    message: "Fetch task accepted for subscription 123"
         '400':
-          description: 請求格式錯誤或 URL 不支持
+          description: 請求格式錯誤
           content:
             application/json:
               schema:
@@ -106,211 +104,124 @@ paths:
                 invalidUrl:
                   value:
                     status: "error"
-                    error: "Invalid Mikanani RSS URL format"
-        '500':
-          description: 服務內部錯誤（網路、解析等）
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MikananiRssFetchResponse'
-              examples:
-                networkError:
-                  value:
-                    status: "error"
-                    count: 0
-                    error: "Connection refused to mikanani.me"
-                    details:
-                      retry_attempts: 3
-                      last_error: "Connection refused"
-                parseError:
-                  value:
-                    status: "error"
-                    count: 0
-                    error: "Failed to parse RSS feed: Invalid feed format"
-                    details:
-                      partial_results: 5
+                    error: "Invalid request format"
 
-  /subscribe:
+  /can-handle-subscription:
     post:
       tags:
-        - Subscription
-      summary: 接收訂閱廣播
+        - Ownership
+      summary: 檢查 URL 歸屬
       description: |
-        接收核心服務發送的訂閱廣播，建立新的 RSS 訂閱。
+        檢查此 Fetcher 是否可以處理指定的訂閱 URL。
 
-        Mikanani Fetcher 會驗證 URL 是否來自 mikanani.me 域名，
-        只接受有效的 Mikanani RSS URL。
-      operationId: handleMikananiSubscription
+        Mikanani Fetcher 會驗證：
+        - URL 是否來自 mikanani.me 域名
+        - source_type 是否為 "rss"
+      operationId: canHandleMikananiSubscription
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubscriptionBroadcastPayload'
+              $ref: '#/components/schemas/CanHandleRequest'
             examples:
-              mikananiSubscription:
+              mikananiUrl:
+                summary: Mikanani RSS URL
                 value:
-                  rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-                  service_name: "mikanani"
+                  source_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+                  source_type: "rss"
+              otherUrl:
+                summary: 非 Mikanani URL
+                value:
+                  source_url: "https://example.com/rss"
+                  source_type: "rss"
       responses:
         '200':
-          description: 訂閱已接收並驗證
+          description: 可以處理此 URL（URL 包含 mikanani.me 且類型為 rss）
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubscriptionBroadcastResponse'
+                $ref: '#/components/schemas/CanHandleResponse'
               examples:
-                received:
+                canHandle:
                   value:
-                    status: "received"
-                    message: "Subscription received for https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-        '400':
-          description: 請求格式錯誤或 URL 不支持
+                    can_handle: true
+        '204':
+          description: 無法處理此 URL（URL 不是 mikanani.me 或類型不是 rss）
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/CanHandleResponse'
               examples:
-                invalidDomain:
+                cannotHandle:
                   value:
-                    status: "error"
-                    error: "URL does not contain mikanani.me"
-                invalidFormat:
-                  value:
-                    status: "error"
-                    error: "Invalid Mikanani RSS URL format"
-
-  /info:
-    get:
-      tags:
-        - Information
-      summary: 獲取服務信息
-      description: 獲取 Mikanani Fetcher 服務的詳細信息和能力
-      operationId: getServiceInfo
-      responses:
-        '200':
-          description: 服務信息
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServiceInfo'
-              example:
-                name: "mikanani"
-                version: "0.1.0"
-                service_type: "fetcher"
-                capabilities:
-                  - fetch_rss
-                  - subscribe
-                  - health_check
-                supported_domains:
-                  - "mikanani.me"
-                max_concurrent_fetches: 5
-                max_retries: 3
-                timeout_seconds: 30
+                    can_handle: false
 
 components:
   schemas:
-    MikananiRssFetchRequest:
+    FetchTriggerRequest:
       type: object
       required:
+        - subscription_id
         - rss_url
+        - callback_url
       properties:
+        subscription_id:
+          type: integer
+          description: 訂閱 ID
+          example: 123
         rss_url:
           type: string
           format: uri
           pattern: '^https?://mikanani\.me/RSS/.*'
           description: Mikanani RSS 源的完整 URL
           example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-
-    MikananiRssFetchResponse:
-      type: object
-      required:
-        - status
-        - count
-      properties:
-        status:
-          type: string
-          enum: [success, error]
-          description: 爬取狀態
-          example: "success"
-        count:
-          type: integer
-          minimum: 0
-          description: 成功解析的動畫連結總數
-          example: 42
-        error:
-          type: string
-          nullable: true
-          description: 錯誤信息（成功時為 null）
-          example: null
-        details:
-          $ref: '#/components/schemas/FetchDetails'
-
-    FetchDetails:
-      type: object
-      description: 爬取的詳細統計信息
-      properties:
-        anime_series_parsed:
-          type: integer
-          description: 解析的動畫系列數量
-          example: 1
-        total_links_extracted:
-          type: integer
-          description: 提取的連結總數
-          example: 42
-        unique_episodes:
-          type: integer
-          description: 唯一的集數數量
-          example: 12
-        unique_subtitle_groups:
-          type: integer
-          description: 唯一的字幕組數量
-          example: 3
-        retry_attempts:
-          type: integer
-          description: 進行的重試次數
-          example: 0
-        last_error:
-          type: string
-          nullable: true
-          description: 最後的錯誤信息（成功時為 null）
-          example: null
-        partial_results:
-          type: integer
-          description: 部分解析成功的結果數量
-          example: 0
-
-    SubscriptionBroadcastPayload:
-      type: object
-      required:
-        - rss_url
-        - service_name
-      properties:
-        rss_url:
+        callback_url:
           type: string
           format: uri
-          description: Mikanani RSS 源 URL
-          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-        service_name:
-          type: string
-          description: Fetcher 服務名稱
-          enum: [mikanani]
-          example: "mikanani"
+          description: 爬取完成後的回呼 URL
+          example: "http://core-service:8000/raw-fetcher-results"
 
-    SubscriptionBroadcastResponse:
+    FetchTriggerResponse:
       type: object
       required:
-        - status
+        - accepted
         - message
       properties:
-        status:
-          type: string
-          description: 訂閱處理狀態
-          example: "received"
+        accepted:
+          type: boolean
+          description: 任務是否被接受
+          example: true
         message:
           type: string
-          description: 狀態消息
-          example: "Subscription received for https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+          description: 狀態訊息
+          example: "Fetch task accepted for subscription 123"
+
+    CanHandleRequest:
+      type: object
+      required:
+        - source_url
+        - source_type
+      properties:
+        source_url:
+          type: string
+          format: uri
+          description: 訂閱來源 URL
+          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
+        source_type:
+          type: string
+          description: 訂閱類型
+          example: "rss"
+
+    CanHandleResponse:
+      type: object
+      required:
+        - can_handle
+      properties:
+        can_handle:
+          type: boolean
+          description: 是否可以處理此訂閱
+          example: true
 
     HealthCheckResponse:
       type: object
@@ -322,11 +233,6 @@ components:
           enum: [ok]
           description: 服務健康狀態
           example: "ok"
-        timestamp:
-          type: string
-          format: date-time
-          description: 檢查時間戳（可選）
-          example: "2024-01-26T12:34:56Z"
 
     ErrorResponse:
       type: object
@@ -341,55 +247,7 @@ components:
         error:
           type: string
           description: 錯誤詳細信息
-          example: "Connection refused"
-        error_code:
-          type: string
-          description: 錯誤代碼（可選）
-          example: "NETWORK_ERROR"
-
-    ServiceInfo:
-      type: object
-      required:
-        - name
-        - version
-        - service_type
-      properties:
-        name:
-          type: string
-          enum: [mikanani]
-          description: 服務名稱
-        version:
-          type: string
-          description: 服務版本
-          example: "0.1.0"
-        service_type:
-          type: string
-          enum: [fetcher]
-          description: 服務類型
-        capabilities:
-          type: array
-          items:
-            type: string
-          description: 服務支持的能力
-          example: ["fetch_rss", "subscribe", "health_check"]
-        supported_domains:
-          type: array
-          items:
-            type: string
-          description: 支持的 RSS 域名
-          example: ["mikanani.me"]
-        max_concurrent_fetches:
-          type: integer
-          description: 最大並發爬取數
-          example: 5
-        max_retries:
-          type: integer
-          description: 失敗時的最大重試次數
-          example: 3
-        timeout_seconds:
-          type: integer
-          description: 單個請求超時時間（秒）
-          example: 30
+          example: "Invalid request format"
 
   responses:
     HealthCheckResponse:
@@ -399,19 +257,12 @@ components:
           schema:
             $ref: '#/components/schemas/HealthCheckResponse'
 
-    FetchSuccess:
-      description: RSS 爬取成功
+    FetchAccepted:
+      description: RSS 爬取任務已接受
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/MikananiRssFetchResponse'
-
-    FetchError:
-      description: RSS 爬取失敗
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/MikananiRssFetchResponse'
+            $ref: '#/components/schemas/FetchTriggerResponse'
 
     BadRequest:
       description: 請求格式錯誤
@@ -419,31 +270,3 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-
-    InternalError:
-      description: 服務內部錯誤
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-
-  parameters:
-    RssUrl:
-      name: rss_url
-      in: query
-      description: Mikanani RSS 源 URL
-      required: true
-      schema:
-        type: string
-        format: uri
-
-  examples:
-    MikananiRssUrl:
-      value: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
-      summary: Mikanani RSS URL 示例
-
-    ServiceResponse:
-      value:
-        status: "success"
-        count: 42
-        error: null
