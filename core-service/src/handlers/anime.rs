@@ -10,7 +10,7 @@ use diesel::prelude::*;
 use crate::state::AppState;
 use crate::dto::{
     AnimeRequest, AnimeResponse, SeasonRequest, SeasonResponse, AnimeSeriesRequest,
-    AnimeSeriesResponse, SubtitleGroupRequest, SubtitleGroupResponse, ErrorResponse,
+    AnimeSeriesResponse, SubtitleGroupRequest, SubtitleGroupResponse,
 };
 use crate::models::{NewAnime, NewSeason, NewAnimeSeries, NewSubtitleGroup};
 use crate::schema::{animes, seasons, anime_series, subtitle_groups};

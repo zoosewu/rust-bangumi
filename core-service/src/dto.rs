@@ -1,13 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 
-// ============ Error Response ============
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
-
 // ============ Anime DTO ============
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnimeRequest {

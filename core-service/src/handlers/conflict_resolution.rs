@@ -8,7 +8,7 @@ use serde_json::json;
 use diesel::prelude::*;
 
 use crate::state::AppState;
-use crate::models::{SubscriptionConflict, ServiceModule, ModuleTypeEnum};
+use crate::models::{SubscriptionConflict, ModuleTypeEnum};
 use crate::schema::{subscription_conflicts, subscriptions, service_modules};
 
 // ============ DTOs ============

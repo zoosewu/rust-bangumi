@@ -16,7 +16,7 @@ use crate::models::{
 use crate::schema::{animes, seasons, anime_series, subtitle_groups, anime_links, subscriptions};
 use crate::services::TitleParserService;
 use crate::services::title_parser::ParseStatus;
-use shared::models::{RawAnimeItem as SharedRawAnimeItem, RawFetcherResultsPayload, RawFetcherResultsResponse};
+use shared::models::{RawFetcherResultsPayload, RawFetcherResultsResponse};
 
 // ============ DTOs for Fetcher Results ============
 

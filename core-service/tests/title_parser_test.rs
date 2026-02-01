@@ -106,16 +106,18 @@ fn test_multiple_brackets() {
     assert_eq!(captures.get(3).unwrap().as_str(), "12");
 }
 
-/// 測試解析失敗情況
+/// 測試解析失敗情況：condition_regex 匹配但 parse_regex 無法完整解析
 #[test]
 fn test_parse_failure_handling() {
     let condition_regex = Regex::new(r"^\[.+\].+\s-\s\d+").unwrap();
     let parse_regex = Regex::new(r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)").unwrap();
 
-    let title = "[Group] Some Title - NoNumber [1080p]";
+    // 這個標題匹配 condition_regex（有 [Group] 和 - 數字）
+    // 但不匹配 parse_regex（缺少 [1080p] 等解析度資訊）
+    let title = "[Group] Some Title - 01";
 
-    assert!(condition_regex.is_match(title));
-    assert!(parse_regex.captures(title).is_none(), "Should not parse episode number");
+    assert!(condition_regex.is_match(title), "Should match condition regex");
+    assert!(parse_regex.captures(title).is_none(), "Should not match parse regex (missing resolution)");
 }
 
 /// 測試特殊字符處理
