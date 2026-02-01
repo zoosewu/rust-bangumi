@@ -11,7 +11,6 @@ use tokio::time::{timeout, Duration};
 use crate::state::AppState;
 use crate::models::{Subscription, ServiceModule, ModuleTypeEnum, NewSubscription};
 use crate::schema::{subscriptions, service_modules};
-use crate::services::SubscriptionBroadcast;
 
 // ============ DTOs ============
 

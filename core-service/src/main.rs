@@ -48,11 +48,9 @@ async fn main() -> anyhow::Result<()> {
 
     // 初始化應用狀態
     let registry = std::sync::Arc::new(services::ServiceRegistry::new());
-    let subscription_broadcaster = services::create_subscription_broadcaster();
     let app_state = state::AppState {
         db: pool,
         registry: registry.clone(),
-        subscription_broadcaster,
     };
 
     // 啟動時從資料庫載入已有的所有服務模塊
