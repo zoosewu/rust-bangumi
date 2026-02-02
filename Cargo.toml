@@ -65,3 +65,4 @@ tokio-cron-scheduler = "0.9"
 # Additional utils
 futures = "0.3"
 strum = { version = "0.26", features = ["derive"] }
+async-trait = "0.1"

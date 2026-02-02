@@ -47,11 +47,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 初始化應用狀態
-    let registry = std::sync::Arc::new(services::ServiceRegistry::new());
-    let app_state = state::AppState {
-        db: pool,
-        registry: registry.clone(),
-    };
+    let registry = services::ServiceRegistry::new();
+    let app_state = state::AppState::new(pool, registry);
 
     // 啟動時從資料庫載入已有的所有服務模塊
     load_existing_services(&app_state).await;

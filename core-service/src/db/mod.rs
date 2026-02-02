@@ -3,6 +3,17 @@ use diesel::PgConnection;
 use diesel_migrations::{FileBasedMigrations, MigrationHarness};
 
 pub mod models;
+pub mod repository;
+
+pub use repository::{
+    RepositoryError,
+    AnimeRepository, DieselAnimeRepository,
+    SubscriptionRepository, DieselSubscriptionRepository,
+    ServiceModuleRepository, DieselServiceModuleRepository,
+    SeasonRepository, DieselSeasonRepository,
+    AnimeSeriesRepository, DieselAnimeSeriesRepository, CreateAnimeSeriesParams,
+    SubtitleGroupRepository, DieselSubtitleGroupRepository,
+};
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
