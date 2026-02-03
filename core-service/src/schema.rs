@@ -159,10 +159,10 @@ diesel::table! {
         conflict_type -> Varchar,
         #[max_length = 255]
         affected_item_id -> Nullable<Varchar>,
-        conflict_data -> Text,
+        conflict_data -> Jsonb,
         #[max_length = 50]
         resolution_status -> Varchar,
-        resolution_data -> Nullable<Text>,
+        resolution_data -> Nullable<Jsonb>,
         created_at -> Timestamp,
         resolved_at -> Nullable<Timestamp>,
     }
@@ -181,7 +181,7 @@ diesel::table! {
         next_fetch_at -> Nullable<Timestamp>,
         fetch_interval_minutes -> Int4,
         is_active -> Bool,
-        config -> Nullable<Text>,
+        config -> Nullable<Jsonb>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
         #[max_length = 50]
