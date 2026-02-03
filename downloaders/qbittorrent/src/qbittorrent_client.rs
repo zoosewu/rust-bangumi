@@ -184,6 +184,42 @@ impl QBittorrentClient {
     }
 }
 
+use crate::traits::DownloaderClient;
+
+impl DownloaderClient for QBittorrentClient {
+    async fn login(&self, username: &str, password: &str) -> Result<()> {
+        QBittorrentClient::login(self, username, password).await
+    }
+
+    async fn add_magnet(&self, magnet_url: &str, save_path: Option<&str>) -> Result<String> {
+        QBittorrentClient::add_magnet(self, magnet_url, save_path).await
+    }
+
+    async fn get_torrent_info(&self, hash: &str) -> Result<Option<TorrentInfo>> {
+        QBittorrentClient::get_torrent_info(self, hash).await
+    }
+
+    async fn get_all_torrents(&self) -> Result<Vec<TorrentInfo>> {
+        QBittorrentClient::get_all_torrents(self).await
+    }
+
+    async fn pause_torrent(&self, hash: &str) -> Result<()> {
+        QBittorrentClient::pause_torrent(self, hash).await
+    }
+
+    async fn resume_torrent(&self, hash: &str) -> Result<()> {
+        QBittorrentClient::resume_torrent(self, hash).await
+    }
+
+    async fn delete_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
+        QBittorrentClient::delete_torrent(self, hash, delete_files).await
+    }
+
+    fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
+        QBittorrentClient::extract_hash_from_magnet(self, magnet_url)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
