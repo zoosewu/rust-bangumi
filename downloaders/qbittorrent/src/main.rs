@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     client.login(&qb_user, &qb_pass).await?;
 
     let app = Router::new()
-        .route("/download", post(handlers::download))
+        .route("/download", post(handlers::download::<QBittorrentClient>))
         .route("/health", get(handlers::health_check))
         .with_state(client);
 
