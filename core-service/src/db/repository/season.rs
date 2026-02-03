@@ -13,6 +13,7 @@ pub trait SeasonRepository: Send + Sync {
     async fn find_all(&self) -> Result<Vec<Season>, RepositoryError>;
     async fn create(&self, year: i32, season: String) -> Result<Season, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
+    async fn find_or_create(&self, year: i32, season: String) -> Result<Season, RepositoryError>;
 }
 
 pub struct DieselSeasonRepository {
@@ -30,33 +31,31 @@ impl SeasonRepository for DieselSeasonRepository {
     async fn find_by_id(&self, id: i32) -> Result<Option<Season>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             seasons::table
                 .filter(seasons::season_id.eq(id))
                 .first(&mut conn)
                 .optional()
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn find_all(&self) -> Result<Vec<Season>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             seasons::table
                 .load::<Season>(&mut conn)
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn create(&self, year: i32, season: String) -> Result<Season, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             let now = Utc::now().naive_utc();
             let new_season = NewSeason {
                 year,
@@ -68,21 +67,48 @@ impl SeasonRepository for DieselSeasonRepository {
                 .get_result(&mut conn)
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             let deleted = diesel::delete(seasons::table.filter(seasons::season_id.eq(id)))
-                .execute(&mut conn)
-                .map_err(RepositoryError::from)?;
+                .execute(&mut conn)?;
             Ok(deleted > 0)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
+    }
+
+    async fn find_or_create(&self, year: i32, season: String) -> Result<Season, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            // Try to find existing
+            match seasons::table
+                .filter(seasons::year.eq(year))
+                .filter(seasons::season.eq(&season))
+                .first::<Season>(&mut conn)
+            {
+                Ok(s) => Ok(s),
+                Err(diesel::NotFound) => {
+                    // Create new
+                    let now = Utc::now().naive_utc();
+                    let new_season = NewSeason {
+                        year,
+                        season,
+                        created_at: now,
+                    };
+                    diesel::insert_into(seasons::table)
+                        .values(&new_season)
+                        .get_result(&mut conn)
+                        .map_err(RepositoryError::from)
+                }
+                Err(e) => Err(RepositoryError::from(e)),
+            }
+        })
+        .await?
     }
 }
 
@@ -160,6 +186,30 @@ pub mod mock {
             let original_len = seasons.len();
             seasons.retain(|s| s.season_id != id);
             Ok(seasons.len() < original_len)
+        }
+
+        async fn find_or_create(&self, year: i32, season: String) -> Result<Season, RepositoryError> {
+            self.operations.lock().unwrap().push(format!("find_or_create:{}:{}", year, season));
+            // Try to find existing
+            {
+                let seasons = self.seasons.lock().unwrap();
+                if let Some(s) = seasons.iter().find(|s| s.year == year && s.season == season) {
+                    return Ok(s.clone());
+                }
+            }
+            // Create new
+            let mut seasons = self.seasons.lock().unwrap();
+            let mut next_id = self.next_id.lock().unwrap();
+            let now = Utc::now().naive_utc();
+            let new_season = Season {
+                season_id: *next_id,
+                year,
+                season,
+                created_at: now,
+            };
+            *next_id += 1;
+            seasons.push(new_season.clone());
+            Ok(new_season)
         }
     }
 }

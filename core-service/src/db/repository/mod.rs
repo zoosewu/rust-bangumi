@@ -5,6 +5,11 @@ pub mod service_module;
 pub mod season;
 pub mod anime_series;
 pub mod subtitle_group;
+pub mod filter_rule;
+pub mod anime_link;
+pub mod title_parser;
+pub mod raw_item;
+pub mod conflict;
 
 pub use error::RepositoryError;
 pub use subscription::{SubscriptionRepository, DieselSubscriptionRepository};
@@ -13,3 +18,8 @@ pub use service_module::{ServiceModuleRepository, DieselServiceModuleRepository}
 pub use season::{SeasonRepository, DieselSeasonRepository};
 pub use anime_series::{AnimeSeriesRepository, DieselAnimeSeriesRepository, CreateAnimeSeriesParams};
 pub use subtitle_group::{SubtitleGroupRepository, DieselSubtitleGroupRepository};
+pub use filter_rule::{FilterRuleRepository, DieselFilterRuleRepository};
+pub use anime_link::{AnimeLinkRepository, DieselAnimeLinkRepository};
+pub use title_parser::{TitleParserRepository, DieselTitleParserRepository};
+pub use raw_item::{RawItemRepository, DieselRawItemRepository, RawItemFilter};
+pub use conflict::{ConflictRepository, DieselConflictRepository};

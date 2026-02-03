@@ -24,6 +24,7 @@ pub trait AnimeSeriesRepository: Send + Sync {
     async fn find_all(&self) -> Result<Vec<AnimeSeries>, RepositoryError>;
     async fn create(&self, params: CreateAnimeSeriesParams) -> Result<AnimeSeries, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
+    async fn find_or_create(&self, anime_id: i32, series_no: i32, season_id: i32, description: Option<String>) -> Result<AnimeSeries, RepositoryError>;
 }
 
 pub struct DieselAnimeSeriesRepository {
@@ -41,46 +42,43 @@ impl AnimeSeriesRepository for DieselAnimeSeriesRepository {
     async fn find_by_id(&self, id: i32) -> Result<Option<AnimeSeries>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             anime_series::table
                 .filter(anime_series::series_id.eq(id))
                 .first(&mut conn)
                 .optional()
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn find_by_anime_id(&self, anime_id: i32) -> Result<Vec<AnimeSeries>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             anime_series::table
                 .filter(anime_series::anime_id.eq(anime_id))
                 .load::<AnimeSeries>(&mut conn)
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn find_all(&self) -> Result<Vec<AnimeSeries>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             anime_series::table
                 .load::<AnimeSeries>(&mut conn)
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn create(&self, params: CreateAnimeSeriesParams) -> Result<AnimeSeries, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             let now = Utc::now().naive_utc();
             let new_series = NewAnimeSeries {
                 anime_id: params.anime_id,
@@ -97,21 +95,54 @@ impl AnimeSeriesRepository for DieselAnimeSeriesRepository {
                 .get_result(&mut conn)
                 .map_err(RepositoryError::from)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
     }
 
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get().map_err(|e| RepositoryError::Pool(e.to_string()))?;
+            let mut conn = pool.get()?;
             let deleted = diesel::delete(anime_series::table.filter(anime_series::series_id.eq(id)))
-                .execute(&mut conn)
-                .map_err(RepositoryError::from)?;
+                .execute(&mut conn)?;
             Ok(deleted > 0)
         })
-        .await
-        .map_err(|e| RepositoryError::TaskJoin(e.to_string()))?
+        .await?
+    }
+
+    async fn find_or_create(&self, anime_id: i32, series_no: i32, season_id: i32, description: Option<String>) -> Result<AnimeSeries, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            // Try to find existing
+            match anime_series::table
+                .filter(anime_series::anime_id.eq(anime_id))
+                .filter(anime_series::series_no.eq(series_no))
+                .filter(anime_series::season_id.eq(season_id))
+                .first::<AnimeSeries>(&mut conn)
+            {
+                Ok(s) => Ok(s),
+                Err(diesel::NotFound) => {
+                    // Create new
+                    let now = Utc::now().naive_utc();
+                    let new_series = NewAnimeSeries {
+                        anime_id,
+                        series_no,
+                        season_id,
+                        description,
+                        aired_date: None,
+                        end_date: None,
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    diesel::insert_into(anime_series::table)
+                        .values(&new_series)
+                        .get_result(&mut conn)
+                        .map_err(RepositoryError::from)
+                }
+                Err(e) => Err(RepositoryError::from(e)),
+            }
+        })
+        .await?
     }
 }
 
@@ -199,6 +230,35 @@ pub mod mock {
             let original_len = series.len();
             series.retain(|s| s.series_id != id);
             Ok(series.len() < original_len)
+        }
+
+        async fn find_or_create(&self, anime_id: i32, series_no: i32, season_id: i32, description: Option<String>) -> Result<AnimeSeries, RepositoryError> {
+            self.operations.lock().unwrap().push(format!("find_or_create:{}:{}:{}", anime_id, series_no, season_id));
+            // Try to find existing
+            {
+                let series = self.series.lock().unwrap();
+                if let Some(s) = series.iter().find(|s| s.anime_id == anime_id && s.series_no == series_no && s.season_id == season_id) {
+                    return Ok(s.clone());
+                }
+            }
+            // Create new
+            let mut series = self.series.lock().unwrap();
+            let mut next_id = self.next_id.lock().unwrap();
+            let now = Utc::now().naive_utc();
+            let new_series = AnimeSeries {
+                series_id: *next_id,
+                anime_id,
+                series_no,
+                season_id,
+                description,
+                aired_date: None,
+                end_date: None,
+                created_at: now,
+                updated_at: now,
+            };
+            *next_id += 1;
+            series.push(new_series.clone());
+            Ok(new_series)
         }
     }
 }

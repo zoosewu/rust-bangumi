@@ -7,6 +7,11 @@ use crate::db::{
     SeasonRepository, DieselSeasonRepository,
     AnimeSeriesRepository, DieselAnimeSeriesRepository,
     SubtitleGroupRepository, DieselSubtitleGroupRepository,
+    FilterRuleRepository, DieselFilterRuleRepository,
+    AnimeLinkRepository, DieselAnimeLinkRepository,
+    TitleParserRepository, DieselTitleParserRepository,
+    RawItemRepository, DieselRawItemRepository,
+    ConflictRepository, DieselConflictRepository,
 };
 use std::sync::Arc;
 
@@ -17,6 +22,11 @@ pub struct Repositories {
     pub season: Arc<dyn SeasonRepository>,
     pub anime_series: Arc<dyn AnimeSeriesRepository>,
     pub subtitle_group: Arc<dyn SubtitleGroupRepository>,
+    pub filter_rule: Arc<dyn FilterRuleRepository>,
+    pub anime_link: Arc<dyn AnimeLinkRepository>,
+    pub title_parser: Arc<dyn TitleParserRepository>,
+    pub raw_item: Arc<dyn RawItemRepository>,
+    pub conflict: Arc<dyn ConflictRepository>,
 }
 
 impl Repositories {
@@ -27,7 +37,12 @@ impl Repositories {
             service_module: Arc::new(DieselServiceModuleRepository::new(pool.clone())),
             season: Arc::new(DieselSeasonRepository::new(pool.clone())),
             anime_series: Arc::new(DieselAnimeSeriesRepository::new(pool.clone())),
-            subtitle_group: Arc::new(DieselSubtitleGroupRepository::new(pool)),
+            subtitle_group: Arc::new(DieselSubtitleGroupRepository::new(pool.clone())),
+            filter_rule: Arc::new(DieselFilterRuleRepository::new(pool.clone())),
+            anime_link: Arc::new(DieselAnimeLinkRepository::new(pool.clone())),
+            title_parser: Arc::new(DieselTitleParserRepository::new(pool.clone())),
+            raw_item: Arc::new(DieselRawItemRepository::new(pool.clone())),
+            conflict: Arc::new(DieselConflictRepository::new(pool)),
         }
     }
 }
@@ -59,6 +74,11 @@ impl Repositories {
         season: Arc<dyn SeasonRepository>,
         anime_series: Arc<dyn AnimeSeriesRepository>,
         subtitle_group: Arc<dyn SubtitleGroupRepository>,
+        filter_rule: Arc<dyn FilterRuleRepository>,
+        anime_link: Arc<dyn AnimeLinkRepository>,
+        title_parser: Arc<dyn TitleParserRepository>,
+        raw_item: Arc<dyn RawItemRepository>,
+        conflict: Arc<dyn ConflictRepository>,
     ) -> Self {
         Self {
             anime,
@@ -67,6 +87,11 @@ impl Repositories {
             season,
             anime_series,
             subtitle_group,
+            filter_rule,
+            anime_link,
+            title_parser,
+            raw_item,
+            conflict,
         }
     }
 }

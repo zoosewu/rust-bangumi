@@ -10,6 +10,7 @@ use super::RepositoryError;
 #[async_trait]
 pub trait SubscriptionRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<Subscription>, RepositoryError>;
+    async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError>;
     async fn find_all(&self) -> Result<Vec<Subscription>, RepositoryError>;
     async fn find_active(&self) -> Result<Vec<Subscription>, RepositoryError>;
     async fn find_by_fetcher_id(&self, fetcher_id: i32) -> Result<Vec<Subscription>, RepositoryError>;
@@ -17,6 +18,7 @@ pub trait SubscriptionRepository: Send + Sync {
     async fn create(&self, new_subscription: NewSubscription) -> Result<Subscription, RepositoryError>;
     async fn update(&self, subscription: &Subscription) -> Result<Subscription, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
+    async fn delete_by_source_url(&self, source_url: &str) -> Result<bool, RepositoryError>;
     async fn update_assignment_status(
         &self,
         id: i32,
@@ -49,6 +51,20 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
             let mut conn = pool.get()?;
             subscriptions::table
                 .find(id)
+                .first::<Subscription>(&mut conn)
+                .optional()
+                .map_err(RepositoryError::from)
+        })
+        .await?
+    }
+
+    async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError> {
+        let pool = self.pool.clone();
+        let source_url = source_url.to_string();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            subscriptions::table
+                .filter(subscriptions::source_url.eq(&source_url))
                 .first::<Subscription>(&mut conn)
                 .optional()
                 .map_err(RepositoryError::from)
@@ -151,6 +167,19 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         .await?
     }
 
+    async fn delete_by_source_url(&self, source_url: &str) -> Result<bool, RepositoryError> {
+        let pool = self.pool.clone();
+        let source_url = source_url.to_string();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            let rows_deleted = diesel::delete(
+                subscriptions::table.filter(subscriptions::source_url.eq(&source_url))
+            ).execute(&mut conn)?;
+            Ok(rows_deleted > 0)
+        })
+        .await?
+    }
+
     async fn update_assignment_status(
         &self,
         id: i32,
@@ -241,6 +270,14 @@ pub mod mock {
                 .cloned())
         }
 
+        async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError> {
+            self.operations.lock().unwrap().push(format!("find_by_source_url:{}", source_url));
+            Ok(self.subscriptions.lock().unwrap()
+                .iter()
+                .find(|s| s.source_url == source_url)
+                .cloned())
+        }
+
         async fn find_all(&self) -> Result<Vec<Subscription>, RepositoryError> {
             self.operations.lock().unwrap().push("find_all".to_string());
             Ok(self.subscriptions.lock().unwrap().clone())
@@ -315,6 +352,14 @@ pub mod mock {
             let mut subs = self.subscriptions.lock().unwrap();
             let len_before = subs.len();
             subs.retain(|s| s.subscription_id != id);
+            Ok(subs.len() < len_before)
+        }
+
+        async fn delete_by_source_url(&self, source_url: &str) -> Result<bool, RepositoryError> {
+            self.operations.lock().unwrap().push(format!("delete_by_source_url:{}", source_url));
+            let mut subs = self.subscriptions.lock().unwrap();
+            let len_before = subs.len();
+            subs.retain(|s| s.source_url != source_url);
             Ok(subs.len() < len_before)
         }
 

@@ -15,6 +15,7 @@ pub trait AnimeRepository: Send + Sync {
     async fn create(&self, title: String) -> Result<Anime, RepositoryError>;
     async fn update(&self, id: i32, title: String) -> Result<Anime, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
+    async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError>;
 }
 
 pub struct DieselAnimeRepository {
@@ -107,6 +108,35 @@ impl AnimeRepository for DieselAnimeRepository {
             let rows_deleted = diesel::delete(animes::table.find(id))
                 .execute(&mut conn)?;
             Ok(rows_deleted > 0)
+        })
+        .await?
+    }
+
+    async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            // Try to find existing
+            match animes::table
+                .filter(animes::title.eq(&title))
+                .first::<Anime>(&mut conn)
+            {
+                Ok(anime) => Ok(anime),
+                Err(diesel::NotFound) => {
+                    // Create new
+                    let now = Utc::now().naive_utc();
+                    let new_anime = NewAnime {
+                        title,
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    diesel::insert_into(animes::table)
+                        .values(&new_anime)
+                        .get_result::<Anime>(&mut conn)
+                        .map_err(RepositoryError::from)
+                }
+                Err(e) => Err(RepositoryError::from(e)),
+            }
         })
         .await?
     }
@@ -204,6 +234,29 @@ pub mod mock {
             let len_before = animes.len();
             animes.retain(|a| a.anime_id != id);
             Ok(animes.len() < len_before)
+        }
+
+        async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError> {
+            self.operations.lock().unwrap().push(format!("find_or_create:{}", title));
+            // Try to find existing
+            {
+                let animes = self.animes.lock().unwrap();
+                if let Some(anime) = animes.iter().find(|a| a.title == title) {
+                    return Ok(anime.clone());
+                }
+            }
+            // Create new
+            let mut animes = self.animes.lock().unwrap();
+            let id = animes.len() as i32 + 1;
+            let now = Utc::now().naive_utc();
+            let anime = Anime {
+                anime_id: id,
+                title,
+                created_at: now,
+                updated_at: now,
+            };
+            animes.push(anime.clone());
+            Ok(anime)
         }
     }
 
