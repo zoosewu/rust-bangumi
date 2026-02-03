@@ -2,7 +2,7 @@ use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use downloader_qbittorrent::{QBittorrentClient, retry_with_backoff};
+use downloader_qbittorrent::{DownloaderClient, retry_with_backoff};
 
 #[derive(Debug, Deserialize)]
 pub struct DownloadRequest {
@@ -17,8 +17,8 @@ pub struct DownloadResponse {
     pub error: Option<String>,
 }
 
-pub async fn download(
-    State(client): State<Arc<QBittorrentClient>>,
+pub async fn download<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
     Json(req): Json<DownloadRequest>,
 ) -> (StatusCode, Json<DownloadResponse>) {
     if !req.url.starts_with("magnet:") {
