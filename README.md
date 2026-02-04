@@ -211,7 +211,7 @@ docker compose logs qbittorrent
 
 ## 開發
 
-開發環境設置請參考 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+開發環境設置請參考 [DEVELOPMENT.md](DEVELOPMENT.md)
 
 ## 許可證
 

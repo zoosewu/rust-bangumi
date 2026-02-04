@@ -442,6 +442,6 @@ git worktree remove .worktrees/my-feature
 
 ## 相關文檔
 
-- [API 規格](./API-SPECIFICATIONS.md)
-- [架構設計](./plans/2025-01-21-rust-bangumi-architecture-design.md)
-- [CORS 設定](./CORS-CONFIGURATION.md)
+- [API 規格](docs/API-SPECIFICATIONS.md)
+- [架構設計](docs/plans/2025-01-21-rust-bangumi-architecture-design.md)
+- [CORS 設定](docs/CORS-CONFIGURATION.md)
