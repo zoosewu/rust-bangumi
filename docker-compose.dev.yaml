@@ -1,5 +1,17 @@
 version: '3.8'
 
+# ============================================================================
+# 開發環境 Docker Compose
+# ============================================================================
+# 使用方式：
+#   docker compose -f docker-compose.dev.yaml up -d
+#
+# 啟動的服務：
+#   - PostgreSQL (port 5432)
+#   - Adminer (port 8081)
+#   - qBittorrent (port 8080)
+# ============================================================================
+
 services:
   # ============================================================================
   # PostgreSQL 數據庫（開發環境）
@@ -53,6 +65,48 @@ services:
         max-size: "10m"
         max-file: "2"
 
+  # ============================================================================
+  # qBittorrent - 下載服務（開發環境）
+  # ============================================================================
+  # WebUI: http://localhost:8080
+  # 預設帳號: admin
+  # 預設密碼: 首次啟動時會在 log 中顯示臨時密碼，登入後請至設定修改
+  #
+  # 設定步驟：
+  #   1. docker compose -f docker-compose.dev.yaml logs qbittorrent | grep password
+  #   2. 用臨時密碼登入 http://localhost:8080
+  #   3. 設定 > Web UI > 修改密碼為 adminadmin（與 .env.dev 一致）
+  # ============================================================================
+  qbittorrent:
+    image: linuxserver/qbittorrent:latest
+    container_name: bangumi-qbittorrent-dev
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Taipei
+      WEBUI_PORT: 8080
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    volumes:
+      - qbittorrent_dev_config:/config
+      - qbittorrent_dev_downloads:/downloads
+    networks:
+      - bangumi-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
 # ============================================================================
 # 網絡
 # ============================================================================
@@ -65,4 +119,8 @@ networks:
 # ============================================================================
 volumes:
   postgres_dev_data:
+    driver: local
+  qbittorrent_dev_config:
+    driver: local
+  qbittorrent_dev_downloads:
     driver: local

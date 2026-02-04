@@ -1,212 +1,218 @@
 # Rust Bangumi - 動畫 RSS 聚合與下載管理系統
 
-這是一個使用 Rust + PostgreSQL 構建的微服務架構動畫 RSS 聚合、下載與媒體庫管理系統。
+使用 Rust + PostgreSQL 構建的微服務架構動畫 RSS 聚合、下載與媒體庫管理系統。
 
-## 系統概述
+## 系統架構
 
-系統由 5 個主要微服務組成，各自獨立部署在 Docker 容器中：
+系統由 5 個主要微服務組成：
 
-1. **核心服務 (Core Service)** - 主協調器，管理數據庫、調度任務
-2. **擷取區塊 (Fetcher)** - 從 RSS/爬蟲取數據（支持多個實例）
-3. **下載區塊 (Downloader)** - 執行下載任務（支持多個實例）
-4. **顯示區塊 (Viewer)** - 文件同步與組織（通常一個實例）
-5. **CLI 工具** - 用戶交互界面
+| 服務 | 說明 | Port |
+|------|------|------|
+| Core Service | 主協調器，管理數據庫、調度任務 | 8000 |
+| Fetcher (Mikanani) | 從 RSS 取得動畫資訊 | 8001 |
+| Downloader (qBittorrent) | 執行 BT 下載任務 | 8002 |
+| Viewer (Jellyfin) | 檔案同步與組織 | 8003 |
 
-詳細架構設計見 `docs/plans/2025-01-21-rust-bangumi-architecture-design.md`
+外部依賴：
+- **PostgreSQL** - 資料庫
+- **qBittorrent** - BT 下載客戶端
+- **Jellyfin** - 媒體伺服器（可選）
 
-## 項目結構
-
-```
-rust-bangumi/
-├── Cargo.toml                          # Workspace 配置
-├── shared/                             # 共享庫
-│   ├── src/
-│   │   ├── lib.rs
-│   │   ├── models.rs                   # 共享數據結構
-│   │   ├── errors.rs                   # 錯誤類型
-│   │   └── api.rs                      # API 常數
-├── core-service/                       # 核心服務
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── config.rs
-│   │   ├── handlers/                   # HTTP 處理器
-│   │   ├── services/                   # 業務邏輯
-│   │   ├── models/
-│   │   └── db/                         # 數據庫操作
-├── fetchers/
-│   └── mikanani/                       # Mikanani RSS 擷取區塊
-│       ├── src/
-│       │   ├── main.rs
-│       │   ├── handlers.rs
-│       │   └── rss_parser.rs
-├── downloaders/
-│   └── qbittorrent/                    # qBittorrent 下載區塊
-│       ├── src/
-│       │   ├── main.rs
-│       │   ├── handlers.rs
-│       │   └── qbittorrent_client.rs
-├── viewers/
-│   └── jellyfin/                       # Jellyfin 顯示區塊
-│       ├── src/
-│       │   ├── main.rs
-│       │   ├── handlers.rs
-│       │   └── file_organizer.rs
-├── cli/                                # CLI 工具
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── commands.rs
-│   │   └── client.rs
-├── docker-compose.yaml                 # 生產環境 Docker 編排
-├── docker-compose.dev.yaml             # 開發環境（僅 PostgreSQL + Adminer）
-├── Dockerfile.*                        # 各服務 Dockerfile
-├── .env.example                        # 環境變數範例
-├── .env.dev                            # 開發環境配置模板
-├── .env.prod                           # 生產環境配置模板
-└── docs/
-    └── plans/
-        └── 2025-01-21-*-design.md      # 架構設計文檔
-```
-
-## 快速開始
+## 快速部署
 
 ### 前置條件
 
-- Rust 1.75+ (或使用 Docker)
-- Docker & Docker Compose
-- PostgreSQL 15+ (或使用 docker compose 自動拉起)
+- Docker & Docker Compose v2+
+- 至少 2GB RAM
 
-### 使用 Docker Compose 啟動
+### 1. 設定環境變數
 
 ```bash
-# 構建所有服務
-docker compose build
+# 複製生產環境模板
+cp .env.prod .env
 
-# 啟動所有服務
+# 編輯必要變數
+vim .env
+```
+
+**必須設定的變數：**
+
+```env
+POSTGRES_DB=bangumi
+POSTGRES_USER=bangumi
+POSTGRES_PASSWORD=<your-secure-password>
+```
+
+### 2. 啟動服務
+
+```bash
+# 啟動核心服務（不含外部依賴）
 docker compose up -d
 
-# 查看日誌
-docker compose logs -f
-
-# 停止所有服務
-docker compose down
+# 啟動含 qBittorrent 和 Jellyfin
+docker compose -f docker-compose.yaml -f docker-compose.override.yaml up -d
 ```
 
-所有服務將在以下端口監聽：
-- Core Service: `http://localhost:8000`
-- Fetcher (Mikanani): `http://localhost:8001`
-- Downloader (qBittorrent): `http://localhost:8002`
-- Viewer (Jellyfin): `http://localhost:8003`
-
-### 本地開發
+### 3. 驗證部署
 
 ```bash
-# 1. 啟動開發數據庫（PostgreSQL + Adminer）
-docker compose -f docker-compose.dev.yaml up -d
+# 檢查服務狀態
+docker compose ps
 
-# 2. 使用開發環境配置（已預設，或複製模板）
-cp .env.dev .env
+# 檢查健康狀態
+curl http://localhost:8000/health
+curl http://localhost:8001/health
+curl http://localhost:8002/health
 
-# 3. 啟動服務（各開一個終端）
-cargo run -p core-service
-cargo run -p fetcher-mikanani
-
-# 4. 運行 CLI
-cargo run -p bangumi-cli -- --help
+# 查看日誌
+docker compose logs -f core-service
 ```
 
-**開發環境服務：**
-- PostgreSQL: `localhost:5432`
-- Adminer (DB 管理介面): `http://localhost:8081`
+## 服務端點
 
-### 環境配置
+### Core Service (8000)
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/health` | 健康檢查 |
+| GET | `/anime` | 列出動畫 |
+| GET | `/subscriptions` | 列出訂閱 |
+| POST | `/subscriptions` | 新增訂閱 |
+| GET | `/services` | 列出已註冊服務 |
+
+### Fetcher (8001)
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/health` | 健康檢查 |
+| POST | `/fetch` | 執行 RSS 抓取 |
+
+### Downloader (8002)
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/health` | 健康檢查 |
+| POST | `/download` | 新增下載任務 |
+
+## 配置說明
+
+### 環境變數
+
+| 變數 | 預設值 | 說明 |
+|------|--------|------|
+| `POSTGRES_DB` | - | 資料庫名稱（必填） |
+| `POSTGRES_USER` | - | 資料庫使用者（必填） |
+| `POSTGRES_PASSWORD` | - | 資料庫密碼（必填） |
+| `CORE_PORT` | 8000 | Core Service port |
+| `FETCHER_PORT` | 8001 | Fetcher port |
+| `DOWNLOADER_PORT` | 8002 | Downloader port |
+| `QBITTORRENT_URL` | http://qbittorrent:8080 | qBittorrent WebUI |
+| `RUST_LOG` | info | 日誌等級 |
+
+### Docker Compose 檔案
 
 | 檔案 | 用途 |
 |------|------|
-| `.env` | 當前使用的配置（已在 .gitignore） |
-| `.env.dev` | 開發環境模板（cargo run） |
-| `.env.prod` | 生產環境模板（docker compose） |
-| `.env.example` | 完整變數說明 |
+| `docker-compose.yaml` | 主要服務配置 |
+| `docker-compose.override.yaml` | qBittorrent + Jellyfin |
+| `docker-compose.dev.yaml` | 開發環境（見 DEVELOPMENT.md） |
 
-**關鍵環境變數：**
-
-| 變數 | 開發環境 | 生產環境 (Docker) |
-|------|----------|-------------------|
-| `DATABASE_URL` | `...@localhost:5432/...` | 由 docker-compose 自動構建 |
-| `CORE_SERVICE_URL` | `http://localhost:8000` | `http://core-service:8000` |
-| `SERVICE_HOST` | `localhost` | 不需設定（使用容器名） |
-
-## CLI 使用範例
+## CLI 工具
 
 ```bash
+# 使用 Docker
+docker run --rm --network bangumi-network bangumi-cli --help
+
 # 訂閱 RSS
-cargo run --package bangumi-cli -- subscribe \
+docker run --rm --network bangumi-network bangumi-cli subscribe \
   "https://mikanani.me/RSS/Classic" \
   --fetcher mikanani
 
 # 列出動畫
-cargo run --package bangumi-cli -- list --season 2025/冬
-
-# 添加過濾規則
-cargo run --package bangumi-cli -- filter add \
-  1 "HorribleSubs" \
-  positive "1080p"
-
-# 查看狀態
-cargo run --package bangumi-cli -- status
+docker run --rm --network bangumi-network bangumi-cli list
 ```
 
-## API 端點
+## 維運指南
 
-### 核心服務
+### 日誌查看
 
-- `POST /services/register` - 服務註冊
-- `GET /services` - 列出所有服務
-- `GET /anime` - 列出動畫
-- `POST /filters` - 添加過濾規則
-- `GET /health` - 健康檢查
+```bash
+# 所有服務
+docker compose logs -f
 
-詳細 API 文檔見架構設計文檔
+# 特定服務
+docker compose logs -f core-service
+docker compose logs -f downloader-qbittorrent
+```
 
-## 數據庫架構
+### 資料庫備份
 
-核心表結構：
-- `seasons` - 季度（冬/春/夏/秋）
-- `animes` - 動畫基本信息
-- `anime_series` - 動畫季數
-- `subtitle_groups` - 字幕組
-- `anime_links` - 動畫下載連結
-- `filter_rules` - 過濾規則
-- `downloads` - 下載記錄
-- `cron_logs` - Cron 執行日誌
+```bash
+# 備份
+docker compose exec postgres pg_dump -U bangumi bangumi > backup.sql
 
-詳見架構設計文檔的 Section 2
+# 還原
+docker compose exec -T postgres psql -U bangumi bangumi < backup.sql
+```
 
-## 開發進展
+### 更新服務
 
-### 已完成
-- [x] 架構設計與驗證
-- [x] 項目結構與 Cargo workspace 設置
-- [x] 共享庫 (shared) 實現
-- [x] Docker & Docker Compose 配置
+```bash
+# 拉取最新代碼
+git pull
 
-### 進行中
-- [ ] 數據庫 schema 與 migrations
-- [ ] 核心服務完整實現
-- [ ] 各擷取/下載/顯示區塊實現
-- [ ] CLI 工具完整實現
-- [ ] 單元測試與集成測試
+# 重新構建並部署
+docker compose build --no-cache
+docker compose up -d
+```
 
-### 計劃中
-- [ ] Web UI 前端
-- [ ] 更多擷取源支持
-- [ ] 更多下載器支持
-- [ ] 通知功能（郵件/Telegram）
-- [ ] 性能優化與監控
+### 清理
+
+```bash
+# 停止所有服務
+docker compose down
+
+# 停止並刪除所有資料（危險！）
+docker compose down -v
+```
+
+## 故障排除
+
+### 服務無法啟動
+
+```bash
+# 檢查 port 是否被佔用
+lsof -i :8000
+lsof -i :5432
+
+# 檢查容器日誌
+docker compose logs core-service
+```
+
+### 資料庫連接失敗
+
+```bash
+# 確認 PostgreSQL 運行中
+docker compose exec postgres pg_isready
+
+# 測試連接
+docker compose exec postgres psql -U bangumi -d bangumi -c "SELECT 1"
+```
+
+### Downloader 無法連接 qBittorrent
+
+```bash
+# 確認 qBittorrent 運行中
+curl http://localhost:8080
+
+# 檢查認證設定
+docker compose logs qbittorrent
+```
+
+## 開發
+
+開發環境設置請參考 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 ## 許可證
 
 MIT
-
-## 開發聯絡
-
-如有問題或建議，歡迎提交 Issue 或 PR

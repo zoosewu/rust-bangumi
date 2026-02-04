@@ -1,308 +1,447 @@
 # 開發指南
 
+本文件說明如何在本地開發環境中設置和運行 Rust Bangumi 專案。
+
+## 目錄
+
+- [開發環境設置](#開發環境設置)
+- [專案結構](#專案結構)
+- [啟動開發環境](#啟動開發環境)
+- [運行服務](#運行服務)
+- [測試](#測試)
+- [編碼規範](#編碼規範)
+- [資料庫操作](#資料庫操作)
+- [常見問題](#常見問題)
+
+---
+
 ## 開發環境設置
 
-### 安裝依賴
+### 前置條件
+
+- **Rust 1.75+**
+- **Docker & Docker Compose v2+**
+- **PostgreSQL client** (可選，用於 CLI 操作)
+
+### 安裝 Rust
 
 ```bash
-# 安裝 Rust（如果還未安裝）
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 安裝必要工具
-cargo install cargo-watch
-cargo install diesel_cli --no-default-features --features postgres
-
-# 安裝 Docker & Docker Compose
-# 詳見 https://docs.docker.com/get-docker/
+rustup update
 ```
 
-### 本地開發設置
+### 安裝開發工具
 
 ```bash
-# 複製環境配置
-cp .env.example .env
+# Diesel CLI（資料庫遷移）
+cargo install diesel_cli --no-default-features --features postgres
 
-# 啟動 Docker 開發基礎設施（PostgreSQL + Adminer）
-make dev-infra
+# 開發輔助工具（可選）
+cargo install cargo-watch    # 檔案監視
+cargo install cargo-tarpaulin  # 測試覆蓋率
+```
 
-# 執行數據庫遷移
-DATABASE_URL="postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi" \
+---
+
+## 專案結構
+
+```
+rust-bangumi/
+├── Cargo.toml                          # Workspace 配置
+├── shared/                             # 共享庫
+│   └── src/
+│       ├── lib.rs
+│       ├── models.rs                   # 共享數據結構
+│       ├── errors.rs                   # 錯誤類型
+│       └── api.rs                      # API 常數
+├── core-service/                       # 核心服務
+│   └── src/
+│       ├── main.rs
+│       ├── config.rs
+│       ├── handlers/                   # HTTP 處理器
+│       ├── services/                   # 業務邏輯
+│       └── db/                         # 數據庫操作
+├── fetchers/mikanani/                  # Mikanani RSS Fetcher
+├── downloaders/qbittorrent/            # qBittorrent Downloader
+├── viewers/jellyfin/                   # Jellyfin Viewer
+├── cli/                                # CLI 工具
+├── docker-compose.yaml                 # 生產環境
+├── docker-compose.dev.yaml             # 開發環境 ← 使用這個
+├── docker-compose.override.yaml        # 生產環境可選服務
+└── docs/                               # 文檔
+```
+
+---
+
+## 啟動開發環境
+
+### 1. 啟動基礎設施
+
+開發環境包含：PostgreSQL、Adminer、qBittorrent
+
+```bash
+# 啟動所有開發服務
+docker compose -f docker-compose.dev.yaml up -d
+
+# 檢查狀態
+docker compose -f docker-compose.dev.yaml ps
+```
+
+**服務端點：**
+
+| 服務 | URL | 說明 |
+|------|-----|------|
+| PostgreSQL | `localhost:5432` | 資料庫 |
+| Adminer | `http://localhost:8081` | 資料庫管理介面 |
+| qBittorrent | `http://localhost:8080` | BT 下載客戶端 |
+
+### 2. 設置 qBittorrent
+
+首次啟動 qBittorrent 時需要設置密碼：
+
+```bash
+# 查看臨時密碼
+docker compose -f docker-compose.dev.yaml logs qbittorrent | grep -i password
+```
+
+輸出範例：
+```
+The WebUI administrator password was not set. A temporary password is provided for this session: aBcDeFgH
+```
+
+1. 用臨時密碼登入 `http://localhost:8080`（帳號：`admin`）
+2. 進入 **設定 > Web UI > 驗證**
+3. 將密碼修改為 `adminadmin`（與 `.env.dev` 一致）
+
+### 3. 設置環境變數
+
+```bash
+# 複製開發環境模板
+cp .env.dev .env
+```
+
+`.env.dev` 內容：
+```env
+DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi
+CORE_SERVICE_URL=http://localhost:8000
+QBITTORRENT_URL=http://localhost:8080
+QBITTORRENT_USER=admin
+QBITTORRENT_PASSWORD=adminadmin
+RUST_LOG=debug
+```
+
+### 4. 執行資料庫遷移
+
+```bash
 diesel migration run
 ```
 
-## 常用命令
+---
 
-### 構建
+## 運行服務
+
+### 運行單一服務
 
 ```bash
-# 構建所有項目
-cargo build
+# Core Service (port 8000)
+cargo run -p core-service
 
-# 構建特定項目
-cargo build --package core-service
-cargo build --package bangumi-cli --release
+# Fetcher (port 8001)
+cargo run -p fetcher-mikanani
 
-# 檢查編譯
-cargo check
+# Downloader (port 8002)
+cargo run -p downloader-qbittorrent
 
-# 格式化代碼
-cargo fmt
-
-# Lint 檢查
-cargo clippy
+# CLI
+cargo run -p bangumi-cli -- --help
 ```
 
-### 運行
+### 監視模式（自動重新編譯）
 
 ```bash
-# 運行核心服務
-cargo run --package core-service
-
-# 運行 fetcher
-CORE_SERVICE_URL=http://localhost:8000 \
-cargo run --package fetcher-mikanani
-
-# 運行 CLI
-cargo run --package bangumi-cli -- --help
-```
-
-### 測試
-
-```bash
-# 運行所有測試
-cargo test
-
-# 運行特定測試
-cargo test --package shared
-
-# 帶輸出的測試
-cargo test -- --nocapture
-
-# 運行集成測試
-cargo test --test '*'
-```
-
-### 監視文件變更
-
-```bash
-# 監視源代碼並自動重新編譯
-cargo watch -x build
+# 監視並自動重新運行
+cargo watch -x 'run -p core-service'
 
 # 監視並運行測試
-cargo watch -x test
+cargo watch -x 'test -p core-service'
 ```
 
-## 項目架構說明
+### 同時運行多個服務
 
-### 共享庫 (shared)
+開多個終端分別執行，或使用 `tmux`：
 
-包含所有微服務共用的數據結構、錯誤類型、API 常數等。
+```bash
+# 終端 1
+cargo run -p core-service
 
-- `models.rs` - 所有 Struct 定義（ServiceRegistration、FetchResponse 等）
-- `errors.rs` - 統一的錯誤類型 AppError
-- `api.rs` - API 路由、header、默認值等常數
+# 終端 2
+cargo run -p fetcher-mikanani
 
-### 核心服務 (core-service)
-
-主協調服務，負責：
-- PostgreSQL 連接與數據庫操作
-- REST API 服務
-- 服務註冊與健康檢查
-- Cron 調度任務
-- 過濾規則應用
-- 錯誤處理與重試
-
-模塊結構：
-```
-src/
-├── main.rs          # 應用入口、路由定義
-├── config.rs        # 配置管理
-├── handlers/        # HTTP 請求處理器
-├── services/        # 業務邏輯
-├── models/          # 本地數據模型
-└── db/              # 數據庫操作層
+# 終端 3
+cargo run -p downloader-qbittorrent
 ```
 
-### 微服務（Fetcher、Downloader、Viewer）
+---
 
-各微服務的基本模式：
+## 測試
 
-1. **啟動時向核心服務註冊自己**
-2. **暴露相應的 REST 端點**
-3. **接收來自核心服務的請求**
-4. **執行具體業務邏輯**
-5. **回報結果或進度**
+### 運行測試
+
+```bash
+# 所有測試
+cargo test
+
+# 特定套件
+cargo test -p core-service
+cargo test -p downloader-qbittorrent
+
+# 帶輸出
+cargo test -- --nocapture
+
+# 特定測試
+cargo test test_name
+
+# 集成測試
+cargo test --test integration_test
+```
+
+### 測試覆蓋率
+
+```bash
+cargo tarpaulin --out Html
+open tarpaulin-report.html
+```
+
+### 測試開發環境連線
+
+```bash
+# 測試 PostgreSQL
+psql postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi -c "SELECT 1"
+
+# 測試 qBittorrent
+curl -X POST http://localhost:8080/api/v2/auth/login \
+  -d "username=admin&password=adminadmin"
+
+# 測試 Core Service
+curl http://localhost:8000/health
+
+# 測試 Downloader
+curl -X POST http://localhost:8002/download \
+  -H "Content-Type: application/json" \
+  -d '{"link_id": 1, "url": "magnet:?xt=urn:btih:test123456789012345678901234"}'
+```
+
+---
 
 ## 編碼規範
 
 ### Rust 風格
 
-- 遵循 [Rust API 指南](https://rust-lang.github.io/api-guidelines/)
-- 使用 `cargo fmt` 格式化代碼
-- 使用 `cargo clippy` 檢查代碼質量
+```bash
+# 格式化
+cargo fmt
+
+# Lint 檢查
+cargo clippy
+
+# 檢查編譯
+cargo check
+```
 
 ### 命名慣例
 
-- 模塊名：snake_case
-- 類型名：PascalCase
-- 函數名：snake_case
-- 常數名：SCREAMING_SNAKE_CASE
+| 類型 | 風格 | 範例 |
+|------|------|------|
+| 模塊 | snake_case | `qbittorrent_client` |
+| 類型 | PascalCase | `TorrentInfo` |
+| 函數 | snake_case | `get_torrent_info` |
+| 常數 | SCREAMING_SNAKE_CASE | `MAX_RETRIES` |
 
 ### 錯誤處理
 
-使用 `AppError` 統一錯誤類型：
+使用 `anyhow` 和 `thiserror`：
 
 ```rust
-use shared::{Result, AppError};
+use anyhow::{anyhow, Result};
 
-async fn my_handler() -> Result<Json<MyResponse>> {
+async fn my_function() -> Result<String> {
     let data = fetch_data()
         .await
-        .map_err(|e| AppError::DatabaseError(e.to_string()))?;
-
-    Ok(Json(data))
+        .map_err(|e| anyhow!("Failed to fetch: {}", e))?;
+    Ok(data)
 }
 ```
 
 ### 日誌
 
-使用 `tracing` 庫記錄日誌：
+使用 `tracing`：
 
 ```rust
-tracing::debug!("調試信息");
-tracing::info!("信息");
-tracing::warn!("警告");
-tracing::error!("錯誤");
+tracing::debug!("Debug message");
+tracing::info!("Info message");
+tracing::warn!("Warning");
+tracing::error!("Error: {}", e);
 ```
 
-## 數據庫遷移
+---
 
-本專案使用 **Diesel ORM** 進行資料庫遷移管理。
+## 資料庫操作
 
-### 創建新遷移
+### 創建遷移
 
 ```bash
-# 創建新遷移（自動生成時間戳和目錄結構）
 diesel migration generate my_migration_name
-
-# 編輯生成的文件
-vim migrations/TIMESTAMP_my_migration_name/up.sql    # 上升路徑
-vim migrations/TIMESTAMP_my_migration_name/down.sql  # 下降路徑
 ```
 
 ### 執行遷移
 
 ```bash
-# 執行所有待執行的遷移
-DATABASE_URL="postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi" \
+# 執行
 diesel migration run
 
-# 或如果已設置環境變數
-diesel migration run
-```
+# 回滾
+diesel migration revert
 
-### 回滾遷移
-
-```bash
-# 回滾最後一個遷移
+# 重做（回滾後執行）
 diesel migration redo
-
-# 回滾所有遷移
-diesel migration revert --all
 ```
 
-## 測試
+### 使用 Adminer
 
-### 單元測試
+1. 開啟 `http://localhost:8081`
+2. 選擇 PostgreSQL
+3. 輸入：
+   - Server: `postgres`
+   - Username: `bangumi`
+   - Password: `bangumi_dev_password`
+   - Database: `bangumi`
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_something() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-```
-
-### 集成測試
-
-在 `tests/` 目錄下創建測試文件。
-
-### 測試覆蓋率
-
-```bash
-# 安裝 tarpaulin
-cargo install cargo-tarpaulin
-
-# 生成覆蓋率報告
-cargo tarpaulin --out Html
-```
-
-## Docker 開發
-
-### 構建單個服務鏡像
-
-```bash
-docker build -f Dockerfile.core -t bangumi-core .
-docker build -f Dockerfile.fetcher-mikanani -t bangumi-fetcher-mikanani .
-```
-
-### 用 Docker Compose 開發
-
-```bash
-# 啟動特定服務
-docker compose up core-service postgres
-
-# 重建服務鏡像
-docker compose build --no-cache
-
-# 進入容器 shell
-docker compose exec core-service bash
-
-# 查看服務日誌
-docker compose logs -f core-service
-```
+---
 
 ## 常見問題
 
-### 編譯错误：某些依賴無法解析
-
-確保所有依賴都在 `Cargo.toml` 中定義，特別是 `workspace.dependencies` 部分。
-
-### 數據庫連接失敗
-
-檢查 `DATABASE_URL` 環境變數是否正確設置，確保 PostgreSQL 服務正常運行。
-
-### Docker 容器無法通信
-
-確保所有容器都在同一個 Docker 網絡中（`bangumi-network`），使用服務名稱而不是 localhost 進行通信。
-
-## 性能優化
-
-### 編譯優化
-
-使用 `--release` 標誌進行發佈構建：
+### Port 已被佔用
 
 ```bash
-cargo build --release
-cargo run --release
+# 找出佔用 port 的程式
+lsof -i :8000
+lsof -i :5432
+lsof -i :8080
+
+# 停止佔用的服務
+docker compose -f docker-compose.dev.yaml down
 ```
 
-### 數據庫查詢優化
+### 資料庫連接失敗
 
-- 添加適當的索引
-- 使用 `EXPLAIN` 分析查詢計劃
-- 避免 N+1 查詢問題
+```bash
+# 確認 PostgreSQL 運行中
+docker compose -f docker-compose.dev.yaml ps postgres
 
-## 貢獻指南
+# 重啟 PostgreSQL
+docker compose -f docker-compose.dev.yaml restart postgres
 
-1. 創建特性分支：`git checkout -b feature/my-feature`
-2. 提交更改：`git commit -am 'Add my feature'`
-3. 推送分支：`git push origin feature/my-feature`
-4. 提交 PR 描述
+# 檢查日誌
+docker compose -f docker-compose.dev.yaml logs postgres
+```
 
-確保所有測試通過且代碼符合規範。
+### qBittorrent 無法連接
 
+```bash
+# 檢查服務狀態
+docker compose -f docker-compose.dev.yaml ps qbittorrent
+
+# 查看日誌
+docker compose -f docker-compose.dev.yaml logs qbittorrent
+
+# 測試 WebUI
+curl http://localhost:8080
+```
+
+如果出現認證錯誤，請重新設置密碼（見上方步驟 2）。
+
+### 清理開發環境
+
+```bash
+# 停止服務
+docker compose -f docker-compose.dev.yaml down
+
+# 停止並刪除資料
+docker compose -f docker-compose.dev.yaml down -v
+
+# 清理 Rust build
+cargo clean
+```
+
+### 重置 qBittorrent 密碼
+
+如果忘記密碼：
+
+```bash
+# 刪除 qBittorrent 配置
+docker compose -f docker-compose.dev.yaml down
+docker volume rm rust-bangumi_qbittorrent_dev_config
+
+# 重新啟動
+docker compose -f docker-compose.dev.yaml up -d qbittorrent
+
+# 查看新的臨時密碼
+docker compose -f docker-compose.dev.yaml logs qbittorrent | grep -i password
+```
+
+---
+
+## 開發流程
+
+### 建議的開發流程
+
+1. **創建 feature branch**
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+
+2. **啟動開發環境**
+   ```bash
+   docker compose -f docker-compose.dev.yaml up -d
+   ```
+
+3. **開發與測試**
+   ```bash
+   cargo watch -x 'test -p my-package'
+   ```
+
+4. **格式化與檢查**
+   ```bash
+   cargo fmt
+   cargo clippy
+   cargo test
+   ```
+
+5. **提交**
+   ```bash
+   git add .
+   git commit -m "feat: add my feature"
+   ```
+
+### 使用 Git Worktree 隔離開發
+
+對於大型功能開發，建議使用 worktree：
+
+```bash
+# 創建 worktree
+git worktree add .worktrees/my-feature -b feature/my-feature
+
+# 進入 worktree
+cd .worktrees/my-feature
+
+# 完成後清理
+git worktree remove .worktrees/my-feature
+```
+
+---
+
+## 相關文檔
+
+- [API 規格](./API-SPECIFICATIONS.md)
+- [架構設計](./plans/2025-01-21-rust-bangumi-architecture-design.md)
+- [CORS 設定](./CORS-CONFIGURATION.md)
