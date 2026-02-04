@@ -1,8 +1,8 @@
 use axum::{extract::State, http::StatusCode, Json};
+use downloader_qbittorrent::{retry_with_backoff, DownloaderClient};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use downloader_qbittorrent::{DownloaderClient, retry_with_backoff};
 
 #[derive(Debug, Deserialize)]
 pub struct DownloadRequest {
@@ -22,38 +22,46 @@ pub async fn download<C: DownloaderClient + 'static>(
     Json(req): Json<DownloadRequest>,
 ) -> (StatusCode, Json<DownloadResponse>) {
     if !req.url.starts_with("magnet:") {
-        return (StatusCode::BAD_REQUEST, Json(DownloadResponse {
-            status: "unsupported".to_string(),
-            hash: None,
-            error: Some("Only magnet links supported".to_string()),
-        }));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(DownloadResponse {
+                status: "unsupported".to_string(),
+                hash: None,
+                error: Some("Only magnet links supported".to_string()),
+            }),
+        );
     }
 
     // Use retry logic for download with exponential backoff
     let result = retry_with_backoff(3, Duration::from_secs(1), || {
         let client = client.clone();
         let url = req.url.clone();
-        async move {
-            client.add_magnet(&url, None).await
-        }
-    }).await;
+        async move { client.add_magnet(&url, None).await }
+    })
+    .await;
 
     match result {
         Ok(hash) => {
             tracing::info!("Download started: link_id={}, hash={}", req.link_id, hash);
-            (StatusCode::CREATED, Json(DownloadResponse {
-                status: "accepted".to_string(),
-                hash: Some(hash),
-                error: None,
-            }))
+            (
+                StatusCode::CREATED,
+                Json(DownloadResponse {
+                    status: "accepted".to_string(),
+                    hash: Some(hash),
+                    error: None,
+                }),
+            )
         }
         Err(e) => {
             tracing::error!("Download failed after retries: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(DownloadResponse {
-                status: "error".to_string(),
-                hash: None,
-                error: Some(e.to_string()),
-            }))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(DownloadResponse {
+                    status: "error".to_string(),
+                    hash: None,
+                    error: Some(e.to_string()),
+                }),
+            )
         }
     }
 }

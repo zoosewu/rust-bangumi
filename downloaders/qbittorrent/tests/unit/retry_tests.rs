@@ -60,11 +60,10 @@ async fn test_retry_succeeds_after_multiple_failures() {
 
 #[tokio::test]
 async fn test_retry_exhausts_all_attempts() {
-    let result =
-        retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(1), || async {
-            Err("Always fails".to_string())
-        })
-        .await;
+    let result = retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(1), || async {
+        Err("Always fails".to_string())
+    })
+    .await;
 
     assert!(result.is_err());
 }
@@ -72,11 +71,9 @@ async fn test_retry_exhausts_all_attempts() {
 #[tokio::test]
 async fn test_retry_exponential_backoff_timing() {
     let start = Instant::now();
-    let result = retry_with_backoff::<_, _, i32, String>(
-        2,
-        Duration::from_millis(10),
-        || async { Err("Always fails".to_string()) },
-    )
+    let result = retry_with_backoff::<_, _, i32, String>(2, Duration::from_millis(10), || async {
+        Err("Always fails".to_string())
+    })
     .await;
 
     let elapsed = start.elapsed();

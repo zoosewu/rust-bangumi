@@ -51,7 +51,10 @@ fn test_extract_hash_invalid_url_no_btih() {
     let result = client.extract_hash_from_magnet("magnet:?dn=test&tr=http://tracker.com");
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Invalid magnet URL"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Invalid magnet URL"));
 }
 
 #[test]

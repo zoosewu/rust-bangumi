@@ -6,46 +6,53 @@ use downloader_qbittorrent::{DownloaderClient, MockDownloaderClient, TorrentInfo
 
 #[tokio::test]
 async fn test_login_success() {
-    let mock = MockDownloaderClient::new()
-        .with_login_result(Ok(()));
+    let mock = MockDownloaderClient::new().with_login_result(Ok(()));
 
     let result = mock.login("admin", "password").await;
 
     assert!(result.is_ok());
     assert_eq!(mock.login_calls.borrow().len(), 1);
-    assert_eq!(mock.login_calls.borrow()[0], ("admin".to_string(), "password".to_string()));
+    assert_eq!(
+        mock.login_calls.borrow()[0],
+        ("admin".to_string(), "password".to_string())
+    );
 }
 
 #[tokio::test]
 async fn test_login_wrong_credentials_returns_error() {
-    let mock = MockDownloaderClient::new()
-        .with_login_result(Err(anyhow!("Invalid credentials")));
+    let mock = MockDownloaderClient::new().with_login_result(Err(anyhow!("Invalid credentials")));
 
     let result = mock.login("admin", "wrong").await;
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Invalid credentials"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Invalid credentials"));
 }
 
 #[tokio::test]
 async fn test_login_connection_failed_returns_error() {
-    let mock = MockDownloaderClient::new()
-        .with_login_result(Err(anyhow!("Connection refused")));
+    let mock = MockDownloaderClient::new().with_login_result(Err(anyhow!("Connection refused")));
 
     let result = mock.login("admin", "password").await;
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Connection refused"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Connection refused"));
 }
 
 // ============ Add Magnet Tests ============
 
 #[tokio::test]
 async fn test_add_magnet_success_returns_hash() {
-    let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Ok("abc123def456".to_string()));
+    let mock = MockDownloaderClient::new().with_add_magnet_result(Ok("abc123def456".to_string()));
 
-    let result = mock.add_magnet("magnet:?xt=urn:btih:abc123def456", None).await;
+    let result = mock
+        .add_magnet("magnet:?xt=urn:btih:abc123def456", None)
+        .await;
 
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "abc123def456");
@@ -53,10 +60,11 @@ async fn test_add_magnet_success_returns_hash() {
 
 #[tokio::test]
 async fn test_add_magnet_with_save_path() {
-    let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Ok("hash123".to_string()));
+    let mock = MockDownloaderClient::new().with_add_magnet_result(Ok("hash123".to_string()));
 
-    let result = mock.add_magnet("magnet:?xt=urn:btih:hash123", Some("/downloads")).await;
+    let result = mock
+        .add_magnet("magnet:?xt=urn:btih:hash123", Some("/downloads"))
+        .await;
 
     assert!(result.is_ok());
     let calls = mock.add_magnet_calls.borrow();
@@ -66,8 +74,8 @@ async fn test_add_magnet_with_save_path() {
 
 #[tokio::test]
 async fn test_add_magnet_duplicate_torrent_error() {
-    let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Err(anyhow!("Torrent already exists")));
+    let mock =
+        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Torrent already exists")));
 
     let result = mock.add_magnet("magnet:?xt=urn:btih:existing", None).await;
 
@@ -102,8 +110,7 @@ async fn test_get_torrent_info_found() {
         downloaded: 500000000,
     };
 
-    let mock = MockDownloaderClient::new()
-        .with_get_torrent_info_result(Ok(Some(info.clone())));
+    let mock = MockDownloaderClient::new().with_get_torrent_info_result(Ok(Some(info.clone())));
 
     let result = mock.get_torrent_info("testhash123").await;
 
@@ -115,8 +122,7 @@ async fn test_get_torrent_info_found() {
 
 #[tokio::test]
 async fn test_get_torrent_info_not_found_returns_none() {
-    let mock = MockDownloaderClient::new()
-        .with_get_torrent_info_result(Ok(None));
+    let mock = MockDownloaderClient::new().with_get_torrent_info_result(Ok(None));
 
     let result = mock.get_torrent_info("nonexistent").await;
 
@@ -158,8 +164,7 @@ async fn test_get_all_torrents_returns_list() {
         },
     ];
 
-    let mock = MockDownloaderClient::new()
-        .with_get_all_torrents_result(Ok(torrents));
+    let mock = MockDownloaderClient::new().with_get_all_torrents_result(Ok(torrents));
 
     let result = mock.get_all_torrents().await;
 
@@ -172,8 +177,7 @@ async fn test_get_all_torrents_returns_list() {
 
 #[tokio::test]
 async fn test_get_all_torrents_empty_list() {
-    let mock = MockDownloaderClient::new()
-        .with_get_all_torrents_result(Ok(vec![]));
+    let mock = MockDownloaderClient::new().with_get_all_torrents_result(Ok(vec![]));
 
     let result = mock.get_all_torrents().await;
 
@@ -185,8 +189,7 @@ async fn test_get_all_torrents_empty_list() {
 
 #[tokio::test]
 async fn test_pause_torrent_success() {
-    let mock = MockDownloaderClient::new()
-        .with_pause_result(Ok(()));
+    let mock = MockDownloaderClient::new().with_pause_result(Ok(()));
 
     let result = mock.pause_torrent("pausehash").await;
 
@@ -196,8 +199,7 @@ async fn test_pause_torrent_success() {
 
 #[tokio::test]
 async fn test_pause_torrent_not_found_error() {
-    let mock = MockDownloaderClient::new()
-        .with_pause_result(Err(anyhow!("Torrent not found")));
+    let mock = MockDownloaderClient::new().with_pause_result(Err(anyhow!("Torrent not found")));
 
     let result = mock.pause_torrent("nonexistent").await;
 
@@ -206,8 +208,7 @@ async fn test_pause_torrent_not_found_error() {
 
 #[tokio::test]
 async fn test_resume_torrent_success() {
-    let mock = MockDownloaderClient::new()
-        .with_resume_result(Ok(()));
+    let mock = MockDownloaderClient::new().with_resume_result(Ok(()));
 
     let result = mock.resume_torrent("resumehash").await;
 
@@ -217,8 +218,7 @@ async fn test_resume_torrent_success() {
 
 #[tokio::test]
 async fn test_delete_torrent_with_files() {
-    let mock = MockDownloaderClient::new()
-        .with_delete_result(Ok(()));
+    let mock = MockDownloaderClient::new().with_delete_result(Ok(()));
 
     let result = mock.delete_torrent("deletehash", true).await;
 
@@ -229,8 +229,7 @@ async fn test_delete_torrent_with_files() {
 
 #[tokio::test]
 async fn test_delete_torrent_without_files() {
-    let mock = MockDownloaderClient::new()
-        .with_delete_result(Ok(()));
+    let mock = MockDownloaderClient::new().with_delete_result(Ok(()));
 
     let result = mock.delete_torrent("deletehash", false).await;
 

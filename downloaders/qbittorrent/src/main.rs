@@ -1,7 +1,10 @@
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
+use downloader_qbittorrent::QBittorrentClient;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use downloader_qbittorrent::QBittorrentClient;
 
 mod handlers;
 
@@ -17,11 +20,11 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let qb_url = std::env::var("QBITTORRENT_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let qb_url =
+        std::env::var("QBITTORRENT_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let qb_user = std::env::var("QBITTORRENT_USER").unwrap_or_else(|_| "admin".to_string());
-    let qb_pass = std::env::var("QBITTORRENT_PASSWORD")
-        .unwrap_or_else(|_| "adminadmin".to_string());
+    let qb_pass =
+        std::env::var("QBITTORRENT_PASSWORD").unwrap_or_else(|_| "adminadmin".to_string());
 
     let client = Arc::new(QBittorrentClient::new(qb_url));
     client.login(&qb_user, &qb_pass).await?;

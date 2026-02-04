@@ -106,11 +106,7 @@ impl MockDownloaderClient {
         if let Some(start) = magnet_url.find("btih:") {
             let hash_start = start + 5;
             let hash_part = &magnet_url[hash_start..];
-            let hash = hash_part
-                .split('&')
-                .next()
-                .unwrap_or("")
-                .to_lowercase();
+            let hash = hash_part.split('&').next().unwrap_or("").to_lowercase();
 
             if !hash.is_empty() && hash.len() >= 32 {
                 Ok(hash)
@@ -130,7 +126,9 @@ unsafe impl Sync for MockDownloaderClient {}
 
 impl DownloaderClient for MockDownloaderClient {
     async fn login(&self, username: &str, password: &str) -> Result<()> {
-        self.login_calls.borrow_mut().push((username.to_string(), password.to_string()));
+        self.login_calls
+            .borrow_mut()
+            .push((username.to_string(), password.to_string()));
 
         // Clone the result to return it
         match &*self.login_result.borrow() {
@@ -140,10 +138,9 @@ impl DownloaderClient for MockDownloaderClient {
     }
 
     async fn add_magnet(&self, magnet_url: &str, save_path: Option<&str>) -> Result<String> {
-        self.add_magnet_calls.borrow_mut().push((
-            magnet_url.to_string(),
-            save_path.map(|s| s.to_string()),
-        ));
+        self.add_magnet_calls
+            .borrow_mut()
+            .push((magnet_url.to_string(), save_path.map(|s| s.to_string())));
 
         match &*self.add_magnet_result.borrow() {
             Ok(hash) => Ok(hash.clone()),
@@ -152,7 +149,9 @@ impl DownloaderClient for MockDownloaderClient {
     }
 
     async fn get_torrent_info(&self, hash: &str) -> Result<Option<TorrentInfo>> {
-        self.get_torrent_info_calls.borrow_mut().push(hash.to_string());
+        self.get_torrent_info_calls
+            .borrow_mut()
+            .push(hash.to_string());
 
         match &*self.get_torrent_info_result.borrow() {
             Ok(info) => Ok(info.clone()),
@@ -186,7 +185,9 @@ impl DownloaderClient for MockDownloaderClient {
     }
 
     async fn delete_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
-        self.delete_calls.borrow_mut().push((hash.to_string(), delete_files));
+        self.delete_calls
+            .borrow_mut()
+            .push((hash.to_string(), delete_files));
 
         match &*self.delete_result.borrow() {
             Ok(()) => Ok(()),

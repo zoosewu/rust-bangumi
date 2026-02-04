@@ -79,7 +79,10 @@ mod handlers {
 
 fn create_test_app(mock: MockDownloaderClient) -> Router {
     Router::new()
-        .route("/download", post(handlers::download::<MockDownloaderClient>))
+        .route(
+            "/download",
+            post(handlers::download::<MockDownloaderClient>),
+        )
         .with_state(Arc::new(mock))
 }
 
@@ -183,14 +186,17 @@ async fn test_download_success_response_has_hash() {
 
     let body = parse_response(response).await;
     assert_eq!(body.status, "accepted");
-    assert_eq!(body.hash, Some("responsehash12345678901234567890".to_string()));
+    assert_eq!(
+        body.hash,
+        Some("responsehash12345678901234567890".to_string())
+    );
     assert!(body.error.is_none());
 }
 
 #[tokio::test]
 async fn test_download_error_response_has_message() {
-    let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Err(anyhow!("Connection timeout")));
+    let mock =
+        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Connection timeout")));
 
     let app = create_test_app(mock);
 
@@ -244,8 +250,8 @@ async fn test_download_unsupported_response_format() {
 
 #[tokio::test]
 async fn test_download_client_error_returns_500() {
-    let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Err(anyhow!("Internal client error")));
+    let mock =
+        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Internal client error")));
 
     let app = create_test_app(mock);
 

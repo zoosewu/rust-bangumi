@@ -40,7 +40,15 @@ fn test_torrent_info_deserialize_json() {
 
 #[test]
 fn test_torrent_info_all_states() {
-    let states = vec!["downloading", "uploading", "paused", "completed", "error", "stalledDL", "stalledUP"];
+    let states = vec![
+        "downloading",
+        "uploading",
+        "paused",
+        "completed",
+        "error",
+        "stalledDL",
+        "stalledUP",
+    ];
 
     for state in states {
         let info = TorrentInfo {

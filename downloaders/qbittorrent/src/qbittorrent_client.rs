@@ -1,7 +1,7 @@
+use anyhow::{anyhow, Result};
 use reqwest::{cookie::Jar, Client};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use anyhow::{anyhow, Result};
 
 #[derive(Debug, Clone)]
 pub struct QBittorrentClient {
@@ -54,11 +54,7 @@ impl QBittorrentClient {
         }
     }
 
-    pub async fn add_magnet(
-        &self,
-        magnet_url: &str,
-        save_path: Option<&str>,
-    ) -> Result<String> {
+    pub async fn add_magnet(&self, magnet_url: &str, save_path: Option<&str>) -> Result<String> {
         let mut params = vec![("urls", magnet_url)];
 
         if let Some(path) = save_path {
@@ -167,11 +163,7 @@ impl QBittorrentClient {
         if let Some(start) = magnet_url.find("btih:") {
             let hash_start = start + 5;
             let hash_part = &magnet_url[hash_start..];
-            let hash = hash_part
-                .split('&')
-                .next()
-                .unwrap_or("")
-                .to_lowercase();
+            let hash = hash_part.split('&').next().unwrap_or("").to_lowercase();
 
             if !hash.is_empty() && hash.len() >= 32 {
                 Ok(hash)
