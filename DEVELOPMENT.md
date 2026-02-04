@@ -87,23 +87,40 @@ docker compose -f docker-compose.dev.yaml up -d
 docker compose -f docker-compose.dev.yaml ps
 ```
 
+**DOOD 環境（在容器內使用 Docker）：**
+
+如果你在容器內透過掛載 `/var/run/docker.sock` 使用 host Docker，需要設定 `HOST_PROJECT_PATH`：
+
+```bash
+# 設定 host 上的專案路徑
+export HOST_PROJECT_PATH=/path/to/rust-bangumi/on/host
+
+# 然後啟動服務
+docker compose -f docker-compose.dev.yaml up -d
+```
+
 **服務端點：**
 
 | 服務 | URL | 說明 |
 |------|-----|------|
 | PostgreSQL | `localhost:5432` | 資料庫 |
 | Adminer | `http://localhost:8081` | 資料庫管理介面 |
-| qBittorrent | `http://localhost:8080` | BT 下載客戶端 |
+| qBittorrent | `http://localhost:8080` | BT 下載客戶端（admin/adminadmin） |
 
 ### 2. 設置環境變數
 
 ```bash
 # 複製開發環境模板
 cp .env.dev .env
+
+# DOOD 環境需編輯 .env 設定 HOST_PROJECT_PATH
 ```
 
-`.env.dev` 內容：
+`.env.dev` 關鍵變數：
 ```env
+# DOOD 環境必填（host 上的專案絕對路徑）
+HOST_PROJECT_PATH=/path/to/rust-bangumi
+
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi
 CORE_SERVICE_URL=http://localhost:8000
 QBITTORRENT_URL=http://localhost:8080

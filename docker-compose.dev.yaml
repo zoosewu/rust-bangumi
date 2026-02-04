@@ -71,6 +71,8 @@ services:
   # WebUI: http://localhost:8080
   # 帳號: admin
   # 密碼: adminadmin（已預設，無需手動設定）
+  #
+  # DOOD 環境需設定 HOST_PROJECT_PATH 環境變數指向 host 上的專案路徑
   # ============================================================================
   qbittorrent:
     image: linuxserver/qbittorrent:latest
@@ -85,7 +87,7 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - ./dev-config/qbittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf
+      - ${HOST_PROJECT_PATH:-.}/dev-config/qbittorrent:/config/qBittorrent
       - qbittorrent_dev_downloads:/downloads
     networks:
       - bangumi-dev-network
