@@ -69,13 +69,8 @@ services:
   # qBittorrent - 下載服務（開發環境）
   # ============================================================================
   # WebUI: http://localhost:8080
-  # 預設帳號: admin
-  # 預設密碼: 首次啟動時會在 log 中顯示臨時密碼，登入後請至設定修改
-  #
-  # 設定步驟：
-  #   1. docker compose -f docker-compose.dev.yaml logs qbittorrent | grep password
-  #   2. 用臨時密碼登入 http://localhost:8080
-  #   3. 設定 > Web UI > 修改密碼為 adminadmin（與 .env.dev 一致）
+  # 帳號: admin
+  # 密碼: adminadmin（已預設，無需手動設定）
   # ============================================================================
   qbittorrent:
     image: linuxserver/qbittorrent:latest
@@ -90,7 +85,7 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - qbittorrent_dev_config:/config
+      - ./dev-config/qbittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf
       - qbittorrent_dev_downloads:/downloads
     networks:
       - bangumi-dev-network
@@ -119,8 +114,6 @@ networks:
 # ============================================================================
 volumes:
   postgres_dev_data:
-    driver: local
-  qbittorrent_dev_config:
     driver: local
   qbittorrent_dev_downloads:
     driver: local

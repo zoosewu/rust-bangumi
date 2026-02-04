@@ -95,25 +95,7 @@ docker compose -f docker-compose.dev.yaml ps
 | Adminer | `http://localhost:8081` | 資料庫管理介面 |
 | qBittorrent | `http://localhost:8080` | BT 下載客戶端 |
 
-### 2. 設置 qBittorrent
-
-首次啟動 qBittorrent 時需要設置密碼：
-
-```bash
-# 查看臨時密碼
-docker compose -f docker-compose.dev.yaml logs qbittorrent | grep -i password
-```
-
-輸出範例：
-```
-The WebUI administrator password was not set. A temporary password is provided for this session: aBcDeFgH
-```
-
-1. 用臨時密碼登入 `http://localhost:8080`（帳號：`admin`）
-2. 進入 **設定 > Web UI > 驗證**
-3. 將密碼修改為 `adminadmin`（與 `.env.dev` 一致）
-
-### 3. 設置環境變數
+### 2. 設置環境變數
 
 ```bash
 # 複製開發環境模板
@@ -130,7 +112,7 @@ QBITTORRENT_PASSWORD=adminadmin
 RUST_LOG=debug
 ```
 
-### 4. 執行資料庫遷移
+### 3. 執行資料庫遷移
 
 ```bash
 diesel migration run
@@ -358,7 +340,7 @@ docker compose -f docker-compose.dev.yaml logs qbittorrent
 curl http://localhost:8080
 ```
 
-如果出現認證錯誤，請重新設置密碼（見上方步驟 2）。
+如果出現認證錯誤，請確認使用 `admin` / `adminadmin` 登入。
 
 ### 清理開發環境
 
@@ -371,22 +353,6 @@ docker compose -f docker-compose.dev.yaml down -v
 
 # 清理 Rust build
 cargo clean
-```
-
-### 重置 qBittorrent 密碼
-
-如果忘記密碼：
-
-```bash
-# 刪除 qBittorrent 配置
-docker compose -f docker-compose.dev.yaml down
-docker volume rm rust-bangumi_qbittorrent_dev_config
-
-# 重新啟動
-docker compose -f docker-compose.dev.yaml up -d qbittorrent
-
-# 查看新的臨時密碼
-docker compose -f docker-compose.dev.yaml logs qbittorrent | grep -i password
 ```
 
 ---
