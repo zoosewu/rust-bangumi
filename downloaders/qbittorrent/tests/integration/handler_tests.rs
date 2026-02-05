@@ -38,13 +38,13 @@ mod handlers {
         State(client): State<Arc<C>>,
         Json(req): Json<DownloadRequest>,
     ) -> (StatusCode, Json<DownloadResponse>) {
-        if !req.url.starts_with("magnet:") {
+        if !req.url.starts_with("magnet:") && !req.url.starts_with("http") {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(DownloadResponse {
                     status: "unsupported".to_string(),
                     hash: None,
-                    error: Some("Only magnet links supported".to_string()),
+                    error: Some("Only magnet links and torrent URLs supported".to_string()),
                 }),
             );
         }
@@ -52,7 +52,7 @@ mod handlers {
         let result = retry_with_backoff(3, Duration::from_millis(10), || {
             let client = client.clone();
             let url = req.url.clone();
-            async move { client.add_magnet(&url, None).await }
+            async move { client.add_torrent(&url, None).await }
         })
         .await;
 
@@ -97,7 +97,7 @@ async fn parse_response(response: axum::response::Response) -> handlers::Downloa
 #[tokio::test]
 async fn test_download_valid_magnet_returns_201() {
     let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Ok("testhash123456789012345678901234".to_string()));
+        .with_add_torrent_result(Ok("testhash123456789012345678901234".to_string()));
 
     let app = create_test_app(mock);
 
@@ -119,7 +119,7 @@ async fn test_download_valid_magnet_returns_201() {
 }
 
 #[tokio::test]
-async fn test_download_non_magnet_returns_400() {
+async fn test_download_unsupported_protocol_returns_400() {
     let mock = MockDownloaderClient::new();
     let app = create_test_app(mock);
 
@@ -130,7 +130,7 @@ async fn test_download_non_magnet_returns_400() {
                 .uri("/download")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    r#"{"link_id":1,"url":"http://example.com/file.torrent"}"#,
+                    r#"{"link_id":1,"url":"ftp://example.com/file.torrent"}"#,
                 ))
                 .unwrap(),
         )
@@ -138,6 +138,30 @@ async fn test_download_non_magnet_returns_400() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_download_torrent_url_returns_201() {
+    let mock = MockDownloaderClient::new()
+        .with_add_torrent_result(Ok("ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc".to_string()));
+
+    let app = create_test_app(mock);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/download")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"link_id":1,"url":"https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
 }
 
 #[tokio::test]
@@ -166,7 +190,7 @@ async fn test_download_invalid_json_returns_error() {
 #[tokio::test]
 async fn test_download_success_response_has_hash() {
     let mock = MockDownloaderClient::new()
-        .with_add_magnet_result(Ok("responsehash12345678901234567890".to_string()));
+        .with_add_torrent_result(Ok("responsehash12345678901234567890".to_string()));
 
     let app = create_test_app(mock);
 
@@ -196,7 +220,7 @@ async fn test_download_success_response_has_hash() {
 #[tokio::test]
 async fn test_download_error_response_has_message() {
     let mock =
-        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Connection timeout")));
+        MockDownloaderClient::new().with_add_torrent_result(Err(anyhow!("Connection timeout")));
 
     let app = create_test_app(mock);
 
@@ -233,7 +257,7 @@ async fn test_download_unsupported_response_format() {
                 .uri("/download")
                 .header("content-type", "application/json")
                 .body(Body::from(
-                    r#"{"link_id":1,"url":"https://not-a-magnet.com"}"#,
+                    r#"{"link_id":1,"url":"ftp://not-supported.com"}"#,
                 ))
                 .unwrap(),
         )
@@ -243,7 +267,6 @@ async fn test_download_unsupported_response_format() {
     let body = parse_response(response).await;
     assert_eq!(body.status, "unsupported");
     assert!(body.error.is_some());
-    assert!(body.error.unwrap().contains("magnet"));
 }
 
 // ============ Error Handling Tests ============
@@ -251,7 +274,7 @@ async fn test_download_unsupported_response_format() {
 #[tokio::test]
 async fn test_download_client_error_returns_500() {
     let mock =
-        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Internal client error")));
+        MockDownloaderClient::new().with_add_torrent_result(Err(anyhow!("Internal client error")));
 
     let app = create_test_app(mock);
 

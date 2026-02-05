@@ -95,3 +95,31 @@ fn test_extract_hash_idempotent() {
 
     assert_eq!(hash1, hash2);
 }
+
+// ============ URL Hash Extraction Tests ============
+
+#[test]
+fn test_extract_hash_from_torrent_url() {
+    let client = create_client();
+    let url = "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
+
+    let hash = client.extract_hash_from_url(url).unwrap();
+    assert_eq!(hash, "ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc");
+}
+
+#[test]
+fn test_extract_hash_from_url_magnet_delegates() {
+    let client = create_client();
+    let magnet = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef&dn=test";
+
+    let hash = client.extract_hash_from_url(magnet).unwrap();
+    assert_eq!(hash, "1234567890abcdef1234567890abcdef");
+}
+
+#[test]
+fn test_extract_hash_from_url_unsupported_fails() {
+    let client = create_client();
+    let url = "ftp://example.com/something";
+
+    assert!(client.extract_hash_from_url(url).is_err());
+}
