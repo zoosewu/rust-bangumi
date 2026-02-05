@@ -77,3 +77,83 @@ impl Default for RssParser {
         Self::new()
     }
 }
+
+/// 常用 BitTorrent tracker 列表
+const TRACKERS: &[&str] = &[
+    "http://open.acgtracker.com:1096/announce",
+    "http://t.nyaatracker.com:80/announce",
+    "udp://tracker.openbittorrent.com:80/announce",
+];
+
+/// 嘗試從 mikanani 的 .torrent URL 提取 hash 並構造 magnet link
+///
+/// URL 格式: `https://mikanani.me/Download/{date}/{hash}.torrent`
+fn torrent_url_to_magnet(url: &str) -> Option<String> {
+    if !url.contains("mikanani.me") || !url.ends_with(".torrent") {
+        return None;
+    }
+
+    let filename = url.rsplit('/').next()?;
+    let hash = filename.strip_suffix(".torrent")?;
+
+    if hash.len() < 32 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    let trackers: String = TRACKERS.iter().map(|t| format!("&tr={}", t)).collect();
+
+    Some(format!(
+        "magnet:?xt=urn:btih:{}{}",
+        hash.to_lowercase(),
+        trackers
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_torrent_url_to_magnet_valid_mikanani_url() {
+        let url = "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
+        let result = torrent_url_to_magnet(url);
+        assert!(result.is_some());
+        let magnet = result.unwrap();
+        assert!(magnet.starts_with("magnet:?xt=urn:btih:ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc"));
+        assert!(magnet.contains("&tr="));
+    }
+
+    #[test]
+    fn test_torrent_url_to_magnet_uppercase_hash_lowered() {
+        let url = "https://mikanani.me/Download/20241222/ABCDEF1234567890ABCDEF1234567890ABCDEF12.torrent";
+        let result = torrent_url_to_magnet(url);
+        assert!(result.is_some());
+        assert!(result
+            .unwrap()
+            .contains("abcdef1234567890abcdef1234567890abcdef12"));
+    }
+
+    #[test]
+    fn test_torrent_url_to_magnet_non_mikanani_returns_none() {
+        let url = "https://example.com/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
+        assert!(torrent_url_to_magnet(url).is_none());
+    }
+
+    #[test]
+    fn test_torrent_url_to_magnet_non_torrent_returns_none() {
+        let url = "https://mikanani.me/Home/Episode/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc";
+        assert!(torrent_url_to_magnet(url).is_none());
+    }
+
+    #[test]
+    fn test_torrent_url_to_magnet_short_hash_returns_none() {
+        let url = "https://mikanani.me/Download/20241222/shorthash.torrent";
+        assert!(torrent_url_to_magnet(url).is_none());
+    }
+
+    #[test]
+    fn test_torrent_url_to_magnet_non_hex_hash_returns_none() {
+        let url = "https://mikanani.me/Download/20241222/not_a_valid_hex_string_at_all_nope.torrent";
+        assert!(torrent_url_to_magnet(url).is_none());
+    }
+}
