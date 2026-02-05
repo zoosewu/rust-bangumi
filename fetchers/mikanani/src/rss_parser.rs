@@ -43,16 +43,19 @@ impl RssParser {
             }
 
             // Get download URL from enclosure or link
-            let download_url = entry.media.first()
+            let original_url = entry.media.first()
                 .and_then(|m| m.content.first())
                 .and_then(|c| c.url.as_ref())
                 .map(|u| u.to_string())
                 .or_else(|| entry.links.first().map(|l| l.href.clone()))
                 .unwrap_or_default();
 
-            if download_url.is_empty() {
+            if original_url.is_empty() {
                 continue;
             }
+
+            // 優先轉換為 magnet link，失敗則使用原始 URL
+            let download_url = torrent_url_to_magnet(&original_url).unwrap_or(original_url);
 
             let description = entry.summary.map(|s| s.content);
 
