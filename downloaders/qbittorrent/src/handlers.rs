@@ -21,13 +21,13 @@ pub async fn download<C: DownloaderClient + 'static>(
     State(client): State<Arc<C>>,
     Json(req): Json<DownloadRequest>,
 ) -> (StatusCode, Json<DownloadResponse>) {
-    if !req.url.starts_with("magnet:") {
+    if !req.url.starts_with("magnet:") && !req.url.starts_with("http") {
         return (
             StatusCode::BAD_REQUEST,
             Json(DownloadResponse {
                 status: "unsupported".to_string(),
                 hash: None,
-                error: Some("Only magnet links supported".to_string()),
+                error: Some("Only magnet links and torrent URLs supported".to_string()),
             }),
         );
     }
@@ -36,7 +36,7 @@ pub async fn download<C: DownloaderClient + 'static>(
     let result = retry_with_backoff(3, Duration::from_secs(1), || {
         let client = client.clone();
         let url = req.url.clone();
-        async move { client.add_magnet(&url, None).await }
+        async move { client.add_torrent(&url, None).await }
     })
     .await;
 
