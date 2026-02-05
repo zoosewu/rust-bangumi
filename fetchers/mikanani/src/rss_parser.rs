@@ -1,8 +1,8 @@
+use crate::retry::retry_with_backoff;
+use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use shared::models::RawAnimeItem;
-use crate::retry::retry_with_backoff;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
 
 pub struct RssParser;
 
@@ -15,24 +15,20 @@ impl RssParser {
     pub async fn fetch_raw_items(&self, rss_url: &str) -> Result<Vec<RawAnimeItem>, String> {
         // Download RSS feed with retry logic
         let url = rss_url.to_string();
-        let content = retry_with_backoff(
-            3,
-            Duration::from_secs(2),
-            || {
-                let url = url.clone();
-                async move {
-                    let resp = reqwest::get(&url).await?;
-                    let resp = resp.error_for_status()?;
-                    resp.bytes().await
-                }
-            },
-        )
+        let content = retry_with_backoff(3, Duration::from_secs(2), || {
+            let url = url.clone();
+            async move {
+                let resp = reqwest::get(&url).await?;
+                let resp = resp.error_for_status()?;
+                resp.bytes().await
+            }
+        })
         .await
         .map_err(|e| format!("Failed to fetch RSS feed: {}", e))?;
 
         // Parse RSS
-        let feed = parser::parse(&content[..])
-            .map_err(|e| format!("Failed to parse RSS feed: {}", e))?;
+        let feed =
+            parser::parse(&content[..]).map_err(|e| format!("Failed to parse RSS feed: {}", e))?;
 
         let mut items = Vec::new();
 
@@ -43,7 +39,9 @@ impl RssParser {
             }
 
             // Get download URL from enclosure or link
-            let original_url = entry.media.first()
+            let original_url = entry
+                .media
+                .first()
                 .and_then(|m| m.content.first())
                 .and_then(|c| c.url.as_ref())
                 .map(|u| u.to_string())
@@ -59,7 +57,8 @@ impl RssParser {
 
             let description = entry.summary.map(|s| s.content);
 
-            let pub_date = entry.published
+            let pub_date = entry
+                .published
                 .or(entry.updated)
                 .map(|dt| DateTime::<Utc>::from(dt));
 
@@ -156,7 +155,8 @@ mod tests {
 
     #[test]
     fn test_torrent_url_to_magnet_non_hex_hash_returns_none() {
-        let url = "https://mikanani.me/Download/20241222/not_a_valid_hex_string_at_all_nope.torrent";
+        let url =
+            "https://mikanani.me/Download/20241222/not_a_valid_hex_string_at_all_nope.torrent";
         assert!(torrent_url_to_magnet(url).is_none());
     }
 }

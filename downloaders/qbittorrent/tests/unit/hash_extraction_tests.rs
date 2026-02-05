@@ -101,7 +101,8 @@ fn test_extract_hash_idempotent() {
 #[test]
 fn test_extract_hash_from_torrent_url() {
     let client = create_client();
-    let url = "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
+    let url =
+        "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
 
     let hash = client.extract_hash_from_url(url).unwrap();
     assert_eq!(hash, "ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc");
