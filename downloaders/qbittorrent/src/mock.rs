@@ -28,10 +28,12 @@ pub struct MockDownloaderClient {
     pause_result: RefCell<Result<()>>,
     resume_result: RefCell<Result<()>>,
     delete_result: RefCell<Result<()>>,
+    add_torrent_result: RefCell<Result<String>>,
 
     // Call recordings
     pub login_calls: RefCell<Vec<(String, String)>>,
     pub add_magnet_calls: RefCell<Vec<(String, Option<String>)>>,
+    pub add_torrent_calls: RefCell<Vec<(String, Option<String>)>>,
     pub get_torrent_info_calls: RefCell<Vec<String>>,
     pub pause_calls: RefCell<Vec<String>>,
     pub resume_calls: RefCell<Vec<String>>,
@@ -48,9 +50,11 @@ impl Default for MockDownloaderClient {
             pause_result: RefCell::new(Ok(())),
             resume_result: RefCell::new(Ok(())),
             delete_result: RefCell::new(Ok(())),
+            add_torrent_result: RefCell::new(Ok("default_hash".to_string())),
 
             login_calls: RefCell::new(vec![]),
             add_magnet_calls: RefCell::new(vec![]),
+            add_torrent_calls: RefCell::new(vec![]),
             get_torrent_info_calls: RefCell::new(vec![]),
             pause_calls: RefCell::new(vec![]),
             resume_calls: RefCell::new(vec![]),
@@ -101,6 +105,11 @@ impl MockDownloaderClient {
         self
     }
 
+    pub fn with_add_torrent_result(self, result: Result<String>) -> Self {
+        *self.add_torrent_result.borrow_mut() = result;
+        self
+    }
+
     // Helper to extract hash (same logic as real client)
     fn do_extract_hash(&self, magnet_url: &str) -> Result<String> {
         if let Some(start) = magnet_url.find("btih:") {
@@ -116,6 +125,23 @@ impl MockDownloaderClient {
         } else {
             Err(anyhow!("Invalid magnet URL format"))
         }
+    }
+
+    fn do_extract_hash_from_url(&self, url: &str) -> Result<String> {
+        if url.starts_with("magnet:") {
+            return self.do_extract_hash(url);
+        }
+        if url.ends_with(".torrent") {
+            if let Some(filename) = url.rsplit('/').next() {
+                if let Some(hash) = filename.strip_suffix(".torrent") {
+                    let hash = hash.to_lowercase();
+                    if hash.len() >= 32 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                        return Ok(hash);
+                    }
+                }
+            }
+        }
+        Err(anyhow!("Cannot extract hash from URL: {}", url))
     }
 }
 
@@ -197,5 +223,20 @@ impl DownloaderClient for MockDownloaderClient {
 
     fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
         self.do_extract_hash(magnet_url)
+    }
+
+    async fn add_torrent(&self, url: &str, save_path: Option<&str>) -> Result<String> {
+        self.add_torrent_calls
+            .borrow_mut()
+            .push((url.to_string(), save_path.map(|s| s.to_string())));
+
+        match &*self.add_torrent_result.borrow() {
+            Ok(hash) => Ok(hash.clone()),
+            Err(e) => Err(anyhow!("{}", e)),
+        }
+    }
+
+    fn extract_hash_from_url(&self, url: &str) -> Result<String> {
+        self.do_extract_hash_from_url(url)
     }
 }

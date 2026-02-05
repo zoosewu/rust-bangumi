@@ -45,4 +45,14 @@ pub trait DownloaderClient: Send + Sync {
 
     /// Extract the info hash from a magnet URL
     fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String>;
+
+    /// Add a torrent by URL (magnet link or .torrent HTTP URL) and return the torrent hash
+    fn add_torrent(
+        &self,
+        url: &str,
+        save_path: Option<&str>,
+    ) -> impl std::future::Future<Output = Result<String>> + Send;
+
+    /// Extract the info hash from a URL (magnet link or .torrent URL)
+    fn extract_hash_from_url(&self, url: &str) -> Result<String>;
 }

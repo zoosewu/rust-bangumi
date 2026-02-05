@@ -174,6 +174,50 @@ impl QBittorrentClient {
             Err(anyhow!("Invalid magnet URL format"))
         }
     }
+
+    pub fn extract_hash_from_url(&self, url: &str) -> Result<String> {
+        if url.starts_with("magnet:") {
+            return self.extract_hash_from_magnet(url);
+        }
+
+        // 嘗試從 .torrent URL 的檔名提取 hash
+        // 格式: https://example.com/path/{hash}.torrent
+        if url.ends_with(".torrent") {
+            if let Some(filename) = url.rsplit('/').next() {
+                if let Some(hash) = filename.strip_suffix(".torrent") {
+                    let hash = hash.to_lowercase();
+                    if hash.len() >= 32 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                        return Ok(hash);
+                    }
+                }
+            }
+        }
+
+        Err(anyhow!("Cannot extract hash from URL: {}", url))
+    }
+
+    pub async fn add_torrent(&self, url: &str, save_path: Option<&str>) -> Result<String> {
+        let mut params = vec![("urls", url)];
+
+        if let Some(path) = save_path {
+            params.push(("savepath", path));
+        }
+
+        let resp = self
+            .client
+            .post(format!("{}/api/v2/torrents/add", self.base_url))
+            .form(&params)
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            tracing::info!("Torrent added successfully");
+            let hash = self.extract_hash_from_url(url)?;
+            Ok(hash)
+        } else {
+            Err(anyhow!("Failed to add torrent: {}", resp.status()))
+        }
+    }
 }
 
 use crate::traits::DownloaderClient;
@@ -209,5 +253,13 @@ impl DownloaderClient for QBittorrentClient {
 
     fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
         QBittorrentClient::extract_hash_from_magnet(self, magnet_url)
+    }
+
+    async fn add_torrent(&self, url: &str, save_path: Option<&str>) -> Result<String> {
+        QBittorrentClient::add_torrent(self, url, save_path).await
+    }
+
+    fn extract_hash_from_url(&self, url: &str) -> Result<String> {
+        QBittorrentClient::extract_hash_from_url(self, url)
     }
 }
