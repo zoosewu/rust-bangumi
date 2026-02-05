@@ -23,7 +23,7 @@ pub struct CreateSubscriptionRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub fetch_interval_minutes: Option<i32>,
-    pub config: Option<String>,
+    pub config: Option<serde_json::Value>,
     pub source_type: Option<String>,
 }
 
@@ -38,7 +38,7 @@ pub struct SubscriptionResponse {
     pub next_fetch_at: Option<chrono::NaiveDateTime>,
     pub fetch_interval_minutes: i32,
     pub is_active: bool,
-    pub config: Option<String>,
+    pub config: Option<serde_json::Value>,
     pub source_type: String,
     pub assignment_status: String,
     pub assigned_at: Option<chrono::NaiveDateTime>,
@@ -68,9 +68,7 @@ pub struct CanHandleRequest {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CanHandleResponse {
-    pub fetcher_id: i32,
     pub can_handle: bool,
-    pub priority: i32,
 }
 
 // ============ Handlers ============
