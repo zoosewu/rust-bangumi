@@ -2,20 +2,29 @@ use async_trait::async_trait;
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 
+use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::{NewSubscription, Subscription};
 use crate::schema::subscriptions;
-use super::RepositoryError;
 
 #[async_trait]
 pub trait SubscriptionRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<Subscription>, RepositoryError>;
-    async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError>;
+    async fn find_by_source_url(
+        &self,
+        source_url: &str,
+    ) -> Result<Option<Subscription>, RepositoryError>;
     async fn find_all(&self) -> Result<Vec<Subscription>, RepositoryError>;
     async fn find_active(&self) -> Result<Vec<Subscription>, RepositoryError>;
-    async fn find_by_fetcher_id(&self, fetcher_id: i32) -> Result<Vec<Subscription>, RepositoryError>;
+    async fn find_by_fetcher_id(
+        &self,
+        fetcher_id: i32,
+    ) -> Result<Vec<Subscription>, RepositoryError>;
     async fn find_pending_assignment(&self) -> Result<Vec<Subscription>, RepositoryError>;
-    async fn create(&self, new_subscription: NewSubscription) -> Result<Subscription, RepositoryError>;
+    async fn create(
+        &self,
+        new_subscription: NewSubscription,
+    ) -> Result<Subscription, RepositoryError>;
     async fn update(&self, subscription: &Subscription) -> Result<Subscription, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
     async fn delete_by_source_url(&self, source_url: &str) -> Result<bool, RepositoryError>;
@@ -58,7 +67,10 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         .await?
     }
 
-    async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError> {
+    async fn find_by_source_url(
+        &self,
+        source_url: &str,
+    ) -> Result<Option<Subscription>, RepositoryError> {
         let pool = self.pool.clone();
         let source_url = source_url.to_string();
         tokio::task::spawn_blocking(move || {
@@ -95,7 +107,10 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         .await?
     }
 
-    async fn find_by_fetcher_id(&self, fetcher_id: i32) -> Result<Vec<Subscription>, RepositoryError> {
+    async fn find_by_fetcher_id(
+        &self,
+        fetcher_id: i32,
+    ) -> Result<Vec<Subscription>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -120,7 +135,10 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         .await?
     }
 
-    async fn create(&self, new_subscription: NewSubscription) -> Result<Subscription, RepositoryError> {
+    async fn create(
+        &self,
+        new_subscription: NewSubscription,
+    ) -> Result<Subscription, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -160,8 +178,7 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let rows_deleted = diesel::delete(subscriptions::table.find(id))
-                .execute(&mut conn)?;
+            let rows_deleted = diesel::delete(subscriptions::table.find(id)).execute(&mut conn)?;
             Ok(rows_deleted > 0)
         })
         .await?
@@ -173,8 +190,9 @@ impl SubscriptionRepository for DieselSubscriptionRepository {
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             let rows_deleted = diesel::delete(
-                subscriptions::table.filter(subscriptions::source_url.eq(&source_url))
-            ).execute(&mut conn)?;
+                subscriptions::table.filter(subscriptions::source_url.eq(&source_url)),
+            )
+            .execute(&mut conn)?;
             Ok(rows_deleted > 0)
         })
         .await?
@@ -263,16 +281,31 @@ pub mod mock {
     #[async_trait]
     impl SubscriptionRepository for MockSubscriptionRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<Subscription>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.subscriptions.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .subscriptions
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|s| s.subscription_id == id)
                 .cloned())
         }
 
-        async fn find_by_source_url(&self, source_url: &str) -> Result<Option<Subscription>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_source_url:{}", source_url));
-            Ok(self.subscriptions.lock().unwrap()
+        async fn find_by_source_url(
+            &self,
+            source_url: &str,
+        ) -> Result<Option<Subscription>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_source_url:{}", source_url));
+            Ok(self
+                .subscriptions
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|s| s.source_url == source_url)
                 .cloned())
@@ -284,17 +317,32 @@ pub mod mock {
         }
 
         async fn find_active(&self) -> Result<Vec<Subscription>, RepositoryError> {
-            self.operations.lock().unwrap().push("find_active".to_string());
-            Ok(self.subscriptions.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push("find_active".to_string());
+            Ok(self
+                .subscriptions
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|s| s.is_active)
                 .cloned()
                 .collect())
         }
 
-        async fn find_by_fetcher_id(&self, fetcher_id: i32) -> Result<Vec<Subscription>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_fetcher_id:{}", fetcher_id));
-            Ok(self.subscriptions.lock().unwrap()
+        async fn find_by_fetcher_id(
+            &self,
+            fetcher_id: i32,
+        ) -> Result<Vec<Subscription>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_fetcher_id:{}", fetcher_id));
+            Ok(self
+                .subscriptions
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|s| s.fetcher_id == fetcher_id)
                 .cloned()
@@ -302,15 +350,24 @@ pub mod mock {
         }
 
         async fn find_pending_assignment(&self) -> Result<Vec<Subscription>, RepositoryError> {
-            self.operations.lock().unwrap().push("find_pending_assignment".to_string());
-            Ok(self.subscriptions.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push("find_pending_assignment".to_string());
+            Ok(self
+                .subscriptions
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|s| s.assignment_status == "pending" && s.is_active)
                 .cloned()
                 .collect())
         }
 
-        async fn create(&self, new_subscription: NewSubscription) -> Result<Subscription, RepositoryError> {
+        async fn create(
+            &self,
+            new_subscription: NewSubscription,
+        ) -> Result<Subscription, RepositoryError> {
             self.operations.lock().unwrap().push("create".to_string());
             let mut subs = self.subscriptions.lock().unwrap();
             let id = subs.len() as i32 + 1;
@@ -336,10 +393,19 @@ pub mod mock {
             Ok(subscription)
         }
 
-        async fn update(&self, subscription: &Subscription) -> Result<Subscription, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update:{}", subscription.subscription_id));
+        async fn update(
+            &self,
+            subscription: &Subscription,
+        ) -> Result<Subscription, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update:{}", subscription.subscription_id));
             let mut subs = self.subscriptions.lock().unwrap();
-            if let Some(pos) = subs.iter().position(|s| s.subscription_id == subscription.subscription_id) {
+            if let Some(pos) = subs
+                .iter()
+                .position(|s| s.subscription_id == subscription.subscription_id)
+            {
                 subs[pos] = subscription.clone();
                 Ok(subscription.clone())
             } else {
@@ -348,7 +414,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut subs = self.subscriptions.lock().unwrap();
             let len_before = subs.len();
             subs.retain(|s| s.subscription_id != id);
@@ -356,7 +425,10 @@ pub mod mock {
         }
 
         async fn delete_by_source_url(&self, source_url: &str) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete_by_source_url:{}", source_url));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete_by_source_url:{}", source_url));
             let mut subs = self.subscriptions.lock().unwrap();
             let len_before = subs.len();
             subs.retain(|s| s.source_url != source_url);
@@ -369,7 +441,10 @@ pub mod mock {
             status: &str,
             assigned_at: Option<NaiveDateTime>,
         ) -> Result<Subscription, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update_assignment_status:{}:{}", id, status));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update_assignment_status:{}:{}", id, status));
             let mut subs = self.subscriptions.lock().unwrap();
             if let Some(pos) = subs.iter().position(|s| s.subscription_id == id) {
                 subs[pos].assignment_status = status.to_string();
@@ -387,7 +462,10 @@ pub mod mock {
             last_fetched_at: NaiveDateTime,
             next_fetch_at: NaiveDateTime,
         ) -> Result<Subscription, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update_fetch_times:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update_fetch_times:{}", id));
             let mut subs = self.subscriptions.lock().unwrap();
             if let Some(pos) = subs.iter().position(|s| s.subscription_id == id) {
                 subs[pos].last_fetched_at = Some(last_fetched_at);
@@ -534,7 +612,10 @@ pub mod mock {
             let repo = MockSubscriptionRepository::with_data(vec![sub]);
             let now = Utc::now().naive_utc();
 
-            let updated = repo.update_assignment_status(1, "assigned", Some(now)).await.unwrap();
+            let updated = repo
+                .update_assignment_status(1, "assigned", Some(now))
+                .await
+                .unwrap();
             assert_eq!(updated.assignment_status, "assigned");
             assert!(updated.assigned_at.is_some());
 

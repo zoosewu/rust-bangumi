@@ -1,8 +1,8 @@
-use anyhow::Result;
-use tracing::info;
 use crate::client::ApiClient;
 use crate::models::*;
-use prettytable::{Table, Row, Cell};
+use anyhow::Result;
+use prettytable::{Cell, Row, Table};
+use tracing::info;
 
 /// Task 36: 訂閱 RSS 源
 pub async fn subscribe(api_url: &str, rss_url: &str, fetcher: &str) -> Result<()> {
@@ -106,7 +106,11 @@ pub async fn links(
     ]));
 
     for link in links {
-        let status = if link.filtered_flag { "已過濾" } else { "活躍" };
+        let status = if link.filtered_flag {
+            "已過濾"
+        } else {
+            "活躍"
+        };
         table.add_row(Row::new(vec![
             Cell::new(&link.link_id.to_string()),
             Cell::new(&link.episode_no.to_string()),
@@ -139,8 +143,7 @@ pub async fn filter_add(
     };
 
     // 解析 group 為 group_id (假設是數字 ID)
-    let group_id: i64 = group.parse()
-        .unwrap_or(1i64);
+    let group_id: i64 = group.parse().unwrap_or(1i64);
 
     let request = CreateFilterRuleRequest {
         series_id,
@@ -164,8 +167,7 @@ pub async fn filter_add(
 pub async fn filter_list(api_url: &str, series_id: i64, group: &str) -> Result<()> {
     let client = ApiClient::new(api_url.to_string());
 
-    let group_id: i64 = group.parse()
-        .unwrap_or(1i64);
+    let group_id: i64 = group.parse().unwrap_or(1i64);
 
     let path = format!("/filters/{}/{}", series_id, group_id);
     let response: ListResponse<FilterRule> = client.get(&path).await?;
@@ -273,7 +275,11 @@ pub async fn services(api_url: &str) -> Result<()> {
     ]));
 
     for service in response.items {
-        let status = if service.is_healthy { "✓ 健康" } else { "✗ 不健康" };
+        let status = if service.is_healthy {
+            "✓ 健康"
+        } else {
+            "✗ 不健康"
+        };
         table.add_row(Row::new(vec![
             Cell::new(&service.service_id),
             Cell::new(&service.service_type),

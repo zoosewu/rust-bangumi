@@ -11,8 +11,8 @@ use diesel::prelude::*;
 use serde_json::json;
 
 // Re-export modules from the core-service library
-use core_service::schema::*;
 use core_service::models::*;
+use core_service::schema::*;
 
 type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
 
@@ -24,8 +24,9 @@ type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConne
 /// The database URL should be provided via DATABASE_TEST_URL environment variable.
 /// Falls back to a default test database if not set.
 fn setup_test_db() -> Result<DbPool, String> {
-    let database_url = std::env::var("DATABASE_TEST_URL")
-        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_password@localhost:5432/bangumi_test".to_string());
+    let database_url = std::env::var("DATABASE_TEST_URL").unwrap_or_else(|_| {
+        "postgresql://bangumi:bangumi_password@localhost:5432/bangumi_test".to_string()
+    });
 
     let manager = diesel::r2d2::ConnectionManager::<diesel::PgConnection>::new(&database_url);
     let pool = diesel::r2d2::Pool::builder()
@@ -167,7 +168,8 @@ fn insert_test_conflict(
 #[ignore]
 fn test_create_subscription() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup any existing test data
@@ -180,12 +182,8 @@ fn test_create_subscription() -> Result<(), String> {
     // Step 3: Create test subscription
     let test_url = "https://example.com/rss/test.xml";
     let test_name = "Test RSS Feed";
-    let subscription = insert_test_subscription(
-        &mut conn,
-        test_fetcher.module_id,
-        test_url,
-        Some(test_name),
-    )?;
+    let subscription =
+        insert_test_subscription(&mut conn, test_fetcher.module_id, test_url, Some(test_name))?;
 
     // Step 4: Verify subscription was created correctly
     assert_eq!(subscription.fetcher_id, test_fetcher.module_id);
@@ -193,7 +191,10 @@ fn test_create_subscription() -> Result<(), String> {
     assert_eq!(subscription.name, Some(test_name.to_string()));
     assert!(subscription.is_active);
     assert_eq!(subscription.fetch_interval_minutes, 60);
-    tracing::info!("Subscription created successfully: {}", subscription.subscription_id);
+    tracing::info!(
+        "Subscription created successfully: {}",
+        subscription.subscription_id
+    );
 
     // Step 5: Verify we can retrieve the subscription
     let retrieved = subscriptions::table
@@ -226,7 +227,8 @@ fn test_create_subscription() -> Result<(), String> {
 #[ignore]
 fn test_duplicate_subscription_rejection() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup
@@ -237,13 +239,12 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
 
     // Step 3: Create first subscription
     let test_url = "https://example.com/rss/unique.xml";
-    let first_subscription = insert_test_subscription(
-        &mut conn,
-        test_fetcher.module_id,
-        test_url,
-        Some("First"),
-    )?;
-    tracing::info!("First subscription created: {}", first_subscription.subscription_id);
+    let first_subscription =
+        insert_test_subscription(&mut conn, test_fetcher.module_id, test_url, Some("First"))?;
+    tracing::info!(
+        "First subscription created: {}",
+        first_subscription.subscription_id
+    );
 
     // Step 4: Attempt to create duplicate subscription with same URL
     let _result = insert_test_subscription(
@@ -265,7 +266,10 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
     // The insert will succeed here because we're at DB level without application constraints
     // In real HTTP testing, this would return 409 Conflict
     assert!(count >= 1, "At least one subscription should exist");
-    tracing::info!("Duplicate handling verified: {} subscription(s) exist", count);
+    tracing::info!(
+        "Duplicate handling verified: {} subscription(s) exist",
+        count
+    );
 
     // Step 6: Cleanup
     cleanup_test_subscriptions(&mut conn)?;
@@ -290,7 +294,8 @@ fn test_duplicate_subscription_rejection() -> Result<(), String> {
 #[ignore]
 fn test_fetcher_subscription_retrieval() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup
@@ -299,7 +304,11 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
     // Step 2: Create multiple test fetchers
     let fetcher1 = insert_test_fetcher(&mut conn, "fetcher-1", "1.0.0")?;
     let fetcher2 = insert_test_fetcher(&mut conn, "fetcher-2", "1.0.0")?;
-    tracing::info!("Test fetchers created: {} and {}", fetcher1.module_id, fetcher2.module_id);
+    tracing::info!(
+        "Test fetchers created: {} and {}",
+        fetcher1.module_id,
+        fetcher2.module_id
+    );
 
     // Step 3: Create subscriptions for fetcher 1
     let sub1_url = "https://example.com/rss/anime1.xml";
@@ -321,7 +330,11 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
 
     // Step 6: Verify results
-    assert_eq!(fetcher1_subs.len(), 2, "Fetcher 1 should have 2 subscriptions");
+    assert_eq!(
+        fetcher1_subs.len(),
+        2,
+        "Fetcher 1 should have 2 subscriptions"
+    );
     let urls: Vec<String> = fetcher1_subs.iter().map(|s| s.source_url.clone()).collect();
     assert!(urls.contains(&sub1_url.to_string()));
     assert!(urls.contains(&sub2_url.to_string()));
@@ -336,7 +349,11 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
         .map_err(|e| format!("Failed to retrieve subscriptions: {}", e))?;
 
     // Step 8: Verify fetcher 2 has only 1 subscription
-    assert_eq!(fetcher2_subs.len(), 1, "Fetcher 2 should have 1 subscription");
+    assert_eq!(
+        fetcher2_subs.len(),
+        1,
+        "Fetcher 2 should have 1 subscription"
+    );
     assert_eq!(fetcher2_subs[0].source_url, sub3_url);
     tracing::info!("Fetcher 2 subscriptions verified");
 
@@ -363,7 +380,8 @@ fn test_fetcher_subscription_retrieval() -> Result<(), String> {
 #[ignore]
 fn test_conflict_resolution() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup
@@ -373,8 +391,12 @@ fn test_conflict_resolution() -> Result<(), String> {
     let fetcher1 = insert_test_fetcher(&mut conn, "fetcher-1", "1.0.0")?;
     let fetcher2 = insert_test_fetcher(&mut conn, "fetcher-2", "1.0.0")?;
     let fetcher3 = insert_test_fetcher(&mut conn, "fetcher-3", "1.0.0")?;
-    tracing::info!("Test fetchers created: {}, {}, {}",
-        fetcher1.module_id, fetcher2.module_id, fetcher3.module_id);
+    tracing::info!(
+        "Test fetchers created: {}, {}, {}",
+        fetcher1.module_id,
+        fetcher2.module_id,
+        fetcher3.module_id
+    );
 
     // Step 3: Create subscription with unresolved fetcher
     let test_url = "https://example.com/rss/conflict-test.xml";
@@ -384,7 +406,10 @@ fn test_conflict_resolution() -> Result<(), String> {
         test_url,
         Some("Conflict Test"),
     )?;
-    tracing::info!("Test subscription created: {}", subscription.subscription_id);
+    tracing::info!(
+        "Test subscription created: {}",
+        subscription.subscription_id
+    );
 
     // Step 4: Create unresolved conflict with multiple candidate fetchers
     let conflict = insert_test_conflict(
@@ -409,7 +434,7 @@ fn test_conflict_resolution() -> Result<(), String> {
     // Update conflict status
     let updated_conflict = diesel::update(
         subscription_conflicts::table
-            .filter(subscription_conflicts::conflict_id.eq(conflict.conflict_id))
+            .filter(subscription_conflicts::conflict_id.eq(conflict.conflict_id)),
     )
     .set((
         subscription_conflicts::resolution_status.eq("resolved"),
@@ -422,7 +447,7 @@ fn test_conflict_resolution() -> Result<(), String> {
     // Update subscription with resolved fetcher
     diesel::update(
         subscriptions::table
-            .filter(subscriptions::subscription_id.eq(subscription.subscription_id))
+            .filter(subscriptions::subscription_id.eq(subscription.subscription_id)),
     )
     .set(subscriptions::fetcher_id.eq(resolve_to_fetcher))
     .execute(&mut conn)
@@ -441,7 +466,10 @@ fn test_conflict_resolution() -> Result<(), String> {
 
     assert_eq!(updated_subscription.fetcher_id, resolve_to_fetcher);
     assert_eq!(updated_subscription.source_url, test_url); // Original data preserved
-    tracing::info!("Subscription fetcher updated to: {}", updated_subscription.fetcher_id);
+    tracing::info!(
+        "Subscription fetcher updated to: {}",
+        updated_subscription.fetcher_id
+    );
 
     // Step 9: Cleanup
     cleanup_test_subscriptions(&mut conn)?;
@@ -466,7 +494,8 @@ fn test_conflict_resolution() -> Result<(), String> {
 #[ignore]
 fn test_invalid_conflict_resolution() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup
@@ -546,7 +575,8 @@ fn test_invalid_conflict_resolution() -> Result<(), String> {
 #[ignore]
 fn test_list_all_subscriptions() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Cleanup
@@ -583,7 +613,10 @@ fn test_list_all_subscriptions() -> Result<(), String> {
         .map_err(|e| format!("Failed to list subscriptions: {}", e))?;
 
     // Step 5: Verify all subscriptions are returned
-    assert!(all_active.len() >= 3, "Should have at least 3 subscriptions");
+    assert!(
+        all_active.len() >= 3,
+        "Should have at least 3 subscriptions"
+    );
     tracing::info!("Listed {} active subscriptions", all_active.len());
 
     // Step 6: Verify we can find all our test subscriptions
@@ -615,13 +648,18 @@ fn test_list_all_subscriptions() -> Result<(), String> {
 #[ignore]
 fn test_list_fetcher_modules() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Step 1: Create test fetchers
     let fetcher1 = insert_test_fetcher(&mut conn, "test-fetcher-1", "1.0.0")?;
     let fetcher2 = insert_test_fetcher(&mut conn, "test-fetcher-2", "2.0.0")?;
-    tracing::info!("Test fetchers created: {}, {}", fetcher1.module_id, fetcher2.module_id);
+    tracing::info!(
+        "Test fetchers created: {}, {}",
+        fetcher1.module_id,
+        fetcher2.module_id
+    );
 
     // Step 2: Retrieve all fetcher modules
     let all_fetchers = service_modules::table

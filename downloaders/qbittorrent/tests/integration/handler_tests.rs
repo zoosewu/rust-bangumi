@@ -189,14 +189,12 @@ fn create_test_app(mock: MockDownloaderClient) -> Router {
 
 #[tokio::test]
 async fn test_batch_download_returns_200() {
-    let mock = MockDownloaderClient::new().with_add_torrents_result(Ok(vec![
-        DownloadResultItem {
-            url: "magnet:?xt=urn:btih:testhash123456789012345678901234&dn=test".to_string(),
-            hash: Some("testhash123456789012345678901234".to_string()),
-            status: "accepted".to_string(),
-            reason: None,
-        },
-    ]));
+    let mock = MockDownloaderClient::new().with_add_torrents_result(Ok(vec![DownloadResultItem {
+        url: "magnet:?xt=urn:btih:testhash123456789012345678901234&dn=test".to_string(),
+        hash: Some("testhash123456789012345678901234".to_string()),
+        status: "accepted".to_string(),
+        reason: None,
+    }]));
 
     let app = create_test_app(mock);
 
@@ -291,12 +289,11 @@ async fn test_batch_download_client_error_returns_500() {
 
 #[tokio::test]
 async fn test_batch_cancel_returns_200() {
-    let mock = MockDownloaderClient::new().with_cancel_torrents_result(Ok(vec![
-        CancelResultItem {
+    let mock =
+        MockDownloaderClient::new().with_cancel_torrents_result(Ok(vec![CancelResultItem {
             hash: "abc123".to_string(),
             status: "cancelled".to_string(),
-        },
-    ]));
+        }]));
 
     let app = create_test_app(mock);
 
@@ -345,14 +342,12 @@ async fn test_batch_cancel_empty_hashes_returns_400() {
 
 #[tokio::test]
 async fn test_query_status_returns_200() {
-    let mock = MockDownloaderClient::new().with_query_status_result(Ok(vec![
-        DownloadStatusItem {
-            hash: "hash1".to_string(),
-            status: "downloading".to_string(),
-            progress: 0.5,
-            size: 1000000,
-        },
-    ]));
+    let mock = MockDownloaderClient::new().with_query_status_result(Ok(vec![DownloadStatusItem {
+        hash: "hash1".to_string(),
+        status: "downloading".to_string(),
+        progress: 0.5,
+        size: 1000000,
+    }]));
 
     let app = create_test_app(mock);
 

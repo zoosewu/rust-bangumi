@@ -4,13 +4,14 @@
 use crate::db::DbPool;
 use crate::models::*;
 use crate::schema::*;
+use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
-use chrono::{Utc, NaiveDate};
 
 // ============ Anime CRUD ============
 
 pub fn create_anime(pool: &DbPool, title: String) -> Result<Anime, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -27,7 +28,8 @@ pub fn create_anime(pool: &DbPool, title: String) -> Result<Anime, String> {
 }
 
 pub fn get_anime_by_id(pool: &DbPool, anime_id: i32) -> Result<Anime, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     animes::table
@@ -37,7 +39,8 @@ pub fn get_anime_by_id(pool: &DbPool, anime_id: i32) -> Result<Anime, String> {
 }
 
 pub fn get_anime_by_title(pool: &DbPool, title: &str) -> Result<Anime, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     animes::table
@@ -47,7 +50,8 @@ pub fn get_anime_by_title(pool: &DbPool, title: &str) -> Result<Anime, String> {
 }
 
 pub fn get_all_animes(pool: &DbPool) -> Result<Vec<Anime>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     animes::table
@@ -56,7 +60,8 @@ pub fn get_all_animes(pool: &DbPool) -> Result<Vec<Anime>, String> {
 }
 
 pub fn update_anime(pool: &DbPool, anime_id: i32, title: String) -> Result<Anime, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::update(animes::table.find(anime_id))
@@ -69,7 +74,8 @@ pub fn update_anime(pool: &DbPool, anime_id: i32, title: String) -> Result<Anime
 }
 
 pub fn delete_anime(pool: &DbPool, anime_id: i32) -> Result<usize, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::delete(animes::table.find(anime_id))
@@ -80,7 +86,8 @@ pub fn delete_anime(pool: &DbPool, anime_id: i32) -> Result<usize, String> {
 // ============ Season CRUD ============
 
 pub fn create_season(pool: &DbPool, year: i32, season: String) -> Result<Season, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let new_season = NewSeason {
@@ -96,7 +103,8 @@ pub fn create_season(pool: &DbPool, year: i32, season: String) -> Result<Season,
 }
 
 pub fn get_season_by_id(pool: &DbPool, season_id: i32) -> Result<Season, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     seasons::table
@@ -105,12 +113,9 @@ pub fn get_season_by_id(pool: &DbPool, season_id: i32) -> Result<Season, String>
         .map_err(|e| format!("Failed to get season: {}", e))
 }
 
-pub fn get_or_create_season(
-    pool: &DbPool,
-    year: i32,
-    season: String,
-) -> Result<Season, String> {
-    let mut conn = pool.get()
+pub fn get_or_create_season(pool: &DbPool, year: i32, season: String) -> Result<Season, String> {
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Try to find existing season
@@ -137,7 +142,8 @@ pub fn get_or_create_season(
 }
 
 pub fn get_all_seasons(pool: &DbPool) -> Result<Vec<Season>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     seasons::table
@@ -156,7 +162,8 @@ pub fn create_anime_series(
     aired_date: Option<NaiveDate>,
     end_date: Option<NaiveDate>,
 ) -> Result<AnimeSeries, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -178,7 +185,8 @@ pub fn create_anime_series(
 }
 
 pub fn get_anime_series_by_id(pool: &DbPool, series_id: i32) -> Result<AnimeSeries, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     anime_series::table
@@ -188,7 +196,8 @@ pub fn get_anime_series_by_id(pool: &DbPool, series_id: i32) -> Result<AnimeSeri
 }
 
 pub fn get_anime_series_by_anime(pool: &DbPool, anime_id: i32) -> Result<Vec<AnimeSeries>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     anime_series::table
@@ -197,8 +206,12 @@ pub fn get_anime_series_by_anime(pool: &DbPool, anime_id: i32) -> Result<Vec<Ani
         .map_err(|e| format!("Failed to get anime series by anime: {}", e))
 }
 
-pub fn get_anime_series_by_season(pool: &DbPool, season_id: i32) -> Result<Vec<AnimeSeries>, String> {
-    let mut conn = pool.get()
+pub fn get_anime_series_by_season(
+    pool: &DbPool,
+    season_id: i32,
+) -> Result<Vec<AnimeSeries>, String> {
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     anime_series::table
@@ -217,7 +230,8 @@ pub fn update_anime_series(
     aired_date: Option<NaiveDate>,
     end_date: Option<NaiveDate>,
 ) -> Result<AnimeSeries, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::update(anime_series::table.find(series_id))
@@ -235,7 +249,8 @@ pub fn update_anime_series(
 }
 
 pub fn delete_anime_series(pool: &DbPool, series_id: i32) -> Result<usize, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::delete(anime_series::table.find(series_id))
@@ -245,11 +260,9 @@ pub fn delete_anime_series(pool: &DbPool, series_id: i32) -> Result<usize, Strin
 
 // ============ SubtitleGroups CRUD ============
 
-pub fn create_subtitle_group(
-    pool: &DbPool,
-    group_name: String,
-) -> Result<SubtitleGroup, String> {
-    let mut conn = pool.get()
+pub fn create_subtitle_group(pool: &DbPool, group_name: String) -> Result<SubtitleGroup, String> {
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let new_group = NewSubtitleGroup {
@@ -264,7 +277,8 @@ pub fn create_subtitle_group(
 }
 
 pub fn get_subtitle_group_by_id(pool: &DbPool, group_id: i32) -> Result<SubtitleGroup, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     subtitle_groups::table
@@ -277,7 +291,8 @@ pub fn get_or_create_subtitle_group(
     pool: &DbPool,
     group_name: String,
 ) -> Result<SubtitleGroup, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Try to find existing subtitle group
@@ -302,7 +317,8 @@ pub fn get_or_create_subtitle_group(
 }
 
 pub fn get_all_subtitle_groups(pool: &DbPool) -> Result<Vec<SubtitleGroup>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     subtitle_groups::table
@@ -311,7 +327,8 @@ pub fn get_all_subtitle_groups(pool: &DbPool) -> Result<Vec<SubtitleGroup>, Stri
 }
 
 pub fn delete_subtitle_group(pool: &DbPool, group_id: i32) -> Result<usize, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::delete(subtitle_groups::table.find(group_id))
@@ -331,7 +348,8 @@ pub fn create_anime_link(
     source_hash: String,
     filtered_flag: bool,
 ) -> Result<AnimeLink, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -354,11 +372,9 @@ pub fn create_anime_link(
         .map_err(|e| format!("Failed to create anime link: {}", e))
 }
 
-pub fn get_anime_links_by_series(
-    pool: &DbPool,
-    series_id: i32,
-) -> Result<Vec<AnimeLink>, String> {
-    let mut conn = pool.get()
+pub fn get_anime_links_by_series(pool: &DbPool, series_id: i32) -> Result<Vec<AnimeLink>, String> {
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     anime_links::table
@@ -374,7 +390,8 @@ pub fn get_filter_rules_by_target(
     target_type: FilterTargetType,
     target_id: Option<i32>,
 ) -> Result<Vec<FilterRule>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     if target_id.is_some() {
@@ -402,7 +419,8 @@ pub fn create_filter_rule(
     is_positive: bool,
     regex_pattern: String,
 ) -> Result<FilterRule, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -423,7 +441,8 @@ pub fn create_filter_rule(
 }
 
 pub fn delete_filter_rule(pool: &DbPool, rule_id: i32) -> Result<usize, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     diesel::delete(filter_rules::table.find(rule_id))
@@ -441,7 +460,8 @@ pub fn get_all_applicable_filter_rules(
     group_id: Option<i32>,
     fetcher_id: Option<i32>,
 ) -> Result<Vec<FilterRule>, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let mut all_rules: Vec<FilterRule> = Vec::new();
@@ -509,7 +529,8 @@ pub fn create_download(
     link_id: i32,
     downloader_type: String,
 ) -> Result<Download, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -530,7 +551,8 @@ pub fn create_download(
 }
 
 pub fn get_download(pool: &DbPool, download_id: i32) -> Result<Download, String> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     downloads::table

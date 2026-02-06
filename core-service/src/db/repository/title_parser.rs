@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 
-use crate::db::DbPool;
-use crate::models::{TitleParser, NewTitleParser};
-use crate::schema::title_parsers;
 use super::RepositoryError;
+use crate::db::DbPool;
+use crate::models::{NewTitleParser, TitleParser};
+use crate::schema::title_parsers;
 
 #[async_trait]
 pub trait TitleParserRepository: Send + Sync {
@@ -81,8 +81,9 @@ impl TitleParserRepository for DieselTitleParserRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let deleted = diesel::delete(title_parsers::table.filter(title_parsers::parser_id.eq(id)))
-                .execute(&mut conn)?;
+            let deleted =
+                diesel::delete(title_parsers::table.filter(title_parsers::parser_id.eq(id)))
+                    .execute(&mut conn)?;
             Ok(deleted > 0)
         })
         .await?
@@ -92,9 +93,9 @@ impl TitleParserRepository for DieselTitleParserRepository {
 #[cfg(test)]
 pub mod mock {
     use super::*;
-    use std::sync::Mutex;
     use crate::models::ParserSourceType;
     use chrono::Utc;
+    use std::sync::Mutex;
 
     pub struct MockTitleParserRepository {
         parsers: Mutex<Vec<TitleParser>>,
@@ -134,20 +135,40 @@ pub mod mock {
     #[async_trait]
     impl TitleParserRepository for MockTitleParserRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<TitleParser>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.parsers.lock().unwrap().iter().find(|p| p.parser_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .parsers
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|p| p.parser_id == id)
+                .cloned())
         }
 
         async fn find_all_sorted_by_priority(&self) -> Result<Vec<TitleParser>, RepositoryError> {
-            self.operations.lock().unwrap().push("find_all_sorted_by_priority".to_string());
+            self.operations
+                .lock()
+                .unwrap()
+                .push("find_all_sorted_by_priority".to_string());
             let mut parsers = self.parsers.lock().unwrap().clone();
             parsers.sort_by(|a, b| b.priority.cmp(&a.priority));
             Ok(parsers)
         }
 
-        async fn find_enabled_sorted_by_priority(&self) -> Result<Vec<TitleParser>, RepositoryError> {
-            self.operations.lock().unwrap().push("find_enabled_sorted_by_priority".to_string());
-            let mut parsers: Vec<TitleParser> = self.parsers.lock().unwrap()
+        async fn find_enabled_sorted_by_priority(
+            &self,
+        ) -> Result<Vec<TitleParser>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push("find_enabled_sorted_by_priority".to_string());
+            let mut parsers: Vec<TitleParser> = self
+                .parsers
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|p| p.is_enabled)
                 .cloned()
@@ -157,7 +178,10 @@ pub mod mock {
         }
 
         async fn create(&self, parser: NewTitleParser) -> Result<TitleParser, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{}", parser.name));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{}", parser.name));
             let mut parsers = self.parsers.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let new_parser = TitleParser {
@@ -191,7 +215,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut parsers = self.parsers.lock().unwrap();
             let original_len = parsers.len();
             parsers.retain(|p| p.parser_id != id);
@@ -202,8 +229,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockTitleParserRepository;
+    use super::*;
     use crate::models::ParserSourceType;
     use chrono::Utc;
 

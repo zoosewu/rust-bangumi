@@ -8,13 +8,17 @@ fn test_lolihouse_standard_format() {
     let condition_regex = Regex::new(r"^\[.+\].+\s-\s\d+").unwrap();
     let parse_regex = Regex::new(r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)").unwrap();
 
-    let title = "[LoliHouse] 黄金神威 最终章 / Golden Kamuy - 53 [WebRip 1080p HEVC-10bit AAC][无字幕]";
+    let title =
+        "[LoliHouse] 黄金神威 最终章 / Golden Kamuy - 53 [WebRip 1080p HEVC-10bit AAC][无字幕]";
 
     assert!(condition_regex.is_match(title));
 
     let captures = parse_regex.captures(title).expect("Should match");
     assert_eq!(captures.get(1).unwrap().as_str(), "LoliHouse");
-    assert_eq!(captures.get(2).unwrap().as_str().trim(), "黄金神威 最终章 / Golden Kamuy");
+    assert_eq!(
+        captures.get(2).unwrap().as_str().trim(),
+        "黄金神威 最终章 / Golden Kamuy"
+    );
     assert_eq!(captures.get(3).unwrap().as_str(), "53");
     assert_eq!(captures.get(4).unwrap().as_str(), "1080p");
 }
@@ -31,7 +35,10 @@ fn test_star_separator_format() {
 
     let captures = parse_regex.captures(title).expect("Should match");
     assert_eq!(captures.get(1).unwrap().as_str(), "六四位元字幕组");
-    assert_eq!(captures.get(2).unwrap().as_str(), "可以帮忙洗干净吗？Kirei ni Shite Moraemasu ka");
+    assert_eq!(
+        captures.get(2).unwrap().as_str(),
+        "可以帮忙洗干净吗？Kirei ni Shite Moraemasu ka"
+    );
     assert_eq!(captures.get(3).unwrap().as_str(), "04");
     assert_eq!(captures.get(4).unwrap().as_str(), "1920x1080");
 }
@@ -68,7 +75,11 @@ fn test_non_matching_title() {
     ];
 
     for title in non_matching {
-        assert!(!condition_regex.is_match(title), "Should not match: {}", title);
+        assert!(
+            !condition_regex.is_match(title),
+            "Should not match: {}",
+            title
+        );
     }
 }
 
@@ -116,8 +127,14 @@ fn test_parse_failure_handling() {
     // 但不匹配 parse_regex（缺少 [1080p] 等解析度資訊）
     let title = "[Group] Some Title - 01";
 
-    assert!(condition_regex.is_match(title), "Should match condition regex");
-    assert!(parse_regex.captures(title).is_none(), "Should not match parse regex (missing resolution)");
+    assert!(
+        condition_regex.is_match(title),
+        "Should match condition regex"
+    );
+    assert!(
+        parse_regex.captures(title).is_none(),
+        "Should not match parse regex (missing resolution)"
+    );
 }
 
 /// 測試特殊字符處理

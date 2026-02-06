@@ -80,8 +80,8 @@ impl QBittorrentClient {
                 "completed".to_string()
             }
             "pausedDL" | "pausedUP" => "paused".to_string(),
-            "downloading" | "stalledDL" | "forcedDL" | "queuedDL" | "checkingDL"
-            | "metaDL" | "allocating" | "moving" => "downloading".to_string(),
+            "downloading" | "stalledDL" | "forcedDL" | "queuedDL" | "checkingDL" | "metaDL"
+            | "allocating" | "moving" => "downloading".to_string(),
             "checkingResumeData" => "checking".to_string(),
             "unknown" | _ => "unknown".to_string(),
         }
@@ -145,31 +145,26 @@ impl DownloaderClient for QBittorrentClient {
                 .await;
 
             match resp {
-                Ok(r) if r.status().is_success() => {
-                    match Self::extract_hash_from_url(&item.url) {
-                        Ok(hash) => {
-                            tracing::info!("Torrent added successfully: {}", hash);
-                            results.push(DownloadResultItem {
-                                url: item.url.clone(),
-                                hash: Some(hash),
-                                status: "accepted".to_string(),
-                                reason: None,
-                            });
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Torrent added but could not extract hash from URL: {}",
-                                e
-                            );
-                            results.push(DownloadResultItem {
-                                url: item.url.clone(),
-                                hash: None,
-                                status: "accepted".to_string(),
-                                reason: Some(format!("Added but hash extraction failed: {}", e)),
-                            });
-                        }
+                Ok(r) if r.status().is_success() => match Self::extract_hash_from_url(&item.url) {
+                    Ok(hash) => {
+                        tracing::info!("Torrent added successfully: {}", hash);
+                        results.push(DownloadResultItem {
+                            url: item.url.clone(),
+                            hash: Some(hash),
+                            status: "accepted".to_string(),
+                            reason: None,
+                        });
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("Torrent added but could not extract hash from URL: {}", e);
+                        results.push(DownloadResultItem {
+                            url: item.url.clone(),
+                            hash: None,
+                            status: "accepted".to_string(),
+                            reason: Some(format!("Added but hash extraction failed: {}", e)),
+                        });
+                    }
+                },
                 Ok(r) => {
                     let status = r.status();
                     tracing::error!("Failed to add torrent {}: {}", item.url, status);
@@ -249,10 +244,7 @@ impl DownloaderClient for QBittorrentClient {
             .await?;
 
         if !resp.status().is_success() {
-            return Err(anyhow!(
-                "Failed to query torrent status: {}",
-                resp.status()
-            ));
+            return Err(anyhow!("Failed to query torrent status: {}", resp.status()));
         }
 
         let torrents: Vec<TorrentInfo> = resp.json().await?;

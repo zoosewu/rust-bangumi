@@ -110,10 +110,7 @@ fn test_sync_request_json_structure() {
     assert_eq!(value["anime_title"].as_str(), Some("Attack on Titan"));
     assert_eq!(value["season"].as_u64(), Some(1));
     assert_eq!(value["episodes"].as_array().unwrap().len(), 2);
-    assert_eq!(
-        value["episodes"][0]["episode_number"].as_u64(),
-        Some(1)
-    );
+    assert_eq!(value["episodes"][0]["episode_number"].as_u64(), Some(1));
 }
 
 #[test]
@@ -257,7 +254,11 @@ fn test_error_handling_invalid_episode_format() {
     ];
 
     for filename in invalid_formats {
-        assert!(!regex.is_match(filename), "Unexpected match for: {}", filename);
+        assert!(
+            !regex.is_match(filename),
+            "Unexpected match for: {}",
+            filename
+        );
     }
 }
 
@@ -297,5 +298,8 @@ fn test_service_registration_structure() {
     assert_eq!(registration["service_type"].as_str(), Some("Viewer"));
     assert_eq!(registration["service_name"].as_str(), Some("jellyfin"));
     assert_eq!(registration["port"].as_u64(), Some(8003));
-    assert_eq!(registration["capabilities"]["sync_endpoint"].as_str(), Some("/sync"));
+    assert_eq!(
+        registration["capabilities"]["sync_endpoint"].as_str(),
+        Some("/sync")
+    );
 }

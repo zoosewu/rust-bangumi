@@ -71,7 +71,10 @@ mod tests {
             8001,
             "test".to_string(),
         );
-        assert_eq!(config.callback_url(), "http://localhost:8000/fetcher-results");
+        assert_eq!(
+            config.callback_url(),
+            "http://localhost:8000/fetcher-results"
+        );
     }
 
     #[test]
@@ -82,6 +85,9 @@ mod tests {
             8001,
             "test".to_string(),
         );
-        assert_eq!(config.register_url(), "http://localhost:8000/services/register");
+        assert_eq!(
+            config.register_url(),
+            "http://localhost:8000/services/register"
+        );
     }
 }

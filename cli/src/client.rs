@@ -23,14 +23,10 @@ impl ApiClient {
         let url = format!("{}{}", self.base_url, path);
         debug!("GET {}", url);
 
-        let response = self.client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("GET 請求失敗 {}: {}", url, e);
-                anyhow::anyhow!("GET 請求失敗: {}", e)
-            })?;
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            error!("GET 請求失敗 {}: {}", url, e);
+            anyhow::anyhow!("GET 請求失敗: {}", e)
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -54,7 +50,8 @@ impl ApiClient {
         let url = format!("{}{}", self.base_url, path);
         debug!("POST {} with body", url);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .json(body)
             .send()
@@ -82,14 +79,10 @@ impl ApiClient {
         let url = format!("{}{}", self.base_url, path);
         debug!("DELETE {}", url);
 
-        let response = self.client
-            .delete(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                error!("DELETE 請求失敗 {}: {}", url, e);
-                anyhow::anyhow!("DELETE 請求失敗: {}", e)
-            })?;
+        let response = self.client.delete(&url).send().await.map_err(|e| {
+            error!("DELETE 請求失敗 {}: {}", url, e);
+            anyhow::anyhow!("DELETE 請求失敗: {}", e)
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -100,5 +93,4 @@ impl ApiClient {
 
         Ok(())
     }
-
 }

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 // ============ Download Types ============
@@ -95,7 +95,7 @@ pub struct FetchResponse {
 pub struct FetchedAnime {
     pub title: String,
     pub description: String,
-    pub season: String,  // 冬/春/夏/秋
+    pub season: String, // 冬/春/夏/秋
     pub year: i32,
     pub series_no: i32,
     pub links: Vec<FetchedLink>,
@@ -106,7 +106,7 @@ pub struct FetchedLink {
     pub episode_no: i32,
     pub subtitle_group: String,
     pub title: String,
-    pub url: String,  // magnet/torrent/http 等格式
+    pub url: String, // magnet/torrent/http 等格式
     pub source_hash: String,
     pub source_rss_url: String,
 }
@@ -180,8 +180,8 @@ pub struct DownloadResponse {
 pub struct DownloadProgress {
     pub link_id: Uuid,
     pub downloader_type: String,
-    pub status: String,  // downloading/completed/failed
-    pub progress: f64,   // 0-1
+    pub status: String, // downloading/completed/failed
+    pub progress: f64,  // 0-1
     pub downloaded_bytes: u64,
     pub total_bytes: u64,
     pub error_message: Option<String>,
@@ -202,7 +202,7 @@ pub struct SyncRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncResponse {
-    pub status: String,  // synced/failed
+    pub status: String, // synced/failed
     pub target_path: String,
     pub message: String,
 }
@@ -259,7 +259,7 @@ pub struct CronStatus {
 pub struct FetchTriggerRequest {
     pub subscription_id: i32,
     pub rss_url: String,
-    pub callback_url: String,  // Core 的 /fetcher-results endpoint
+    pub callback_url: String, // Core 的 /fetcher-results endpoint
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -273,10 +273,10 @@ pub struct FetchTriggerResponse {
 /// 原始動畫項目（單集）- 來自 Fetcher 的原始資料
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RawAnimeItem {
-    pub title: String,                      // RSS <title>
-    pub description: Option<String>,        // RSS <description>
-    pub download_url: String,               // RSS <enclosure> url
-    pub pub_date: Option<DateTime<Utc>>,    // RSS <pubDate>
+    pub title: String,                   // RSS <title>
+    pub description: Option<String>,     // RSS <description>
+    pub download_url: String,            // RSS <enclosure> url
+    pub pub_date: Option<DateTime<Utc>>, // RSS <pubDate>
 }
 
 /// Fetcher 回傳的原始結果（新架構）

@@ -2,12 +2,12 @@
 //!
 //! 負責使用 title_parsers 表中的解析器解析原始標題
 
+use chrono::Utc;
 use diesel::prelude::*;
 use regex::Regex;
-use chrono::Utc;
 
-use crate::models::{TitleParser, ParserSourceType, RawAnimeItem, NewRawAnimeItem};
-use crate::schema::{title_parsers, raw_anime_items};
+use crate::models::{NewRawAnimeItem, ParserSourceType, RawAnimeItem, TitleParser};
+use crate::schema::{raw_anime_items, title_parsers};
 
 /// 解析結果
 #[derive(Debug, Clone)]
@@ -78,8 +78,12 @@ impl TitleParserService {
     /// 嘗試使用單一解析器解析標題
     fn try_parser(parser: &TitleParser, title: &str) -> Result<Option<ParsedResult>, String> {
         // 檢查 condition_regex 是否匹配
-        let condition_regex = Regex::new(&parser.condition_regex)
-            .map_err(|e| format!("Invalid condition_regex for parser {}: {}", parser.parser_id, e))?;
+        let condition_regex = Regex::new(&parser.condition_regex).map_err(|e| {
+            format!(
+                "Invalid condition_regex for parser {}: {}",
+                parser.parser_id, e
+            )
+        })?;
 
         if !condition_regex.is_match(title) {
             return Ok(None);
@@ -95,9 +99,18 @@ impl TitleParserService {
         };
 
         // 提取必要欄位
-        let anime_title = Self::extract_value(&parser.anime_title_source, &parser.anime_title_value, &captures)?;
-        let episode_str = Self::extract_value(&parser.episode_no_source, &parser.episode_no_value, &captures)?;
-        let episode_no: i32 = episode_str.parse()
+        let anime_title = Self::extract_value(
+            &parser.anime_title_source,
+            &parser.anime_title_value,
+            &captures,
+        )?;
+        let episode_str = Self::extract_value(
+            &parser.episode_no_source,
+            &parser.episode_no_value,
+            &captures,
+        )?;
+        let episode_no: i32 = episode_str
+            .parse()
             .map_err(|_| format!("Failed to parse episode_no '{}' as integer", episode_str))?;
 
         // 提取 series_no（預設為 1）
@@ -122,17 +135,10 @@ impl TitleParserService {
             &captures,
         );
 
-        let season = Self::extract_optional_value(
-            &parser.season_source,
-            &parser.season_value,
-            &captures,
-        );
+        let season =
+            Self::extract_optional_value(&parser.season_source, &parser.season_value, &captures);
 
-        let year = Self::extract_optional_value(
-            &parser.year_source,
-            &parser.year_value,
-            &captures,
-        );
+        let year = Self::extract_optional_value(&parser.year_source, &parser.year_value, &captures);
 
         Ok(Some(ParsedResult {
             anime_title,
@@ -154,9 +160,11 @@ impl TitleParserService {
     ) -> Result<String, String> {
         match source {
             ParserSourceType::Regex => {
-                let index: usize = value.parse()
+                let index: usize = value
+                    .parse()
                     .map_err(|_| format!("Invalid capture group index: {}", value))?;
-                captures.get(index)
+                captures
+                    .get(index)
                     .map(|m| m.as_str().trim().to_string())
                     .ok_or_else(|| format!("Capture group {} not found", index))
             }

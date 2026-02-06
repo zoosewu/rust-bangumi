@@ -11,15 +11,15 @@ use tower_http::cors::CorsLayer;
 pub fn create_cors_layer() -> Option<CorsLayer> {
     let enable_cors = std::env::var("ENABLE_CORS")
         .unwrap_or_else(|_| "true".to_string())
-        .to_lowercase() == "true";
+        .to_lowercase()
+        == "true";
 
     if !enable_cors {
         tracing::info!("CORS 已禁用");
         return None;
     }
 
-    let allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "*".to_string());
+    let allowed_origins = std::env::var("CORS_ALLOWED_ORIGINS").unwrap_or_else(|_| "*".to_string());
 
     // 目前使用寬鬆的 CORS 政策（允許所有來源和方法）
     // 當需要限制特定來源時，可以使用 CorsLayer::new() 和 allow_origin() 方法
@@ -28,7 +28,10 @@ pub fn create_cors_layer() -> Option<CorsLayer> {
     if allowed_origins == "*" {
         tracing::info!("CORS 已啟用 - 允許所有來源");
     } else {
-        tracing::warn!("CORS 已啟用 - 僅允許的來源配置需要進一步實現: {}", allowed_origins);
+        tracing::warn!(
+            "CORS 已啟用 - 僅允許的來源配置需要進一步實現: {}",
+            allowed_origins
+        );
     }
 
     Some(cors)

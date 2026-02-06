@@ -1,18 +1,13 @@
-use crate::services::{ServiceRegistry, DownloadDispatchService};
 use crate::db::{
-    DbPool,
-    AnimeRepository, DieselAnimeRepository,
-    SubscriptionRepository, DieselSubscriptionRepository,
-    ServiceModuleRepository, DieselServiceModuleRepository,
-    SeasonRepository, DieselSeasonRepository,
-    AnimeSeriesRepository, DieselAnimeSeriesRepository,
-    SubtitleGroupRepository, DieselSubtitleGroupRepository,
-    FilterRuleRepository, DieselFilterRuleRepository,
-    AnimeLinkRepository, DieselAnimeLinkRepository,
-    TitleParserRepository, DieselTitleParserRepository,
-    RawItemRepository, DieselRawItemRepository,
-    ConflictRepository, DieselConflictRepository,
+    AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository, ConflictRepository, DbPool,
+    DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeSeriesRepository,
+    DieselConflictRepository, DieselFilterRuleRepository, DieselRawItemRepository,
+    DieselSeasonRepository, DieselServiceModuleRepository, DieselSubscriptionRepository,
+    DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,
+    RawItemRepository, SeasonRepository, ServiceModuleRepository, SubscriptionRepository,
+    SubtitleGroupRepository, TitleParserRepository,
 };
+use crate::services::{DownloadDispatchService, ServiceRegistry};
 use std::sync::Arc;
 
 pub struct Repositories {

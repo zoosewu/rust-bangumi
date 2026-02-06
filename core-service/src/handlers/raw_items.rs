@@ -8,11 +8,11 @@ use axum::{
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::state::AppState;
 use crate::models::RawAnimeItem;
 use crate::schema::raw_anime_items;
-use crate::services::TitleParserService;
 use crate::services::title_parser::ParseStatus;
+use crate::services::TitleParserService;
+use crate::state::AppState;
 
 // ============ DTOs ============
 
@@ -72,7 +72,9 @@ pub async fn list_raw_items(
     State(state): State<AppState>,
     Query(query): Query<ListRawItemsQuery>,
 ) -> Result<Json<Vec<RawItemResponse>>, (StatusCode, String)> {
-    let mut conn = state.db.get()
+    let mut conn = state
+        .db
+        .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut q = raw_anime_items::table.into_boxed();
@@ -103,7 +105,9 @@ pub async fn get_raw_item(
     State(state): State<AppState>,
     Path(item_id): Path<i32>,
 ) -> Result<Json<RawItemResponse>, (StatusCode, String)> {
-    let mut conn = state.db.get()
+    let mut conn = state
+        .db
+        .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let item = raw_anime_items::table
@@ -119,7 +123,9 @@ pub async fn reparse_item(
     State(state): State<AppState>,
     Path(item_id): Path<i32>,
 ) -> Result<Json<ReparseResponse>, (StatusCode, String)> {
-    let mut conn = state.db.get()
+    let mut conn = state
+        .db
+        .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let item = raw_anime_items::table
@@ -135,7 +141,8 @@ pub async fn reparse_item(
                 ParseStatus::Parsed,
                 Some(parsed.parser_id),
                 None,
-            ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
             Ok(Json(ReparseResponse {
                 success: true,
@@ -151,7 +158,8 @@ pub async fn reparse_item(
                 ParseStatus::NoMatch,
                 None,
                 Some("No matching parser"),
-            ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
             Ok(Json(ReparseResponse {
                 success: false,
@@ -167,7 +175,8 @@ pub async fn reparse_item(
                 ParseStatus::Failed,
                 None,
                 Some(&e),
-            ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            )
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
             Err((StatusCode::INTERNAL_SERVER_ERROR, e))
         }
@@ -179,7 +188,9 @@ pub async fn skip_item(
     State(state): State<AppState>,
     Path(item_id): Path<i32>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let mut conn = state.db.get()
+    let mut conn = state
+        .db
+        .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     TitleParserService::update_raw_item_status(
@@ -188,7 +199,8 @@ pub async fn skip_item(
         ParseStatus::Skipped,
         None,
         Some("Manually skipped"),
-    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

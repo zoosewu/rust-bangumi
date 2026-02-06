@@ -1,11 +1,7 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use crate::file_organizer::FileOrganizer;
+use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use crate::file_organizer::FileOrganizer;
 
 #[derive(Debug, Deserialize)]
 pub struct SyncRequest {
@@ -148,7 +144,9 @@ mod tests {
             organized_files: vec![OrganizedFile {
                 episode_number: 1,
                 source_path: "/path/to/episode1.mkv".to_string(),
-                target_path: "/media/jellyfin/Attack on Titan/Season 01/Attack on Titan - S01E01.mkv".to_string(),
+                target_path:
+                    "/media/jellyfin/Attack on Titan/Season 01/Attack on Titan - S01E01.mkv"
+                        .to_string(),
             }],
             error: None,
         };

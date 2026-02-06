@@ -89,10 +89,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_retry_exhausts_attempts() {
-        let result = retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(1), || async {
-            Err("Always fails".to_string())
-        })
-        .await;
+        let result =
+            retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(1), || async {
+                Err("Always fails".to_string())
+            })
+            .await;
 
         assert!(result.is_err());
     }
@@ -104,12 +105,11 @@ mod tests {
         let start = Instant::now();
         // 3 retries: fail -> wait 10ms -> fail -> wait 20ms -> fail -> return
         // Total delay should be at least 30ms (10 + 20)
-        let result = retry_with_backoff::<_, _, i32, String>(
-            3,
-            Duration::from_millis(10),
-            || async { Err("Always fails".to_string()) },
-        )
-        .await;
+        let result =
+            retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(10), || async {
+                Err("Always fails".to_string())
+            })
+            .await;
 
         let elapsed = start.elapsed();
         assert!(result.is_err());

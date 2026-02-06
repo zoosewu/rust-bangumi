@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
-mod commands;
 mod client;
+mod commands;
 mod models;
 
 #[cfg(test)]
@@ -86,18 +86,13 @@ enum FilterAction {
     Add {
         series_id: i64,
         group_name: String,
-        rule_type: String,  // positive | negative
+        rule_type: String, // positive | negative
         regex: String,
     },
     /// 列出過濾規則
-    List {
-        series_id: i64,
-        group_name: String,
-    },
+    List { series_id: i64, group_name: String },
     /// 刪除過濾規則
-    Remove {
-        rule_id: i64,
-    },
+    Remove { rule_id: i64 },
 }
 
 #[tokio::main]
@@ -121,24 +116,33 @@ async fn main() -> anyhow::Result<()> {
         Commands::List { anime_id, season } => {
             commands::list(&cli.api_url, anime_id, season).await?
         }
-        Commands::Links { anime_id, series, group } => {
-            commands::links(&cli.api_url, anime_id, series, group).await?
-        }
+        Commands::Links {
+            anime_id,
+            series,
+            group,
+        } => commands::links(&cli.api_url, anime_id, series, group).await?,
         Commands::Filter { action } => match action {
-            FilterAction::Add { series_id, group_name, rule_type, regex } => {
+            FilterAction::Add {
+                series_id,
+                group_name,
+                rule_type,
+                regex,
+            } => {
                 commands::filter_add(&cli.api_url, series_id, &group_name, &rule_type, &regex)
                     .await?
             }
-            FilterAction::List { series_id, group_name } => {
-                commands::filter_list(&cli.api_url, series_id, &group_name).await?
-            }
+            FilterAction::List {
+                series_id,
+                group_name,
+            } => commands::filter_list(&cli.api_url, series_id, &group_name).await?,
             FilterAction::Remove { rule_id } => {
                 commands::filter_remove(&cli.api_url, rule_id).await?
             }
         },
-        Commands::Download { link_id, downloader } => {
-            commands::download(&cli.api_url, link_id, downloader).await?
-        }
+        Commands::Download {
+            link_id,
+            downloader,
+        } => commands::download(&cli.api_url, link_id, downloader).await?,
         Commands::Status => commands::status(&cli.api_url).await?,
         Commands::Services => commands::services(&cli.api_url).await?,
         Commands::Logs { r#type } => commands::logs(&cli.api_url, &r#type).await?,

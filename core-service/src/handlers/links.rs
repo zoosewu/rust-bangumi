@@ -1,14 +1,14 @@
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use chrono::Utc;
 use serde_json::json;
 
-use crate::state::AppState;
 use crate::dto::{AnimeLinkRequest, AnimeLinkResponse};
 use crate::models::NewAnimeLink;
+use crate::state::AppState;
 
 /// Create a new anime link
 pub async fn create_anime_link(
@@ -63,7 +63,12 @@ pub async fn get_anime_links(
     State(state): State<AppState>,
     Path(series_id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    match state.repos.anime_link.find_by_series_id(series_id, false).await {
+    match state
+        .repos
+        .anime_link
+        .find_by_series_id(series_id, false)
+        .await
+    {
         Ok(links) => {
             let responses: Vec<AnimeLinkResponse> = links
                 .into_iter()

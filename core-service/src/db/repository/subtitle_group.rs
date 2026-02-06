@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use diesel::prelude::*;
 use chrono::Utc;
+use diesel::prelude::*;
 
-use crate::db::DbPool;
-use crate::models::{SubtitleGroup, NewSubtitleGroup};
-use crate::schema::subtitle_groups;
 use super::RepositoryError;
+use crate::db::DbPool;
+use crate::models::{NewSubtitleGroup, SubtitleGroup};
+use crate::schema::subtitle_groups;
 
 #[async_trait]
 pub trait SubtitleGroupRepository: Send + Sync {
@@ -88,8 +88,9 @@ impl SubtitleGroupRepository for DieselSubtitleGroupRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let deleted = diesel::delete(subtitle_groups::table.filter(subtitle_groups::group_id.eq(id)))
-                .execute(&mut conn)?;
+            let deleted =
+                diesel::delete(subtitle_groups::table.filter(subtitle_groups::group_id.eq(id)))
+                    .execute(&mut conn)?;
             Ok(deleted > 0)
         })
         .await?
@@ -167,13 +168,31 @@ pub mod mock {
     #[async_trait]
     impl SubtitleGroupRepository for MockSubtitleGroupRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<SubtitleGroup>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.groups.lock().unwrap().iter().find(|g| g.group_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .groups
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|g| g.group_id == id)
+                .cloned())
         }
 
         async fn find_by_name(&self, name: &str) -> Result<Option<SubtitleGroup>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_name:{}", name));
-            Ok(self.groups.lock().unwrap().iter().find(|g| g.group_name == name).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_name:{}", name));
+            Ok(self
+                .groups
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|g| g.group_name == name)
+                .cloned())
         }
 
         async fn find_all(&self) -> Result<Vec<SubtitleGroup>, RepositoryError> {
@@ -182,7 +201,10 @@ pub mod mock {
         }
 
         async fn create(&self, group_name: String) -> Result<SubtitleGroup, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{}", group_name));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{}", group_name));
             let mut groups = self.groups.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let now = Utc::now().naive_utc();
@@ -197,15 +219,24 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut groups = self.groups.lock().unwrap();
             let original_len = groups.len();
             groups.retain(|g| g.group_id != id);
             Ok(groups.len() < original_len)
         }
 
-        async fn find_or_create(&self, group_name: String) -> Result<SubtitleGroup, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_or_create:{}", group_name));
+        async fn find_or_create(
+            &self,
+            group_name: String,
+        ) -> Result<SubtitleGroup, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_or_create:{}", group_name));
             // Try to find existing
             {
                 let groups = self.groups.lock().unwrap();
@@ -231,8 +262,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockSubtitleGroupRepository;
+    use super::*;
 
     #[tokio::test]
     async fn test_mock_subtitle_group_repository_create() {

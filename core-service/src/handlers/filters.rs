@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -7,9 +7,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::state::AppState;
 use crate::dto::{FilterRuleRequest, FilterRuleResponse};
-use crate::models::{NewFilterRule, FilterTargetType};
+use crate::models::{FilterTargetType, NewFilterRule};
+use crate::state::AppState;
 
 /// Query parameters for filter rules
 #[derive(Debug, Deserialize, Serialize)]
@@ -117,7 +117,12 @@ pub async fn get_filter_rules(
         }
     };
 
-    match state.repos.filter_rule.find_by_target(target_type, query.target_id).await {
+    match state
+        .repos
+        .filter_rule
+        .find_by_target(target_type, query.target_id)
+        .await
+    {
         Ok(rules) => {
             let responses: Vec<FilterRuleResponse> = rules
                 .into_iter()

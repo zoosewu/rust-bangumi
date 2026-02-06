@@ -1,12 +1,11 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use regex::Regex;
-use once_cell::sync::Lazy;
 
 #[allow(dead_code)]
-static EPISODE_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)s(\d+)e(\d+)|\[(\d+)\]").unwrap()
-});
+static EPISODE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)s(\d+)e(\d+)|\[(\d+)\]").unwrap());
 
 #[derive(Clone, Debug)]
 pub struct FileOrganizer {

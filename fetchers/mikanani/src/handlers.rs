@@ -1,12 +1,8 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
+use fetcher_mikanani::{FetchTask, RealHttpClient, RssParser};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use fetcher_mikanani::{RssParser, FetchTask, RealHttpClient};
 use shared::{FetchTriggerRequest, FetchTriggerResponse};
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct CanHandleRequest {
@@ -54,7 +50,10 @@ pub async fn fetch(
     // 立即回傳 202 Accepted
     let response = FetchTriggerResponse {
         accepted: true,
-        message: format!("Fetch task accepted for subscription {}", payload.subscription_id),
+        message: format!(
+            "Fetch task accepted for subscription {}",
+            payload.subscription_id
+        ),
     };
 
     // 在背景執行抓取任務
@@ -69,7 +68,10 @@ pub async fn fetch(
 
         let task = FetchTask::new(parser, http_client, "mikanani".to_string());
 
-        if let Err(e) = task.execute_and_send(subscription_id, &rss_url, &callback_url).await {
+        if let Err(e) = task
+            .execute_and_send(subscription_id, &rss_url, &callback_url)
+            .await
+        {
             tracing::error!("Background fetch task failed: {}", e);
         }
     });

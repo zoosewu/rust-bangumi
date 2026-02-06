@@ -14,8 +14,7 @@ impl DownloadTypeDetector for MagnetDetector {
 struct TorrentDetector;
 impl DownloadTypeDetector for TorrentDetector {
     fn detect(&self, url: &str) -> Option<DownloadType> {
-        (url.starts_with("http") && url.contains(".torrent"))
-            .then_some(DownloadType::Torrent)
+        (url.starts_with("http") && url.contains(".torrent")).then_some(DownloadType::Torrent)
     }
 }
 

@@ -1,21 +1,17 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use chrono::Utc;
-use serde_json::json;
-use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 
-use crate::state::AppState;
 use crate::models::{
-    NewAnime, NewSeason, NewAnimeSeries, NewSubtitleGroup, NewAnimeLink,
-    Anime, Season, AnimeSeries, SubtitleGroup, AnimeLink, Subscription, RawAnimeItem,
+    Anime, AnimeLink, AnimeSeries, NewAnime, NewAnimeLink, NewAnimeSeries, NewSeason,
+    NewSubtitleGroup, RawAnimeItem, Season, Subscription, SubtitleGroup,
 };
-use crate::schema::{animes, seasons, anime_series, subtitle_groups, anime_links, subscriptions};
-use crate::services::TitleParserService;
+use crate::schema::{anime_links, anime_series, animes, seasons, subscriptions, subtitle_groups};
 use crate::services::title_parser::ParseStatus;
+use crate::services::TitleParserService;
+use crate::state::AppState;
 use shared::models::{RawFetcherResultsPayload, RawFetcherResultsResponse};
 
 // ============ DTOs for Fetcher Results ============
@@ -34,7 +30,7 @@ pub struct FetchedLinkPayload {
 pub struct FetchedAnimePayload {
     pub title: String,
     pub description: String,
-    pub season: String,  // 冬/春/夏/秋
+    pub season: String, // 冬/春/夏/秋
     pub year: i32,
     pub series_no: i32,
     pub links: Vec<FetchedLinkPayload>,
@@ -42,9 +38,9 @@ pub struct FetchedAnimePayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FetcherResultsPayload {
-    pub subscription_id: Option<i32>,  // 可選，向後相容
+    pub subscription_id: Option<i32>, // 可選，向後相容
     pub animes: Vec<FetchedAnimePayload>,
-    pub fetcher_source: String,  // e.g., "mikanani"
+    pub fetcher_source: String,        // e.g., "mikanani"
     pub success: Option<bool>,         // 抓取是否成功
     pub error_message: Option<String>, // 錯誤訊息
 }
@@ -73,7 +69,9 @@ pub async fn receive_fetcher_results(
 
     // 更新訂閱的 last_fetched_at
     if let Some(sub_id) = payload.subscription_id {
-        if let Err(e) = update_subscription_after_fetch(&state, sub_id, payload.success.unwrap_or(true)).await {
+        if let Err(e) =
+            update_subscription_after_fetch(&state, sub_id, payload.success.unwrap_or(true)).await
+        {
             tracing::error!("Failed to update subscription {}: {}", sub_id, e);
         }
     }
@@ -91,7 +89,11 @@ pub async fn receive_fetcher_results(
                         animes_created += 1;
 
                         // Create or get season
-                        match create_or_get_season(&mut conn, fetched_anime.year, &fetched_anime.season) {
+                        match create_or_get_season(
+                            &mut conn,
+                            fetched_anime.year,
+                            &fetched_anime.season,
+                        ) {
                             Ok(season) => {
                                 // Create or get anime series
                                 match create_or_get_series(
@@ -105,7 +107,10 @@ pub async fn receive_fetcher_results(
                                         // Process each link in the anime
                                         for fetched_link in &fetched_anime.links {
                                             // Create or get subtitle group
-                                            match create_or_get_subtitle_group(&mut conn, &fetched_link.subtitle_group) {
+                                            match create_or_get_subtitle_group(
+                                                &mut conn,
+                                                &fetched_link.subtitle_group,
+                                            ) {
                                                 Ok(group) => {
                                                     // Create anime link
                                                     match create_anime_link(
@@ -126,7 +131,8 @@ pub async fn receive_fetcher_results(
                                                         Err(e) => {
                                                             tracing::warn!(
                                                                 "Failed to create link for {}: {}",
-                                                                fetched_anime.title, e
+                                                                fetched_anime.title,
+                                                                e
                                                             );
                                                             errors.push(format!(
                                                                 "Link creation failed for {}: {}",
@@ -151,7 +157,8 @@ pub async fn receive_fetcher_results(
                                     Err(e) => {
                                         tracing::warn!(
                                             "Failed to get/create series for {}: {}",
-                                            fetched_anime.title, e
+                                            fetched_anime.title,
+                                            e
                                         );
                                         errors.push(format!(
                                             "Series creation failed for {}: {}",
@@ -163,21 +170,24 @@ pub async fn receive_fetcher_results(
                             Err(e) => {
                                 tracing::warn!(
                                     "Failed to get/create season {}/{}: {}",
-                                    fetched_anime.year, fetched_anime.season, e
-                                );
-                                errors.push(format!(
-                                    "Season creation failed: {}",
+                                    fetched_anime.year,
+                                    fetched_anime.season,
                                     e
-                                ));
+                                );
+                                errors.push(format!("Season creation failed: {}", e));
                             }
                         }
                     }
                     Err(e) => {
                         tracing::warn!(
                             "Failed to get/create anime '{}': {}",
-                            fetched_anime.title, e
+                            fetched_anime.title,
+                            e
                         );
-                        errors.push(format!("Anime creation failed for {}: {}", fetched_anime.title, e));
+                        errors.push(format!(
+                            "Anime creation failed for {}: {}",
+                            fetched_anime.title, e
+                        ));
                     }
                 }
             }
@@ -201,7 +211,8 @@ pub async fn receive_fetcher_results(
 
             tracing::info!(
                 "Fetcher results processing complete: {} animes, {} links",
-                animes_created, links_created
+                animes_created,
+                links_created
             );
 
             (StatusCode::OK, Json(json!(response)))
@@ -337,7 +348,10 @@ fn create_or_get_series(
 }
 
 /// Create or get a subtitle group
-fn create_or_get_subtitle_group(conn: &mut PgConnection, group_name: &str) -> Result<SubtitleGroup, String> {
+fn create_or_get_subtitle_group(
+    conn: &mut PgConnection,
+    group_name: &str,
+) -> Result<SubtitleGroup, String> {
     // Try to find existing subtitle group
     match subtitle_groups::table
         .filter(subtitle_groups::group_name.eq(group_name))
@@ -442,8 +456,14 @@ pub async fn receive_raw_fetcher_results(
     );
 
     // 更新訂閱的 last_fetched_at
-    if let Err(e) = update_subscription_after_fetch(&state, payload.subscription_id, payload.success).await {
-        tracing::error!("Failed to update subscription {}: {}", payload.subscription_id, e);
+    if let Err(e) =
+        update_subscription_after_fetch(&state, payload.subscription_id, payload.success).await
+    {
+        tracing::error!(
+            "Failed to update subscription {}: {}",
+            payload.subscription_id,
+            e
+        );
     }
 
     let mut items_received = 0;
@@ -490,7 +510,8 @@ pub async fn receive_raw_fetcher_results(
                                     ParseStatus::Parsed,
                                     Some(parsed.parser_id),
                                     None,
-                                ).ok();
+                                )
+                                .ok();
                                 items_parsed += 1;
                                 tracing::debug!(
                                     "Parsed: {} -> {} EP{}",
@@ -506,7 +527,8 @@ pub async fn receive_raw_fetcher_results(
                                     ParseStatus::Failed,
                                     Some(parsed.parser_id),
                                     Some(&e),
-                                ).ok();
+                                )
+                                .ok();
                                 items_failed += 1;
                                 errors.push(e);
                             }
@@ -520,7 +542,8 @@ pub async fn receive_raw_fetcher_results(
                             ParseStatus::NoMatch,
                             None,
                             Some("No matching parser found"),
-                        ).ok();
+                        )
+                        .ok();
                         items_failed += 1;
                         tracing::warn!("No parser matched for: {}", raw_item.title);
                     }
@@ -531,7 +554,8 @@ pub async fn receive_raw_fetcher_results(
                             ParseStatus::Failed,
                             None,
                             Some(&e),
-                        ).ok();
+                        )
+                        .ok();
                         items_failed += 1;
                         errors.push(e);
                     }
@@ -541,7 +565,11 @@ pub async fn receive_raw_fetcher_results(
             // 批次派發新建的下載連結
             if !new_link_ids.is_empty() {
                 let link_count = new_link_ids.len();
-                match state.dispatch_service.dispatch_new_links(new_link_ids).await {
+                match state
+                    .dispatch_service
+                    .dispatch_new_links(new_link_ids)
+                    .await
+                {
                     Ok(result) => {
                         tracing::info!(
                             "Download dispatch: {} links -> {} dispatched, {} no_downloader, {} failed",
@@ -560,9 +588,15 @@ pub async fn receive_raw_fetcher_results(
                 items_parsed,
                 items_failed,
                 message: if errors.is_empty() {
-                    format!("Processed {} items: {} parsed, {} failed", items_received, items_parsed, items_failed)
+                    format!(
+                        "Processed {} items: {} parsed, {} failed",
+                        items_received, items_parsed, items_failed
+                    )
                 } else {
-                    format!("Processed {} items with errors: {:?}", items_received, errors)
+                    format!(
+                        "Processed {} items with errors: {:?}",
+                        items_received, errors
+                    )
                 },
             };
 
@@ -591,13 +625,15 @@ fn process_parsed_result(
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
 ) -> Result<i32, String> {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     // 1. 建立或取得 anime
     let anime = create_or_get_anime(conn, &parsed.anime_title)?;
 
     // 2. 建立或取得 season（使用預設值）
-    let year = parsed.year.as_ref()
+    let year = parsed
+        .year
+        .as_ref()
         .and_then(|y| y.parse::<i32>().ok())
         .unwrap_or(2025);
     let season_name = parsed.season.as_deref().unwrap_or("unknown");
@@ -609,7 +645,7 @@ fn process_parsed_result(
         anime.anime_id,
         parsed.series_no,
         season.season_id,
-        "",  // description
+        "", // description
     )?;
 
     // 4. 建立或取得 subtitle_group
@@ -623,7 +659,8 @@ fn process_parsed_result(
 
     // 6. 建立 anime_link
     let now = Utc::now().naive_utc();
-    let detected_type = crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
+    let detected_type =
+        crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
     let new_link = NewAnimeLink {
         series_id: series.series_id,
         group_id: group.group_id,

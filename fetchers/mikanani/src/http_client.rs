@@ -72,10 +72,7 @@ impl HttpClient for RealHttpClient {
             .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 
         let status = response.status();
-        let body = response
-            .text()
-            .await
-            .unwrap_or_default();
+        let body = response.text().await.unwrap_or_default();
 
         Ok(HttpResponse { status, body })
     }
@@ -143,7 +140,10 @@ pub mod mock {
             // 記錄請求
             let body_json = serde_json::to_string(body)
                 .map_err(|e| HttpError::SerializationFailed(e.to_string()))?;
-            self.requests.lock().unwrap().push((url.to_string(), body_json));
+            self.requests
+                .lock()
+                .unwrap()
+                .push((url.to_string(), body_json));
 
             // 回傳預設回應
             self.response
@@ -160,8 +160,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockHttpClient;
+    use super::*;
 
     #[tokio::test]
     async fn test_mock_client_records_requests() {

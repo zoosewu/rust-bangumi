@@ -98,8 +98,8 @@ async fn test_add_torrents_records_call_parameters() {
 
 #[tokio::test]
 async fn test_add_torrents_error_propagates() {
-    let mock = MockDownloaderClient::new()
-        .with_add_torrents_result(Err(anyhow!("Connection timeout")));
+    let mock =
+        MockDownloaderClient::new().with_add_torrents_result(Err(anyhow!("Connection timeout")));
 
     let items = vec![DownloadRequestItem {
         url: "magnet:?xt=urn:btih:hash1".to_string(),
@@ -108,7 +108,10 @@ async fn test_add_torrents_error_propagates() {
 
     let result = mock.add_torrents(items).await;
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("Connection timeout"));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Connection timeout"));
 }
 
 // ============ Cancel Torrents (Batch) Tests ============

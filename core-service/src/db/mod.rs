@@ -6,18 +6,14 @@ pub mod models;
 pub mod repository;
 
 pub use repository::{
-    RepositoryError,
-    AnimeRepository, DieselAnimeRepository,
-    SubscriptionRepository, DieselSubscriptionRepository,
-    ServiceModuleRepository, DieselServiceModuleRepository,
-    SeasonRepository, DieselSeasonRepository,
-    AnimeSeriesRepository, DieselAnimeSeriesRepository, CreateAnimeSeriesParams,
-    SubtitleGroupRepository, DieselSubtitleGroupRepository,
-    FilterRuleRepository, DieselFilterRuleRepository,
-    AnimeLinkRepository, DieselAnimeLinkRepository,
-    TitleParserRepository, DieselTitleParserRepository,
-    RawItemRepository, DieselRawItemRepository, RawItemFilter,
-    ConflictRepository, DieselConflictRepository,
+    AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository, ConflictRepository,
+    CreateAnimeSeriesParams, DieselAnimeLinkRepository, DieselAnimeRepository,
+    DieselAnimeSeriesRepository, DieselConflictRepository, DieselFilterRuleRepository,
+    DieselRawItemRepository, DieselSeasonRepository, DieselServiceModuleRepository,
+    DieselSubscriptionRepository, DieselSubtitleGroupRepository, DieselTitleParserRepository,
+    FilterRuleRepository, RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository,
+    ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
+    TitleParserRepository,
 };
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -34,7 +30,8 @@ pub fn establish_connection_pool(database_url: &str) -> anyhow::Result<DbPool> {
 }
 
 pub fn run_migrations(pool: &DbPool) -> anyhow::Result<()> {
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| anyhow::anyhow!("Failed to get connection from pool: {}", e))?;
 
     let migrations = FileBasedMigrations::from_path("./migrations")

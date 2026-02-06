@@ -1,15 +1,19 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 
+use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::{AnimeLink, NewAnimeLink};
 use crate::schema::anime_links;
-use super::RepositoryError;
 
 #[async_trait]
 pub trait AnimeLinkRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<AnimeLink>, RepositoryError>;
-    async fn find_by_series_id(&self, series_id: i32, include_filtered: bool) -> Result<Vec<AnimeLink>, RepositoryError>;
+    async fn find_by_series_id(
+        &self,
+        series_id: i32,
+        include_filtered: bool,
+    ) -> Result<Vec<AnimeLink>, RepositoryError>;
     async fn create(&self, link: NewAnimeLink) -> Result<AnimeLink, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
 }
@@ -39,7 +43,11 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
         .await?
     }
 
-    async fn find_by_series_id(&self, series_id: i32, include_filtered: bool) -> Result<Vec<AnimeLink>, RepositoryError> {
+    async fn find_by_series_id(
+        &self,
+        series_id: i32,
+        include_filtered: bool,
+    ) -> Result<Vec<AnimeLink>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -126,14 +134,31 @@ pub mod mock {
     #[async_trait]
     impl AnimeLinkRepository for MockAnimeLinkRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<AnimeLink>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.links.lock().unwrap().iter().find(|l| l.link_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .links
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|l| l.link_id == id)
+                .cloned())
         }
 
-        async fn find_by_series_id(&self, series_id: i32, include_filtered: bool) -> Result<Vec<AnimeLink>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_series_id:{}:{}", series_id, include_filtered));
+        async fn find_by_series_id(
+            &self,
+            series_id: i32,
+            include_filtered: bool,
+        ) -> Result<Vec<AnimeLink>, RepositoryError> {
+            self.operations.lock().unwrap().push(format!(
+                "find_by_series_id:{}:{}",
+                series_id, include_filtered
+            ));
             let links = self.links.lock().unwrap();
-            let result: Vec<AnimeLink> = links.iter()
+            let result: Vec<AnimeLink> = links
+                .iter()
                 .filter(|l| l.series_id == series_id && (include_filtered || !l.filtered_flag))
                 .cloned()
                 .collect();
@@ -141,7 +166,10 @@ pub mod mock {
         }
 
         async fn create(&self, link: NewAnimeLink) -> Result<AnimeLink, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:series_id:{}", link.series_id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:series_id:{}", link.series_id));
             let mut links = self.links.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let new_link = AnimeLink {
@@ -163,7 +191,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut links = self.links.lock().unwrap();
             let original_len = links.len();
             links.retain(|l| l.link_id != id);
@@ -174,8 +205,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockAnimeLinkRepository;
+    use super::*;
     use chrono::Utc;
 
     #[tokio::test]

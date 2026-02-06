@@ -2,21 +2,31 @@ use async_trait::async_trait;
 use chrono::Utc;
 use diesel::prelude::*;
 
+use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::{ModuleTypeEnum, NewServiceModule, ServiceModule};
 use crate::schema::service_modules;
-use super::RepositoryError;
 
 #[async_trait]
 pub trait ServiceModuleRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<ServiceModule>, RepositoryError>;
     async fn find_by_name(&self, name: &str) -> Result<Option<ServiceModule>, RepositoryError>;
-    async fn find_by_type(&self, module_type: ModuleTypeEnum) -> Result<Vec<ServiceModule>, RepositoryError>;
+    async fn find_by_type(
+        &self,
+        module_type: ModuleTypeEnum,
+    ) -> Result<Vec<ServiceModule>, RepositoryError>;
     async fn find_enabled(&self) -> Result<Vec<ServiceModule>, RepositoryError>;
     async fn find_all(&self) -> Result<Vec<ServiceModule>, RepositoryError>;
     async fn create(&self, new_module: NewServiceModule) -> Result<ServiceModule, RepositoryError>;
-    async fn upsert_by_name(&self, new_module: NewServiceModule) -> Result<ServiceModule, RepositoryError>;
-    async fn update_enabled(&self, id: i32, is_enabled: bool) -> Result<ServiceModule, RepositoryError>;
+    async fn upsert_by_name(
+        &self,
+        new_module: NewServiceModule,
+    ) -> Result<ServiceModule, RepositoryError>;
+    async fn update_enabled(
+        &self,
+        id: i32,
+        is_enabled: bool,
+    ) -> Result<ServiceModule, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
 }
 
@@ -59,7 +69,10 @@ impl ServiceModuleRepository for DieselServiceModuleRepository {
         .await?
     }
 
-    async fn find_by_type(&self, module_type: ModuleTypeEnum) -> Result<Vec<ServiceModule>, RepositoryError> {
+    async fn find_by_type(
+        &self,
+        module_type: ModuleTypeEnum,
+    ) -> Result<Vec<ServiceModule>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -109,7 +122,10 @@ impl ServiceModuleRepository for DieselServiceModuleRepository {
         .await?
     }
 
-    async fn upsert_by_name(&self, new_module: NewServiceModule) -> Result<ServiceModule, RepositoryError> {
+    async fn upsert_by_name(
+        &self,
+        new_module: NewServiceModule,
+    ) -> Result<ServiceModule, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -144,7 +160,11 @@ impl ServiceModuleRepository for DieselServiceModuleRepository {
         .await?
     }
 
-    async fn update_enabled(&self, id: i32, is_enabled: bool) -> Result<ServiceModule, RepositoryError> {
+    async fn update_enabled(
+        &self,
+        id: i32,
+        is_enabled: bool,
+    ) -> Result<ServiceModule, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -163,8 +183,8 @@ impl ServiceModuleRepository for DieselServiceModuleRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let rows_deleted = diesel::delete(service_modules::table.find(id))
-                .execute(&mut conn)?;
+            let rows_deleted =
+                diesel::delete(service_modules::table.find(id)).execute(&mut conn)?;
             Ok(rows_deleted > 0)
         })
         .await?
@@ -210,24 +230,45 @@ pub mod mock {
     #[async_trait]
     impl ServiceModuleRepository for MockServiceModuleRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<ServiceModule>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.modules.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .modules
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|m| m.module_id == id)
                 .cloned())
         }
 
         async fn find_by_name(&self, name: &str) -> Result<Option<ServiceModule>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_name:{}", name));
-            Ok(self.modules.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_name:{}", name));
+            Ok(self
+                .modules
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|m| m.name == name)
                 .cloned())
         }
 
-        async fn find_by_type(&self, module_type: ModuleTypeEnum) -> Result<Vec<ServiceModule>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_type:{:?}", module_type));
-            Ok(self.modules.lock().unwrap()
+        async fn find_by_type(
+            &self,
+            module_type: ModuleTypeEnum,
+        ) -> Result<Vec<ServiceModule>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_type:{:?}", module_type));
+            Ok(self
+                .modules
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|m| m.module_type == module_type)
                 .cloned()
@@ -235,8 +276,14 @@ pub mod mock {
         }
 
         async fn find_enabled(&self) -> Result<Vec<ServiceModule>, RepositoryError> {
-            self.operations.lock().unwrap().push("find_enabled".to_string());
-            Ok(self.modules.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push("find_enabled".to_string());
+            Ok(self
+                .modules
+                .lock()
+                .unwrap()
                 .iter()
                 .filter(|m| m.is_enabled)
                 .cloned()
@@ -248,8 +295,14 @@ pub mod mock {
             Ok(self.modules.lock().unwrap().clone())
         }
 
-        async fn create(&self, new_module: NewServiceModule) -> Result<ServiceModule, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{}", new_module.name));
+        async fn create(
+            &self,
+            new_module: NewServiceModule,
+        ) -> Result<ServiceModule, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{}", new_module.name));
             let mut modules = self.modules.lock().unwrap();
             let id = modules.len() as i32 + 1;
             let module = ServiceModule {
@@ -269,8 +322,14 @@ pub mod mock {
             Ok(module)
         }
 
-        async fn upsert_by_name(&self, new_module: NewServiceModule) -> Result<ServiceModule, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("upsert_by_name:{}", new_module.name));
+        async fn upsert_by_name(
+            &self,
+            new_module: NewServiceModule,
+        ) -> Result<ServiceModule, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("upsert_by_name:{}", new_module.name));
             let mut modules = self.modules.lock().unwrap();
 
             if let Some(pos) = modules.iter().position(|m| m.name == new_module.name) {
@@ -301,8 +360,15 @@ pub mod mock {
             }
         }
 
-        async fn update_enabled(&self, id: i32, is_enabled: bool) -> Result<ServiceModule, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update_enabled:{}:{}", id, is_enabled));
+        async fn update_enabled(
+            &self,
+            id: i32,
+            is_enabled: bool,
+        ) -> Result<ServiceModule, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update_enabled:{}:{}", id, is_enabled));
             let mut modules = self.modules.lock().unwrap();
             if let Some(pos) = modules.iter().position(|m| m.module_id == id) {
                 modules[pos].is_enabled = is_enabled;
@@ -314,7 +380,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut modules = self.modules.lock().unwrap();
             let len_before = modules.len();
             modules.retain(|m| m.module_id != id);
@@ -326,7 +395,12 @@ pub mod mock {
     mod tests {
         use super::*;
 
-        fn create_test_module(id: i32, name: &str, module_type: ModuleTypeEnum, is_enabled: bool) -> ServiceModule {
+        fn create_test_module(
+            id: i32,
+            name: &str,
+            module_type: ModuleTypeEnum,
+            is_enabled: bool,
+        ) -> ServiceModule {
             let now = Utc::now().naive_utc();
             ServiceModule {
                 module_id: id,

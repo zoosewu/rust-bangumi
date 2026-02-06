@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use diesel::prelude::*;
 use chrono::Utc;
+use diesel::prelude::*;
 
-use crate::db::DbPool;
-use crate::models::{Season, NewSeason};
-use crate::schema::seasons;
 use super::RepositoryError;
+use crate::db::DbPool;
+use crate::models::{NewSeason, Season};
+use crate::schema::seasons;
 
 #[async_trait]
 pub trait SeasonRepository: Send + Sync {
@@ -155,8 +155,17 @@ pub mod mock {
     #[async_trait]
     impl SeasonRepository for MockSeasonRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<Season>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.seasons.lock().unwrap().iter().find(|s| s.season_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .seasons
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|s| s.season_id == id)
+                .cloned())
         }
 
         async fn find_all(&self) -> Result<Vec<Season>, RepositoryError> {
@@ -165,7 +174,10 @@ pub mod mock {
         }
 
         async fn create(&self, year: i32, season: String) -> Result<Season, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{}:{}", year, season));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{}:{}", year, season));
             let mut seasons = self.seasons.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let now = Utc::now().naive_utc();
@@ -181,19 +193,32 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut seasons = self.seasons.lock().unwrap();
             let original_len = seasons.len();
             seasons.retain(|s| s.season_id != id);
             Ok(seasons.len() < original_len)
         }
 
-        async fn find_or_create(&self, year: i32, season: String) -> Result<Season, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_or_create:{}:{}", year, season));
+        async fn find_or_create(
+            &self,
+            year: i32,
+            season: String,
+        ) -> Result<Season, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_or_create:{}:{}", year, season));
             // Try to find existing
             {
                 let seasons = self.seasons.lock().unwrap();
-                if let Some(s) = seasons.iter().find(|s| s.year == year && s.season == season) {
+                if let Some(s) = seasons
+                    .iter()
+                    .find(|s| s.year == year && s.season == season)
+                {
                     return Ok(s.clone());
                 }
             }
@@ -216,8 +241,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockSeasonRepository;
+    use super::*;
 
     #[tokio::test]
     async fn test_mock_season_repository_create() {

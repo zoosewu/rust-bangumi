@@ -1,14 +1,14 @@
+use crate::models::db::ModuleTypeEnum;
+use crate::state::AppState;
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
+use diesel::prelude::*;
 use serde_json::json;
 use shared::{ServiceRegistration, ServiceRegistrationResponse, ServiceType};
 use uuid::Uuid;
-use crate::state::AppState;
-use crate::models::db::ModuleTypeEnum;
-use diesel::prelude::*;
 
 /// Register a new service
 pub async fn register(
@@ -40,7 +40,8 @@ pub async fn register(
     match state.db.get() {
         Ok(mut conn) => {
             let service_base_url = format!("http://{}:{}", payload.host, payload.port);
-            let service_description = format!("{}:{}:{}", payload.service_name, payload.host, payload.port);
+            let service_description =
+                format!("{}:{}:{}", payload.service_name, payload.host, payload.port);
             let module_type_str = ModuleTypeEnum::from(&payload.service_type).to_string();
 
             // Use UPSERT to handle service restart scenarios
@@ -93,7 +94,9 @@ pub async fn register(
                             .collect();
                         let dispatch = state.dispatch_service.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = dispatch.retry_no_downloader_links(&download_types).await {
+                            if let Err(e) =
+                                dispatch.retry_no_downloader_links(&download_types).await
+                            {
                                 tracing::error!("Failed to retry no_downloader links: {}", e);
                             }
                         });
@@ -109,10 +112,7 @@ pub async fn register(
             }
         }
         Err(e) => {
-            tracing::error!(
-                "Failed to get database connection: {}",
-                e
-            );
+            tracing::error!("Failed to get database connection: {}", e);
         }
     }
 
@@ -125,9 +125,7 @@ pub async fn register(
 }
 
 /// List all registered services
-pub async fn list_services(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+pub async fn list_services(State(state): State<AppState>) -> Json<serde_json::Value> {
     match state.registry.get_services() {
         Ok(services) => Json(json!({ "services": services })),
         Err(e) => {
@@ -146,9 +144,7 @@ pub async fn list_by_type(
         "fetcher" => ServiceType::Fetcher,
         "downloader" => ServiceType::Downloader,
         "viewer" => ServiceType::Viewer,
-        _ => {
-            return Json(json!({"error": "Invalid service type", "services": []}))
-        }
+        _ => return Json(json!({"error": "Invalid service type", "services": []})),
     };
 
     match state.registry.get_services_by_type(&service_type_enum) {
@@ -166,8 +162,8 @@ fn save_downloader_capabilities(
     service_name: &str,
     download_types: &[shared::DownloadType],
 ) {
-    use crate::schema::{service_modules, downloader_capabilities};
     use crate::models::DownloaderCapability;
+    use crate::schema::{downloader_capabilities, service_modules};
 
     // Get the module_id for this service
     let module_id: Option<i32> = service_modules::table
@@ -221,7 +217,10 @@ pub async fn health_check(
         Ok(_) => (StatusCode::OK, Json(json!({"status": "ok"}))),
         Err(e) => {
             tracing::error!("Failed to update health: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"status": "error", "message": e})))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"status": "error", "message": e})),
+            )
         }
     }
 }

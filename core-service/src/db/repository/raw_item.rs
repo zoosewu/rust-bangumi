@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use diesel::prelude::*;
 use chrono::{NaiveDateTime, Utc};
+use diesel::prelude::*;
 
+use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::RawAnimeItem;
 use crate::schema::raw_anime_items;
-use super::RepositoryError;
 
 #[derive(Debug, Clone)]
 pub struct RawItemFilter {
@@ -29,9 +29,25 @@ impl Default for RawItemFilter {
 #[async_trait]
 pub trait RawItemRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<RawAnimeItem>, RepositoryError>;
-    async fn find_with_filters(&self, filter: RawItemFilter) -> Result<Vec<RawAnimeItem>, RepositoryError>;
-    async fn save(&self, title: &str, description: Option<&str>, download_url: &str, pub_date: Option<NaiveDateTime>, subscription_id: i32) -> Result<RawAnimeItem, RepositoryError>;
-    async fn update_status(&self, id: i32, status: &str, parser_id: Option<i32>, error_message: Option<&str>) -> Result<(), RepositoryError>;
+    async fn find_with_filters(
+        &self,
+        filter: RawItemFilter,
+    ) -> Result<Vec<RawAnimeItem>, RepositoryError>;
+    async fn save(
+        &self,
+        title: &str,
+        description: Option<&str>,
+        download_url: &str,
+        pub_date: Option<NaiveDateTime>,
+        subscription_id: i32,
+    ) -> Result<RawAnimeItem, RepositoryError>;
+    async fn update_status(
+        &self,
+        id: i32,
+        status: &str,
+        parser_id: Option<i32>,
+        error_message: Option<&str>,
+    ) -> Result<(), RepositoryError>;
 }
 
 pub struct DieselRawItemRepository {
@@ -59,7 +75,10 @@ impl RawItemRepository for DieselRawItemRepository {
         .await?
     }
 
-    async fn find_with_filters(&self, filter: RawItemFilter) -> Result<Vec<RawAnimeItem>, RepositoryError> {
+    async fn find_with_filters(
+        &self,
+        filter: RawItemFilter,
+    ) -> Result<Vec<RawAnimeItem>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -83,7 +102,14 @@ impl RawItemRepository for DieselRawItemRepository {
         .await?
     }
 
-    async fn save(&self, title: &str, description: Option<&str>, download_url: &str, pub_date: Option<NaiveDateTime>, subscription_id: i32) -> Result<RawAnimeItem, RepositoryError> {
+    async fn save(
+        &self,
+        title: &str,
+        description: Option<&str>,
+        download_url: &str,
+        pub_date: Option<NaiveDateTime>,
+        subscription_id: i32,
+    ) -> Result<RawAnimeItem, RepositoryError> {
         let pool = self.pool.clone();
         let title = title.to_string();
         let description = description.map(|s| s.to_string());
@@ -109,7 +135,13 @@ impl RawItemRepository for DieselRawItemRepository {
         .await?
     }
 
-    async fn update_status(&self, id: i32, status: &str, parser_id: Option<i32>, error_message: Option<&str>) -> Result<(), RepositoryError> {
+    async fn update_status(
+        &self,
+        id: i32,
+        status: &str,
+        parser_id: Option<i32>,
+        error_message: Option<&str>,
+    ) -> Result<(), RepositoryError> {
         let pool = self.pool.clone();
         let status = status.to_string();
         let error_message = error_message.map(|s| s.to_string());
@@ -175,17 +207,35 @@ pub mod mock {
     #[async_trait]
     impl RawItemRepository for MockRawItemRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<RawAnimeItem>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.items.lock().unwrap().iter().find(|i| i.item_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .items
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|i| i.item_id == id)
+                .cloned())
         }
 
-        async fn find_with_filters(&self, filter: RawItemFilter) -> Result<Vec<RawAnimeItem>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_with_filters:status={:?}", filter.status));
+        async fn find_with_filters(
+            &self,
+            filter: RawItemFilter,
+        ) -> Result<Vec<RawAnimeItem>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_with_filters:status={:?}", filter.status));
             let items = self.items.lock().unwrap();
-            let mut result: Vec<RawAnimeItem> = items.iter()
+            let mut result: Vec<RawAnimeItem> = items
+                .iter()
                 .filter(|i| {
                     let status_match = filter.status.as_ref().map_or(true, |s| &i.status == s);
-                    let sub_match = filter.subscription_id.map_or(true, |id| i.subscription_id == id);
+                    let sub_match = filter
+                        .subscription_id
+                        .map_or(true, |id| i.subscription_id == id);
                     status_match && sub_match
                 })
                 .cloned()
@@ -196,8 +246,18 @@ pub mod mock {
             Ok(result.into_iter().skip(start).take(end - start).collect())
         }
 
-        async fn save(&self, title: &str, description: Option<&str>, download_url: &str, pub_date: Option<NaiveDateTime>, subscription_id: i32) -> Result<RawAnimeItem, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("save:{}", title));
+        async fn save(
+            &self,
+            title: &str,
+            description: Option<&str>,
+            download_url: &str,
+            pub_date: Option<NaiveDateTime>,
+            subscription_id: i32,
+        ) -> Result<RawAnimeItem, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("save:{}", title));
             let mut items = self.items.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let now = Utc::now().naive_utc();
@@ -219,8 +279,17 @@ pub mod mock {
             Ok(new_item)
         }
 
-        async fn update_status(&self, id: i32, status: &str, parser_id: Option<i32>, error_message: Option<&str>) -> Result<(), RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update_status:{}:{}", id, status));
+        async fn update_status(
+            &self,
+            id: i32,
+            status: &str,
+            parser_id: Option<i32>,
+            error_message: Option<&str>,
+        ) -> Result<(), RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update_status:{}:{}", id, status));
             let mut items = self.items.lock().unwrap();
             if let Some(item) = items.iter_mut().find(|i| i.item_id == id) {
                 item.status = status.to_string();
@@ -235,13 +304,22 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockRawItemRepository;
+    use super::*;
 
     #[tokio::test]
     async fn test_mock_raw_item_repository_save() {
         let repo = MockRawItemRepository::new();
-        let item = repo.save("Test Title", Some("Description"), "http://example.com", None, 1).await.unwrap();
+        let item = repo
+            .save(
+                "Test Title",
+                Some("Description"),
+                "http://example.com",
+                None,
+                1,
+            )
+            .await
+            .unwrap();
         assert_eq!(item.item_id, 1);
         assert_eq!(item.title, "Test Title");
         assert_eq!(item.status, "pending");
@@ -305,7 +383,9 @@ mod tests {
         };
         let repo = MockRawItemRepository::with_data(vec![item]);
 
-        repo.update_status(1, "parsed", Some(5), None).await.unwrap();
+        repo.update_status(1, "parsed", Some(5), None)
+            .await
+            .unwrap();
 
         let updated = repo.find_by_id(1).await.unwrap().unwrap();
         assert_eq!(updated.status, "parsed");

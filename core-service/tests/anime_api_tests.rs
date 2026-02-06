@@ -7,8 +7,8 @@ use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
 
 // Re-export modules from the core-service library
-use core_service::schema::*;
 use core_service::models::*;
+use core_service::schema::*;
 
 type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConnection>>;
 
@@ -18,8 +18,9 @@ type DbPool = diesel::r2d2::Pool<diesel::r2d2::ConnectionManager<diesel::PgConne
 /// The database URL should be provided via DATABASE_TEST_URL environment variable.
 /// Falls back to localhost if not set.
 fn setup_test_db() -> Result<DbPool, String> {
-    let database_url = std::env::var("DATABASE_TEST_URL")
-        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_password@localhost:5432/bangumi_test".to_string());
+    let database_url = std::env::var("DATABASE_TEST_URL").unwrap_or_else(|_| {
+        "postgresql://bangumi:bangumi_password@localhost:5432/bangumi_test".to_string()
+    });
 
     let manager = diesel::r2d2::ConnectionManager::<diesel::PgConnection>::new(&database_url);
     let pool = diesel::r2d2::Pool::builder()
@@ -44,7 +45,8 @@ fn setup_test_db() -> Result<DbPool, String> {
 #[ignore]
 fn test_create_anime() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
@@ -74,7 +76,8 @@ fn test_create_anime() -> Result<(), String> {
 #[ignore]
 fn test_get_anime_by_id() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // First create an anime
@@ -113,7 +116,8 @@ fn test_get_anime_by_id() -> Result<(), String> {
 #[ignore]
 fn test_get_all_animes() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Create a test anime
@@ -148,7 +152,8 @@ fn test_get_all_animes() -> Result<(), String> {
 #[ignore]
 fn test_update_anime() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Create an anime
@@ -190,7 +195,8 @@ fn test_update_anime() -> Result<(), String> {
 #[ignore]
 fn test_delete_anime() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Create an anime
@@ -237,7 +243,8 @@ fn test_delete_anime() -> Result<(), String> {
 #[ignore]
 fn test_create_season() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let new_season = NewSeason {
@@ -267,7 +274,8 @@ fn test_create_season() -> Result<(), String> {
 #[ignore]
 fn test_get_or_create_season() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let year = 2024;
@@ -310,7 +318,10 @@ fn test_get_or_create_season() -> Result<(), String> {
     };
 
     assert_eq!(season_1.season_id, season_2.season_id);
-    println!("Get or create season idempotence verified: ID {}", season_1.season_id);
+    println!(
+        "Get or create season idempotence verified: ID {}",
+        season_1.season_id
+    );
 
     Ok(())
 }
@@ -325,7 +336,8 @@ fn test_get_or_create_season() -> Result<(), String> {
 #[ignore]
 fn test_create_anime_series() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Create prerequisite anime
@@ -385,7 +397,8 @@ fn test_create_anime_series() -> Result<(), String> {
 #[ignore]
 fn test_get_anime_series_by_anime() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     // Create prerequisite anime
@@ -439,7 +452,11 @@ fn test_get_anime_series_by_anime() -> Result<(), String> {
         .map_err(|e| format!("Failed to load series: {}", e))?;
 
     assert_eq!(series_list.len(), 2);
-    println!("Retrieved {} series for anime ID {}", series_list.len(), anime.anime_id);
+    println!(
+        "Retrieved {} series for anime ID {}",
+        series_list.len(),
+        anime.anime_id
+    );
 
     Ok(())
 }
@@ -454,7 +471,8 @@ fn test_get_anime_series_by_anime() -> Result<(), String> {
 #[ignore]
 fn test_create_subtitle_group() -> Result<(), String> {
     let pool = setup_test_db()?;
-    let mut conn = pool.get()
+    let mut conn = pool
+        .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let new_group = NewSubtitleGroup {
@@ -481,7 +499,12 @@ fn test_create_subtitle_group() -> Result<(), String> {
 /// Useful for creating unique anime titles to avoid conflicts in tests
 #[allow(dead_code)]
 fn generate_unique_title(prefix: &str) -> String {
-    format!("{}_{}_{}", prefix, std::process::id(), Utc::now().timestamp())
+    format!(
+        "{}_{}_{}",
+        prefix,
+        std::process::id(),
+        Utc::now().timestamp()
+    )
 }
 
 /// Helper: Generate test season name with timestamp
@@ -489,7 +512,12 @@ fn generate_unique_title(prefix: &str) -> String {
 /// Useful for creating unique season combinations
 #[allow(dead_code)]
 fn generate_unique_season(prefix: &str) -> String {
-    format!("{}_{}_{}", prefix, std::process::id(), Utc::now().timestamp())
+    format!(
+        "{}_{}_{}",
+        prefix,
+        std::process::id(),
+        Utc::now().timestamp()
+    )
 }
 
 /// Helper: Generate test subtitle group name with timestamp
@@ -497,5 +525,10 @@ fn generate_unique_season(prefix: &str) -> String {
 /// Useful for creating unique group names
 #[allow(dead_code)]
 fn generate_unique_group_name(prefix: &str) -> String {
-    format!("{}_{}_{}", prefix, std::process::id(), Utc::now().timestamp())
+    format!(
+        "{}_{}_{}",
+        prefix,
+        std::process::id(),
+        Utc::now().timestamp()
+    )
 }

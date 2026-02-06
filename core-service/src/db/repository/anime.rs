@@ -2,10 +2,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 use diesel::prelude::*;
 
+use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::{Anime, NewAnime};
 use crate::schema::animes;
-use super::RepositoryError;
 
 #[async_trait]
 pub trait AnimeRepository: Send + Sync {
@@ -105,8 +105,7 @@ impl AnimeRepository for DieselAnimeRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let rows_deleted = diesel::delete(animes::table.find(id))
-                .execute(&mut conn)?;
+            let rows_deleted = diesel::delete(animes::table.find(id)).execute(&mut conn)?;
             Ok(rows_deleted > 0)
         })
         .await?
@@ -181,16 +180,28 @@ pub mod mock {
     #[async_trait]
     impl AnimeRepository for MockAnimeRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<Anime>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.animes.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .animes
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|a| a.anime_id == id)
                 .cloned())
         }
 
         async fn find_by_title(&self, title: &str) -> Result<Option<Anime>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_title:{}", title));
-            Ok(self.animes.lock().unwrap()
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_title:{}", title));
+            Ok(self
+                .animes
+                .lock()
+                .unwrap()
                 .iter()
                 .find(|a| a.title == title)
                 .cloned())
@@ -202,7 +213,10 @@ pub mod mock {
         }
 
         async fn create(&self, title: String) -> Result<Anime, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{}", title));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{}", title));
             let mut animes = self.animes.lock().unwrap();
             let id = animes.len() as i32 + 1;
             let now = Utc::now().naive_utc();
@@ -217,7 +231,10 @@ pub mod mock {
         }
 
         async fn update(&self, id: i32, title: String) -> Result<Anime, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("update:{}:{}", id, title));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("update:{}:{}", id, title));
             let mut animes = self.animes.lock().unwrap();
             if let Some(pos) = animes.iter().position(|a| a.anime_id == id) {
                 animes[pos].title = title;
@@ -229,7 +246,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut animes = self.animes.lock().unwrap();
             let len_before = animes.len();
             animes.retain(|a| a.anime_id != id);
@@ -237,7 +257,10 @@ pub mod mock {
         }
 
         async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_or_create:{}", title));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_or_create:{}", title));
             // Try to find existing
             {
                 let animes = self.animes.lock().unwrap();

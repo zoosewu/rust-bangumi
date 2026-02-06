@@ -1,16 +1,16 @@
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use serde_json::json;
 
-use crate::state::AppState;
 use crate::db::CreateAnimeSeriesParams;
 use crate::dto::{
-    AnimeRequest, AnimeResponse, SeasonRequest, SeasonResponse, AnimeSeriesRequest,
-    AnimeSeriesResponse, SubtitleGroupRequest, SubtitleGroupResponse,
+    AnimeRequest, AnimeResponse, AnimeSeriesRequest, AnimeSeriesResponse, SeasonRequest,
+    SeasonResponse, SubtitleGroupRequest, SubtitleGroupResponse,
 };
+use crate::state::AppState;
 
 // ============ Anime Handlers ============
 
@@ -44,9 +44,7 @@ pub async fn create_anime(
 }
 
 /// List all animes
-pub async fn list_anime(
-    State(state): State<AppState>,
-) -> (StatusCode, Json<serde_json::Value>) {
+pub async fn list_anime(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     match state.repos.anime.find_all().await {
         Ok(anime_list) => {
             let responses: Vec<AnimeResponse> = anime_list
@@ -154,7 +152,12 @@ pub async fn create_season(
     State(state): State<AppState>,
     Json(payload): Json<SeasonRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    match state.repos.season.create(payload.year, payload.season).await {
+    match state
+        .repos
+        .season
+        .create(payload.year, payload.season)
+        .await
+    {
         Ok(season) => {
             tracing::info!("Created season: {}", season.season_id);
             let response = SeasonResponse {
@@ -179,9 +182,7 @@ pub async fn create_season(
 }
 
 /// List all seasons
-pub async fn list_seasons(
-    State(state): State<AppState>,
-) -> (StatusCode, Json<serde_json::Value>) {
+pub async fn list_seasons(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     match state.repos.season.find_all().await {
         Ok(season_list) => {
             let responses: Vec<SeasonResponse> = season_list
@@ -320,7 +321,11 @@ pub async fn list_anime_series(
                     updated_at: s.updated_at,
                 })
                 .collect();
-            tracing::info!("Listed {} anime series for anime {}", responses.len(), anime_id);
+            tracing::info!(
+                "Listed {} anime series for anime {}",
+                responses.len(),
+                anime_id
+            );
             (StatusCode::OK, Json(json!({ "series": responses })))
         }
         Err(e) => {
@@ -436,13 +441,13 @@ mod tests {
     use super::*;
     use crate::db::repository::anime::mock::MockAnimeRepository;
     use crate::db::repository::anime::AnimeRepository;
-    use crate::db::repository::season::mock::MockSeasonRepository;
-    use crate::db::repository::season::SeasonRepository;
     use crate::db::repository::anime_series::mock::MockAnimeSeriesRepository;
     use crate::db::repository::anime_series::AnimeSeriesRepository;
+    use crate::db::repository::season::mock::MockSeasonRepository;
+    use crate::db::repository::season::SeasonRepository;
     use crate::db::repository::subtitle_group::mock::MockSubtitleGroupRepository;
     use crate::db::repository::subtitle_group::SubtitleGroupRepository;
-    use crate::models::{Anime, Season, AnimeSeries, SubtitleGroup};
+    use crate::models::{Anime, AnimeSeries, Season, SubtitleGroup};
     use chrono::Utc;
 
     // ============ Anime Repository Tests ============

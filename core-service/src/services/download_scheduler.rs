@@ -1,10 +1,10 @@
+use diesel::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
-use diesel::prelude::*;
 
 use crate::db::DbPool;
-use crate::models::{Download, ServiceModule, ModuleTypeEnum};
+use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{downloads, service_modules};
 use shared::StatusQueryResponse;
 
@@ -228,10 +228,7 @@ impl DownloadScheduler {
         }
     }
 
-    async fn query_downloader_status(
-        &self,
-        url: &str,
-    ) -> Result<StatusQueryResponse, String> {
+    async fn query_downloader_status(&self, url: &str) -> Result<StatusQueryResponse, String> {
         let response = self
             .http_client
             .get(url)

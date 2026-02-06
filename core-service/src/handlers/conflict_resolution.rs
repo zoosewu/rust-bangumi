@@ -1,15 +1,15 @@
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use chrono::Utc;
-use serde_json::json;
 use diesel::prelude::*;
+use serde_json::json;
 
+use crate::models::{ModuleTypeEnum, SubscriptionConflict};
+use crate::schema::{service_modules, subscription_conflicts, subscriptions};
 use crate::state::AppState;
-use crate::models::{SubscriptionConflict, ModuleTypeEnum};
-use crate::schema::{subscription_conflicts, subscriptions, service_modules};
 
 // ============ DTOs ============
 
@@ -65,7 +65,8 @@ pub async fn get_pending_conflicts(
                         };
 
                         // Parse conflict_data to extract candidate fetchers
-                        let candidate_fetchers = parse_candidate_fetchers(&conflict.conflict_data, &mut conn);
+                        let candidate_fetchers =
+                            parse_candidate_fetchers(&conflict.conflict_data, &mut conn);
 
                         // Parse conflict_data as JSON
                         let conflict_data = serde_json::from_str(&conflict.conflict_data)
@@ -191,7 +192,7 @@ pub async fn resolve_conflict(
             // 4. Update subscriptions table with the resolved fetcher
             let update_subscription_result = diesel::update(
                 subscriptions::table
-                    .filter(subscriptions::subscription_id.eq(conflict.subscription_id))
+                    .filter(subscriptions::subscription_id.eq(conflict.subscription_id)),
             )
             .set(subscriptions::fetcher_id.eq(payload.fetcher_id))
             .execute(&mut conn);
@@ -216,7 +217,7 @@ pub async fn resolve_conflict(
 
             let update_conflict_result = diesel::update(
                 subscription_conflicts::table
-                    .filter(subscription_conflicts::conflict_id.eq(conflict_id))
+                    .filter(subscription_conflicts::conflict_id.eq(conflict_id)),
             )
             .set((
                 subscription_conflicts::resolution_status.eq("resolved"),
@@ -271,7 +272,10 @@ pub async fn resolve_conflict(
 // ============ Helper Functions ============
 
 /// Parse candidate fetchers from conflict_data JSON
-fn parse_candidate_fetchers(conflict_data: &str, conn: &mut diesel::PgConnection) -> Vec<CandidateFetcher> {
+fn parse_candidate_fetchers(
+    conflict_data: &str,
+    conn: &mut diesel::PgConnection,
+) -> Vec<CandidateFetcher> {
     if let Ok(data) = serde_json::from_str::<serde_json::Value>(conflict_data) {
         if let Some(fetcher_ids) = data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
             let mut fetchers = Vec::new();

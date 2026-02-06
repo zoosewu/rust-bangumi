@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use shared::models::RawFetcherResultsPayload;
+use std::sync::Arc;
 
 use crate::http_client::{HttpClient, HttpError};
 use crate::RssParser;
@@ -40,13 +40,14 @@ impl<C: HttpClient> FetchTask<C> {
     }
 
     /// 執行新架構的 RSS 抓取並回傳原始項目 payload
-    pub async fn execute(&self, rss_url: &str, subscription_id: i32) -> Result<RawFetcherResultsPayload, FetchTaskError> {
+    pub async fn execute(
+        &self,
+        rss_url: &str,
+        subscription_id: i32,
+    ) -> Result<RawFetcherResultsPayload, FetchTaskError> {
         match self.parser.fetch_raw_items(rss_url).await {
             Ok(items) => {
-                tracing::info!(
-                    "Fetch successful: {} raw items",
-                    items.len()
-                );
+                tracing::info!("Fetch successful: {} raw items", items.len());
                 Ok(RawFetcherResultsPayload {
                     subscription_id,
                     items,
@@ -82,7 +83,9 @@ impl<C: HttpClient> FetchTask<C> {
         } else {
             let err_msg = format!("Core service returned error: {}", response.status);
             tracing::error!("{}", err_msg);
-            Err(FetchTaskError::CallbackError(HttpError::RequestFailed(err_msg)))
+            Err(FetchTaskError::CallbackError(HttpError::RequestFailed(
+                err_msg,
+            )))
         }
     }
 
@@ -137,7 +140,9 @@ mod tests {
             error_message: None,
         };
 
-        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
+        let result = task
+            .send_callback("http://core/raw-fetcher-results", &payload)
+            .await;
 
         assert!(result.is_ok());
 
@@ -164,16 +169,17 @@ mod tests {
             error_message: Some("parse error".to_string()),
         };
 
-        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
+        let result = task
+            .send_callback("http://core/raw-fetcher-results", &payload)
+            .await;
 
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_send_callback_handles_network_error() {
-        let mock_client = MockHttpClient::with_error(
-            HttpError::RequestFailed("connection refused".to_string())
-        );
+        let mock_client =
+            MockHttpClient::with_error(HttpError::RequestFailed("connection refused".to_string()));
         let task = create_test_task(mock_client);
 
         let payload = RawFetcherResultsPayload {
@@ -184,7 +190,9 @@ mod tests {
             error_message: None,
         };
 
-        let result = task.send_callback("http://core/raw-fetcher-results", &payload).await;
+        let result = task
+            .send_callback("http://core/raw-fetcher-results", &payload)
+            .await;
 
         assert!(result.is_err());
         match result.unwrap_err() {

@@ -1,15 +1,19 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
 
-use crate::db::DbPool;
-use crate::models::{FilterRule, NewFilterRule, FilterTargetType};
-use crate::schema::filter_rules;
 use super::RepositoryError;
+use crate::db::DbPool;
+use crate::models::{FilterRule, FilterTargetType, NewFilterRule};
+use crate::schema::filter_rules;
 
 #[async_trait]
 pub trait FilterRuleRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<FilterRule>, RepositoryError>;
-    async fn find_by_target(&self, target_type: FilterTargetType, target_id: Option<i32>) -> Result<Vec<FilterRule>, RepositoryError>;
+    async fn find_by_target(
+        &self,
+        target_type: FilterTargetType,
+        target_id: Option<i32>,
+    ) -> Result<Vec<FilterRule>, RepositoryError>;
     async fn create(&self, rule: NewFilterRule) -> Result<FilterRule, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
 }
@@ -39,7 +43,11 @@ impl FilterRuleRepository for DieselFilterRuleRepository {
         .await?
     }
 
-    async fn find_by_target(&self, target_type: FilterTargetType, target_id: Option<i32>) -> Result<Vec<FilterRule>, RepositoryError> {
+    async fn find_by_target(
+        &self,
+        target_type: FilterTargetType,
+        target_id: Option<i32>,
+    ) -> Result<Vec<FilterRule>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
@@ -129,14 +137,31 @@ pub mod mock {
     #[async_trait]
     impl FilterRuleRepository for MockFilterRuleRepository {
         async fn find_by_id(&self, id: i32) -> Result<Option<FilterRule>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_id:{}", id));
-            Ok(self.rules.lock().unwrap().iter().find(|r| r.rule_id == id).cloned())
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_id:{}", id));
+            Ok(self
+                .rules
+                .lock()
+                .unwrap()
+                .iter()
+                .find(|r| r.rule_id == id)
+                .cloned())
         }
 
-        async fn find_by_target(&self, target_type: FilterTargetType, target_id: Option<i32>) -> Result<Vec<FilterRule>, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("find_by_target:{:?}:{:?}", target_type, target_id));
+        async fn find_by_target(
+            &self,
+            target_type: FilterTargetType,
+            target_id: Option<i32>,
+        ) -> Result<Vec<FilterRule>, RepositoryError> {
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("find_by_target:{:?}:{:?}", target_type, target_id));
             let rules = self.rules.lock().unwrap();
-            let mut result: Vec<FilterRule> = rules.iter()
+            let mut result: Vec<FilterRule> = rules
+                .iter()
                 .filter(|r| r.target_type == target_type && r.target_id == target_id)
                 .cloned()
                 .collect();
@@ -145,7 +170,10 @@ pub mod mock {
         }
 
         async fn create(&self, rule: NewFilterRule) -> Result<FilterRule, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("create:{:?}", rule.target_type));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("create:{:?}", rule.target_type));
             let mut rules = self.rules.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
             let new_rule = FilterRule {
@@ -164,7 +192,10 @@ pub mod mock {
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
-            self.operations.lock().unwrap().push(format!("delete:{}", id));
+            self.operations
+                .lock()
+                .unwrap()
+                .push(format!("delete:{}", id));
             let mut rules = self.rules.lock().unwrap();
             let original_len = rules.len();
             rules.retain(|r| r.rule_id != id);
@@ -175,8 +206,8 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::mock::MockFilterRuleRepository;
+    use super::*;
     use chrono::Utc;
 
     #[tokio::test]
@@ -222,10 +253,16 @@ mod tests {
         };
         let repo = MockFilterRuleRepository::with_data(vec![rule1, rule2]);
 
-        let global_rules = repo.find_by_target(FilterTargetType::Global, None).await.unwrap();
+        let global_rules = repo
+            .find_by_target(FilterTargetType::Global, None)
+            .await
+            .unwrap();
         assert_eq!(global_rules.len(), 1);
 
-        let sub_rules = repo.find_by_target(FilterTargetType::Anime, Some(10)).await.unwrap();
+        let sub_rules = repo
+            .find_by_target(FilterTargetType::Anime, Some(10))
+            .await
+            .unwrap();
         assert_eq!(sub_rules.len(), 1);
     }
 

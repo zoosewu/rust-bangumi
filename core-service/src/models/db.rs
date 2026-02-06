@@ -1,9 +1,17 @@
-use diesel::prelude::*;
 use chrono::{NaiveDate, NaiveDateTime};
+use diesel::prelude::*;
 use std::io::Write;
 
 // ============ FilterTargetType ENUM ============
-#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    diesel::deserialize::FromSqlRow,
+    diesel::expression::AsExpression,
+)]
 #[diesel(sql_type = crate::schema::sql_types::FilterTargetType)]
 pub enum FilterTargetType {
     Global,
@@ -13,7 +21,9 @@ pub enum FilterTargetType {
     Fetcher,
 }
 
-impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg> for FilterTargetType {
+impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg>
+    for FilterTargetType
+{
     fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"global" => Ok(FilterTargetType::Global),
@@ -26,8 +36,13 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, di
     }
 }
 
-impl diesel::serialize::ToSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg> for FilterTargetType {
-    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+impl diesel::serialize::ToSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg>
+    for FilterTargetType
+{
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>,
+    ) -> diesel::serialize::Result {
         match *self {
             FilterTargetType::Global => out.write_all(b"global")?,
             FilterTargetType::Anime => out.write_all(b"anime")?,
@@ -67,7 +82,15 @@ impl std::str::FromStr for FilterTargetType {
 }
 
 // ============ ModuleType ENUM ============
-#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    diesel::deserialize::FromSqlRow,
+    diesel::expression::AsExpression,
+)]
 #[diesel(sql_type = crate::schema::sql_types::ModuleType)]
 pub enum ModuleTypeEnum {
     Fetcher,
@@ -75,7 +98,9 @@ pub enum ModuleTypeEnum {
     Viewer,
 }
 
-impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg> for ModuleTypeEnum {
+impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg>
+    for ModuleTypeEnum
+{
     fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"fetcher" => Ok(ModuleTypeEnum::Fetcher),
@@ -86,8 +111,13 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::
     }
 }
 
-impl diesel::serialize::ToSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg> for ModuleTypeEnum {
-    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+impl diesel::serialize::ToSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg>
+    for ModuleTypeEnum
+{
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>,
+    ) -> diesel::serialize::Result {
         match *self {
             ModuleTypeEnum::Fetcher => out.write_all(b"fetcher")?,
             ModuleTypeEnum::Downloader => out.write_all(b"downloader")?,
@@ -424,14 +454,24 @@ pub struct NewSubscriptionConflict {
 }
 
 // ============ ParserSourceType ENUM ============
-#[derive(Debug, Clone, Copy, PartialEq, Eq, diesel::deserialize::FromSqlRow, diesel::expression::AsExpression)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    diesel::deserialize::FromSqlRow,
+    diesel::expression::AsExpression,
+)]
 #[diesel(sql_type = crate::schema::sql_types::ParserSourceType)]
 pub enum ParserSourceType {
     Regex,
     Static,
 }
 
-impl diesel::deserialize::FromSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg> for ParserSourceType {
+impl diesel::deserialize::FromSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg>
+    for ParserSourceType
+{
     fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"regex" => Ok(ParserSourceType::Regex),
@@ -441,8 +481,13 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::ParserSourceType, di
     }
 }
 
-impl diesel::serialize::ToSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg> for ParserSourceType {
-    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>) -> diesel::serialize::Result {
+impl diesel::serialize::ToSql<crate::schema::sql_types::ParserSourceType, diesel::pg::Pg>
+    for ParserSourceType
+{
+    fn to_sql<'b>(
+        &'b self,
+        out: &mut diesel::serialize::Output<'b, '_, diesel::pg::Pg>,
+    ) -> diesel::serialize::Result {
         match *self {
             ParserSourceType::Regex => out.write_all(b"regex")?,
             ParserSourceType::Static => out.write_all(b"static")?,

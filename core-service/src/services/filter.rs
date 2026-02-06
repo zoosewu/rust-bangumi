@@ -1,5 +1,5 @@
-use regex::Regex;
 use crate::models::{FilterRule, FilterTargetType};
+use regex::Regex;
 
 pub struct FilterEngine {
     rules: Vec<FilterRule>,
@@ -16,7 +16,9 @@ impl FilterEngine {
         rules.sort_by(|a, b| {
             let priority_a = Self::target_type_priority(&a.target_type);
             let priority_b = Self::target_type_priority(&b.target_type);
-            priority_a.cmp(&priority_b).then(a.rule_order.cmp(&b.rule_order))
+            priority_a
+                .cmp(&priority_b)
+                .then(a.rule_order.cmp(&b.rule_order))
         });
         Self { rules }
     }
@@ -84,7 +86,13 @@ mod tests {
         }
     }
 
-    fn create_rule_with_type(id: i32, is_positive: bool, pattern: &str, target_type: FilterTargetType, target_id: Option<i32>) -> FilterRule {
+    fn create_rule_with_type(
+        id: i32,
+        is_positive: bool,
+        pattern: &str,
+        target_type: FilterTargetType,
+        target_id: Option<i32>,
+    ) -> FilterRule {
         let now = Utc::now().naive_utc();
         FilterRule {
             rule_id: id,

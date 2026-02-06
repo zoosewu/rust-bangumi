@@ -387,7 +387,8 @@ mod tests {
             "total": 2
         });
 
-        let response: ListResponse<RegisteredService> = serde_json::from_value(services_response).unwrap();
+        let response: ListResponse<RegisteredService> =
+            serde_json::from_value(services_response).unwrap();
         assert_eq!(response.items.len(), 2);
 
         let fetcher = &response.items[0];
@@ -461,12 +462,7 @@ mod tests {
     /// Task 44: 驗證正則表達式模式
     #[test]
     fn test_filter_regex_patterns() {
-        let patterns = vec![
-            ".*720p.*",
-            ".*1080p.*",
-            "^EP\\d+",
-            "[CHD].*",
-        ];
+        let patterns = vec![".*720p.*", ".*1080p.*", "^EP\\d+", "[CHD].*"];
 
         for pattern in patterns {
             let request = CreateFilterRuleRequest {

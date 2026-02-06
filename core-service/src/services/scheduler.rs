@@ -1,12 +1,12 @@
+use chrono::Utc;
+use diesel::prelude::*;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
-use chrono::Utc;
-use diesel::prelude::*;
 
 use crate::db::DbPool;
-use crate::models::{Subscription, ServiceModule, ModuleTypeEnum, NewCronLog};
-use crate::schema::{subscriptions, service_modules, cron_logs};
+use crate::models::{ModuleTypeEnum, NewCronLog, ServiceModule, Subscription};
+use crate::schema::{cron_logs, service_modules, subscriptions};
 
 pub struct FetchScheduler {
     db_pool: DbPool,
@@ -28,9 +28,9 @@ impl FetchScheduler {
     pub fn new(db_pool: DbPool) -> Self {
         Self {
             db_pool,
-            check_interval_secs: 60,  // 每 60 秒檢查一次
+            check_interval_secs: 60, // 每 60 秒檢查一次
             max_retries: 3,
-            base_retry_delay_secs: 60,  // 初始重試延遲 60 秒
+            base_retry_delay_secs: 60, // 初始重試延遲 60 秒
         }
     }
 
@@ -161,7 +161,9 @@ impl FetchScheduler {
 
             match client.post(&fetch_url).json(&request).send().await {
                 Ok(response) => {
-                    if response.status().is_success() || response.status() == reqwest::StatusCode::ACCEPTED {
+                    if response.status().is_success()
+                        || response.status() == reqwest::StatusCode::ACCEPTED
+                    {
                         tracing::info!(
                             "Successfully triggered fetch for subscription {}",
                             task.subscription_id
@@ -193,8 +195,7 @@ impl FetchScheduler {
 
         Err(format!(
             "Failed after {} attempts: {}",
-            self.max_retries,
-            last_error
+            self.max_retries, last_error
         ))
     }
 
@@ -204,7 +205,11 @@ impl FetchScheduler {
             let now = Utc::now().naive_utc();
             let log = NewCronLog {
                 fetcher_type: format!("subscription_{}", task.subscription_id),
-                status: if success { "success".to_string() } else { "failed".to_string() },
+                status: if success {
+                    "success".to_string()
+                } else {
+                    "failed".to_string()
+                },
                 error_message: error.map(|e| e.to_string()),
                 attempt_count: 1,
                 executed_at: now,
@@ -232,9 +237,9 @@ mod tests {
         // Test that default configuration values are sensible
         // We can't instantiate FetchScheduler without a real DbPool,
         // but we can document expected defaults here.
-        let expected_check_interval = 60;  // seconds
+        let expected_check_interval = 60; // seconds
         let expected_max_retries = 3;
-        let expected_base_retry_delay = 60;  // seconds
+        let expected_base_retry_delay = 60; // seconds
 
         // These values should match the defaults in FetchScheduler::new()
         assert_eq!(expected_check_interval, 60);
