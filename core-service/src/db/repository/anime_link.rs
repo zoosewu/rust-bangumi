@@ -155,6 +155,7 @@ pub mod mock {
                 filtered_flag: link.filtered_flag,
                 created_at: link.created_at,
                 raw_item_id: link.raw_item_id,
+                download_type: link.download_type,
             };
             *next_id += 1;
             links.push(new_link.clone());
@@ -191,6 +192,7 @@ mod tests {
             filtered_flag: false,
             created_at: now,
             raw_item_id: None,
+            download_type: Some("http".to_string()),
         };
         let created = repo.create(link).await.unwrap();
         assert_eq!(created.link_id, 1);

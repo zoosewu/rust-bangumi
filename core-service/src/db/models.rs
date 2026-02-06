@@ -345,6 +345,7 @@ pub fn create_anime_link(
         filtered_flag,
         created_at: now,
         raw_item_id: None,
+        download_type: None,
     };
 
     diesel::insert_into(anime_links::table)
@@ -518,6 +519,8 @@ pub fn create_download(
         status: "pending".to_string(),
         created_at: now,
         updated_at: now,
+        module_id: None,
+        torrent_hash: None,
     };
 
     diesel::insert_into(downloads::table)

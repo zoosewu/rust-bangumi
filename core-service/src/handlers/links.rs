@@ -21,11 +21,13 @@ pub async fn create_anime_link(
         group_id: payload.group_id,
         episode_no: payload.episode_no,
         title: payload.title,
-        url: payload.url,
+        url: payload.url.clone(),
         source_hash: payload.source_hash,
-        filtered_flag: false, // Default to false
+        filtered_flag: false,
         created_at: now,
         raw_item_id: None,
+        download_type: crate::services::download_type_detector::detect_download_type(&payload.url)
+            .map(|dt| dt.to_string()),
     };
 
     match state.repos.anime_link.create(new_link).await {

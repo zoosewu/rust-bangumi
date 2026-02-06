@@ -211,6 +211,7 @@ pub struct AnimeLink {
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
     pub raw_item_id: Option<i32>,
+    pub download_type: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -225,6 +226,7 @@ pub struct NewAnimeLink {
     pub filtered_flag: bool,
     pub created_at: NaiveDateTime,
     pub raw_item_id: Option<i32>,
+    pub download_type: Option<String>,
 }
 
 // ============ FilterRules ============
@@ -267,6 +269,8 @@ pub struct Download {
     pub error_message: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub module_id: Option<i32>,
+    pub torrent_hash: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -277,6 +281,16 @@ pub struct NewDownload {
     pub status: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub module_id: Option<i32>,
+    pub torrent_hash: Option<String>,
+}
+
+// ============ DownloaderCapabilities ============
+#[derive(Queryable, Selectable, Insertable, Debug, Clone)]
+#[diesel(table_name = crate::schema::downloader_capabilities)]
+pub struct DownloaderCapability {
+    pub module_id: i32,
+    pub download_type: String,
 }
 
 // ============ CronLogs ============

@@ -382,6 +382,7 @@ fn create_anime_link(
         filtered_flag: false,
         created_at: now,
         raw_item_id: None,
+        download_type: None,
     };
 
     diesel::insert_into(anime_links::table)
@@ -613,6 +614,7 @@ fn process_parsed_result(
         filtered_flag: false,
         created_at: now,
         raw_item_id: Some(raw_item.item_id),
+        download_type: None,
     };
 
     diesel::insert_into(anime_links::table)
