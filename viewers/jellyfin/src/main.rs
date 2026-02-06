@@ -5,8 +5,8 @@ use axum::{
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-mod handlers;
 mod file_organizer;
+mod handlers;
 
 use file_organizer::FileOrganizer;
 
@@ -29,10 +29,9 @@ async fn main() -> anyhow::Result<()> {
     register_to_core().await?;
 
     // Initialize file organizer with paths from environment or defaults
-    let source_dir = std::env::var("DOWNLOADS_DIR")
-        .unwrap_or_else(|_| "/downloads".to_string());
-    let library_dir = std::env::var("JELLYFIN_LIBRARY_DIR")
-        .unwrap_or_else(|_| "/media/jellyfin".to_string());
+    let source_dir = std::env::var("DOWNLOADS_DIR").unwrap_or_else(|_| "/downloads".to_string());
+    let library_dir =
+        std::env::var("JELLYFIN_LIBRARY_DIR").unwrap_or_else(|_| "/media/jellyfin".to_string());
 
     let organizer = Arc::new(FileOrganizer::new(
         std::path::PathBuf::from(source_dir),
@@ -62,8 +61,8 @@ async fn register_to_core() -> anyhow::Result<()> {
         .unwrap_or_else(|_| "http://core-service:8000".to_string());
 
     // 本地開發時設為 localhost，Docker 環境使用容器名稱
-    let service_host = std::env::var("SERVICE_HOST")
-        .unwrap_or_else(|_| "viewer-jellyfin".to_string());
+    let service_host =
+        std::env::var("SERVICE_HOST").unwrap_or_else(|_| "viewer-jellyfin".to_string());
 
     let registration = shared::ServiceRegistration {
         service_type: shared::ServiceType::Viewer,
@@ -74,6 +73,7 @@ async fn register_to_core() -> anyhow::Result<()> {
             fetch_endpoint: None,
             download_endpoint: None,
             sync_endpoint: Some("/sync".to_string()),
+            supported_download_types: vec![],
         },
     };
 

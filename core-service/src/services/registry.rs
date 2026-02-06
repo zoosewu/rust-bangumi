@@ -1,8 +1,8 @@
+use chrono::Utc;
+use shared::{RegisteredService, ServiceType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use chrono::Utc;
 use uuid::Uuid;
-use shared::{ServiceType, RegisteredService};
 
 pub struct ServiceRegistry {
     services: Arc<Mutex<HashMap<Uuid, RegisteredService>>>,
@@ -31,7 +31,10 @@ impl ServiceRegistry {
         Ok(services.values().cloned().collect())
     }
 
-    pub fn get_services_by_type(&self, service_type: &ServiceType) -> Result<Vec<RegisteredService>, String> {
+    pub fn get_services_by_type(
+        &self,
+        service_type: &ServiceType,
+    ) -> Result<Vec<RegisteredService>, String> {
         let services = self.services.lock().map_err(|e| e.to_string())?;
         Ok(services
             .values()
@@ -79,7 +82,7 @@ impl Clone for ServiceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shared::{ServiceRegistration, Capabilities};
+    use shared::{Capabilities, ServiceRegistration};
 
     fn create_test_service(id: Uuid) -> RegisteredService {
         RegisteredService {
@@ -92,6 +95,7 @@ mod tests {
                 fetch_endpoint: Some("/fetch".to_string()),
                 download_endpoint: None,
                 sync_endpoint: None,
+                supported_download_types: vec![],
             },
             is_healthy: true,
             last_heartbeat: Utc::now(),

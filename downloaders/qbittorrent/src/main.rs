@@ -3,6 +3,7 @@ use axum::{
     Router,
 };
 use downloader_qbittorrent::{DownloaderClient, QBittorrentClient};
+use shared::{DownloadType, ServiceRegistration, ServiceType};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -28,6 +29,9 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Arc::new(QBittorrentClient::new(qb_url));
     client.login(&qb_user, &qb_pass).await?;
+
+    // Register with Core service
+    register_with_core().await;
 
     let app = Router::new()
         .route(
@@ -62,4 +66,44 @@ async fn main() -> anyhow::Result<()> {
 
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn register_with_core() {
+    let core_url =
+        std::env::var("CORE_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
+    let service_name =
+        std::env::var("SERVICE_NAME").unwrap_or_else(|_| "qbittorrent-downloader".to_string());
+    let service_host = std::env::var("SERVICE_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let service_port: u16 = std::env::var("SERVICE_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8002);
+
+    let registration = ServiceRegistration {
+        service_type: ServiceType::Downloader,
+        service_name: service_name.clone(),
+        host: service_host,
+        port: service_port,
+        capabilities: shared::Capabilities {
+            fetch_endpoint: None,
+            download_endpoint: Some("/downloads".to_string()),
+            sync_endpoint: None,
+            supported_download_types: vec![DownloadType::Magnet, DownloadType::Torrent],
+        },
+    };
+
+    let url = format!("{}/services/register", core_url);
+    let http_client = reqwest::Client::new();
+
+    match http_client.post(&url).json(&registration).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            tracing::info!("已向核心服務註冊: {} ({})", service_name, url);
+        }
+        Ok(resp) => {
+            tracing::warn!("核心服務註冊回應非成功: {} ({})", resp.status(), url);
+        }
+        Err(e) => {
+            tracing::warn!("無法連接核心服務進行註冊: {} ({})", e, url);
+        }
+    }
 }

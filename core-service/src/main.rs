@@ -1,6 +1,6 @@
 use axum::{
     response::Json,
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -9,13 +9,13 @@ use uuid;
 
 mod config;
 mod cors;
+mod db;
+mod dto;
 mod handlers;
 mod models;
-mod services;
-mod db;
 mod schema;
+mod services;
 mod state;
-mod dto;
 
 use shared;
 
@@ -35,8 +35,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("啟動核心服務");
 
     // 設置數據庫連接池
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://bangumi:bangumi_dev_password@172.20.0.2:5432/bangumi".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgresql://bangumi:bangumi_dev_password@172.20.0.2:5432/bangumi".to_string()
+    });
 
     let pool = db::establish_connection_pool(&database_url)?;
 
@@ -62,7 +63,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("FetchScheduler started");
 
     // 啟動 DownloadScheduler
-    let download_scheduler = std::sync::Arc::new(services::DownloadScheduler::new(app_state.db.clone()));
+    let download_scheduler =
+        std::sync::Arc::new(services::DownloadScheduler::new(app_state.db.clone()));
     let ds_clone = download_scheduler.clone();
     tokio::spawn(async move {
         ds_clone.start().await;
@@ -74,66 +76,122 @@ async fn main() -> anyhow::Result<()> {
         // 服務註冊
         .route("/services/register", post(handlers::services::register))
         .route("/services", get(handlers::services::list_services))
-        .route("/services/:service_type", get(handlers::services::list_by_type))
-        .route("/services/:service_id/health", get(handlers::services::health_check))
-
+        .route(
+            "/services/:service_type",
+            get(handlers::services::list_by_type),
+        )
+        .route(
+            "/services/:service_id/health",
+            get(handlers::services::health_check),
+        )
         // 動畫管理
         .route("/anime", post(handlers::anime::create_anime))
         .route("/anime", get(handlers::anime::list_anime))
         .route("/anime/:anime_id", get(handlers::anime::get_anime))
-        .route("/anime/:anime_id", axum::routing::delete(handlers::anime::delete_anime))
-
+        .route(
+            "/anime/:anime_id",
+            axum::routing::delete(handlers::anime::delete_anime),
+        )
         // 季度管理
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))
-
         // 動畫系列管理
         .route("/anime/series", post(handlers::anime::create_anime_series))
-        .route("/anime/series/:series_id", get(handlers::anime::get_anime_series))
-        .route("/anime/:anime_id/series", get(handlers::anime::list_anime_series))
-
+        .route(
+            "/anime/series/:series_id",
+            get(handlers::anime::get_anime_series),
+        )
+        .route(
+            "/anime/:anime_id/series",
+            get(handlers::anime::list_anime_series),
+        )
         // 字幕組管理
-        .route("/subtitle-groups", post(handlers::anime::create_subtitle_group))
-        .route("/subtitle-groups", get(handlers::anime::list_subtitle_groups))
-        .route("/subtitle-groups/:group_id", axum::routing::delete(handlers::anime::delete_subtitle_group))
-
+        .route(
+            "/subtitle-groups",
+            post(handlers::anime::create_subtitle_group),
+        )
+        .route(
+            "/subtitle-groups",
+            get(handlers::anime::list_subtitle_groups),
+        )
+        .route(
+            "/subtitle-groups/:group_id",
+            axum::routing::delete(handlers::anime::delete_subtitle_group),
+        )
         // 過濾規則
         .route("/filters", post(handlers::filters::create_filter_rule))
         .route("/filters", get(handlers::filters::get_filter_rules))
-        .route("/filters/:rule_id", delete(handlers::filters::delete_filter_rule))
-
+        .route(
+            "/filters/:rule_id",
+            delete(handlers::filters::delete_filter_rule),
+        )
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
         .route("/links/:series_id", get(handlers::links::get_anime_links))
-
         // 訂閱管理
-        .route("/subscriptions", post(handlers::subscriptions::create_subscription))
-        .route("/subscriptions", get(handlers::subscriptions::list_subscriptions))
-        .route("/fetcher-modules/:fetcher_id/subscriptions", get(handlers::subscriptions::get_fetcher_subscriptions))
-        .route("/fetcher-modules", get(handlers::subscriptions::list_fetcher_modules))
-        .route("/subscriptions/:rss_url", delete(handlers::subscriptions::delete_subscription))
-
+        .route(
+            "/subscriptions",
+            post(handlers::subscriptions::create_subscription),
+        )
+        .route(
+            "/subscriptions",
+            get(handlers::subscriptions::list_subscriptions),
+        )
+        .route(
+            "/fetcher-modules/:fetcher_id/subscriptions",
+            get(handlers::subscriptions::get_fetcher_subscriptions),
+        )
+        .route(
+            "/fetcher-modules",
+            get(handlers::subscriptions::list_fetcher_modules),
+        )
+        .route(
+            "/subscriptions/:rss_url",
+            delete(handlers::subscriptions::delete_subscription),
+        )
         // Fetcher 結果接收
-        .route("/fetcher-results", post(handlers::fetcher_results::receive_fetcher_results))
-        .route("/raw-fetcher-results", post(handlers::fetcher_results::receive_raw_fetcher_results))
-
+        .route(
+            "/fetcher-results",
+            post(handlers::fetcher_results::receive_fetcher_results),
+        )
+        .route(
+            "/raw-fetcher-results",
+            post(handlers::fetcher_results::receive_raw_fetcher_results),
+        )
         // 解析器管理
-        .route("/parsers", get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser))
-        .route("/parsers/:parser_id", get(handlers::parsers::get_parser).delete(handlers::parsers::delete_parser))
-
+        .route(
+            "/parsers",
+            get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser),
+        )
+        .route(
+            "/parsers/:parser_id",
+            get(handlers::parsers::get_parser).delete(handlers::parsers::delete_parser),
+        )
         // 原始資料管理
         .route("/raw-items", get(handlers::raw_items::list_raw_items))
-        .route("/raw-items/:item_id", get(handlers::raw_items::get_raw_item))
-        .route("/raw-items/:item_id/reparse", post(handlers::raw_items::reparse_item))
-        .route("/raw-items/:item_id/skip", post(handlers::raw_items::skip_item))
-
+        .route(
+            "/raw-items/:item_id",
+            get(handlers::raw_items::get_raw_item),
+        )
+        .route(
+            "/raw-items/:item_id/reparse",
+            post(handlers::raw_items::reparse_item),
+        )
+        .route(
+            "/raw-items/:item_id/skip",
+            post(handlers::raw_items::skip_item),
+        )
         // 衝突解決
-        .route("/conflicts", get(handlers::conflict_resolution::get_pending_conflicts))
-        .route("/conflicts/:conflict_id/resolve", post(handlers::conflict_resolution::resolve_conflict))
-
+        .route(
+            "/conflicts",
+            get(handlers::conflict_resolution::get_pending_conflicts),
+        )
+        .route(
+            "/conflicts/:conflict_id/resolve",
+            post(handlers::conflict_resolution::resolve_conflict),
+        )
         // 健康檢查
         .route("/health", get(health_check))
-
         // 應用狀態
         .with_state(app_state);
 
@@ -161,8 +219,8 @@ async fn health_check() -> Json<serde_json::Value> {
 
 /// Load all service modules (Fetcher, Downloader, Viewer) from database and register them in memory
 async fn load_existing_services(app_state: &state::AppState) {
+    use crate::models::{ModuleTypeEnum, ServiceModule};
     use crate::schema::service_modules;
-    use crate::models::{ServiceModule, ModuleTypeEnum};
     use diesel::prelude::*;
 
     match app_state.db.get() {
@@ -183,14 +241,16 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     fetch_endpoint: Some("/fetch".to_string()),
                                     download_endpoint: None,
                                     sync_endpoint: None,
+                                    supported_download_types: vec![],
                                 },
                             ),
                             ModuleTypeEnum::Downloader => (
                                 shared::ServiceType::Downloader,
                                 shared::Capabilities {
                                     fetch_endpoint: None,
-                                    download_endpoint: Some("/download".to_string()),
+                                    download_endpoint: Some("/downloads".to_string()),
                                     sync_endpoint: None,
+                                    supported_download_types: vec![],
                                 },
                             ),
                             ModuleTypeEnum::Viewer => (
@@ -199,6 +259,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     fetch_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: Some("/sync".to_string()),
+                                    supported_download_types: vec![],
                                 },
                             ),
                         };
@@ -215,9 +276,19 @@ async fn load_existing_services(app_state: &state::AppState) {
                         };
 
                         if let Err(e) = app_state.registry.register(service) {
-                            tracing::error!("Failed to load {} {} into registry: {}", module.module_type, module.name, e);
+                            tracing::error!(
+                                "Failed to load {} {} into registry: {}",
+                                module.module_type,
+                                module.name,
+                                e
+                            );
                         } else {
-                            tracing::info!("Loaded {} module from database: {} ({})", module.module_type, module.name, module.base_url);
+                            tracing::info!(
+                                "Loaded {} module from database: {} ({})",
+                                module.module_type,
+                                module.name,
+                                module.base_url
+                            );
                         }
                     }
                 }
@@ -227,7 +298,10 @@ async fn load_existing_services(app_state: &state::AppState) {
             }
         }
         Err(e) => {
-            tracing::error!("Failed to get database connection for loading services: {}", e);
+            tracing::error!(
+                "Failed to get database connection for loading services: {}",
+                e
+            );
         }
     }
 }

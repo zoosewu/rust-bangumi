@@ -2,13 +2,13 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use fetcher_mikanani::{FetcherConfig, HttpClient, RealHttpClient};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber;
-use fetcher_mikanani::{FetcherConfig, RealHttpClient, HttpClient};
 
-mod handlers;
 mod cors;
+mod handlers;
 
 use handlers::AppState;
 
@@ -43,7 +43,10 @@ async fn main() -> anyhow::Result<()> {
     let mut app = Router::new()
         .route("/fetch", post(handlers::fetch))
         .route("/health", get(handlers::health_check))
-        .route("/can-handle-subscription", post(handlers::can_handle_subscription))
+        .route(
+            "/can-handle-subscription",
+            post(handlers::can_handle_subscription),
+        )
         .with_state(app_state);
 
     // 有條件地應用 CORS 中間件
@@ -61,7 +64,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn register_to_core<C: HttpClient>(config: &FetcherConfig, http_client: &C) -> anyhow::Result<()> {
+async fn register_to_core<C: HttpClient>(
+    config: &FetcherConfig,
+    http_client: &C,
+) -> anyhow::Result<()> {
     let registration = shared::ServiceRegistration {
         service_type: shared::ServiceType::Fetcher,
         service_name: config.service_name.clone(),
@@ -71,6 +77,7 @@ async fn register_to_core<C: HttpClient>(config: &FetcherConfig, http_client: &C
             fetch_endpoint: Some("/fetch".to_string()),
             download_endpoint: None,
             sync_endpoint: None,
+            supported_download_types: vec![],
         },
     };
 
@@ -107,9 +114,9 @@ mod tests {
     #[tokio::test]
     async fn test_register_to_core_handles_error() {
         let config = FetcherConfig::for_test();
-        let mock_client = MockHttpClient::with_error(
-            fetcher_mikanani::HttpError::RequestFailed("connection refused".to_string())
-        );
+        let mock_client = MockHttpClient::with_error(fetcher_mikanani::HttpError::RequestFailed(
+            "connection refused".to_string(),
+        ));
 
         let result = register_to_core(&config, &mock_client).await;
 
