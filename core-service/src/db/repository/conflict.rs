@@ -78,8 +78,7 @@ impl ConflictRepository for DieselConflictRepository {
             let resolution_data = serde_json::json!({
                 "resolved_fetcher_id": fetcher_id,
                 "resolved_at": now.to_string()
-            })
-            .to_string();
+            });
 
             diesel::update(
                 subscription_conflicts::table.filter(subscription_conflicts::conflict_id.eq(id)),
@@ -180,12 +179,9 @@ pub mod mock {
             if let Some(conflict) = conflicts.iter_mut().find(|c| c.conflict_id == id) {
                 let now = Utc::now().naive_utc();
                 conflict.resolution_status = "resolved".to_string();
-                conflict.resolution_data = Some(
-                    serde_json::json!({
-                        "resolved_fetcher_id": fetcher_id
-                    })
-                    .to_string(),
-                );
+                conflict.resolution_data = Some(serde_json::json!({
+                    "resolved_fetcher_id": fetcher_id
+                }));
                 conflict.resolved_at = Some(now);
                 return Ok(conflict.clone());
             }
@@ -206,7 +202,7 @@ mod tests {
             subscription_id: 1,
             conflict_type: "multiple_fetchers".to_string(),
             affected_item_id: None,
-            conflict_data: r#"{"candidate_fetcher_ids":[1,2]}"#.to_string(),
+            conflict_data: serde_json::json!({"candidate_fetcher_ids": [1, 2]}),
             resolution_status: status.to_string(),
             resolution_data: None,
             created_at: now,

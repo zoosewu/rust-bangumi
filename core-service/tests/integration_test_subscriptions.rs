@@ -138,7 +138,7 @@ fn insert_test_conflict(
         subscription_id,
         conflict_type: "multi_fetcher_match".to_string(),
         affected_item_id: None,
-        conflict_data: conflict_data.to_string(),
+        conflict_data,
         resolution_status: "unresolved".to_string(),
         resolution_data: None,
         created_at: now,
@@ -438,7 +438,7 @@ fn test_conflict_resolution() -> Result<(), String> {
     )
     .set((
         subscription_conflicts::resolution_status.eq("resolved"),
-        subscription_conflicts::resolution_data.eq(resolution_data.to_string()),
+        subscription_conflicts::resolution_data.eq(resolution_data),
         subscription_conflicts::resolved_at.eq(now),
     ))
     .get_result::<SubscriptionConflict>(&mut conn)
@@ -526,8 +526,7 @@ fn test_invalid_conflict_resolution() -> Result<(), String> {
     // Step 4: Attempt to resolve with non-candidate fetcher
     // Note: In a real HTTP test, this would return 400 Bad Request
     // At DB level, we verify the conflict remains unresolved
-    let conflict_data = serde_json::from_str::<serde_json::Value>(&conflict.conflict_data)
-        .map_err(|e| format!("Failed to parse conflict data: {}", e))?;
+    let conflict_data = &conflict.conflict_data;
 
     let candidates: Vec<i32> = conflict_data
         .get("candidate_fetcher_ids")

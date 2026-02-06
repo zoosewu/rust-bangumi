@@ -1,5 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
+use serde_json::Value as JsonValue;
 use std::io::Write;
 
 // ============ FilterTargetType ENUM ============
@@ -390,7 +391,7 @@ pub struct Subscription {
     pub next_fetch_at: Option<NaiveDateTime>,
     pub fetch_interval_minutes: i32,
     pub is_active: bool,
-    pub config: Option<String>,
+    pub config: Option<JsonValue>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub source_type: String,
@@ -411,7 +412,7 @@ pub struct NewSubscription {
     pub next_fetch_at: Option<NaiveDateTime>,
     pub fetch_interval_minutes: i32,
     pub is_active: bool,
-    pub config: Option<String>,
+    pub config: Option<JsonValue>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub source_type: String,
@@ -432,9 +433,9 @@ pub struct SubscriptionConflict {
     pub subscription_id: i32,
     pub conflict_type: String,
     pub affected_item_id: Option<String>,
-    pub conflict_data: String,
+    pub conflict_data: JsonValue,
     pub resolution_status: String,
-    pub resolution_data: Option<String>,
+    pub resolution_data: Option<JsonValue>,
     pub created_at: NaiveDateTime,
     pub resolved_at: Option<NaiveDateTime>,
 }
@@ -446,9 +447,9 @@ pub struct NewSubscriptionConflict {
     pub subscription_id: i32,
     pub conflict_type: String,
     pub affected_item_id: Option<String>,
-    pub conflict_data: String,
+    pub conflict_data: JsonValue,
     pub resolution_status: String,
-    pub resolution_data: Option<String>,
+    pub resolution_data: Option<JsonValue>,
     pub created_at: NaiveDateTime,
     pub resolved_at: Option<NaiveDateTime>,
 }

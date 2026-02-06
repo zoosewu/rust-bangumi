@@ -68,9 +68,8 @@ pub async fn get_pending_conflicts(
                         let candidate_fetchers =
                             parse_candidate_fetchers(&conflict.conflict_data, &mut conn);
 
-                        // Parse conflict_data as JSON
-                        let conflict_data = serde_json::from_str(&conflict.conflict_data)
-                            .unwrap_or(serde_json::json!({}));
+                        // conflict_data is already a serde_json::Value
+                        let conflict_data = conflict.conflict_data.clone();
 
                         conflict_infos.push(ConflictInfo {
                             conflict_id: conflict.conflict_id,
@@ -221,7 +220,7 @@ pub async fn resolve_conflict(
             )
             .set((
                 subscription_conflicts::resolution_status.eq("resolved"),
-                subscription_conflicts::resolution_data.eq(resolution_data.to_string()),
+                subscription_conflicts::resolution_data.eq(resolution_data),
                 subscription_conflicts::resolved_at.eq(now),
             ))
             .get_result::<SubscriptionConflict>(&mut conn);
@@ -272,48 +271,41 @@ pub async fn resolve_conflict(
 // ============ Helper Functions ============
 
 /// Parse candidate fetchers from conflict_data JSON
-fn parse_candidate_fetchers(
-    conflict_data: &str,
-    conn: &mut diesel::PgConnection,
-) -> Vec<CandidateFetcher> {
-    if let Ok(data) = serde_json::from_str::<serde_json::Value>(conflict_data) {
-        if let Some(fetcher_ids) = data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
-            let mut fetchers = Vec::new();
-            for fetcher_id_val in fetcher_ids {
-                if let Some(fetcher_id) = fetcher_id_val.as_i64() {
-                    let fetcher_id = fetcher_id as i32;
-                    // Get fetcher name from database
-                    if let Ok(name) = service_modules::table
-                        .filter(service_modules::module_id.eq(fetcher_id))
-                        .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
-                        .select(service_modules::name)
-                        .first::<String>(conn)
-                        .optional()
-                    {
-                        if let Some(fetcher_name) = name {
-                            fetchers.push(CandidateFetcher {
-                                fetcher_id,
-                                name: fetcher_name,
-                            });
-                        }
+fn parse_candidate_fetchers(conflict_data: &serde_json::Value, conn: &mut diesel::PgConnection) -> Vec<CandidateFetcher> {
+    if let Some(fetcher_ids) = conflict_data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
+        let mut fetchers = Vec::new();
+        for fetcher_id_val in fetcher_ids {
+            if let Some(fetcher_id) = fetcher_id_val.as_i64() {
+                let fetcher_id = fetcher_id as i32;
+                // Get fetcher name from database
+                if let Ok(name) = service_modules::table
+                    .filter(service_modules::module_id.eq(fetcher_id))
+                    .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+                    .select(service_modules::name)
+                    .first::<String>(conn)
+                    .optional()
+                {
+                    if let Some(fetcher_name) = name {
+                        fetchers.push(CandidateFetcher {
+                            fetcher_id,
+                            name: fetcher_name,
+                        });
                     }
                 }
             }
-            return fetchers;
         }
+        return fetchers;
     }
     Vec::new()
 }
 
-/// Parse candidate fetcher IDs from conflict_data JSON string
-fn parse_candidate_fetchers_vec(conflict_data: &str) -> Vec<i32> {
-    if let Ok(data) = serde_json::from_str::<serde_json::Value>(conflict_data) {
-        if let Some(fetcher_ids) = data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
-            return fetcher_ids
-                .iter()
-                .filter_map(|v| v.as_i64().map(|id| id as i32))
-                .collect();
-        }
+/// Parse candidate fetcher IDs from conflict_data JSON
+fn parse_candidate_fetchers_vec(conflict_data: &serde_json::Value) -> Vec<i32> {
+    if let Some(fetcher_ids) = conflict_data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
+        return fetcher_ids
+            .iter()
+            .filter_map(|v| v.as_i64().map(|id| id as i32))
+            .collect();
     }
     Vec::new()
 }

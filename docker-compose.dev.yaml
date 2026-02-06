@@ -87,7 +87,7 @@ services:
       - "6881:6881"
       - "6881:6881/udp"
     volumes:
-      - ${HOST_PROJECT_PATH:-.}/dev-config/qbittorrent:/config/qBittorrent
+      - ${HOST_PROJECT_PATH:-.}/dev-config/qbittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf
       - qbittorrent_dev_downloads:/downloads
     networks:
       - bangumi-dev-network

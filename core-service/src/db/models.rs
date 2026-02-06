@@ -452,7 +452,7 @@ pub fn delete_filter_rule(pool: &DbPool, rule_id: i32) -> Result<usize, String> 
 
 /// Get all applicable filter rules for a given context.
 /// Rules are collected from all relevant target types and sorted by priority.
-/// Priority order: global < fetcher < anime_series < anime < subtitle_group
+/// Priority order: subtitle_group > anime > anime_series > fetcher > global (higher = higher priority)
 pub fn get_all_applicable_filter_rules(
     pool: &DbPool,
     anime_id: Option<i32>,

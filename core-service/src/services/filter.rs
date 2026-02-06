@@ -11,19 +11,17 @@ impl FilterEngine {
     }
 
     /// Create a FilterEngine with rules sorted by target_type priority and rule_order.
-    /// Priority: global < fetcher < anime_series < anime < subtitle_group
+    /// Priority: subtitle_group > anime > anime_series > fetcher > global (higher = higher priority)
     pub fn with_priority_sorted(mut rules: Vec<FilterRule>) -> Self {
         rules.sort_by(|a, b| {
             let priority_a = Self::target_type_priority(&a.target_type);
             let priority_b = Self::target_type_priority(&b.target_type);
-            priority_a
-                .cmp(&priority_b)
-                .then(a.rule_order.cmp(&b.rule_order))
+            priority_b.cmp(&priority_a).then(b.rule_order.cmp(&a.rule_order))
         });
         Self { rules }
     }
 
-    /// Get priority for target_type (lower = earlier in chain)
+    /// Get priority for target_type (higher = higher priority, consistent with service_modules/title_parsers)
     fn target_type_priority(target_type: &FilterTargetType) -> u8 {
         match target_type {
             FilterTargetType::Global => 0,
@@ -173,9 +171,9 @@ mod tests {
         let engine = FilterEngine::with_priority_sorted(rules);
         let target_types = engine.target_types();
 
-        // Global should come first, then Fetcher, then AnimeSeries
-        assert_eq!(target_types[0], FilterTargetType::Global);
+        // AnimeSeries (highest priority) should come first, then Fetcher, then Global
+        assert_eq!(target_types[0], FilterTargetType::AnimeSeries);
         assert_eq!(target_types[1], FilterTargetType::Fetcher);
-        assert_eq!(target_types[2], FilterTargetType::AnimeSeries);
+        assert_eq!(target_types[2], FilterTargetType::Global);
     }
 }
