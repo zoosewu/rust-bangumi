@@ -2,6 +2,38 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+// ============ Download Types ============
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DownloadType {
+    Magnet,
+    Torrent,
+    Http,
+}
+
+impl std::fmt::Display for DownloadType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DownloadType::Magnet => write!(f, "magnet"),
+            DownloadType::Torrent => write!(f, "torrent"),
+            DownloadType::Http => write!(f, "http"),
+        }
+    }
+}
+
+impl std::str::FromStr for DownloadType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "magnet" => Ok(DownloadType::Magnet),
+            "torrent" => Ok(DownloadType::Torrent),
+            "http" => Ok(DownloadType::Http),
+            _ => Err(format!("Unknown download type: {}", s)),
+        }
+    }
+}
+
 // ============ Service Registration ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +62,8 @@ pub struct Capabilities {
     pub download_endpoint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_endpoint: Option<String>,
+    #[serde(default)]
+    pub supported_download_types: Vec<DownloadType>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,4 +297,59 @@ pub struct RawFetcherResultsResponse {
     pub items_parsed: usize,
     pub items_failed: usize,
     pub message: String,
+}
+
+// ============ Batch Download API DTOs ============
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDownloadRequest {
+    pub items: Vec<DownloadRequestItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadRequestItem {
+    pub url: String,
+    pub save_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDownloadResponse {
+    pub results: Vec<DownloadResultItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadResultItem {
+    pub url: String,
+    pub hash: Option<String>,
+    pub status: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchCancelRequest {
+    pub hashes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchCancelResponse {
+    pub results: Vec<CancelResultItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelResultItem {
+    pub hash: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusQueryResponse {
+    pub statuses: Vec<DownloadStatusItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadStatusItem {
+    pub hash: String,
+    pub status: String,
+    pub progress: f64,
+    pub size: u64,
 }
