@@ -28,6 +28,8 @@ diesel::table! {
         filtered_flag -> Bool,
         created_at -> Timestamp,
         raw_item_id -> Nullable<Int4>,
+        #[max_length = 20]
+        download_type -> Nullable<Varchar>,
     }
 }
 
@@ -69,6 +71,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    downloader_capabilities (module_id, download_type) {
+        module_id -> Int4,
+        #[max_length = 20]
+        download_type -> Varchar,
+    }
+}
+
+diesel::table! {
     downloads (download_id) {
         download_id -> Int4,
         link_id -> Int4,
@@ -82,6 +92,9 @@ diesel::table! {
         error_message -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        module_id -> Nullable<Int4>,
+        #[max_length = 255]
+        torrent_hash -> Nullable<Varchar>,
     }
 }
 
@@ -246,7 +259,9 @@ diesel::joinable!(anime_links -> raw_anime_items (raw_item_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));
 diesel::joinable!(anime_series -> animes (anime_id));
 diesel::joinable!(anime_series -> seasons (season_id));
+diesel::joinable!(downloader_capabilities -> service_modules (module_id));
 diesel::joinable!(downloads -> anime_links (link_id));
+diesel::joinable!(downloads -> service_modules (module_id));
 diesel::joinable!(raw_anime_items -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> title_parsers (parser_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
@@ -256,6 +271,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     anime_series,
     animes,
     cron_logs,
+    downloader_capabilities,
     downloads,
     filter_rules,
     raw_anime_items,
