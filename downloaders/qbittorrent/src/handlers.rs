@@ -1,71 +1,160 @@
-use axum::{extract::State, http::StatusCode, Json};
-use downloader_qbittorrent::{retry_with_backoff, DownloaderClient};
-use serde::{Deserialize, Serialize};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    Json,
+};
+use downloader_qbittorrent::DownloaderClient;
+use serde::Deserialize;
+use shared::{
+    BatchCancelRequest, BatchCancelResponse, BatchDownloadRequest, BatchDownloadResponse,
+    StatusQueryResponse,
+};
 use std::sync::Arc;
-use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
-pub struct DownloadRequest {
-    pub link_id: i32,
-    pub url: String,
+pub struct StatusQueryParams {
+    pub hashes: String, // comma-separated
 }
 
-#[derive(Debug, Serialize)]
-pub struct DownloadResponse {
-    pub status: String,
-    pub hash: Option<String>,
-    pub error: Option<String>,
+#[derive(Debug, Deserialize)]
+pub struct DeleteParams {
+    pub delete_files: Option<bool>,
 }
 
-pub async fn download<C: DownloaderClient + 'static>(
+/// POST /downloads - batch add torrents
+pub async fn batch_download<C: DownloaderClient + 'static>(
     State(client): State<Arc<C>>,
-    Json(req): Json<DownloadRequest>,
-) -> (StatusCode, Json<DownloadResponse>) {
-    if !req.url.starts_with("magnet:") && !req.url.starts_with("http") {
+    Json(req): Json<BatchDownloadRequest>,
+) -> (StatusCode, Json<BatchDownloadResponse>) {
+    if req.items.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
-            Json(DownloadResponse {
-                status: "unsupported".to_string(),
-                hash: None,
-                error: Some("Only magnet links and torrent URLs supported".to_string()),
-            }),
+            Json(BatchDownloadResponse { results: vec![] }),
         );
     }
 
-    // Use retry logic for download with exponential backoff
-    let result = retry_with_backoff(3, Duration::from_secs(1), || {
-        let client = client.clone();
-        let url = req.url.clone();
-        async move { client.add_torrent(&url, None).await }
-    })
-    .await;
-
-    match result {
-        Ok(hash) => {
-            tracing::info!("Download started: link_id={}, hash={}", req.link_id, hash);
-            (
-                StatusCode::CREATED,
-                Json(DownloadResponse {
-                    status: "accepted".to_string(),
-                    hash: Some(hash),
-                    error: None,
-                }),
-            )
-        }
+    match client.add_torrents(req.items).await {
+        Ok(results) => (StatusCode::OK, Json(BatchDownloadResponse { results })),
         Err(e) => {
-            tracing::error!("Download failed after retries: {}", e);
+            tracing::error!("Batch download failed: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(DownloadResponse {
-                    status: "error".to_string(),
-                    hash: None,
-                    error: Some(e.to_string()),
-                }),
+                Json(BatchDownloadResponse { results: vec![] }),
             )
         }
     }
 }
 
+/// POST /downloads/cancel - batch cancel
+pub async fn batch_cancel<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Json(req): Json<BatchCancelRequest>,
+) -> (StatusCode, Json<BatchCancelResponse>) {
+    if req.hashes.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(BatchCancelResponse { results: vec![] }),
+        );
+    }
+
+    match client.cancel_torrents(req.hashes).await {
+        Ok(results) => (StatusCode::OK, Json(BatchCancelResponse { results })),
+        Err(e) => {
+            tracing::error!("Batch cancel failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(BatchCancelResponse { results: vec![] }),
+            )
+        }
+    }
+}
+
+/// GET /downloads?hashes=hash1,hash2 - query status
+pub async fn query_download_status<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Query(params): Query<StatusQueryParams>,
+) -> (StatusCode, Json<StatusQueryResponse>) {
+    let hashes: Vec<String> = params
+        .hashes
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if hashes.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(StatusQueryResponse { statuses: vec![] }),
+        );
+    }
+
+    match client.query_status(hashes).await {
+        Ok(statuses) => (StatusCode::OK, Json(StatusQueryResponse { statuses })),
+        Err(e) => {
+            tracing::error!("Status query failed: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(StatusQueryResponse { statuses: vec![] }),
+            )
+        }
+    }
+}
+
+/// POST /downloads/:hash/pause
+pub async fn pause<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Path(hash): Path<String>,
+) -> StatusCode {
+    match client.pause_torrent(&hash).await {
+        Ok(()) => {
+            tracing::info!("Torrent {} paused", hash);
+            StatusCode::OK
+        }
+        Err(e) => {
+            tracing::error!("Failed to pause torrent {}: {}", hash, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
+
+/// POST /downloads/:hash/resume
+pub async fn resume<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Path(hash): Path<String>,
+) -> StatusCode {
+    match client.resume_torrent(&hash).await {
+        Ok(()) => {
+            tracing::info!("Torrent {} resumed", hash);
+            StatusCode::OK
+        }
+        Err(e) => {
+            tracing::error!("Failed to resume torrent {}: {}", hash, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
+
+/// DELETE /downloads/:hash
+pub async fn delete_download<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Path(hash): Path<String>,
+    Query(params): Query<DeleteParams>,
+) -> StatusCode {
+    let delete_files = params.delete_files.unwrap_or(false);
+
+    match client.delete_torrent(&hash, delete_files).await {
+        Ok(()) => {
+            tracing::info!("Torrent {} deleted (delete_files={})", hash, delete_files);
+            StatusCode::OK
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete torrent {}: {}", hash, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
+}
+
+/// GET /health
 pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }

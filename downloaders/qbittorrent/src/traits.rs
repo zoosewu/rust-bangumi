@@ -1,6 +1,6 @@
 // src/traits.rs
-use crate::TorrentInfo;
 use anyhow::Result;
+use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 
 /// Trait defining the interface for torrent download clients.
 /// This abstraction allows for mock implementations in tests.
@@ -12,23 +12,23 @@ pub trait DownloaderClient: Send + Sync {
         password: &str,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
-    /// Add a magnet link and return the torrent hash
-    fn add_magnet(
+    /// Add multiple torrents in batch, returning per-item results
+    fn add_torrents(
         &self,
-        magnet_url: &str,
-        save_path: Option<&str>,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
+        items: Vec<DownloadRequestItem>,
+    ) -> impl std::future::Future<Output = Result<Vec<DownloadResultItem>>> + Send;
 
-    /// Get information about a specific torrent by hash
-    fn get_torrent_info(
+    /// Cancel (delete without removing files) multiple torrents by hash
+    fn cancel_torrents(
         &self,
-        hash: &str,
-    ) -> impl std::future::Future<Output = Result<Option<TorrentInfo>>> + Send;
+        hashes: Vec<String>,
+    ) -> impl std::future::Future<Output = Result<Vec<CancelResultItem>>> + Send;
 
-    /// Get information about all torrents
-    fn get_all_torrents(
+    /// Query download status for multiple torrents by hash
+    fn query_status(
         &self,
-    ) -> impl std::future::Future<Output = Result<Vec<TorrentInfo>>> + Send;
+        hashes: Vec<String>,
+    ) -> impl std::future::Future<Output = Result<Vec<DownloadStatusItem>>> + Send;
 
     /// Pause a torrent
     fn pause_torrent(&self, hash: &str) -> impl std::future::Future<Output = Result<()>> + Send;
@@ -42,17 +42,4 @@ pub trait DownloaderClient: Send + Sync {
         hash: &str,
         delete_files: bool,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Extract the info hash from a magnet URL
-    fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String>;
-
-    /// Add a torrent by URL (magnet link or .torrent HTTP URL) and return the torrent hash
-    fn add_torrent(
-        &self,
-        url: &str,
-        save_path: Option<&str>,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
-
-    /// Extract the info hash from a URL (magnet link or .torrent URL)
-    fn extract_hash_from_url(&self, url: &str) -> Result<String>;
 }

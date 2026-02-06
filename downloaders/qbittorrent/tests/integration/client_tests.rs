@@ -1,6 +1,7 @@
 // tests/integration/client_tests.rs
 use anyhow::anyhow;
-use downloader_qbittorrent::{DownloaderClient, MockDownloaderClient, TorrentInfo};
+use downloader_qbittorrent::{DownloaderClient, MockDownloaderClient};
+use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 
 // ============ Login Tests ============
 
@@ -44,145 +45,137 @@ async fn test_login_connection_failed_returns_error() {
         .contains("Connection refused"));
 }
 
-// ============ Add Magnet Tests ============
+// ============ Add Torrents (Batch) Tests ============
 
 #[tokio::test]
-async fn test_add_magnet_success_returns_hash() {
-    let mock = MockDownloaderClient::new().with_add_magnet_result(Ok("abc123def456".to_string()));
+async fn test_add_torrents_success_returns_results() {
+    let expected = vec![DownloadResultItem {
+        url: "magnet:?xt=urn:btih:abc123def456".to_string(),
+        hash: Some("abc123def456".to_string()),
+        status: "accepted".to_string(),
+        reason: None,
+    }];
 
-    let result = mock
-        .add_magnet("magnet:?xt=urn:btih:abc123def456", None)
-        .await;
+    let mock = MockDownloaderClient::new().with_add_torrents_result(Ok(expected.clone()));
+
+    let items = vec![DownloadRequestItem {
+        url: "magnet:?xt=urn:btih:abc123def456".to_string(),
+        save_path: "/downloads".to_string(),
+    }];
+
+    let result = mock.add_torrents(items).await;
 
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "abc123def456");
+    let results = result.unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "accepted");
+    assert_eq!(results[0].hash, Some("abc123def456".to_string()));
 }
 
 #[tokio::test]
-async fn test_add_magnet_with_save_path() {
-    let mock = MockDownloaderClient::new().with_add_magnet_result(Ok("hash123".to_string()));
-
-    let result = mock
-        .add_magnet("magnet:?xt=urn:btih:hash123", Some("/downloads"))
-        .await;
-
-    assert!(result.is_ok());
-    let calls = mock.add_magnet_calls.borrow();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].1, Some("/downloads".to_string()));
-}
-
-#[tokio::test]
-async fn test_add_magnet_duplicate_torrent_error() {
-    let mock =
-        MockDownloaderClient::new().with_add_magnet_result(Err(anyhow!("Torrent already exists")));
-
-    let result = mock.add_magnet("magnet:?xt=urn:btih:existing", None).await;
-
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("already exists"));
-}
-
-#[tokio::test]
-async fn test_add_magnet_records_call_parameters() {
-    let mock = MockDownloaderClient::new();
-    let magnet = "magnet:?xt=urn:btih:recordtest123456789012345678901234";
-
-    let _ = mock.add_magnet(magnet, Some("/path")).await;
-
-    let calls = mock.add_magnet_calls.borrow();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].0, magnet);
-    assert_eq!(calls[0].1, Some("/path".to_string()));
-}
-
-// ============ Get Torrent Info Tests ============
-
-#[tokio::test]
-async fn test_get_torrent_info_found() {
-    let info = TorrentInfo {
-        hash: "testhash123".to_string(),
-        name: "Test Torrent".to_string(),
-        state: "downloading".to_string(),
-        progress: 0.5,
-        dlspeed: 1024000,
-        size: 1000000000,
-        downloaded: 500000000,
-    };
-
-    let mock = MockDownloaderClient::new().with_get_torrent_info_result(Ok(Some(info.clone())));
-
-    let result = mock.get_torrent_info("testhash123").await;
-
-    assert!(result.is_ok());
-    let returned_info = result.unwrap().unwrap();
-    assert_eq!(returned_info.hash, "testhash123");
-    assert_eq!(returned_info.progress, 0.5);
-}
-
-#[tokio::test]
-async fn test_get_torrent_info_not_found_returns_none() {
-    let mock = MockDownloaderClient::new().with_get_torrent_info_result(Ok(None));
-
-    let result = mock.get_torrent_info("nonexistent").await;
-
-    assert!(result.is_ok());
-    assert!(result.unwrap().is_none());
-}
-
-#[tokio::test]
-async fn test_get_torrent_info_records_hash() {
+async fn test_add_torrents_records_call_parameters() {
     let mock = MockDownloaderClient::new();
 
-    let _ = mock.get_torrent_info("queryhash").await;
-
-    assert_eq!(mock.get_torrent_info_calls.borrow()[0], "queryhash");
-}
-
-// ============ Get All Torrents Tests ============
-
-#[tokio::test]
-async fn test_get_all_torrents_returns_list() {
-    let torrents = vec![
-        TorrentInfo {
-            hash: "hash1".to_string(),
-            name: "Torrent 1".to_string(),
-            state: "downloading".to_string(),
-            progress: 0.3,
-            dlspeed: 500000,
-            size: 500000000,
-            downloaded: 150000000,
+    let items = vec![
+        DownloadRequestItem {
+            url: "magnet:?xt=urn:btih:hash1".to_string(),
+            save_path: "/path1".to_string(),
         },
-        TorrentInfo {
-            hash: "hash2".to_string(),
-            name: "Torrent 2".to_string(),
-            state: "completed".to_string(),
-            progress: 1.0,
-            dlspeed: 0,
-            size: 200000000,
-            downloaded: 200000000,
+        DownloadRequestItem {
+            url: "magnet:?xt=urn:btih:hash2".to_string(),
+            save_path: "/path2".to_string(),
         },
     ];
 
-    let mock = MockDownloaderClient::new().with_get_all_torrents_result(Ok(torrents));
+    let _ = mock.add_torrents(items).await;
 
-    let result = mock.get_all_torrents().await;
-
-    assert!(result.is_ok());
-    let list = result.unwrap();
-    assert_eq!(list.len(), 2);
-    assert_eq!(list[0].hash, "hash1");
-    assert_eq!(list[1].hash, "hash2");
+    let calls = mock.add_torrents_calls.borrow();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].len(), 2);
+    assert_eq!(calls[0][0].url, "magnet:?xt=urn:btih:hash1");
+    assert_eq!(calls[0][1].save_path, "/path2");
 }
 
 #[tokio::test]
-async fn test_get_all_torrents_empty_list() {
-    let mock = MockDownloaderClient::new().with_get_all_torrents_result(Ok(vec![]));
+async fn test_add_torrents_error_propagates() {
+    let mock = MockDownloaderClient::new()
+        .with_add_torrents_result(Err(anyhow!("Connection timeout")));
 
-    let result = mock.get_all_torrents().await;
+    let items = vec![DownloadRequestItem {
+        url: "magnet:?xt=urn:btih:hash1".to_string(),
+        save_path: "/downloads".to_string(),
+    }];
+
+    let result = mock.add_torrents(items).await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Connection timeout"));
+}
+
+// ============ Cancel Torrents (Batch) Tests ============
+
+#[tokio::test]
+async fn test_cancel_torrents_success() {
+    let expected = vec![CancelResultItem {
+        hash: "abc123".to_string(),
+        status: "cancelled".to_string(),
+    }];
+
+    let mock = MockDownloaderClient::new().with_cancel_torrents_result(Ok(expected));
+
+    let result = mock.cancel_torrents(vec!["abc123".to_string()]).await;
 
     assert!(result.is_ok());
-    assert!(result.unwrap().is_empty());
+    let results = result.unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].status, "cancelled");
+}
+
+#[tokio::test]
+async fn test_cancel_torrents_records_hashes() {
+    let mock = MockDownloaderClient::new();
+
+    let _ = mock
+        .cancel_torrents(vec!["hash1".to_string(), "hash2".to_string()])
+        .await;
+
+    let calls = mock.cancel_torrents_calls.borrow();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0], vec!["hash1".to_string(), "hash2".to_string()]);
+}
+
+// ============ Query Status Tests ============
+
+#[tokio::test]
+async fn test_query_status_returns_statuses() {
+    let expected = vec![DownloadStatusItem {
+        hash: "hash1".to_string(),
+        status: "downloading".to_string(),
+        progress: 0.5,
+        size: 1000000,
+    }];
+
+    let mock = MockDownloaderClient::new().with_query_status_result(Ok(expected));
+
+    let result = mock.query_status(vec!["hash1".to_string()]).await;
+
+    assert!(result.is_ok());
+    let statuses = result.unwrap();
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0].hash, "hash1");
+    assert_eq!(statuses[0].progress, 0.5);
+}
+
+#[tokio::test]
+async fn test_query_status_records_hashes() {
+    let mock = MockDownloaderClient::new();
+
+    let _ = mock
+        .query_status(vec!["h1".to_string(), "h2".to_string()])
+        .await;
+
+    let calls = mock.query_status_calls.borrow();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0], vec!["h1".to_string(), "h2".to_string()]);
 }
 
 // ============ Pause / Resume / Delete Tests ============
@@ -236,26 +229,4 @@ async fn test_delete_torrent_without_files() {
     assert!(result.is_ok());
     let calls = mock.delete_calls.borrow();
     assert_eq!(calls[0], ("deletehash".to_string(), false));
-}
-
-// ============ Extract Hash Tests ============
-
-#[tokio::test]
-async fn test_extract_hash_from_valid_magnet() {
-    let mock = MockDownloaderClient::new();
-    let magnet = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef&dn=test";
-
-    let result = mock.extract_hash_from_magnet(magnet);
-
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "1234567890abcdef1234567890abcdef");
-}
-
-#[tokio::test]
-async fn test_extract_hash_invalid_url() {
-    let mock = MockDownloaderClient::new();
-
-    let result = mock.extract_hash_from_magnet("not_a_magnet");
-
-    assert!(result.is_err());
 }

@@ -213,6 +213,7 @@ mod tests {
             filtered_flag: false,
             created_at: now,
             raw_item_id: None,
+            download_type: Some("http".to_string()),
         };
         let link2 = AnimeLink {
             link_id: 2,
@@ -225,6 +226,7 @@ mod tests {
             filtered_flag: true, // filtered
             created_at: now,
             raw_item_id: None,
+            download_type: Some("http".to_string()),
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link1, link2]);
 
@@ -251,6 +253,7 @@ mod tests {
             filtered_flag: false,
             created_at: now,
             raw_item_id: None,
+            download_type: Some("http".to_string()),
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link]);
 

@@ -1,8 +1,8 @@
 use axum::{
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
-use downloader_qbittorrent::QBittorrentClient;
+use downloader_qbittorrent::{DownloaderClient, QBittorrentClient};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -30,7 +30,30 @@ async fn main() -> anyhow::Result<()> {
     client.login(&qb_user, &qb_pass).await?;
 
     let app = Router::new()
-        .route("/download", post(handlers::download::<QBittorrentClient>))
+        .route(
+            "/downloads",
+            post(handlers::batch_download::<QBittorrentClient>),
+        )
+        .route(
+            "/downloads",
+            get(handlers::query_download_status::<QBittorrentClient>),
+        )
+        .route(
+            "/downloads/cancel",
+            post(handlers::batch_cancel::<QBittorrentClient>),
+        )
+        .route(
+            "/downloads/:hash/pause",
+            post(handlers::pause::<QBittorrentClient>),
+        )
+        .route(
+            "/downloads/:hash/resume",
+            post(handlers::resume::<QBittorrentClient>),
+        )
+        .route(
+            "/downloads/:hash",
+            delete(handlers::delete_download::<QBittorrentClient>),
+        )
         .route("/health", get(handlers::health_check))
         .with_state(client);
 

@@ -73,6 +73,31 @@ pub async fn register(
                         payload.host,
                         payload.port
                     );
+
+                    // Save downloader capabilities if this is a downloader
+                    if payload.service_type == ServiceType::Downloader
+                        && !payload.capabilities.supported_download_types.is_empty()
+                    {
+                        save_downloader_capabilities(
+                            &mut conn,
+                            &payload.service_name,
+                            &payload.capabilities.supported_download_types,
+                        );
+
+                        // Trigger retry of no_downloader links
+                        let download_types: Vec<String> = payload
+                            .capabilities
+                            .supported_download_types
+                            .iter()
+                            .map(|dt| dt.to_string())
+                            .collect();
+                        let dispatch = state.dispatch_service.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = dispatch.retry_no_downloader_links(&download_types).await {
+                                tracing::error!("Failed to retry no_downloader links: {}", e);
+                            }
+                        });
+                    }
                 }
                 Err(e) => {
                     tracing::error!(
@@ -133,6 +158,58 @@ pub async fn list_by_type(
             Json(json!({ "services": [] }))
         }
     }
+}
+
+/// Save downloader capabilities to junction table
+fn save_downloader_capabilities(
+    conn: &mut diesel::PgConnection,
+    service_name: &str,
+    download_types: &[shared::DownloadType],
+) {
+    use crate::schema::{service_modules, downloader_capabilities};
+    use crate::models::DownloaderCapability;
+
+    // Get the module_id for this service
+    let module_id: Option<i32> = service_modules::table
+        .filter(service_modules::name.eq(service_name))
+        .select(service_modules::module_id)
+        .first::<i32>(conn)
+        .ok();
+
+    let Some(module_id) = module_id else {
+        tracing::error!("Could not find module_id for service: {}", service_name);
+        return;
+    };
+
+    // Delete existing capabilities
+    if let Err(e) = diesel::delete(
+        downloader_capabilities::table.filter(downloader_capabilities::module_id.eq(module_id)),
+    )
+    .execute(conn)
+    {
+        tracing::error!("Failed to delete old capabilities: {}", e);
+        return;
+    }
+
+    // Insert new capabilities
+    for dt in download_types {
+        let cap = DownloaderCapability {
+            module_id,
+            download_type: dt.to_string(),
+        };
+        if let Err(e) = diesel::insert_into(downloader_capabilities::table)
+            .values(&cap)
+            .execute(conn)
+        {
+            tracing::error!("Failed to insert capability {}: {}", dt, e);
+        }
+    }
+
+    tracing::info!(
+        "Saved {} capabilities for downloader {}",
+        download_types.len(),
+        service_name
+    );
 }
 
 /// Update service health status

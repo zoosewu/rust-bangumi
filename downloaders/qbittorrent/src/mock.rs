@@ -2,8 +2,8 @@
 //! Mock implementation of DownloaderClient for testing purposes.
 
 use crate::traits::DownloaderClient;
-use crate::TorrentInfo;
 use anyhow::{anyhow, Result};
+use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 use std::cell::RefCell;
 
 /// A mock implementation of DownloaderClient for testing.
@@ -14,27 +14,25 @@ use std::cell::RefCell;
 /// # Example
 /// ```ignore
 /// let mock = MockDownloaderClient::new()
-///     .with_add_magnet_result(Ok("abc123".to_string()));
+///     .with_add_torrents_result(Ok(vec![DownloadResultItem { ... }]));
 ///
-/// let result = mock.add_magnet("magnet:...", None).await;
-/// assert_eq!(result.unwrap(), "abc123");
+/// let result = mock.add_torrents(vec![...]).await;
 /// ```
 pub struct MockDownloaderClient {
     // Return values
     login_result: RefCell<Result<()>>,
-    add_magnet_result: RefCell<Result<String>>,
-    get_torrent_info_result: RefCell<Result<Option<TorrentInfo>>>,
-    get_all_torrents_result: RefCell<Result<Vec<TorrentInfo>>>,
+    add_torrents_result: RefCell<Result<Vec<DownloadResultItem>>>,
+    cancel_torrents_result: RefCell<Result<Vec<CancelResultItem>>>,
+    query_status_result: RefCell<Result<Vec<DownloadStatusItem>>>,
     pause_result: RefCell<Result<()>>,
     resume_result: RefCell<Result<()>>,
     delete_result: RefCell<Result<()>>,
-    add_torrent_result: RefCell<Result<String>>,
 
     // Call recordings
     pub login_calls: RefCell<Vec<(String, String)>>,
-    pub add_magnet_calls: RefCell<Vec<(String, Option<String>)>>,
-    pub add_torrent_calls: RefCell<Vec<(String, Option<String>)>>,
-    pub get_torrent_info_calls: RefCell<Vec<String>>,
+    pub add_torrents_calls: RefCell<Vec<Vec<DownloadRequestItem>>>,
+    pub cancel_torrents_calls: RefCell<Vec<Vec<String>>>,
+    pub query_status_calls: RefCell<Vec<Vec<String>>>,
     pub pause_calls: RefCell<Vec<String>>,
     pub resume_calls: RefCell<Vec<String>>,
     pub delete_calls: RefCell<Vec<(String, bool)>>,
@@ -44,18 +42,17 @@ impl Default for MockDownloaderClient {
     fn default() -> Self {
         Self {
             login_result: RefCell::new(Ok(())),
-            add_magnet_result: RefCell::new(Ok("default_hash".to_string())),
-            get_torrent_info_result: RefCell::new(Ok(None)),
-            get_all_torrents_result: RefCell::new(Ok(vec![])),
+            add_torrents_result: RefCell::new(Ok(vec![])),
+            cancel_torrents_result: RefCell::new(Ok(vec![])),
+            query_status_result: RefCell::new(Ok(vec![])),
             pause_result: RefCell::new(Ok(())),
             resume_result: RefCell::new(Ok(())),
             delete_result: RefCell::new(Ok(())),
-            add_torrent_result: RefCell::new(Ok("default_hash".to_string())),
 
             login_calls: RefCell::new(vec![]),
-            add_magnet_calls: RefCell::new(vec![]),
-            add_torrent_calls: RefCell::new(vec![]),
-            get_torrent_info_calls: RefCell::new(vec![]),
+            add_torrents_calls: RefCell::new(vec![]),
+            cancel_torrents_calls: RefCell::new(vec![]),
+            query_status_calls: RefCell::new(vec![]),
             pause_calls: RefCell::new(vec![]),
             resume_calls: RefCell::new(vec![]),
             delete_calls: RefCell::new(vec![]),
@@ -75,18 +72,18 @@ impl MockDownloaderClient {
         self
     }
 
-    pub fn with_add_magnet_result(self, result: Result<String>) -> Self {
-        *self.add_magnet_result.borrow_mut() = result;
+    pub fn with_add_torrents_result(self, result: Result<Vec<DownloadResultItem>>) -> Self {
+        *self.add_torrents_result.borrow_mut() = result;
         self
     }
 
-    pub fn with_get_torrent_info_result(self, result: Result<Option<TorrentInfo>>) -> Self {
-        *self.get_torrent_info_result.borrow_mut() = result;
+    pub fn with_cancel_torrents_result(self, result: Result<Vec<CancelResultItem>>) -> Self {
+        *self.cancel_torrents_result.borrow_mut() = result;
         self
     }
 
-    pub fn with_get_all_torrents_result(self, result: Result<Vec<TorrentInfo>>) -> Self {
-        *self.get_all_torrents_result.borrow_mut() = result;
+    pub fn with_query_status_result(self, result: Result<Vec<DownloadStatusItem>>) -> Self {
+        *self.query_status_result.borrow_mut() = result;
         self
     }
 
@@ -104,45 +101,6 @@ impl MockDownloaderClient {
         *self.delete_result.borrow_mut() = result;
         self
     }
-
-    pub fn with_add_torrent_result(self, result: Result<String>) -> Self {
-        *self.add_torrent_result.borrow_mut() = result;
-        self
-    }
-
-    // Helper to extract hash (same logic as real client)
-    fn do_extract_hash(&self, magnet_url: &str) -> Result<String> {
-        if let Some(start) = magnet_url.find("btih:") {
-            let hash_start = start + 5;
-            let hash_part = &magnet_url[hash_start..];
-            let hash = hash_part.split('&').next().unwrap_or("").to_lowercase();
-
-            if !hash.is_empty() && hash.len() >= 32 {
-                Ok(hash)
-            } else {
-                Err(anyhow!("Invalid hash extracted from magnet URL"))
-            }
-        } else {
-            Err(anyhow!("Invalid magnet URL format"))
-        }
-    }
-
-    fn do_extract_hash_from_url(&self, url: &str) -> Result<String> {
-        if url.starts_with("magnet:") {
-            return self.do_extract_hash(url);
-        }
-        if url.ends_with(".torrent") {
-            if let Some(filename) = url.rsplit('/').next() {
-                if let Some(hash) = filename.strip_suffix(".torrent") {
-                    let hash = hash.to_lowercase();
-                    if hash.len() >= 32 && hash.chars().all(|c| c.is_ascii_hexdigit()) {
-                        return Ok(hash);
-                    }
-                }
-            }
-        }
-        Err(anyhow!("Cannot extract hash from URL: {}", url))
-    }
 }
 
 // SAFETY: MockDownloaderClient uses RefCell internally but is designed for single-threaded test use.
@@ -156,38 +114,38 @@ impl DownloaderClient for MockDownloaderClient {
             .borrow_mut()
             .push((username.to_string(), password.to_string()));
 
-        // Clone the result to return it
         match &*self.login_result.borrow() {
             Ok(()) => Ok(()),
             Err(e) => Err(anyhow!("{}", e)),
         }
     }
 
-    async fn add_magnet(&self, magnet_url: &str, save_path: Option<&str>) -> Result<String> {
-        self.add_magnet_calls
-            .borrow_mut()
-            .push((magnet_url.to_string(), save_path.map(|s| s.to_string())));
+    async fn add_torrents(
+        &self,
+        items: Vec<DownloadRequestItem>,
+    ) -> Result<Vec<DownloadResultItem>> {
+        self.add_torrents_calls.borrow_mut().push(items);
 
-        match &*self.add_magnet_result.borrow() {
-            Ok(hash) => Ok(hash.clone()),
+        match &*self.add_torrents_result.borrow() {
+            Ok(results) => Ok(results.clone()),
             Err(e) => Err(anyhow!("{}", e)),
         }
     }
 
-    async fn get_torrent_info(&self, hash: &str) -> Result<Option<TorrentInfo>> {
-        self.get_torrent_info_calls
-            .borrow_mut()
-            .push(hash.to_string());
+    async fn cancel_torrents(&self, hashes: Vec<String>) -> Result<Vec<CancelResultItem>> {
+        self.cancel_torrents_calls.borrow_mut().push(hashes);
 
-        match &*self.get_torrent_info_result.borrow() {
-            Ok(info) => Ok(info.clone()),
+        match &*self.cancel_torrents_result.borrow() {
+            Ok(results) => Ok(results.clone()),
             Err(e) => Err(anyhow!("{}", e)),
         }
     }
 
-    async fn get_all_torrents(&self) -> Result<Vec<TorrentInfo>> {
-        match &*self.get_all_torrents_result.borrow() {
-            Ok(list) => Ok(list.clone()),
+    async fn query_status(&self, hashes: Vec<String>) -> Result<Vec<DownloadStatusItem>> {
+        self.query_status_calls.borrow_mut().push(hashes);
+
+        match &*self.query_status_result.borrow() {
+            Ok(results) => Ok(results.clone()),
             Err(e) => Err(anyhow!("{}", e)),
         }
     }
@@ -219,24 +177,5 @@ impl DownloaderClient for MockDownloaderClient {
             Ok(()) => Ok(()),
             Err(e) => Err(anyhow!("{}", e)),
         }
-    }
-
-    fn extract_hash_from_magnet(&self, magnet_url: &str) -> Result<String> {
-        self.do_extract_hash(magnet_url)
-    }
-
-    async fn add_torrent(&self, url: &str, save_path: Option<&str>) -> Result<String> {
-        self.add_torrent_calls
-            .borrow_mut()
-            .push((url.to_string(), save_path.map(|s| s.to_string())));
-
-        match &*self.add_torrent_result.borrow() {
-            Ok(hash) => Ok(hash.clone()),
-            Err(e) => Err(anyhow!("{}", e)),
-        }
-    }
-
-    fn extract_hash_from_url(&self, url: &str) -> Result<String> {
-        self.do_extract_hash_from_url(url)
     }
 }

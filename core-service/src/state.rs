@@ -1,4 +1,4 @@
-use crate::services::ServiceRegistry;
+use crate::services::{ServiceRegistry, DownloadDispatchService};
 use crate::db::{
     DbPool,
     AnimeRepository, DieselAnimeRepository,
@@ -52,15 +52,18 @@ pub struct AppState {
     pub db: DbPool,
     pub registry: Arc<ServiceRegistry>,
     pub repos: Arc<Repositories>,
+    pub dispatch_service: Arc<DownloadDispatchService>,
 }
 
 impl AppState {
     pub fn new(db: DbPool, registry: ServiceRegistry) -> Self {
         let repos = Repositories::new(db.clone());
+        let dispatch_service = DownloadDispatchService::new(db.clone());
         Self {
             db,
             registry: Arc::new(registry),
             repos: Arc::new(repos),
+            dispatch_service: Arc::new(dispatch_service),
         }
     }
 }

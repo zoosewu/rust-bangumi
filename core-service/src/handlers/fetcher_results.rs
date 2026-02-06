@@ -450,6 +450,7 @@ pub async fn receive_raw_fetcher_results(
     let mut items_parsed = 0;
     let mut items_failed = 0;
     let mut errors = Vec::new();
+    let mut new_link_ids: Vec<i32> = Vec::new();
 
     match state.db.get() {
         Ok(mut conn) => {
@@ -481,7 +482,8 @@ pub async fn receive_raw_fetcher_results(
                     Ok(Some(parsed)) => {
                         // 解析成功，建立相關記錄
                         match process_parsed_result(&mut conn, &saved_item, &parsed) {
-                            Ok(_) => {
+                            Ok(link_id) => {
+                                new_link_ids.push(link_id);
                                 TitleParserService::update_raw_item_status(
                                     &mut conn,
                                     saved_item.item_id,
@@ -536,6 +538,22 @@ pub async fn receive_raw_fetcher_results(
                 }
             }
 
+            // 批次派發新建的下載連結
+            if !new_link_ids.is_empty() {
+                let link_count = new_link_ids.len();
+                match state.dispatch_service.dispatch_new_links(new_link_ids).await {
+                    Ok(result) => {
+                        tracing::info!(
+                            "Download dispatch: {} links -> {} dispatched, {} no_downloader, {} failed",
+                            link_count, result.dispatched, result.no_downloader, result.failed
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!("Download dispatch failed: {}", e);
+                    }
+                }
+            }
+
             let response = RawFetcherResultsResponse {
                 success: items_failed == 0,
                 items_received,
@@ -567,11 +585,12 @@ pub async fn receive_raw_fetcher_results(
 }
 
 /// 處理解析成功的結果，建立 anime, series, group, link 記錄
+/// 回傳新建的 link_id
 fn process_parsed_result(
     conn: &mut PgConnection,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
-) -> Result<(), String> {
+) -> Result<i32, String> {
     use sha2::{Sha256, Digest};
 
     // 1. 建立或取得 anime
@@ -604,6 +623,7 @@ fn process_parsed_result(
 
     // 6. 建立 anime_link
     let now = Utc::now().naive_utc();
+    let detected_type = crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
     let new_link = NewAnimeLink {
         series_id: series.series_id,
         group_id: group.group_id,
@@ -614,13 +634,13 @@ fn process_parsed_result(
         filtered_flag: false,
         created_at: now,
         raw_item_id: Some(raw_item.item_id),
-        download_type: None,
+        download_type: detected_type.map(|dt| dt.to_string()),
     };
 
-    diesel::insert_into(anime_links::table)
+    let created_link: AnimeLink = diesel::insert_into(anime_links::table)
         .values(&new_link)
-        .execute(conn)
+        .get_result(conn)
         .map_err(|e| format!("Failed to create anime link: {}", e))?;
 
-    Ok(())
+    Ok(created_link.link_id)
 }
