@@ -19,6 +19,7 @@ pub struct TorrentInfo {
     pub dlspeed: i64,
     pub size: i64,
     pub downloaded: i64,
+    pub content_path: Option<String>,
 }
 
 impl QBittorrentClient {
@@ -260,6 +261,7 @@ impl DownloaderClient for QBittorrentClient {
                 status: Self::map_torrent_state(&t.state),
                 progress: t.progress,
                 size: t.size as u64,
+                content_path: t.content_path.clone(),
             })
             .collect();
 
@@ -271,6 +273,7 @@ impl DownloaderClient for QBittorrentClient {
                     status: "not_found".to_string(),
                     progress: 0.0,
                     size: 0,
+                    content_path: None,
                 });
             }
         }
