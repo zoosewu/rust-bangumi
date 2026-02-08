@@ -34,7 +34,11 @@ pub fn run_migrations(pool: &DbPool) -> anyhow::Result<()> {
         .get()
         .map_err(|e| anyhow::anyhow!("Failed to get connection from pool: {}", e))?;
 
-    let migrations = FileBasedMigrations::from_path("./migrations")
+    // 使用相對於 Cargo.toml 的路徑，確保不受 CWD 影響
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let migrations_path = std::path::Path::new(manifest_dir).join("migrations");
+
+    let migrations = FileBasedMigrations::from_path(migrations_path)
         .map_err(|e| anyhow::anyhow!("Failed to load migrations: {}", e))?;
 
     conn.run_pending_migrations(migrations)
