@@ -227,21 +227,43 @@ impl DownloadScheduler {
                     };
 
                     let now = chrono::Utc::now().naive_utc();
-                    diesel::update(
-                        downloads::table
-                            .filter(downloads::torrent_hash.eq(&status_item.hash))
-                            .filter(downloads::module_id.eq(downloader.module_id)),
-                    )
-                    .set((
-                        downloads::status.eq(new_status),
-                        downloads::progress.eq(status_item.progress as f32),
-                        downloads::total_bytes.eq(status_item.size as i64),
-                        downloads::error_message.eq::<Option<String>>(None),
-                        downloads::updated_at.eq(now),
-                    ))
-                    .execute(conn)
-                    .ok();
+
+                    if new_status == "completed" {
+                        diesel::update(
+                            downloads::table
+                                .filter(downloads::torrent_hash.eq(&status_item.hash))
+                                .filter(downloads::module_id.eq(downloader.module_id)),
+                        )
+                        .set((
+                            downloads::status.eq(new_status),
+                            downloads::progress.eq(status_item.progress as f32),
+                            downloads::total_bytes.eq(status_item.size as i64),
+                            downloads::file_path.eq(&status_item.content_path),
+                            downloads::error_message.eq::<Option<String>>(None),
+                            downloads::updated_at.eq(now),
+                        ))
+                        .execute(conn)
+                        .ok();
+                    } else {
+                        diesel::update(
+                            downloads::table
+                                .filter(downloads::torrent_hash.eq(&status_item.hash))
+                                .filter(downloads::module_id.eq(downloader.module_id)),
+                        )
+                        .set((
+                            downloads::status.eq(new_status),
+                            downloads::progress.eq(status_item.progress as f32),
+                            downloads::total_bytes.eq(status_item.size as i64),
+                            downloads::error_message.eq::<Option<String>>(None),
+                            downloads::updated_at.eq(now),
+                        ))
+                        .execute(conn)
+                        .ok();
+                    }
                 }
+
+                // Trigger sync for newly completed downloads
+                self.trigger_sync_for_completed(conn).await;
 
                 Ok(())
             }
