@@ -40,9 +40,6 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting Jellyfin Viewer Service");
 
-    // Register to core service
-    register_to_core().await?;
-
     // Initialize file organizer with paths from environment or defaults
     let source_dir = std::env::var("DOWNLOADS_DIR").unwrap_or_else(|_| "/downloads".to_string());
     let library_dir =
@@ -89,9 +86,18 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8003));
-    let listener = TcpListener::bind(addr).await?;
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("無法綁定 {} — {}", addr, e);
+            std::process::exit(1);
+        }
+    };
 
     tracing::info!("Jellyfin Viewer Service listening on {}", addr);
+
+    // 服務就緒後才向 Core 註冊
+    tokio::spawn(async { register_to_core().await });
 
     axum::serve(listener, app).await?;
 

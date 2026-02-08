@@ -205,7 +205,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("無法綁定 {} — {}", addr, e);
+            std::process::exit(1);
+        }
+    };
 
     tracing::info!("核心服務監聽於 {}", addr);
 

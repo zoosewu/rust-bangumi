@@ -30,9 +30,6 @@ async fn main() -> anyhow::Result<()> {
     let client = Arc::new(QBittorrentClient::new(qb_url));
     client.login(&qb_user, &qb_pass).await?;
 
-    // Register with Core service
-    register_with_core().await;
-
     let app = Router::new()
         .route(
             "/downloads",
@@ -61,8 +58,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health_check))
         .with_state(client);
 
-    let listener = TcpListener::bind("0.0.0.0:8002").await?;
-    tracing::info!("Download service listening on 0.0.0.0:8002");
+    let addr = "0.0.0.0:8002";
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("無法綁定 {} — {}", addr, e);
+            std::process::exit(1);
+        }
+    };
+    tracing::info!("Download service listening on {}", addr);
+
+    // 服務就緒後才向 Core 註冊
+    tokio::spawn(async { register_with_core().await });
 
     axum::serve(listener, app).await?;
     Ok(())

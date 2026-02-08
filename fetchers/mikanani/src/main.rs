@@ -4,8 +4,6 @@ use axum::{
 };
 use fetcher_mikanani::{FetcherConfig, HttpClient, RealHttpClient};
 use std::net::SocketAddr;
-use std::sync::Arc;
-use tracing_subscriber;
 
 mod cors;
 mod handlers;
@@ -30,12 +28,6 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = FetcherConfig::from_env();
 
-    // Create HTTP client for registration
-    let http_client = Arc::new(RealHttpClient::new());
-
-    // Register to core service
-    register_to_core(&config, &*http_client).await?;
-
     // Create app state
     let app_state = AppState::new();
 
@@ -55,9 +47,23 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.service_port));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            tracing::error!("無法綁定 {} — {}", addr, e);
+            std::process::exit(1);
+        }
+    };
 
     tracing::info!("Mikanani fetcher service listening on {}", addr);
+
+    // 服務就緒後才向 Core 註冊
+    tokio::spawn(async move {
+        let http_client = RealHttpClient::new();
+        if let Err(e) = register_to_core(&config, &http_client).await {
+            tracing::warn!("向核心服務註冊失敗: {}", e);
+        }
+    });
 
     axum::serve(listener, app).await?;
 
