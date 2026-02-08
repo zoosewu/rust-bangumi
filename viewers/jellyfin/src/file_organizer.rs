@@ -59,9 +59,10 @@ impl FileOrganizer {
 
         let target_path = season_dir.join(new_filename);
 
-        // Try hard link first, fallback to copy
-        if let Err(_) = fs::hard_link(source_file, &target_path).await {
+        // Move the file (rename for same filesystem, fallback to copy+delete)
+        if let Err(_) = fs::rename(source_file, &target_path).await {
             fs::copy(source_file, &target_path).await?;
+            let _ = fs::remove_file(source_file).await;
         }
 
         tracing::info!(
