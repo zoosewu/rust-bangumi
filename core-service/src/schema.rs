@@ -95,6 +95,8 @@ diesel::table! {
         module_id -> Nullable<Int4>,
         #[max_length = 255]
         torrent_hash -> Nullable<Varchar>,
+        file_path -> Nullable<Text>,
+        sync_retry_count -> Int4,
     }
 }
 
