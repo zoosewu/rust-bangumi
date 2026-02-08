@@ -189,6 +189,7 @@ pub struct DownloadProgress {
 
 // ============ Viewer/Sync ============
 
+#[deprecated(note = "Use ViewerSyncRequest instead")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncRequest {
     pub link_id: Uuid,
@@ -200,11 +201,34 @@ pub struct SyncRequest {
     pub file_size: u64,
 }
 
+#[deprecated(note = "Use ViewerSyncCallback instead")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncResponse {
     pub status: String, // synced/failed
     pub target_path: String,
     pub message: String,
+}
+
+/// Core → Viewer: request to sync a completed download
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerSyncRequest {
+    pub download_id: i32,
+    pub series_id: i32,
+    pub anime_title: String,
+    pub series_no: i32,
+    pub episode_no: i32,
+    pub subtitle_group: String,
+    pub file_path: String,
+    pub callback_url: String,
+}
+
+/// Viewer → Core: callback after sync processing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerSyncCallback {
+    pub download_id: i32,
+    pub status: String, // "synced" | "failed"
+    pub target_path: Option<String>,
+    pub error_message: Option<String>,
 }
 
 // ============ Filter Rules ============
@@ -352,4 +376,5 @@ pub struct DownloadStatusItem {
     pub status: String,
     pub progress: f64,
     pub size: u64,
+    pub content_path: Option<String>,
 }
