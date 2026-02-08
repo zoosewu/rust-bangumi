@@ -7,7 +7,7 @@ use crate::db::{
     RawItemRepository, SeasonRepository, ServiceModuleRepository, SubscriptionRepository,
     SubtitleGroupRepository, TitleParserRepository,
 };
-use crate::services::{DownloadDispatchService, ServiceRegistry};
+use crate::services::{DownloadDispatchService, ServiceRegistry, SyncService};
 use std::sync::Arc;
 
 pub struct Repositories {
@@ -48,17 +48,20 @@ pub struct AppState {
     pub registry: Arc<ServiceRegistry>,
     pub repos: Arc<Repositories>,
     pub dispatch_service: Arc<DownloadDispatchService>,
+    pub sync_service: Arc<SyncService>,
 }
 
 impl AppState {
     pub fn new(db: DbPool, registry: ServiceRegistry) -> Self {
         let repos = Repositories::new(db.clone());
         let dispatch_service = DownloadDispatchService::new(db.clone());
+        let sync_service = SyncService::new(db.clone());
         Self {
             db,
             registry: Arc::new(registry),
             repos: Arc::new(repos),
             dispatch_service: Arc::new(dispatch_service),
+            sync_service: Arc::new(sync_service),
         }
     }
 }

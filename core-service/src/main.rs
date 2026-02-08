@@ -190,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
             "/conflicts/:conflict_id/resolve",
             post(handlers::conflict_resolution::resolve_conflict),
         )
+        // Viewer 同步回呼
+        .route("/sync-callback", post(handlers::sync::sync_callback))
         // 健康檢查
         .route("/health", get(health_check))
         // 應用狀態
