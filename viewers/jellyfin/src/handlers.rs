@@ -39,8 +39,8 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
         req.episode_no
     );
 
-    // Record sync task
-    if let Ok(mut conn) = state.db.get() {
+    // Record sync task and get task_id
+    let task_id = if let Ok(mut conn) = state.db.get() {
         let new_task = NewSyncTask {
             download_id: req.download_id,
             core_series_id: req.series_id,
@@ -48,17 +48,21 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
             source_path: req.file_path.clone(),
             status: "processing".to_string(),
         };
-        let _ = diesel::insert_into(sync_tasks::table)
+        diesel::insert_into(sync_tasks::table)
             .values(&new_task)
-            .execute(&mut conn);
-    }
+            .returning(sync_tasks::task_id)
+            .get_result::<i32>(&mut conn)
+            .ok()
+    } else {
+        None
+    };
 
     // Spawn async processing
     let organizer = state.organizer.clone();
     let db = state.db.clone();
     let bangumi = state.bangumi.clone();
     tokio::spawn(async move {
-        process_sync(organizer, db, bangumi, req).await;
+        process_sync(organizer, db, bangumi, req, task_id).await;
     });
 
     StatusCode::ACCEPTED
@@ -69,38 +73,31 @@ async fn process_sync(
     db: DbPool,
     bangumi: Arc<BangumiClient>,
     req: ViewerSyncRequest,
+    task_id: Option<i32>,
 ) {
     let result = do_sync(&organizer, &db, &bangumi, &req).await;
 
-    // Update sync_task record
-    if let Ok(mut conn) = db.get() {
+    // Update sync_task record by task_id
+    if let (Some(tid), Ok(mut conn)) = (task_id, db.get()) {
         let now = chrono::Utc::now().naive_utc();
         match &result {
             Ok(target_path) => {
-                let _ = diesel::update(
-                    sync_tasks::table
-                        .filter(sync_tasks::download_id.eq(req.download_id))
-                        .filter(sync_tasks::status.eq("processing")),
-                )
-                .set((
-                    sync_tasks::status.eq("completed"),
-                    sync_tasks::target_path.eq(target_path),
-                    sync_tasks::completed_at.eq(Some(now)),
-                ))
-                .execute(&mut conn);
+                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
+                    .set((
+                        sync_tasks::status.eq("completed"),
+                        sync_tasks::target_path.eq(target_path),
+                        sync_tasks::completed_at.eq(Some(now)),
+                    ))
+                    .execute(&mut conn);
             }
             Err(e) => {
-                let _ = diesel::update(
-                    sync_tasks::table
-                        .filter(sync_tasks::download_id.eq(req.download_id))
-                        .filter(sync_tasks::status.eq("processing")),
-                )
-                .set((
-                    sync_tasks::status.eq("failed"),
-                    sync_tasks::error_message.eq(Some(e.to_string())),
-                    sync_tasks::completed_at.eq(Some(now)),
-                ))
-                .execute(&mut conn);
+                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
+                    .set((
+                        sync_tasks::status.eq("failed"),
+                        sync_tasks::error_message.eq(Some(e.to_string())),
+                        sync_tasks::completed_at.eq(Some(now)),
+                    ))
+                    .execute(&mut conn);
             }
         }
     }

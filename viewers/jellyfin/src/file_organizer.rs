@@ -109,7 +109,6 @@ impl FileOrganizer {
         &self.source_dir
     }
 
-    #[allow(dead_code)]
     pub fn get_library_dir(&self) -> &Path {
         &self.library_dir
     }

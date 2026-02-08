@@ -96,6 +96,7 @@ pub async fn generate_episode_nfo(
     <episode>{episode}</episode>
     <aired>{aired}</aired>
     <plot>{plot}</plot>
+    <uniqueid type="bangumi">{bangumi_ep_id}</uniqueid>
 </episodedetails>
 "#,
         title = display_title,
@@ -103,6 +104,7 @@ pub async fn generate_episode_nfo(
         episode = ep_no,
         aired = aired,
         plot = plot,
+        bangumi_ep_id = episode.id,
     );
 
     fs::write(&nfo_path, nfo_content).await?;

@@ -5,7 +5,6 @@ use crate::schema::{
 };
 use diesel::prelude::*;
 use shared::ViewerSyncRequest;
-use std::sync::Arc;
 
 pub struct SyncService {
     db_pool: DbPool,
