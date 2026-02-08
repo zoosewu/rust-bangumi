@@ -3,11 +3,13 @@ use reqwest::{cookie::Jar, Client};
 use serde::{Deserialize, Serialize};
 use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct QBittorrentClient {
     pub client: Client,
     pub base_url: String,
+    credentials: Arc<Mutex<Option<(String, String)>>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,7 +32,38 @@ impl QBittorrentClient {
             .build()
             .expect("Failed to build HTTP client");
 
-        Self { client, base_url }
+        Self {
+            client,
+            base_url,
+            credentials: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// 嘗試重新登入（使用儲存的帳密）
+    async fn re_login(&self) -> Result<()> {
+        let creds = self.credentials.lock().await;
+        if let Some((username, password)) = creds.as_ref() {
+            tracing::info!("Session expired, re-authenticating with qBittorrent...");
+            let params = [("username", username.as_str()), ("password", password.as_str())];
+            let resp = self
+                .client
+                .post(format!("{}/api/v2/auth/login", self.base_url))
+                .form(&params)
+                .send()
+                .await?;
+
+            if resp.status().is_success() {
+                let body = resp.text().await?;
+                if body == "Ok." {
+                    tracing::info!("Re-login successful");
+                    return Ok(());
+                }
+                return Err(anyhow!("Re-login failed: {}", body));
+            }
+            Err(anyhow!("Re-login request failed: {}", resp.status()))
+        } else {
+            Err(anyhow!("No stored credentials for re-login"))
+        }
     }
 
     /// Extract the info hash from a magnet URL or .torrent URL (private helper)
@@ -105,6 +138,9 @@ impl DownloaderClient for QBittorrentClient {
         if resp.status().is_success() {
             let body = resp.text().await?;
             if body == "Ok." {
+                // 儲存帳密供 session 過期時重新登入
+                *self.credentials.lock().await =
+                    Some((username.to_string(), password.to_string()));
                 tracing::info!("Successfully logged in to qBittorrent");
                 Ok(())
             } else {
@@ -138,12 +174,24 @@ impl DownloaderClient for QBittorrentClient {
                 params.push(("savepath", save_path.as_str()));
             }
 
-            let resp = self
-                .client
-                .post(format!("{}/api/v2/torrents/add", self.base_url))
-                .form(&params)
-                .send()
-                .await;
+            let add_url = format!("{}/api/v2/torrents/add", self.base_url);
+            let resp = self.client.post(&add_url).form(&params).send().await;
+
+            // 403 時嘗試重新登入再重試一次
+            let resp = match &resp {
+                Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => {
+                    if self.re_login().await.is_ok() {
+                        let mut retry_params = vec![("urls", item.url.as_str())];
+                        if !save_path.is_empty() {
+                            retry_params.push(("savepath", save_path.as_str()));
+                        }
+                        self.client.post(&add_url).form(&retry_params).send().await
+                    } else {
+                        resp
+                    }
+                }
+                _ => resp,
+            };
 
             match resp {
                 Ok(r) if r.status().is_success() => match Self::extract_hash_from_url(&item.url) {
