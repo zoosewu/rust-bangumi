@@ -13,6 +13,7 @@ fn test_torrent_info_serialize_json() {
         dlspeed: 1024000,
         size: 1000000000,
         downloaded: 500000000,
+        content_path: None,
     };
 
     let json = serde_json::to_string(&info).unwrap();
@@ -59,6 +60,7 @@ fn test_torrent_info_all_states() {
             dlspeed: 0,
             size: 100000,
             downloaded: 100000,
+            content_path: None,
         };
 
         assert_eq!(info.state, state);
@@ -76,6 +78,7 @@ fn test_torrent_info_progress_boundaries() {
         dlspeed: 1024,
         size: 1000000,
         downloaded: 0,
+        content_path: None,
     };
     assert_eq!(info_zero.progress, 0.0);
 
@@ -88,6 +91,7 @@ fn test_torrent_info_progress_boundaries() {
         dlspeed: 0,
         size: 1000000,
         downloaded: 1000000,
+        content_path: Some("/downloads/test.mkv".to_string()),
     };
     assert_eq!(info_full.progress, 1.0);
 }

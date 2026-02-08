@@ -347,6 +347,7 @@ async fn test_query_status_returns_200() {
         status: "downloading".to_string(),
         progress: 0.5,
         size: 1000000,
+        content_path: None,
     }]));
 
     let app = create_test_app(mock);

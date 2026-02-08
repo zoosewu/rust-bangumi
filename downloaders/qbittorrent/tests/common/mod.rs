@@ -10,6 +10,7 @@ pub fn sample_torrent_info() -> TorrentInfo {
         dlspeed: 1024000,
         size: 1000000000,
         downloaded: 500000000,
+        content_path: None,
     }
 }
 
