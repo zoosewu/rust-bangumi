@@ -16,7 +16,9 @@ impl FilterEngine {
         rules.sort_by(|a, b| {
             let priority_a = Self::target_type_priority(&a.target_type);
             let priority_b = Self::target_type_priority(&b.target_type);
-            priority_b.cmp(&priority_a).then(b.rule_order.cmp(&a.rule_order))
+            priority_b
+                .cmp(&priority_a)
+                .then(b.rule_order.cmp(&a.rule_order))
         });
         Self { rules }
     }

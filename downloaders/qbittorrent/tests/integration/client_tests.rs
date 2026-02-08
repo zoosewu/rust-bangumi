@@ -155,6 +155,7 @@ async fn test_query_status_returns_statuses() {
         status: "downloading".to_string(),
         progress: 0.5,
         size: 1000000,
+        content_path: None,
     }];
 
     let mock = MockDownloaderClient::new().with_query_status_result(Ok(expected));

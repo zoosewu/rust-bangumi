@@ -4,10 +4,12 @@ pub mod download_type_detector;
 pub mod filter;
 pub mod registry;
 pub mod scheduler;
+pub mod sync_service;
 pub mod title_parser;
 
 pub use download_dispatch::DownloadDispatchService;
 pub use download_scheduler::DownloadScheduler;
 pub use registry::ServiceRegistry;
 pub use scheduler::FetchScheduler;
+pub use sync_service::SyncService;
 pub use title_parser::TitleParserService;

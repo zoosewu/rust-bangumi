@@ -12,10 +12,11 @@ pub struct DownloadScheduler {
     db_pool: DbPool,
     poll_interval_secs: u64,
     http_client: reqwest::Client,
+    sync_service: Arc<super::SyncService>,
 }
 
 impl DownloadScheduler {
-    pub fn new(db_pool: DbPool) -> Self {
+    pub fn new(db_pool: DbPool, sync_service: Arc<super::SyncService>) -> Self {
         let poll_interval_secs = std::env::var("DOWNLOAD_POLL_INTERVAL")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
@@ -25,6 +26,7 @@ impl DownloadScheduler {
             db_pool,
             poll_interval_secs,
             http_client: reqwest::Client::new(),
+            sync_service,
         }
     }
 
@@ -114,20 +116,42 @@ impl DownloadScheduler {
                     };
 
                     let now = chrono::Utc::now().naive_utc();
-                    diesel::update(
-                        downloads::table
-                            .filter(downloads::torrent_hash.eq(&status_item.hash))
-                            .filter(downloads::module_id.eq(downloader.module_id)),
-                    )
-                    .set((
-                        downloads::status.eq(new_status),
-                        downloads::progress.eq(status_item.progress as f32),
-                        downloads::total_bytes.eq(status_item.size as i64),
-                        downloads::updated_at.eq(now),
-                    ))
-                    .execute(conn)
-                    .ok();
+
+                    if new_status == "completed" {
+                        // Store content_path when completed
+                        diesel::update(
+                            downloads::table
+                                .filter(downloads::torrent_hash.eq(&status_item.hash))
+                                .filter(downloads::module_id.eq(downloader.module_id)),
+                        )
+                        .set((
+                            downloads::status.eq(new_status),
+                            downloads::progress.eq(status_item.progress as f32),
+                            downloads::total_bytes.eq(status_item.size as i64),
+                            downloads::file_path.eq(&status_item.content_path),
+                            downloads::updated_at.eq(now),
+                        ))
+                        .execute(conn)
+                        .ok();
+                    } else {
+                        diesel::update(
+                            downloads::table
+                                .filter(downloads::torrent_hash.eq(&status_item.hash))
+                                .filter(downloads::module_id.eq(downloader.module_id)),
+                        )
+                        .set((
+                            downloads::status.eq(new_status),
+                            downloads::progress.eq(status_item.progress as f32),
+                            downloads::total_bytes.eq(status_item.size as i64),
+                            downloads::updated_at.eq(now),
+                        ))
+                        .execute(conn)
+                        .ok();
+                    }
                 }
+
+                // Trigger sync for newly completed downloads
+                self.trigger_sync_for_completed(conn).await;
 
                 Ok(())
             }
@@ -224,6 +248,40 @@ impl DownloadScheduler {
             Err(_) => {
                 // Still offline, nothing to do
                 Ok(())
+            }
+        }
+    }
+
+    async fn trigger_sync_for_completed(&self, conn: &mut PgConnection) {
+        // Find downloads that are "completed" with file_path set and retry count < 3
+        let completed: Vec<Download> = match downloads::table
+            .filter(downloads::status.eq("completed"))
+            .filter(downloads::file_path.is_not_null())
+            .filter(downloads::sync_retry_count.lt(3))
+            .load::<Download>(conn)
+        {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("Failed to query completed downloads: {}", e);
+                return;
+            }
+        };
+
+        for download in completed {
+            match self.sync_service.notify_viewer(&download).await {
+                Ok(true) => {
+                    tracing::info!("Triggered sync for download {}", download.download_id);
+                }
+                Ok(false) => {
+                    // No viewer available, skip
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to trigger sync for download {}: {}",
+                        download.download_id,
+                        e
+                    );
+                }
             }
         }
     }

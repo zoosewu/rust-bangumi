@@ -63,8 +63,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("FetchScheduler started");
 
     // 啟動 DownloadScheduler
-    let download_scheduler =
-        std::sync::Arc::new(services::DownloadScheduler::new(app_state.db.clone()));
+    let download_scheduler = std::sync::Arc::new(services::DownloadScheduler::new(
+        app_state.db.clone(),
+        app_state.sync_service.clone(),
+    ));
     let ds_clone = download_scheduler.clone();
     tokio::spawn(async move {
         ds_clone.start().await;
@@ -190,6 +192,8 @@ async fn main() -> anyhow::Result<()> {
             "/conflicts/:conflict_id/resolve",
             post(handlers::conflict_resolution::resolve_conflict),
         )
+        // Viewer 同步回呼
+        .route("/sync-callback", post(handlers::sync::sync_callback))
         // 健康檢查
         .route("/health", get(health_check))
         // 應用狀態

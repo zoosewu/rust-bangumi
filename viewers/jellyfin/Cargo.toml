@@ -30,6 +30,9 @@ thiserror.workspace = true
 reqwest.workspace = true
 regex.workspace = true
 once_cell = "1.19"
+diesel = { version = "2.2", features = ["postgres", "r2d2", "chrono", "serde_json"] }
+diesel_migrations = "2.2"
+urlencoding = "2.1"
 
 [dev-dependencies]
 mockall.workspace = true
