@@ -137,6 +137,54 @@ impl SyncService {
         })
     }
 
+    /// Retry syncing completed downloads that have no viewer yet.
+    /// Called when a new viewer registers to process backlogged downloads.
+    pub async fn retry_completed_downloads(&self) -> Result<usize, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        let completed: Vec<Download> = downloads::table
+            .filter(downloads::status.eq("completed"))
+            .filter(downloads::file_path.is_not_null())
+            .filter(downloads::sync_retry_count.lt(3))
+            .load::<Download>(&mut conn)
+            .map_err(|e| format!("Failed to query completed downloads: {}", e))?;
+
+        if completed.is_empty() {
+            return Ok(0);
+        }
+
+        tracing::info!(
+            "Found {} completed downloads pending viewer sync",
+            completed.len()
+        );
+
+        let mut synced = 0;
+        for download in &completed {
+            match self.notify_viewer(download).await {
+                Ok(true) => synced += 1,
+                Ok(false) => {
+                    tracing::warn!("No viewer available during retry, stopping");
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to sync download {} during retry: {}",
+                        download.download_id,
+                        e
+                    );
+                }
+            }
+        }
+
+        tracing::info!(
+            "Viewer registration retry: synced {}/{} completed downloads",
+            synced,
+            completed.len()
+        );
+
+        Ok(synced)
+    }
+
     /// Handle sync callback from viewer
     pub fn handle_callback(
         &self,

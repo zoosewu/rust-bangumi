@@ -101,6 +101,19 @@ pub async fn register(
                             }
                         });
                     }
+
+                    // Trigger sync of completed downloads when a viewer registers
+                    if payload.service_type == ServiceType::Viewer {
+                        let sync_service = state.sync_service.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = sync_service.retry_completed_downloads().await {
+                                tracing::error!(
+                                    "Failed to retry completed downloads on viewer registration: {}",
+                                    e
+                                );
+                            }
+                        });
+                    }
                 }
                 Err(e) => {
                     tracing::error!(
