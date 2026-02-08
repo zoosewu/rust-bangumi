@@ -271,8 +271,14 @@ pub async fn resolve_conflict(
 // ============ Helper Functions ============
 
 /// Parse candidate fetchers from conflict_data JSON
-fn parse_candidate_fetchers(conflict_data: &serde_json::Value, conn: &mut diesel::PgConnection) -> Vec<CandidateFetcher> {
-    if let Some(fetcher_ids) = conflict_data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
+fn parse_candidate_fetchers(
+    conflict_data: &serde_json::Value,
+    conn: &mut diesel::PgConnection,
+) -> Vec<CandidateFetcher> {
+    if let Some(fetcher_ids) = conflict_data
+        .get("candidate_fetcher_ids")
+        .and_then(|v| v.as_array())
+    {
         let mut fetchers = Vec::new();
         for fetcher_id_val in fetcher_ids {
             if let Some(fetcher_id) = fetcher_id_val.as_i64() {
@@ -301,7 +307,10 @@ fn parse_candidate_fetchers(conflict_data: &serde_json::Value, conn: &mut diesel
 
 /// Parse candidate fetcher IDs from conflict_data JSON
 fn parse_candidate_fetchers_vec(conflict_data: &serde_json::Value) -> Vec<i32> {
-    if let Some(fetcher_ids) = conflict_data.get("candidate_fetcher_ids").and_then(|v| v.as_array()) {
+    if let Some(fetcher_ids) = conflict_data
+        .get("candidate_fetcher_ids")
+        .and_then(|v| v.as_array())
+    {
         return fetcher_ids
             .iter()
             .filter_map(|v| v.as_i64().map(|id| id as i32))

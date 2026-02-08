@@ -15,8 +15,8 @@ pub struct SyncService {
 
 impl SyncService {
     pub fn new(db_pool: DbPool) -> Self {
-        let core_service_url =
-            std::env::var("CORE_SERVICE_URL").unwrap_or_else(|_| "http://localhost:8000".to_string());
+        let core_service_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://localhost:8000".to_string());
         Self {
             db_pool,
             http_client: reqwest::Client::new(),
@@ -151,16 +151,14 @@ impl SyncService {
 
         match status {
             "synced" => {
-                diesel::update(
-                    downloads::table.filter(downloads::download_id.eq(download_id)),
-                )
-                .set((
-                    downloads::status.eq("synced"),
-                    downloads::file_path.eq(target_path),
-                    downloads::updated_at.eq(now),
-                ))
-                .execute(conn)
-                .map_err(|e| format!("Failed to update download: {}", e))?;
+                diesel::update(downloads::table.filter(downloads::download_id.eq(download_id)))
+                    .set((
+                        downloads::status.eq("synced"),
+                        downloads::file_path.eq(target_path),
+                        downloads::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .map_err(|e| format!("Failed to update download: {}", e))?;
 
                 tracing::info!(
                     "Download {} synced to {}",
@@ -182,17 +180,15 @@ impl SyncService {
                     "completed" // back to completed so scheduler will re-trigger
                 };
 
-                diesel::update(
-                    downloads::table.filter(downloads::download_id.eq(download_id)),
-                )
-                .set((
-                    downloads::status.eq(new_status),
-                    downloads::sync_retry_count.eq(new_retry_count),
-                    downloads::error_message.eq(error_message),
-                    downloads::updated_at.eq(now),
-                ))
-                .execute(conn)
-                .map_err(|e| format!("Failed to update download: {}", e))?;
+                diesel::update(downloads::table.filter(downloads::download_id.eq(download_id)))
+                    .set((
+                        downloads::status.eq(new_status),
+                        downloads::sync_retry_count.eq(new_retry_count),
+                        downloads::error_message.eq(error_message),
+                        downloads::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .map_err(|e| format!("Failed to update download: {}", e))?;
 
                 tracing::warn!(
                     "Download {} sync failed (attempt {}/3): {}",

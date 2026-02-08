@@ -354,12 +354,10 @@ fn to_subject_detail(s: &BangumiSubject) -> crate::bangumi_client::SubjectDetail
                 medium: None,
                 small: None,
             }),
-        rating: s
-            .rating
-            .map(|score| crate::bangumi_client::SubjectRating {
-                score: Some(score),
-                total: None,
-            }),
+        rating: s.rating.map(|score| crate::bangumi_client::SubjectRating {
+            score: Some(score),
+            total: None,
+        }),
         total_episodes: s.episode_count,
     }
 }
