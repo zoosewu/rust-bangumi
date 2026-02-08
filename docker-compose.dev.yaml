@@ -25,6 +25,7 @@ services:
       POSTGRES_PASSWORD: bangumi_dev_password
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
+      - ./dev-config/postgres/init-viewer-db.sh:/docker-entrypoint-initdb.d/02-init-viewer-db.sh
     ports:
       - "5432:5432"
     networks:

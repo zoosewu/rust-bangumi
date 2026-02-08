@@ -25,6 +25,17 @@
 - RSS 訂閱系統設計
 - 數據流圖和交互說明
 
+### [Viewer Jellyfin 設計文件](./plans/2026-02-06-viewer-jellyfin-design.md)
+- Viewer 同步管線設計
+- Core ↔ Viewer 資料流
+- bangumi.tv Metadata 整合
+
+### [Viewer Jellyfin README](../viewers/jellyfin/README.md)
+- 開發環境設置與啟動流程
+- API 文件（POST /sync、GET /health）
+- Docker 部署與 Volume 掛載
+- bangumi.tv API 整合與 NFO 格式
+
 ## ⚙️ 配置指南
 
 ### [CORS 配置指南](./CORS-CONFIGURATION.md)
@@ -58,6 +69,8 @@
 
 | 功能 | 文件 | 完成日期 |
 |------|------|--------|
+| Viewer Jellyfin 同步管線 | [2026-02-06-viewer-jellyfin-design.md](./plans/2026-02-06-viewer-jellyfin-design.md) | 2026-02-08 |
+| 自動下載派送 | [2026-02-06-auto-download-dispatch-design.md](./plans/2026-02-06-auto-download-dispatch-design.md) | 2026-02-06 |
 | Fetcher API 規格 | [2026-01-26-fetcher-api-spec-completion.md](./plans/2026-01-26-fetcher-api-spec-completion.md) | 2026-01-26 |
 | CORS 實現 | [2026-01-26-cors-implementation-completion.md](./plans/2026-01-26-cors-implementation-completion.md) | 2026-01-26 |
 | RSS 訂閱管理重構 | [2026-01-22-rss-subscription-management-refactor.md](./plans/2026-01-22-rss-subscription-management-refactor.md) | 2026-01-22 |
@@ -106,12 +119,15 @@ docs/
 **了解 RSS 訂閱系統**
 → [RSS 訂閱管理架構](./ARCHITECTURE_RSS_SUBSCRIPTIONS.md)
 
+**開發 / 部署 Viewer Jellyfin**
+→ [Viewer Jellyfin README](../viewers/jellyfin/README.md)
+
 ## 📊 統計信息
 
-- **總文檔數**：15+ 個 markdown 文檔
+- **總文檔數**：20+ 個 markdown 文檔
 - **API 規格**：3 個 OpenAPI 規格文件
-- **完成 Phase**：9 個
-- **最後更新**：2026-01-26
+- **服務數量**：4 個（Core、Fetcher、Downloader、Viewer）
+- **最後更新**：2026-02-08
 
 ## 📝 文檔維護
 

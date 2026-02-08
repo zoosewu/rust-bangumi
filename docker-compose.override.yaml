@@ -67,7 +67,7 @@ services:
     volumes:
       - jellyfin_config:/config
       - jellyfin_cache:/cache
-      - media_output:/media/output:ro
+      - jellyfin_media:/media/jellyfin:ro
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.21
@@ -103,4 +103,6 @@ volumes:
   jellyfin_config:
     driver: local
   jellyfin_cache:
+    driver: local
+  jellyfin_media:
     driver: local
