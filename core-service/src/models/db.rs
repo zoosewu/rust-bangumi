@@ -302,6 +302,8 @@ pub struct Download {
     pub updated_at: NaiveDateTime,
     pub module_id: Option<i32>,
     pub torrent_hash: Option<String>,
+    pub file_path: Option<String>,
+    pub sync_retry_count: i32,
 }
 
 #[derive(Insertable)]
