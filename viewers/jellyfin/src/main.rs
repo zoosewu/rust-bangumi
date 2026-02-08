@@ -5,8 +5,11 @@ use axum::{
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+mod db;
 mod file_organizer;
 mod handlers;
+mod models;
+mod schema;
 
 use file_organizer::FileOrganizer;
 
