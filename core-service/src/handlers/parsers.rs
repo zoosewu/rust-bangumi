@@ -9,8 +9,10 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::models::{NewTitleParser, ParserSourceType, TitleParser};
-use crate::schema::title_parsers;
+use crate::models::{NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
+use crate::schema::{raw_anime_items, title_parsers};
+use crate::services::title_parser::ParseStatus;
+use crate::services::TitleParserService;
 use crate::state::AppState;
 
 // ============ DTOs ============
@@ -197,6 +199,13 @@ pub async fn create_parser(
         .get_result::<TitleParser>(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // 非同步重新解析所有失敗的 raw_anime_items
+    let db_pool = state.db.clone();
+    let dispatch_service = state.dispatch_service.clone();
+    tokio::spawn(async move {
+        reparse_failed_items(db_pool, dispatch_service).await;
+    });
+
     Ok((StatusCode::CREATED, Json(ParserResponse::from(parser))))
 }
 
@@ -230,5 +239,101 @@ fn parse_source_type(s: &str) -> Result<ParserSourceType, (StatusCode, String)> 
             StatusCode::BAD_REQUEST,
             format!("Invalid source type: {}", s),
         )),
+    }
+}
+
+/// 重新解析所有 no_match / failed 的 raw_anime_items
+async fn reparse_failed_items(
+    db: crate::db::DbPool,
+    dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
+) {
+    let mut conn = match db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("reparse_failed_items: 無法取得 DB 連線: {}", e);
+            return;
+        }
+    };
+
+    let failed_items: Vec<RawAnimeItem> = match raw_anime_items::table
+        .filter(
+            raw_anime_items::status
+                .eq("no_match")
+                .or(raw_anime_items::status.eq("failed")),
+        )
+        .load::<RawAnimeItem>(&mut conn)
+    {
+        Ok(items) => items,
+        Err(e) => {
+            tracing::error!("reparse_failed_items: 查詢失敗項目失敗: {}", e);
+            return;
+        }
+    };
+
+    if failed_items.is_empty() {
+        return;
+    }
+
+    tracing::info!(
+        "reparse_failed_items: 開始重新解析 {} 筆失敗項目",
+        failed_items.len()
+    );
+
+    let mut parsed_count = 0;
+    let mut new_link_ids: Vec<i32> = Vec::new();
+
+    for item in &failed_items {
+        match TitleParserService::parse_title(&mut conn, &item.title) {
+            Ok(Some(parsed)) => {
+                match super::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
+                    Ok(link_id) => {
+                        new_link_ids.push(link_id);
+                        TitleParserService::update_raw_item_status(
+                            &mut conn,
+                            item.item_id,
+                            ParseStatus::Parsed,
+                            Some(parsed.parser_id),
+                            None,
+                        )
+                        .ok();
+                        parsed_count += 1;
+                        tracing::info!(
+                            "reparse: {} -> {} EP{}",
+                            item.title,
+                            parsed.anime_title,
+                            parsed.episode_no
+                        );
+                    }
+                    Err(e) => {
+                        TitleParserService::update_raw_item_status(
+                            &mut conn,
+                            item.item_id,
+                            ParseStatus::Failed,
+                            Some(parsed.parser_id),
+                            Some(&e),
+                        )
+                        .ok();
+                        tracing::warn!("reparse: 建立記錄失敗 {}: {}", item.title, e);
+                    }
+                }
+            }
+            Ok(None) => {} // 仍然無匹配，保持原狀
+            Err(e) => {
+                tracing::warn!("reparse: 解析錯誤 {}: {}", item.title, e);
+            }
+        }
+    }
+
+    tracing::info!(
+        "reparse_failed_items: 完成，成功解析 {}/{} 筆",
+        parsed_count,
+        failed_items.len()
+    );
+
+    // 觸發 dispatch 下載
+    if !new_link_ids.is_empty() {
+        if let Err(e) = dispatch_service.dispatch_new_links(new_link_ids).await {
+            tracing::warn!("reparse_failed_items: dispatch 失敗: {}", e);
+        }
     }
 }

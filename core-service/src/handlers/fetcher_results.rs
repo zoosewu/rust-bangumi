@@ -235,7 +235,7 @@ pub async fn receive_fetcher_results(
 // ============ Helper Functions ============
 
 /// Create or get an anime by title
-fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<Anime, String> {
+pub(crate) fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<Anime, String> {
     // Try to find existing anime
     match animes::table
         .filter(animes::title.eq(title))
@@ -264,7 +264,7 @@ fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<Anime, St
 }
 
 /// Create or get a season by year and season name
-fn create_or_get_season(
+pub(crate) fn create_or_get_season(
     conn: &mut PgConnection,
     year: i32,
     season_name: &str,
@@ -298,7 +298,7 @@ fn create_or_get_season(
 }
 
 /// Create or get an anime series
-fn create_or_get_series(
+pub(crate) fn create_or_get_series(
     conn: &mut PgConnection,
     anime_id: i32,
     series_no: i32,
@@ -348,7 +348,7 @@ fn create_or_get_series(
 }
 
 /// Create or get a subtitle group
-fn create_or_get_subtitle_group(
+pub(crate) fn create_or_get_subtitle_group(
     conn: &mut PgConnection,
     group_name: &str,
 ) -> Result<SubtitleGroup, String> {
@@ -620,7 +620,7 @@ pub async fn receive_raw_fetcher_results(
 
 /// 處理解析成功的結果，建立 anime, series, group, link 記錄
 /// 回傳新建的 link_id
-fn process_parsed_result(
+pub(crate) fn process_parsed_result(
     conn: &mut PgConnection,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,

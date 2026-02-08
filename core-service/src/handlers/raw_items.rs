@@ -135,21 +135,45 @@ pub async fn reparse_item(
 
     match TitleParserService::parse_title(&mut conn, &item.title) {
         Ok(Some(parsed)) => {
-            TitleParserService::update_raw_item_status(
-                &mut conn,
-                item_id,
-                ParseStatus::Parsed,
-                Some(parsed.parser_id),
-                None,
-            )
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            match super::fetcher_results::process_parsed_result(&mut conn, &item, &parsed) {
+                Ok(link_id) => {
+                    TitleParserService::update_raw_item_status(
+                        &mut conn,
+                        item_id,
+                        ParseStatus::Parsed,
+                        Some(parsed.parser_id),
+                        None,
+                    )
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-            Ok(Json(ReparseResponse {
-                success: true,
-                items_processed: 1,
-                items_parsed: 1,
-                message: format!("Parsed: {} EP{}", parsed.anime_title, parsed.episode_no),
-            }))
+                    // 觸發 dispatch 下載
+                    let dispatch_service = state.dispatch_service.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = dispatch_service.dispatch_new_links(vec![link_id]).await {
+                            tracing::warn!("reparse dispatch 失敗: {}", e);
+                        }
+                    });
+
+                    Ok(Json(ReparseResponse {
+                        success: true,
+                        items_processed: 1,
+                        items_parsed: 1,
+                        message: format!("Parsed: {} EP{}", parsed.anime_title, parsed.episode_no),
+                    }))
+                }
+                Err(e) => {
+                    TitleParserService::update_raw_item_status(
+                        &mut conn,
+                        item_id,
+                        ParseStatus::Failed,
+                        Some(parsed.parser_id),
+                        Some(&e),
+                    )
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+                    Err((StatusCode::INTERNAL_SERVER_ERROR, e))
+                }
+            }
         }
         Ok(None) => {
             TitleParserService::update_raw_item_status(
