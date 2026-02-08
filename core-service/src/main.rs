@@ -63,8 +63,10 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("FetchScheduler started");
 
     // 啟動 DownloadScheduler
-    let download_scheduler =
-        std::sync::Arc::new(services::DownloadScheduler::new(app_state.db.clone()));
+    let download_scheduler = std::sync::Arc::new(services::DownloadScheduler::new(
+        app_state.db.clone(),
+        app_state.sync_service.clone(),
+    ));
     let ds_clone = download_scheduler.clone();
     tokio::spawn(async move {
         ds_clone.start().await;
