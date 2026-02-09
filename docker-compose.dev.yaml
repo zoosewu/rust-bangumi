@@ -10,6 +10,7 @@ version: '3.8'
 #   - PostgreSQL (port 5432)
 #   - Adminer (port 8081)
 #   - qBittorrent (port 8080)
+#   - Jellyfin (port 8096)
 # ============================================================================
 
 services:
@@ -105,6 +106,40 @@ services:
         max-size: "10m"
         max-file: "2"
 
+  # ============================================================================
+  # Jellyfin - 媒體伺服器（開發環境）
+  # ============================================================================
+  # WebUI: http://localhost:8096
+  # viewer-jellyfin 組織完檔案後可在此預覽效果
+  # ============================================================================
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: bangumi-jellyfin-dev
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: Asia/Taipei
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_dev_config:/config
+      - jellyfin_dev_cache:/cache
+      - jellyfin_dev_media:/media/jellyfin:ro
+    networks:
+      - bangumi-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
 # ============================================================================
 # 網絡
 # ============================================================================
@@ -119,4 +154,10 @@ volumes:
   postgres_dev_data:
     driver: local
   qbittorrent_dev_downloads:
+    driver: local
+  jellyfin_dev_config:
+    driver: local
+  jellyfin_dev_cache:
+    driver: local
+  jellyfin_dev_media:
     driver: local
