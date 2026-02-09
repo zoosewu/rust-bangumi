@@ -90,7 +90,7 @@ services:
       - "6881:6881/udp"
     volumes:
       - ${HOST_PROJECT_PATH:-.}/dev-config/qbittorrent/qBittorrent.conf:/config/qBittorrent/qBittorrent.conf
-      - qbittorrent_dev_downloads:/downloads
+      - ${HOST_PROJECT_PATH:-.}/${DOWNLOADS_DIR:-tmp/bangumi-downloads}:/downloads
     networks:
       - bangumi-dev-network
     restart: unless-stopped
@@ -124,7 +124,7 @@ services:
     volumes:
       - jellyfin_dev_config:/config
       - jellyfin_dev_cache:/cache
-      - jellyfin_dev_media:/media/jellyfin:ro
+      - ${HOST_PROJECT_PATH:-.}/${JELLYFIN_LIBRARY_DIR:-tmp/bangumi-media}:/media/jellyfin:ro
     networks:
       - bangumi-dev-network
     restart: unless-stopped
@@ -153,11 +153,7 @@ networks:
 volumes:
   postgres_dev_data:
     driver: local
-  qbittorrent_dev_downloads:
-    driver: local
   jellyfin_dev_config:
     driver: local
   jellyfin_dev_cache:
-    driver: local
-  jellyfin_dev_media:
     driver: local

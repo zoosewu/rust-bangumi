@@ -137,14 +137,14 @@ async fn do_sync(
     bangumi: &BangumiClient,
     req: &ViewerSyncRequest,
 ) -> anyhow::Result<String> {
-    // 1. Move the file
-    let source = std::path::Path::new(&req.file_path);
+    // 1. Move the file (resolve container path → local path)
+    let source = organizer.resolve_download_path(&req.file_path);
     let target_path = organizer
         .organize_episode(
             &req.anime_title,
             req.series_no as u32,
             req.episode_no as u32,
-            source,
+            &source,
         )
         .await?;
 

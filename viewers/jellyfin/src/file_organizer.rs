@@ -9,7 +9,6 @@ static EPISODE_REGEX: Lazy<Regex> =
 
 #[derive(Clone, Debug)]
 pub struct FileOrganizer {
-    #[allow(dead_code)]
     source_dir: PathBuf,
     library_dir: PathBuf,
 }
@@ -20,6 +19,27 @@ impl FileOrganizer {
             source_dir,
             library_dir,
         }
+    }
+
+    /// 解析下載檔案路徑：將容器內部路徑（/downloads/...）對應到本地 source_dir
+    ///
+    /// - 正式環境：viewer 容器內 /downloads 已掛載，路徑直接可用
+    /// - 開發環境：viewer 以 cargo run 執行，/downloads 不存在，
+    ///   需對應到 DOWNLOADS_DIR（如 ./tmp/bangumi-downloads）
+    pub fn resolve_download_path(&self, file_path: &str) -> PathBuf {
+        let path = Path::new(file_path);
+        if path.exists() {
+            return path.to_path_buf();
+        }
+        // 嘗試將 /downloads/... 前綴替換為 source_dir
+        if let Ok(relative) = path.strip_prefix("/downloads") {
+            let mapped = self.source_dir.join(relative);
+            if mapped.exists() {
+                return mapped;
+            }
+        }
+        // Fallback：原始路徑（organize_episode 會回報 file not found）
+        path.to_path_buf()
     }
 
     pub async fn organize_episode(
@@ -104,7 +124,6 @@ impl FileOrganizer {
         None
     }
 
-    #[allow(dead_code)]
     pub fn get_source_dir(&self) -> &Path {
         &self.source_dir
     }
