@@ -26,8 +26,8 @@ fetchers/mikanani/examples/
 # Environment
 .env
 .env.*
-!.env.example
-!.env.production
+!.env.dev
+!.env.prod
 
 # Build artifacts
 dist/

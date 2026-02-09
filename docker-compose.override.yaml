@@ -25,8 +25,8 @@ services:
       - "${QBITTORRENT_DHT_PORT:-6881}:6881"
       - "${QBITTORRENT_DHT_PORT:-6881}:6881/udp"
     volumes:
-      - qbittorrent_config:/config
-      - qbittorrent_downloads:/downloads
+      - ${QBITTORRENT_CONFIG_DIR:?QBITTORRENT_CONFIG_DIR is required}:/config
+      - ${DOWNLOADS_DIR:?DOWNLOADS_DIR is required}:/downloads
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.20
@@ -65,9 +65,9 @@ services:
       - "${JELLYFIN_PORT:-8096}:8096"
       - "${JELLYFIN_DISCOVERY_PORT:-7359}:7359/udp"
     volumes:
-      - jellyfin_config:/config
-      - jellyfin_cache:/cache
-      - jellyfin_media:/media/jellyfin:ro
+      - ${JELLYFIN_CONFIG_DIR:?JELLYFIN_CONFIG_DIR is required}:/config
+      - ${JELLYFIN_CACHE_DIR:?JELLYFIN_CACHE_DIR is required}:/cache
+      - ${JELLYFIN_LIBRARY_DIR:?JELLYFIN_LIBRARY_DIR is required}:/media/jellyfin:ro
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.21
@@ -92,17 +92,3 @@ services:
         max-size: "50m"
         max-file: "5"
 
-# ============================================================================
-# 可選服務卷
-# ============================================================================
-volumes:
-  qbittorrent_config:
-    driver: local
-  qbittorrent_downloads:
-    driver: local
-  jellyfin_config:
-    driver: local
-  jellyfin_cache:
-    driver: local
-  jellyfin_media:
-    driver: local
