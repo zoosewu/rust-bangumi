@@ -186,6 +186,23 @@ pub async fn create_subscription(
                                 fetcher_id,
                                 assignment_status
                             );
+
+                            // Fire-and-forget: 立即觸發一次撈取
+                            let db = state.db.clone();
+                            let sub_id = subscription.subscription_id;
+                            let url = subscription.source_url.clone();
+                            tokio::spawn(async move {
+                                if let Err(e) =
+                                    trigger_immediate_fetch(&db, sub_id, &url, fetcher_id).await
+                                {
+                                    tracing::warn!(
+                                        "Immediate fetch failed for subscription {}: {}",
+                                        sub_id,
+                                        e
+                                    );
+                                }
+                            });
+
                             (StatusCode::CREATED, Json(json!(subscription)))
                         }
                         Err(e) => {
@@ -635,5 +652,70 @@ pub async fn delete_subscription(
                 })),
             )
         }
+    }
+}
+
+/// Best-effort 即時觸發撈取（新訂閱建立後立即呼叫 Fetcher）
+async fn trigger_immediate_fetch(
+    db: &crate::db::DbPool,
+    subscription_id: i32,
+    source_url: &str,
+    fetcher_id: i32,
+) -> Result<(), String> {
+    // 查出 fetcher 的 base_url
+    let mut conn = db.get().map_err(|e| format!("DB connection error: {}", e))?;
+
+    let fetcher = service_modules::table
+        .filter(service_modules::module_id.eq(fetcher_id))
+        .filter(service_modules::is_enabled.eq(true))
+        .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+        .select(ServiceModule::as_select())
+        .first::<ServiceModule>(&mut conn)
+        .map_err(|e| format!("Fetcher {} not found or disabled: {}", fetcher_id, e))?;
+
+    drop(conn);
+
+    let callback_url = std::env::var("CORE_SERVICE_URL")
+        .unwrap_or_else(|_| "http://core-service:8000".to_string());
+    let callback_url = format!("{}/raw-fetcher-results", callback_url);
+
+    let request = shared::FetchTriggerRequest {
+        subscription_id,
+        rss_url: source_url.to_string(),
+        callback_url,
+    };
+
+    let fetch_url = format!("{}/fetch", fetcher.base_url);
+    tracing::info!(
+        "Triggering immediate fetch for subscription {} at {}",
+        subscription_id,
+        fetch_url
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let response = client
+        .post(&fetch_url)
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = response.status();
+    if status.is_success() || status == reqwest::StatusCode::ACCEPTED {
+        tracing::info!(
+            "Immediate fetch triggered successfully for subscription {}",
+            subscription_id
+        );
+        Ok(())
+    } else {
+        Err(format!(
+            "Fetcher returned HTTP {}: {}",
+            status,
+            response.text().await.unwrap_or_default()
+        ))
     }
 }
