@@ -1,0 +1,436 @@
+openapi: 3.0.0
+info:
+  title: Bangumi Downloader (qBittorrent) Service API
+  description: |
+    Downloader 服務 API 規格 - 透過 qBittorrent 後端管理 torrent 下載。
+    支援 magnet link（優先）及 .torrent HTTP URL 兩種下載方式。
+    服務啟動時會向 Core 註冊，廣告支援的 DownloadType（Magnet、Torrent）。
+  version: 0.1.0
+  contact:
+    name: Bangumi Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://downloader-qbittorrent:8002
+    description: qBittorrent Downloader (Docker)
+  - url: http://localhost:8002
+    description: Downloader 本地開發
+
+tags:
+  - name: Health
+    description: 服務健康檢查
+  - name: Downloads
+    description: 下載任務管理
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: 健康檢查
+      description: 檢查 Downloader 服務是否正常運行
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服務正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+  /downloads:
+    post:
+      tags:
+        - Downloads
+      summary: 批次新增下載任務
+      description: |
+        批次新增 torrent 下載任務。每個項目可以是 magnet link 或 .torrent HTTP URL。
+        服務優先處理 magnet link，亦支援 .torrent URL。
+      operationId: batchAddDownloads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDownloadRequest'
+            examples:
+              magnet:
+                summary: 使用 magnet link 新增
+                value:
+                  items:
+                    - url: "magnet:?xt=urn:btih:abc123def456&dn=Example+Torrent"
+                      save_path: "/downloads/bangumi/example"
+              torrentUrl:
+                summary: 使用 .torrent URL 新增
+                value:
+                  items:
+                    - url: "https://mikanani.me/Download/20250101/abc123def456.torrent"
+                      save_path: "/downloads/bangumi/example"
+              mixed:
+                summary: 混合批次新增
+                value:
+                  items:
+                    - url: "magnet:?xt=urn:btih:abc123def456&dn=Torrent+A"
+                      save_path: "/downloads/bangumi/a"
+                    - url: "https://mikanani.me/Download/20250101/789xyz.torrent"
+                      save_path: "/downloads/bangumi/b"
+      responses:
+        '200':
+          description: 批次新增結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchDownloadResponse'
+              examples:
+                success:
+                  summary: 全部成功
+                  value:
+                    results:
+                      - url: "magnet:?xt=urn:btih:abc123def456"
+                        hash: "abc123def456"
+                        status: "success"
+                        reason: null
+                partialFailure:
+                  summary: 部分失敗
+                  value:
+                    results:
+                      - url: "magnet:?xt=urn:btih:abc123def456"
+                        hash: "abc123def456"
+                        status: "success"
+                        reason: null
+                      - url: "https://invalid-url.com/bad.torrent"
+                        hash: null
+                        status: "failed"
+                        reason: "無法解析 torrent URL"
+
+    get:
+      tags:
+        - Downloads
+      summary: 查詢下載狀態
+      description: 根據 hash 列表批次查詢下載任務的當前狀態、進度與大小
+      operationId: queryDownloadStatus
+      parameters:
+        - name: hashes
+          in: query
+          required: true
+          description: 以逗號分隔的 torrent hash 列表
+          schema:
+            type: string
+          example: "abc123def456,789xyz000111"
+      responses:
+        '200':
+          description: 下載狀態查詢結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusQueryResponse'
+              examples:
+                normal:
+                  summary: 正常查詢結果
+                  value:
+                    statuses:
+                      - hash: "abc123def456"
+                        status: "downloading"
+                        progress: 0.45
+                        size: 1073741824
+                        content_path: null
+                      - hash: "789xyz000111"
+                        status: "completed"
+                        progress: 1.0
+                        size: 536870912
+                        content_path: "/downloads/bangumi/example/episode01.mkv"
+
+  /downloads/cancel:
+    post:
+      tags:
+        - Downloads
+      summary: 批次取消下載
+      description: 批次取消指定的下載任務
+      operationId: batchCancelDownloads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCancelRequest'
+            examples:
+              single:
+                summary: 取消單一下載
+                value:
+                  hashes:
+                    - "abc123def456"
+              multiple:
+                summary: 取消多個下載
+                value:
+                  hashes:
+                    - "abc123def456"
+                    - "789xyz000111"
+      responses:
+        '200':
+          description: 批次取消結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchCancelResponse'
+              examples:
+                success:
+                  summary: 取消成功
+                  value:
+                    results:
+                      - hash: "abc123def456"
+                        status: "cancelled"
+                      - hash: "789xyz000111"
+                        status: "cancelled"
+
+  /downloads/{hash}/pause:
+    post:
+      tags:
+        - Downloads
+      summary: 暫停下載
+      description: 暫停指定 hash 的 torrent 下載任務
+      operationId: pauseDownload
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: Torrent 的 info hash
+          schema:
+            type: string
+          example: "abc123def456"
+      responses:
+        '200':
+          description: 已暫停
+
+  /downloads/{hash}/resume:
+    post:
+      tags:
+        - Downloads
+      summary: 恢復下載
+      description: 恢復指定 hash 的已暫停 torrent 下載任務
+      operationId: resumeDownload
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: Torrent 的 info hash
+          schema:
+            type: string
+          example: "abc123def456"
+      responses:
+        '200':
+          description: 已恢復
+
+  /downloads/{hash}:
+    delete:
+      tags:
+        - Downloads
+      summary: 刪除下載
+      description: 刪除指定 hash 的 torrent 下載任務，可選擇是否同時刪除已下載的檔案
+      operationId: deleteDownload
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: Torrent 的 info hash
+          schema:
+            type: string
+          example: "abc123def456"
+        - name: delete_files
+          in: query
+          required: false
+          description: 是否同時刪除已下載的檔案（預設為 false）
+          schema:
+            type: boolean
+            default: false
+          example: true
+      responses:
+        '200':
+          description: 已刪除
+
+components:
+  schemas:
+    BatchDownloadRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: 要新增的下載項目列表
+          items:
+            $ref: '#/components/schemas/DownloadItem'
+
+    DownloadItem:
+      type: object
+      required:
+        - url
+        - save_path
+      properties:
+        url:
+          type: string
+          description: Magnet link 或 .torrent HTTP URL
+          example: "magnet:?xt=urn:btih:abc123def456&dn=Example+Torrent"
+        save_path:
+          type: string
+          description: 下載檔案的儲存路徑
+          example: "/downloads/bangumi/example"
+
+    BatchDownloadResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: 每個下載項目的處理結果
+          items:
+            $ref: '#/components/schemas/DownloadResult'
+
+    DownloadResult:
+      type: object
+      required:
+        - url
+        - status
+      properties:
+        url:
+          type: string
+          description: 原始提交的 URL
+          example: "magnet:?xt=urn:btih:abc123def456"
+        hash:
+          type: string
+          nullable: true
+          description: Torrent 的 info hash（成功時回傳）
+          example: "abc123def456"
+        status:
+          type: string
+          description: 處理結果狀態
+          example: "success"
+        reason:
+          type: string
+          nullable: true
+          description: 失敗時的原因說明
+          example: null
+
+    StatusQueryResponse:
+      type: object
+      required:
+        - statuses
+      properties:
+        statuses:
+          type: array
+          description: 各下載任務的狀態列表
+          items:
+            $ref: '#/components/schemas/DownloadStatus'
+
+    DownloadStatus:
+      type: object
+      required:
+        - hash
+        - status
+        - progress
+        - size
+      properties:
+        hash:
+          type: string
+          description: Torrent 的 info hash
+          example: "abc123def456"
+        status:
+          type: string
+          description: 下載狀態（如 downloading、completed、paused、error）
+          example: "downloading"
+        progress:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: 下載進度（0.0 ~ 1.0）
+          example: 0.45
+        size:
+          type: integer
+          format: int64
+          description: 檔案總大小（位元組）
+          example: 1073741824
+        content_path:
+          type: string
+          nullable: true
+          description: 下載完成後的檔案路徑（下載中時為 null）
+          example: "/downloads/bangumi/example/episode01.mkv"
+
+    BatchCancelRequest:
+      type: object
+      required:
+        - hashes
+      properties:
+        hashes:
+          type: array
+          description: 要取消的 torrent hash 列表
+          items:
+            type: string
+          example:
+            - "abc123def456"
+            - "789xyz000111"
+
+    BatchCancelResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          description: 每個取消操作的結果
+          items:
+            $ref: '#/components/schemas/CancelResult'
+
+    CancelResult:
+      type: object
+      required:
+        - hash
+        - status
+      properties:
+        hash:
+          type: string
+          description: Torrent 的 info hash
+          example: "abc123def456"
+        status:
+          type: string
+          description: 取消結果狀態
+          example: "cancelled"
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        error:
+          type: string
+          description: 錯誤詳細信息
+          example: "Invalid request format"
+
+  responses:
+    HealthCheck:
+      description: 服務健康檢查響應
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                example: "ok"
+
+    BadRequest:
+      description: 請求格式錯誤
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

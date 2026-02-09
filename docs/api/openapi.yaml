@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Bangumi Core Service API
   description: Rust Bangumi 核心服務 API 規格
-  version: 0.1.0
+  version: 0.2.0
   contact:
     name: Bangumi Project
   license:
@@ -15,6 +15,8 @@ servers:
     description: 生產環境（Docker）
 
 tags:
+  - name: Health
+    description: 健康檢查
   - name: Services
     description: 服務管理
   - name: Anime
@@ -33,12 +35,17 @@ tags:
     description: RSS 訂閱管理
   - name: FetcherResults
     description: Fetcher 結果接收
+  - name: Parsers
+    description: 標題解析器管理
+  - name: RawItems
+    description: 原始資料管理
   - name: Conflicts
     description: 衝突解決
-  - name: Health
-    description: 健康檢查
+  - name: SyncCallback
+    description: Viewer 同步回呼
 
 paths:
+  # ============ Health ============
   /health:
     get:
       tags:
@@ -58,6 +65,7 @@ paths:
                     type: string
                     example: "ok"
 
+  # ============ Services ============
   /services/register:
     post:
       tags:
@@ -74,6 +82,10 @@ paths:
       responses:
         '201':
           description: 服務註冊成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceRegistrationResponse'
         '400':
           description: 請求格式錯誤
 
@@ -87,12 +99,90 @@ paths:
       responses:
         '200':
           description: 服務列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RegisteredService'
 
+  /services/{service_type}:
+    get:
+      tags:
+        - Services
+      summary: 依類型列出服務
+      description: 依服務類型（fetcher/downloader/viewer）列出已註冊的服務
+      operationId: listServicesByType
+      parameters:
+        - name: service_type
+          in: path
+          required: true
+          description: 服務類型
+          schema:
+            type: string
+            enum: [fetcher, downloader, viewer]
+      responses:
+        '200':
+          description: 服務列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RegisteredService'
+
+  /services/{service_id}/health:
+    get:
+      tags:
+        - Services
+      summary: 檢查服務健康狀態
+      description: 檢查指定已註冊服務的健康狀態
+      operationId: checkServiceHealth
+      parameters:
+        - name: service_id
+          in: path
+          required: true
+          description: 服務 UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 服務健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+        '500':
+          description: 健康檢查失敗
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+
+  # ============ Anime ============
   /anime:
     post:
       tags:
         - Anime
       summary: 創建動畫
+      description: 建立一部新的動畫記錄
       operationId: createAnime
       requestBody:
         required: true
@@ -103,21 +193,38 @@ paths:
       responses:
         '201':
           description: 動畫創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeResponse'
+        '500':
+          description: 資料庫錯誤
 
     get:
       tags:
         - Anime
       summary: 列出所有動畫
+      description: 獲取所有動畫列表
       operationId: listAnime
       responses:
         '200':
           description: 動畫列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  animes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeResponse'
 
   /anime/{anime_id}:
     get:
       tags:
         - Anime
       summary: 獲取動畫詳情
+      description: 依 ID 取得動畫詳細資訊
       operationId: getAnime
       parameters:
         - name: anime_id
@@ -128,6 +235,10 @@ paths:
       responses:
         '200':
           description: 動畫詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeResponse'
         '404':
           description: 動畫不存在
 
@@ -135,6 +246,7 @@ paths:
       tags:
         - Anime
       summary: 刪除動畫
+      description: 依 ID 刪除動畫
       operationId: deleteAnime
       parameters:
         - name: anime_id
@@ -143,14 +255,26 @@ paths:
           schema:
             type: integer
       responses:
-        '204':
+        '200':
           description: 動畫已刪除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+        '404':
+          description: 動畫不存在
 
+  # ============ Seasons ============
   /seasons:
     post:
       tags:
         - Seasons
       summary: 創建季度
+      description: 建立一個新的季度記錄
       operationId: createSeason
       requestBody:
         required: true
@@ -161,21 +285,311 @@ paths:
       responses:
         '201':
           description: 季度創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeasonResponse'
+        '500':
+          description: 資料庫錯誤
 
     get:
       tags:
         - Seasons
       summary: 列出所有季度
+      description: 獲取所有季度列表
       operationId: listSeasons
       responses:
         '200':
           description: 季度列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  seasons:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SeasonResponse'
 
+  # ============ Anime Series ============
+  /anime/series:
+    post:
+      tags:
+        - AnimeSeries
+      summary: 創建動畫系列
+      description: 建立一個新的動畫系列記錄
+      operationId: createAnimeSeries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnimeSeriesRequest'
+      responses:
+        '201':
+          description: 動畫系列創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeSeriesResponse'
+        '500':
+          description: 資料庫錯誤
+
+  /anime/series/{series_id}:
+    get:
+      tags:
+        - AnimeSeries
+      summary: 依 ID 獲取動畫系列
+      description: 依系列 ID 取得動畫系列詳細資訊
+      operationId: getAnimeSeries
+      parameters:
+        - name: series_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 動畫系列詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeSeriesResponse'
+        '404':
+          description: 動畫系列不存在
+
+  /anime/{anime_id}/series:
+    get:
+      tags:
+        - AnimeSeries
+      summary: 列出動畫的所有系列
+      description: 依動畫 ID 列出該動畫的所有系列
+      operationId: listAnimeSeriesByAnimeId
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 動畫系列列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  series:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeSeriesResponse'
+
+  # ============ Subtitle Groups ============
+  /subtitle-groups:
+    post:
+      tags:
+        - SubtitleGroups
+      summary: 創建字幕組
+      description: 建立一個新的字幕組記錄
+      operationId: createSubtitleGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubtitleGroupRequest'
+      responses:
+        '201':
+          description: 字幕組創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubtitleGroupResponse'
+        '500':
+          description: 資料庫錯誤
+
+    get:
+      tags:
+        - SubtitleGroups
+      summary: 列出所有字幕組
+      description: 獲取所有字幕組列表
+      operationId: listSubtitleGroups
+      responses:
+        '200':
+          description: 字幕組列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubtitleGroupResponse'
+
+  /subtitle-groups/{group_id}:
+    delete:
+      tags:
+        - SubtitleGroups
+      summary: 刪除字幕組
+      description: 依 ID 刪除字幕組
+      operationId: deleteSubtitleGroup
+      parameters:
+        - name: group_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 字幕組已刪除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+        '404':
+          description: 字幕組不存在
+
+  # ============ Filter Rules ============
+  /filters:
+    post:
+      tags:
+        - Filters
+      summary: 創建過濾規則
+      description: 建立一條新的過濾規則
+      operationId: createFilterRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFilterRuleRequest'
+      responses:
+        '201':
+          description: 過濾規則創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterRuleResponse'
+        '400':
+          description: 請求格式錯誤（target_type 無效或 target_id 設置不正確）
+
+    get:
+      tags:
+        - Filters
+      summary: 獲取過濾規則
+      description: 依 target_type 和可選的 target_id 查詢過濾規則，依 rule_order 排序
+      operationId: getFilterRules
+      parameters:
+        - name: target_type
+          in: query
+          required: true
+          description: 目標類型（global/anime/series/group）
+          schema:
+            type: string
+        - name: target_id
+          in: query
+          required: false
+          description: 目標 ID（非全域規則時需指定）
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 過濾規則列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FilterRuleResponse'
+        '400':
+          description: target_type 無效
+
+  /filters/{rule_id}:
+    delete:
+      tags:
+        - Filters
+      summary: 刪除過濾規則
+      description: 依 ID 刪除過濾規則
+      operationId: deleteFilterRule
+      parameters:
+        - name: rule_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 過濾規則已刪除
+        '404':
+          description: 過濾規則不存在
+
+  # ============ Anime Links ============
+  /links:
+    post:
+      tags:
+        - Links
+      summary: 創建動畫連結
+      description: 建立一條新的動畫下載連結
+      operationId: createAnimeLink
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAnimeLinkRequest'
+      responses:
+        '201':
+          description: 動畫連結創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeLinkResponse'
+        '500':
+          description: 資料庫錯誤
+
+  /links/{series_id}:
+    get:
+      tags:
+        - Links
+      summary: 獲取系列連結
+      description: 依系列 ID 獲取動畫連結（僅回傳未過濾的連結）
+      operationId: getAnimeLinks
+      parameters:
+        - name: series_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 動畫連結列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeLinkResponse'
+
+  # ============ Subscriptions ============
   /subscriptions:
     post:
       tags:
         - Subscriptions
       summary: 創建 RSS 訂閱
+      description: |
+        建立一條新的 RSS 訂閱。支援自動選擇或手動指定 Fetcher。
+        建立時會廣播 can_handle 請求給所有 Fetcher 以確認能力。
       operationId: createSubscription
       requestBody:
         required: true
@@ -186,23 +600,122 @@ paths:
       responses:
         '201':
           description: 訂閱創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '400':
+          description: 無 Fetcher 可處理此訂閱
+        '409':
+          description: 訂閱 URL 已存在
 
     get:
       tags:
         - Subscriptions
       summary: 列出所有訂閱
+      description: 獲取所有活躍的訂閱列表
       operationId: listSubscriptions
       responses:
         '200':
           description: 訂閱列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubscriptionResponse'
 
+  /subscriptions/{rss_url}:
+    delete:
+      tags:
+        - Subscriptions
+      summary: 刪除訂閱
+      description: 依來源 URL 刪除訂閱
+      operationId: deleteSubscription
+      parameters:
+        - name: rss_url
+          in: path
+          required: true
+          description: 訂閱的來源 URL
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 訂閱已刪除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  source_url:
+                    type: string
+                  rows_deleted:
+                    type: integer
+        '404':
+          description: 訂閱不存在
+
+  /fetcher-modules:
+    get:
+      tags:
+        - Subscriptions
+      summary: 列出所有 Fetcher 模組
+      description: 獲取所有已註冊的 Fetcher 模組列表
+      operationId: listFetcherModules
+      responses:
+        '200':
+          description: Fetcher 模組列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fetcher_modules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FetcherModuleResponse'
+
+  /fetcher-modules/{fetcher_id}/subscriptions:
+    get:
+      tags:
+        - Subscriptions
+      summary: 獲取 Fetcher 的訂閱
+      description: 獲取指定 Fetcher 模組的所有活躍訂閱 URL 列表
+      operationId: getFetcherSubscriptions
+      parameters:
+        - name: fetcher_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Fetcher 訂閱列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fetcher_id:
+                    type: integer
+                  urls:
+                    type: array
+                    items:
+                      type: string
+                      format: uri
+
+  # ============ Fetcher Results ============
   /fetcher-results:
     post:
       tags:
         - FetcherResults
-      summary: 接收 Fetcher 抓取結果
+      summary: 接收 Fetcher 抓取結果（結構化）
       description: |
-        接收並存儲 Fetcher 服務的抓取結果。
+        接收並存儲 Fetcher 服務的結構化抓取結果。
 
         核心服務會：
         1. 驗證 Fetcher 來源
@@ -255,12 +768,340 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: 服務內部錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /raw-fetcher-results:
+    post:
+      tags:
+        - FetcherResults
+      summary: 接收 Fetcher 原始抓取結果
+      description: |
+        接收 Fetcher 服務的原始抓取結果（新架構）。
+
+        核心服務會：
+        1. 儲存原始項目到 raw_anime_items 表
+        2. 使用標題解析器嘗試解析標題
+        3. 解析成功時建立相關的 anime、series、group、link 記錄
+        4. 觸發下載派發
+      operationId: receiveRawFetcherResults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RawFetcherResultsPayload'
+      responses:
+        '200':
+          description: 原始結果已接收並處理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawFetcherResultsResponse'
+        '500':
+          description: 服務內部錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawFetcherResultsResponse'
+
+  # ============ Parsers ============
+  /parsers:
+    get:
+      tags:
+        - Parsers
+      summary: 列出所有解析器
+      description: 獲取所有標題解析器列表，依優先度降序排列
+      operationId: listParsers
+      responses:
+        '200':
+          description: 解析器列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParserResponse'
+        '500':
+          description: 資料庫錯誤
+
+    post:
+      tags:
+        - Parsers
+      summary: 創建解析器
+      description: |
+        建立一個新的標題解析器。建立後會自動觸發重新解析所有失敗的 raw_anime_items。
+      operationId: createParser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateParserRequest'
+      responses:
+        '201':
+          description: 解析器創建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParserResponse'
+        '400':
+          description: source type 無效（必須為 regex 或 static）
+        '500':
+          description: 資料庫錯誤
+
+  /parsers/{parser_id}:
+    get:
+      tags:
+        - Parsers
+      summary: 獲取解析器詳情
+      description: 依 ID 取得解析器詳細資訊
+      operationId: getParser
+      parameters:
+        - name: parser_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 解析器詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParserResponse'
+        '404':
+          description: 解析器不存在
+
+    delete:
+      tags:
+        - Parsers
+      summary: 刪除解析器
+      description: 依 ID 刪除解析器
+      operationId: deleteParser
+      parameters:
+        - name: parser_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 解析器已刪除
+        '404':
+          description: 解析器不存在
+
+  # ============ Raw Items ============
+  /raw-items:
+    get:
+      tags:
+        - RawItems
+      summary: 列出原始資料
+      description: 獲取原始資料列表，支援依狀態和訂閱 ID 過濾，依建立時間降序排列
+      operationId: listRawItems
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: 過濾狀態（pending/parsed/no_match/failed/skipped）
+          schema:
+            type: string
+        - name: subscription_id
+          in: query
+          required: false
+          description: 過濾訂閱 ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          description: 回傳筆數上限（預設 100，最大 1000）
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          required: false
+          description: 偏移量
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 原始資料列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RawItemResponse'
+        '500':
+          description: 資料庫錯誤
+
+  /raw-items/{item_id}:
+    get:
+      tags:
+        - RawItems
+      summary: 獲取原始資料詳情
+      description: 依 ID 取得單一原始資料項目
+      operationId: getRawItem
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 原始資料詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawItemResponse'
+        '404':
+          description: 項目不存在
+
+  /raw-items/{item_id}/reparse:
+    post:
+      tags:
+        - RawItems
+      summary: 重新解析原始資料
+      description: 重新嘗試解析指定的原始資料項目，解析成功時會觸發下載派發
+      operationId: reparseRawItem
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 重新解析結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReparseResponse'
+        '404':
+          description: 項目不存在
+        '500':
+          description: 解析或資料庫錯誤
+
+  /raw-items/{item_id}/skip:
+    post:
+      tags:
+        - RawItems
+      summary: 跳過原始資料
+      description: 手動標記指定的原始資料項目為已跳過
+      operationId: skipRawItem
+      parameters:
+        - name: item_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 項目已標記為跳過
+        '500':
+          description: 資料庫錯誤
+
+  # ============ Conflicts ============
+  /conflicts:
+    get:
+      tags:
+        - Conflicts
+      summary: 獲取所有待解決的衝突
+      description: 獲取所有未解決的訂閱衝突列表，包含候選 Fetcher 資訊
+      operationId: listConflicts
+      responses:
+        '200':
+          description: 衝突列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConflictInfo'
+
+  /conflicts/{conflict_id}/resolve:
+    post:
+      tags:
+        - Conflicts
+      summary: 解決衝突
+      description: 選擇指定的 Fetcher 來解決訂閱衝突
+      operationId: resolveConflict
+      parameters:
+        - name: conflict_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveConflictRequest'
+      responses:
+        '200':
+          description: 衝突已解決
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Conflict resolved successfully"
+                  conflict_id:
+                    type: integer
+                  subscription_id:
+                    type: integer
+                  resolved_fetcher_id:
+                    type: integer
+                  resolved_at:
+                    type: string
+                    format: date-time
+        '400':
+          description: 指定的 Fetcher 不在候選列表中
+        '404':
+          description: 衝突或 Fetcher 不存在
+
+  # ============ Sync Callback ============
+  /sync-callback:
+    post:
+      tags:
+        - SyncCallback
+      summary: 接收 Viewer 同步回呼
+      description: Viewer 服務同步處理完成後回呼核心服務，更新下載狀態
+      operationId: syncCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewerSyncCallback'
+      responses:
+        '200':
+          description: 回呼處理成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+        '500':
+          description: 處理失敗
           content:
             application/json:
               schema:
@@ -269,39 +1110,102 @@ paths:
                   error:
                     type: string
 
-  /conflicts:
-    get:
-      tags:
-        - Conflicts
-      summary: 獲取所有待解決的衝突
-      operationId: listConflicts
-      responses:
-        '200':
-          description: 衝突列表
-
 components:
   schemas:
+    # ============ Error ============
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+    # ============ Services ============
     ServiceRegistration:
       type: object
       required:
-        - name
         - service_type
+        - service_name
         - host
         - port
+        - capabilities
       properties:
-        name:
-          type: string
-          example: "mikanani-fetcher"
         service_type:
           type: string
           enum: [fetcher, downloader, viewer]
+          description: 服務類型
+        service_name:
+          type: string
+          description: 服務名稱
+          example: "mikanani-fetcher"
         host:
           type: string
+          description: 服務主機位址
           example: "localhost"
         port:
           type: integer
+          description: 服務埠號
           example: 8001
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
 
+    Capabilities:
+      type: object
+      properties:
+        fetch_endpoint:
+          type: string
+          description: Fetcher 的抓取端點
+        download_endpoint:
+          type: string
+          description: Downloader 的下載端點
+        sync_endpoint:
+          type: string
+          description: Viewer 的同步端點
+        supported_download_types:
+          type: array
+          items:
+            type: string
+            enum: [magnet, torrent, http]
+          description: 支援的下載類型（Downloader 專用）
+
+    ServiceRegistrationResponse:
+      type: object
+      required:
+        - service_id
+        - registered_at
+      properties:
+        service_id:
+          type: string
+          format: uuid
+          description: 核心服務分配的服務 UUID
+        registered_at:
+          type: string
+          format: date-time
+          description: 註冊時間
+
+    RegisteredService:
+      type: object
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        service_type:
+          type: string
+          enum: [fetcher, downloader, viewer]
+        service_name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        is_healthy:
+          type: boolean
+        last_heartbeat:
+          type: string
+          format: date-time
+
+    # ============ Anime ============
     CreateAnimeRequest:
       type: object
       required:
@@ -309,8 +1213,24 @@ components:
       properties:
         title:
           type: string
+          description: 動畫標題
           example: "進擊的巨人"
 
+    AnimeResponse:
+      type: object
+      properties:
+        anime_id:
+          type: integer
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ Season ============
     CreateSeasonRequest:
       type: object
       required:
@@ -319,34 +1239,329 @@ components:
       properties:
         year:
           type: integer
+          description: 年份
           example: 2024
         season:
           type: string
+          description: 季度名稱
           enum: [spring, summer, fall, winter]
+          example: "spring"
 
+    SeasonResponse:
+      type: object
+      properties:
+        season_id:
+          type: integer
+        year:
+          type: integer
+        season:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ============ AnimeSeries ============
+    CreateAnimeSeriesRequest:
+      type: object
+      required:
+        - anime_id
+        - series_no
+        - season_id
+      properties:
+        anime_id:
+          type: integer
+          description: 動畫 ID
+        series_no:
+          type: integer
+          description: 系列編號
+        season_id:
+          type: integer
+          description: 季度 ID
+        description:
+          type: string
+          description: 系列描述
+        aired_date:
+          type: string
+          format: date
+          description: 開播日期
+        end_date:
+          type: string
+          format: date
+          description: 完結日期
+
+    AnimeSeriesResponse:
+      type: object
+      properties:
+        series_id:
+          type: integer
+        anime_id:
+          type: integer
+        series_no:
+          type: integer
+        season_id:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        aired_date:
+          type: string
+          format: date
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ SubtitleGroup ============
+    CreateSubtitleGroupRequest:
+      type: object
+      required:
+        - group_name
+      properties:
+        group_name:
+          type: string
+          description: 字幕組名稱
+          example: "喵萌奶茶屋"
+
+    SubtitleGroupResponse:
+      type: object
+      properties:
+        group_id:
+          type: integer
+        group_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ============ FilterRule ============
+    CreateFilterRuleRequest:
+      type: object
+      required:
+        - target_type
+        - rule_order
+        - is_positive
+        - regex_pattern
+      properties:
+        target_type:
+          type: string
+          description: 目標類型（global/anime/series/group）
+        target_id:
+          type: integer
+          description: 目標 ID（全域規則為 null，其他類型必須指定）
+          nullable: true
+        rule_order:
+          type: integer
+          description: 規則順序
+        is_positive:
+          type: boolean
+          description: 是否為正向規則（true 為允許，false 為排除）
+        regex_pattern:
+          type: string
+          description: 正則表達式模式
+
+    FilterRuleResponse:
+      type: object
+      properties:
+        rule_id:
+          type: integer
+        target_type:
+          type: string
+        target_id:
+          type: integer
+          nullable: true
+        rule_order:
+          type: integer
+        is_positive:
+          type: boolean
+        regex_pattern:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ AnimeLink ============
+    CreateAnimeLinkRequest:
+      type: object
+      required:
+        - series_id
+        - group_id
+        - episode_no
+        - url
+        - source_hash
+      properties:
+        series_id:
+          type: integer
+          description: 系列 ID
+        group_id:
+          type: integer
+          description: 字幕組 ID
+        episode_no:
+          type: integer
+          description: 集數編號
+        title:
+          type: string
+          description: 連結標題
+          nullable: true
+        url:
+          type: string
+          description: 連結 URL（支援 magnet/torrent/http）
+          example: "magnet:?xt=urn:btih:xxxxx"
+        source_hash:
+          type: string
+          description: 來源 hash（用於去重）
+
+    AnimeLinkResponse:
+      type: object
+      properties:
+        link_id:
+          type: integer
+        series_id:
+          type: integer
+        group_id:
+          type: integer
+        episode_no:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        url:
+          type: string
+        source_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ============ Subscription ============
     CreateSubscriptionRequest:
       type: object
       required:
-        - fetcher_id
-        - rss_url
+        - source_url
       properties:
         fetcher_id:
           type: integer
-        rss_url:
+          description: 指定 Fetcher ID（不指定則自動選擇）
+          nullable: true
+        source_url:
           type: string
           format: uri
+          description: RSS 來源 URL
         name:
           type: string
+          description: 訂閱名稱
+          nullable: true
+        description:
+          type: string
+          description: 訂閱描述
+          nullable: true
         fetch_interval_minutes:
           type: integer
+          description: 抓取間隔（分鐘），預設 60
           example: 60
+        config:
+          type: object
+          description: 訂閱配置 JSON
+          nullable: true
+        source_type:
+          type: string
+          description: 來源類型，預設 rss
+          example: "rss"
 
+    SubscriptionResponse:
+      type: object
+      properties:
+        subscription_id:
+          type: integer
+        fetcher_id:
+          type: integer
+        source_url:
+          type: string
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        last_fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+        next_fetch_at:
+          type: string
+          format: date-time
+          nullable: true
+        fetch_interval_minutes:
+          type: integer
+        is_active:
+          type: boolean
+        config:
+          type: object
+          nullable: true
+        source_type:
+          type: string
+        assignment_status:
+          type: string
+          description: 分配狀態（auto_assigned/assigned）
+        assigned_at:
+          type: string
+          format: date-time
+          nullable: true
+        auto_selected:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FetcherModuleResponse:
+      type: object
+      properties:
+        module_id:
+          type: integer
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_enabled:
+          type: boolean
+        config_schema:
+          type: string
+          nullable: true
+        priority:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ Fetcher Results (Structured) ============
     FetcherResultsPayload:
       type: object
       required:
         - animes
         - fetcher_source
       properties:
+        subscription_id:
+          type: integer
+          description: 訂閱 ID（可選，向後相容）
+          nullable: true
         animes:
           type: array
           items:
@@ -357,6 +1572,14 @@ components:
           enum: [mikanani]
           description: Fetcher 的來源名稱
           example: "mikanani"
+        success:
+          type: boolean
+          description: 抓取是否成功
+          nullable: true
+        error_message:
+          type: string
+          description: 錯誤訊息
+          nullable: true
 
     FetchedAnimePayload:
       type: object
@@ -456,3 +1679,344 @@ components:
           type: string
           description: 處理消息
           example: "Successfully processed fetcher results"
+
+    # ============ Fetcher Results (Raw) ============
+    RawFetcherResultsPayload:
+      type: object
+      required:
+        - subscription_id
+        - items
+        - fetcher_source
+        - success
+      properties:
+        subscription_id:
+          type: integer
+          description: 訂閱 ID
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RawAnimeItem'
+          description: 原始抓取項目列表
+        fetcher_source:
+          type: string
+          description: Fetcher 來源名稱
+        success:
+          type: boolean
+          description: 抓取是否成功
+        error_message:
+          type: string
+          description: 錯誤訊息
+          nullable: true
+
+    RawAnimeItem:
+      type: object
+      required:
+        - title
+        - download_url
+      properties:
+        title:
+          type: string
+          description: RSS 標題
+          example: "[喵萌奶茶屋] 進擊的巨人 - 01 [1080p]"
+        description:
+          type: string
+          description: RSS 描述
+          nullable: true
+        download_url:
+          type: string
+          description: RSS enclosure URL
+          example: "magnet:?xt=urn:btih:xxxxx"
+        pub_date:
+          type: string
+          format: date-time
+          description: RSS pubDate
+          nullable: true
+
+    RawFetcherResultsResponse:
+      type: object
+      required:
+        - success
+        - items_received
+        - items_parsed
+        - items_failed
+        - message
+      properties:
+        success:
+          type: boolean
+          description: 處理是否全部成功
+        items_received:
+          type: integer
+          description: 接收的項目數量
+        items_parsed:
+          type: integer
+          description: 成功解析的項目數量
+        items_failed:
+          type: integer
+          description: 解析失敗的項目數量
+        message:
+          type: string
+          description: 處理消息
+
+    # ============ Parsers ============
+    CreateParserRequest:
+      type: object
+      required:
+        - name
+        - priority
+        - condition_regex
+        - parse_regex
+        - anime_title_source
+        - anime_title_value
+        - episode_no_source
+        - episode_no_value
+      properties:
+        name:
+          type: string
+          description: 解析器名稱
+        description:
+          type: string
+          description: 解析器描述
+          nullable: true
+        priority:
+          type: integer
+          description: 優先度（越高越優先）
+        is_enabled:
+          type: boolean
+          description: 是否啟用（預設 true）
+          default: true
+        condition_regex:
+          type: string
+          description: 條件正則表達式（匹配時才使用此解析器）
+        parse_regex:
+          type: string
+          description: 解析正則表達式（用於提取欄位）
+        anime_title_source:
+          type: string
+          description: 動畫標題來源類型
+          enum: [regex, static]
+        anime_title_value:
+          type: string
+          description: 動畫標題值（regex 時為 group 名稱，static 時為固定值）
+        episode_no_source:
+          type: string
+          description: 集數來源類型
+          enum: [regex, static]
+        episode_no_value:
+          type: string
+          description: 集數值
+        series_no_source:
+          type: string
+          description: 系列編號來源類型
+          enum: [regex, static]
+          nullable: true
+        series_no_value:
+          type: string
+          description: 系列編號值
+          nullable: true
+        subtitle_group_source:
+          type: string
+          description: 字幕組來源類型
+          enum: [regex, static]
+          nullable: true
+        subtitle_group_value:
+          type: string
+          description: 字幕組值
+          nullable: true
+        resolution_source:
+          type: string
+          description: 解析度來源類型
+          enum: [regex, static]
+          nullable: true
+        resolution_value:
+          type: string
+          description: 解析度值
+          nullable: true
+        season_source:
+          type: string
+          description: 季度來源類型
+          enum: [regex, static]
+          nullable: true
+        season_value:
+          type: string
+          description: 季度值
+          nullable: true
+        year_source:
+          type: string
+          description: 年份來源類型
+          enum: [regex, static]
+          nullable: true
+        year_value:
+          type: string
+          description: 年份值
+          nullable: true
+
+    ParserResponse:
+      type: object
+      properties:
+        parser_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        priority:
+          type: integer
+        is_enabled:
+          type: boolean
+        condition_regex:
+          type: string
+        parse_regex:
+          type: string
+        anime_title_source:
+          type: string
+        anime_title_value:
+          type: string
+        episode_no_source:
+          type: string
+        episode_no_value:
+          type: string
+        series_no_source:
+          type: string
+          nullable: true
+        series_no_value:
+          type: string
+          nullable: true
+        subtitle_group_source:
+          type: string
+          nullable: true
+        subtitle_group_value:
+          type: string
+          nullable: true
+        resolution_source:
+          type: string
+          nullable: true
+        resolution_value:
+          type: string
+          nullable: true
+        season_source:
+          type: string
+          nullable: true
+        season_value:
+          type: string
+          nullable: true
+        year_source:
+          type: string
+          nullable: true
+        year_value:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ Raw Items ============
+    RawItemResponse:
+      type: object
+      properties:
+        item_id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        download_url:
+          type: string
+        pub_date:
+          type: string
+          nullable: true
+        subscription_id:
+          type: integer
+        status:
+          type: string
+          description: 解析狀態（pending/parsed/no_match/failed/skipped）
+        parser_id:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        parsed_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+
+    ReparseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        items_processed:
+          type: integer
+        items_parsed:
+          type: integer
+        message:
+          type: string
+
+    # ============ Conflicts ============
+    ConflictInfo:
+      type: object
+      properties:
+        conflict_id:
+          type: integer
+        subscription_id:
+          type: integer
+        rss_url:
+          type: string
+        conflict_type:
+          type: string
+        conflict_data:
+          type: object
+          description: 衝突相關的 JSON 資料
+        candidate_fetchers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CandidateFetcher'
+        created_at:
+          type: string
+          format: date-time
+
+    CandidateFetcher:
+      type: object
+      properties:
+        fetcher_id:
+          type: integer
+        name:
+          type: string
+
+    ResolveConflictRequest:
+      type: object
+      required:
+        - fetcher_id
+      properties:
+        fetcher_id:
+          type: integer
+          description: 選擇的 Fetcher ID
+
+    # ============ Sync Callback ============
+    ViewerSyncCallback:
+      type: object
+      required:
+        - download_id
+        - status
+      properties:
+        download_id:
+          type: integer
+          description: 下載記錄 ID
+        status:
+          type: string
+          enum: [synced, failed]
+          description: 同步狀態
+        target_path:
+          type: string
+          description: 目標檔案路徑
+          nullable: true
+        error_message:
+          type: string
+          description: 錯誤訊息
+          nullable: true

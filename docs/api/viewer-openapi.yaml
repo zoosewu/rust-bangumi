@@ -1,0 +1,211 @@
+openapi: 3.0.0
+info:
+  title: Bangumi Viewer Jellyfin Service API
+  description: |
+    Viewer Jellyfin 服務 API 規格 - 負責將已完成下載的動畫檔案整理至 Jellyfin 媒體庫。
+
+    ## 非同步回呼流程
+
+    此服務採用非同步回呼模式：
+    1. Core Service 發送 `POST /sync` 請求，附帶已完成下載的檔案資訊
+    2. Viewer 立即回傳 `202 Accepted`
+    3. Viewer 在背景執行處理（檔案搬移、bangumi.tv 元資料查詢、NFO 產生）
+    4. 處理完成後，Viewer 向 Core 的 `callback_url`（`/sync-callback`）發送回呼通知結果
+  version: 0.1.0
+  contact:
+    name: Bangumi Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://viewer-jellyfin:8003
+    description: Viewer Jellyfin (Docker)
+  - url: http://localhost:8003
+    description: Viewer 本地開發
+
+tags:
+  - name: Health
+    description: 服務健康檢查
+  - name: Sync
+    description: 檔案同步與整理功能
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: 健康檢查
+      description: 檢查 Viewer Jellyfin 服務是否正常運行
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服務正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                healthy:
+                  summary: 服務正常運行
+                  value:
+                    status: "healthy"
+                    service: "jellyfin-viewer"
+                    version: "0.1.0"
+
+  /sync:
+    post:
+      tags:
+        - Sync
+      summary: 接收同步請求
+      description: |
+        接收 Core Service 發送的同步請求。此端點為非同步操作：
+        1. 立即回傳 202 Accepted
+        2. 在背景執行檔案搬移、bangumi.tv 元資料查詢、NFO 檔案產生
+        3. 完成後向 `callback_url` 發送 `ViewerSyncCallback` 回呼通知處理結果
+      operationId: receiveSync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ViewerSyncRequest'
+            examples:
+              syncEpisode:
+                summary: 同步單集動畫
+                value:
+                  download_id: 42
+                  series_id: 3215
+                  anime_title: "葬送的芙莉蓮"
+                  series_no: 1
+                  episode_no: 12
+                  subtitle_group: "喵萌奶茶屋"
+                  file_path: "/downloads/[Nekomoe kissaten][Sousou no Frieren][12][1080p].mkv"
+                  callback_url: "http://core-service:8000/sync-callback"
+      responses:
+        '202':
+          description: 同步任務已接受
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          description: 服務狀態
+          example: "healthy"
+        service:
+          type: string
+          description: 服務名稱
+          example: "jellyfin-viewer"
+        version:
+          type: string
+          description: 服務版本
+          example: "0.1.0"
+
+    ViewerSyncRequest:
+      type: object
+      required:
+        - download_id
+        - series_id
+        - anime_title
+        - series_no
+        - episode_no
+        - subtitle_group
+        - file_path
+        - callback_url
+      properties:
+        download_id:
+          type: integer
+          description: 下載記錄 ID
+          example: 42
+        series_id:
+          type: integer
+          description: 系列 ID
+          example: 3215
+        anime_title:
+          type: string
+          description: 動畫標題
+          example: "葬送的芙莉蓮"
+        series_no:
+          type: integer
+          description: 季數編號
+          example: 1
+        episode_no:
+          type: integer
+          description: 集數編號
+          example: 12
+        subtitle_group:
+          type: string
+          description: 字幕組名稱
+          example: "喵萌奶茶屋"
+        file_path:
+          type: string
+          description: 已完成下載的檔案路徑
+          example: "/downloads/[Nekomoe kissaten][Sousou no Frieren][12][1080p].mkv"
+        callback_url:
+          type: string
+          format: uri
+          description: 處理完成後的回呼 URL（Core Service 的 /sync-callback）
+          example: "http://core-service:8000/sync-callback"
+
+    ViewerSyncCallback:
+      type: object
+      description: |
+        Viewer 處理完成後回呼至 Core Service 的資料結構。
+        此 schema 並非本服務的請求/回應，而是 Viewer 向 Core 的 callback_url 發送的 POST 請求 body。
+      required:
+        - download_id
+        - status
+      properties:
+        download_id:
+          type: integer
+          description: 下載記錄 ID（對應原始 ViewerSyncRequest 中的 download_id）
+          example: 42
+        status:
+          type: string
+          enum:
+            - synced
+            - failed
+          description: 同步處理結果狀態
+          example: "synced"
+        target_path:
+          type: string
+          nullable: true
+          description: 檔案搬移後的目標路徑（成功時回傳）
+          example: "/media/anime/葬送的芙莉蓮/Season 1/葬送的芙莉蓮 S01E12.mkv"
+        error_message:
+          type: string
+          nullable: true
+          description: 錯誤訊息（失敗時回傳）
+          example: "File not found: /downloads/missing_file.mkv"
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        error:
+          type: string
+          description: 錯誤詳細信息
+          example: "Invalid request format"
+
+  responses:
+    HealthCheck:
+      description: 服務健康檢查響應
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HealthResponse'
+
+    SyncAccepted:
+      description: 同步任務已接受

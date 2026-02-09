@@ -48,22 +48,16 @@ cargo install cargo-tarpaulin  # 測試覆蓋率
 ```
 rust-bangumi/
 ├── Cargo.toml                          # Workspace 配置
-├── shared/                             # 共享庫
-│   └── src/
-│       ├── lib.rs
-│       ├── models.rs                   # 共享數據結構
-│       ├── errors.rs                   # 錯誤類型
-│       └── api.rs                      # API 常數
-├── core-service/                       # 核心服務
+├── shared/                             # 共享庫（API types、models）
+├── core-service/                       # 核心服務（協調器）
 │   └── src/
 │       ├── main.rs
-│       ├── config.rs
 │       ├── handlers/                   # HTTP 處理器
-│       ├── services/                   # 業務邏輯
+│       ├── services/                   # 業務邏輯（FetchScheduler, DownloadScheduler）
 │       └── db/                         # 數據庫操作
 ├── fetchers/mikanani/                  # Mikanani RSS Fetcher
 ├── downloaders/qbittorrent/            # qBittorrent Downloader
-├── viewers/jellyfin/                   # Jellyfin Viewer
+├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
 ├── cli/                                # CLI 工具
 ├── docker-compose.yaml                 # 生產環境
 ├── docker-compose.dev.yaml             # 開發環境 ← 使用這個
@@ -77,7 +71,7 @@ rust-bangumi/
 
 ### 1. 啟動基礎設施
 
-開發環境包含：PostgreSQL、Adminer、qBittorrent
+開發環境包含：PostgreSQL、Adminer、qBittorrent、Jellyfin
 
 ```bash
 # 啟動所有開發服務
@@ -103,9 +97,10 @@ docker compose -f docker-compose.dev.yaml up -d
 
 | 服務 | URL | 說明 |
 |------|-----|------|
-| PostgreSQL | `localhost:5432` | 資料庫 |
+| PostgreSQL | `localhost:5432` | 資料庫（`bangumi` + `viewer_jellyfin`） |
 | Adminer | `http://localhost:8081` | 資料庫管理介面 |
 | qBittorrent | `http://localhost:8080` | BT 下載客戶端（admin/adminadmin） |
+| Jellyfin | `http://localhost:8096` | 媒體伺服器（首次需設定嚮導） |
 
 ### 2. 設置環境變數
 
@@ -121,18 +116,33 @@ cp .env.dev .env
 # DOOD 環境必填（host 上的專案絕對路徑）
 HOST_PROJECT_PATH=/path/to/rust-bangumi
 
+# Core 資料庫
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi
+
+# Viewer 獨立資料庫
+VIEWER_DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin
+
+# 服務通信
 CORE_SERVICE_URL=http://localhost:8000
 QBITTORRENT_URL=http://localhost:8080
 QBITTORRENT_USER=admin
 QBITTORRENT_PASSWORD=adminadmin
+
+# Viewer 目錄（本地開發用暫存目錄）
+DOWNLOADS_DIR=/tmp/bangumi-downloads
+JELLYFIN_LIBRARY_DIR=/tmp/bangumi-media
+
 RUST_LOG=debug
 ```
 
 ### 3. 執行資料庫遷移
 
 ```bash
+# Core 資料庫遷移
 diesel migration run
+
+# Viewer 資料庫會在 viewer-jellyfin 啟動時自動遷移，無需手動操作
+# 但需先建立資料庫（docker-compose.dev.yaml 的 init script 會自動建立）
 ```
 
 ---
@@ -150,6 +160,10 @@ cargo run -p fetcher-mikanani
 
 # Downloader (port 8002)
 cargo run -p downloader-qbittorrent
+
+# Viewer (port 8003) - 需指定 Viewer 專用資料庫
+DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
+  cargo run -p viewer-jellyfin
 
 # CLI
 cargo run -p bangumi-cli -- --help
@@ -170,14 +184,18 @@ cargo watch -x 'test -p core-service'
 開多個終端分別執行，或使用 `tmux`：
 
 ```bash
-# 終端 1
+# 終端 1 - Core
 cargo run -p core-service
 
-# 終端 2
+# 終端 2 - Fetcher
 cargo run -p fetcher-mikanani
 
-# 終端 3
+# 終端 3 - Downloader
 cargo run -p downloader-qbittorrent
+
+# 終端 4 - Viewer
+DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
+  cargo run -p viewer-jellyfin
 ```
 
 ---
@@ -193,6 +211,7 @@ cargo test
 # 特定套件
 cargo test -p core-service
 cargo test -p downloader-qbittorrent
+cargo test -p viewer-jellyfin
 
 # 帶輸出
 cargo test -- --nocapture
@@ -225,9 +244,29 @@ curl -X POST http://localhost:8080/api/v2/auth/login \
 curl http://localhost:8000/health
 
 # 測試 Downloader
-curl -X POST http://localhost:8002/download \
+curl http://localhost:8002/health
+
+# 測試 Viewer
+curl http://localhost:8003/health
+
+# 測試 Jellyfin
+curl http://localhost:8096/health
+
+# 手動觸發 Viewer 同步（測試用）
+mkdir -p /tmp/bangumi-downloads
+echo "test" > /tmp/bangumi-downloads/test.mkv
+curl -X POST http://localhost:8003/sync \
   -H "Content-Type: application/json" \
-  -d '{"link_id": 1, "url": "magnet:?xt=urn:btih:test123456789012345678901234"}'
+  -d '{
+    "download_id": 1,
+    "series_id": 1,
+    "anime_title": "Test Anime",
+    "series_no": 1,
+    "episode_no": 1,
+    "subtitle_group": "TestGroup",
+    "file_path": "/tmp/bangumi-downloads/test.mkv",
+    "callback_url": "http://localhost:8000/sync-callback"
+  }'
 ```
 
 ---
@@ -286,6 +325,13 @@ tracing::error!("Error: {}", e);
 
 ## 資料庫操作
 
+### 資料庫說明
+
+| 資料庫 | 用途 | 使用者 |
+|--------|------|--------|
+| `bangumi` | Core 主資料庫（動畫、訂閱、下載等） | Core Service |
+| `viewer_jellyfin` | Viewer 獨立資料庫（同步任務、bangumi.tv metadata 快取） | Viewer Jellyfin |
+
 ### 創建遷移
 
 ```bash
@@ -295,8 +341,10 @@ diesel migration generate my_migration_name
 ### 執行遷移
 
 ```bash
-# 執行
+# 執行 Core 資料庫遷移
 diesel migration run
+
+# Viewer 資料庫遷移（內嵌於 binary，啟動時自動執行）
 
 # 回滾
 diesel migration revert
@@ -310,10 +358,10 @@ diesel migration redo
 1. 開啟 `http://localhost:8081`
 2. 選擇 PostgreSQL
 3. 輸入：
-   - Server: `postgres`
+   - Server: `postgres`（Docker 內）或 `localhost`（本地）
    - Username: `bangumi`
    - Password: `bangumi_dev_password`
-   - Database: `bangumi`
+   - Database: `bangumi` 或 `viewer_jellyfin`
 
 ---
 
@@ -326,6 +374,7 @@ diesel migration redo
 lsof -i :8000
 lsof -i :5432
 lsof -i :8080
+lsof -i :8096
 
 # 停止佔用的服務
 docker compose -f docker-compose.dev.yaml down
@@ -358,6 +407,21 @@ curl http://localhost:8080
 ```
 
 如果出現認證錯誤，請確認使用 `admin` / `adminadmin` 登入。
+
+### Jellyfin 無法連接
+
+```bash
+# 檢查服務狀態
+docker compose -f docker-compose.dev.yaml ps jellyfin
+
+# 查看日誌
+docker compose -f docker-compose.dev.yaml logs jellyfin
+
+# 測試健康檢查
+curl http://localhost:8096/health
+```
+
+首次啟動需完成 Jellyfin 設定嚮導（http://localhost:8096）。
 
 ### 清理開發環境
 
@@ -428,3 +492,4 @@ git worktree remove .worktrees/my-feature
 - [API 規格](docs/API-SPECIFICATIONS.md)
 - [架構設計](docs/plans/2025-01-21-rust-bangumi-architecture-design.md)
 - [CORS 設定](docs/CORS-CONFIGURATION.md)
+- [Viewer Jellyfin](viewers/jellyfin/README.md)
