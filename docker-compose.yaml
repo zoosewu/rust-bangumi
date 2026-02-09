@@ -52,7 +52,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      CORE_DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       RUST_LOG: ${RUST_LOG:-core_service=info}
       RUST_BACKTRACE: "0"
       ENABLE_CORS: ${ENABLE_CORS:-true}
@@ -184,7 +184,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/viewer_jellyfin
+      VIEWER_DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/viewer_jellyfin
       DOWNLOADS_DIR: /downloads
       JELLYFIN_LIBRARY_DIR: /media/jellyfin
       CORE_SERVICE_URL: ${CORE_SERVICE_URL:-http://core-service:8000}

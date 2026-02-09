@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("啟動核心服務");
 
     // 設置數據庫連接池
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("CORE_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://bangumi:bangumi_dev_password@172.20.0.2:5432/bangumi".to_string()
     });
 

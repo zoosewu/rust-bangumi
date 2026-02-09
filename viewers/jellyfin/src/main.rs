@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // Initialize database
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+    let database_url = std::env::var("VIEWER_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin".to_string()
     });
     let db_pool = db::create_pool(&database_url);
