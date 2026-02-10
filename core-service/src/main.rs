@@ -131,6 +131,8 @@ async fn main() -> anyhow::Result<()> {
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
         )
+        // 下載記錄
+        .route("/downloads", get(handlers::downloads::list_downloads))
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
         .route("/links/:series_id", get(handlers::links::get_anime_links))

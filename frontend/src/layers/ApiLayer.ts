@@ -6,7 +6,7 @@ import { Anime } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
-import { RawAnimeItem } from "@/schemas/download"
+import { RawAnimeItem, DownloadRow } from "@/schemas/download"
 
 const makeCoreApi = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient
@@ -101,6 +101,29 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Array(RawAnimeItem),
       )
     },
+
+    getDownloads: (params) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set("status", params.status)
+      if (params.limit != null) qs.set("limit", String(params.limit))
+      if (params.offset != null) qs.set("offset", String(params.offset))
+      return fetchJson(
+        HttpClientRequest.get(`/api/core/downloads?${qs.toString()}`),
+        Schema.Array(DownloadRow),
+      )
+    },
+
+    getConflicts: fetchJson(
+      HttpClientRequest.get("/api/core/conflicts"),
+      Schema.Struct({ conflicts: Schema.Array(Schema.Any) }),
+    ).pipe(Effect.map((r) => r.conflicts as readonly Record<string, unknown>[])),
+
+    resolveConflict: (conflictId, fetcherId) =>
+      postJson(
+        `/api/core/conflicts/${conflictId}/resolve`,
+        { fetcher_id: fetcherId },
+        Schema.Any,
+      ),
 
     getHealth: fetchJson(
       HttpClientRequest.get("/api/core/health"),

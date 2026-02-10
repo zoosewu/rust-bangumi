@@ -3,7 +3,7 @@ import type { Anime } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
-import type { RawAnimeItem } from "@/schemas/download"
+import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
 
 export class CoreApi extends Context.Tag("CoreApi")<
   CoreApi,
@@ -38,6 +38,13 @@ export class CoreApi extends Context.Tag("CoreApi")<
       limit?: number
       offset?: number
     }) => Effect.Effect<readonly RawAnimeItem[]>
+    readonly getDownloads: (params: {
+      status?: string
+      limit?: number
+      offset?: number
+    }) => Effect.Effect<readonly DownloadRow[]>
+    readonly getConflicts: Effect.Effect<readonly Record<string, unknown>[]>
+    readonly resolveConflict: (conflictId: number, fetcherId: number) => Effect.Effect<unknown>
     readonly getHealth: Effect.Effect<{ status: string; service: string }>
   }
 >() {}

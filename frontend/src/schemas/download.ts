@@ -14,3 +14,20 @@ export const RawAnimeItem = Schema.Struct({
   created_at: Schema.String,
 })
 export type RawAnimeItem = typeof RawAnimeItem.Type
+
+export const DownloadRow = Schema.Struct({
+  download_id: Schema.Number,
+  link_id: Schema.Number,
+  title: Schema.NullOr(Schema.String),
+  downloader_type: Schema.String,
+  status: Schema.String,
+  progress: Schema.NullOr(Schema.Number),
+  downloaded_bytes: Schema.NullOr(Schema.Number),
+  total_bytes: Schema.NullOr(Schema.Number),
+  error_message: Schema.NullOr(Schema.String),
+  torrent_hash: Schema.NullOr(Schema.String),
+  file_path: Schema.NullOr(Schema.String),
+  created_at: Schema.String,
+  updated_at: Schema.String,
+})
+export type DownloadRow = typeof DownloadRow.Type
