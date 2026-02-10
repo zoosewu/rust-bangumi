@@ -124,6 +124,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/filters", post(handlers::filters::create_filter_rule))
         .route("/filters", get(handlers::filters::get_filter_rules))
         .route(
+            "/filters/preview",
+            post(handlers::filters::preview_filter),
+        )
+        .route(
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
         )
