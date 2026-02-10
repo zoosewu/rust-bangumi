@@ -170,6 +170,10 @@ async fn main() -> anyhow::Result<()> {
             get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser),
         )
         .route(
+            "/parsers/preview",
+            post(handlers::parsers::preview_parser),
+        )
+        .route(
             "/parsers/:parser_id",
             get(handlers::parsers::get_parser).delete(handlers::parsers::delete_parser),
         )

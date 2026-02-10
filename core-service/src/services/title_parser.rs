@@ -76,7 +76,7 @@ impl TitleParserService {
     }
 
     /// 嘗試使用單一解析器解析標題
-    fn try_parser(parser: &TitleParser, title: &str) -> Result<Option<ParsedResult>, String> {
+    pub fn try_parser(parser: &TitleParser, title: &str) -> Result<Option<ParsedResult>, String> {
         // 檢查 condition_regex 是否匹配
         let condition_regex = Regex::new(&parser.condition_regex).map_err(|e| {
             format!(
