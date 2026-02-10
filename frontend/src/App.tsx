@@ -5,6 +5,7 @@ import AnimePage from "@/pages/anime/AnimePage"
 import AnimeDetailPage from "@/pages/anime/AnimeDetailPage"
 import SubscriptionsPage from "@/pages/subscriptions/SubscriptionsPage"
 import RawItemsPage from "@/pages/raw-items/RawItemsPage"
+import FiltersPage from "@/pages/filters/FiltersPage"
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="anime/:animeId" element={<AnimeDetailPage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
           <Route path="raw-items" element={<RawItemsPage />} />
+          <Route path="filters" element={<FiltersPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
