@@ -1,7 +1,15 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { AppLayout } from "@/components/layout/AppLayout"
+import Dashboard from "@/pages/Dashboard"
+
 export default function App() {
   return (
-    <div className="min-h-screen bg-background">
-      <h1 className="text-2xl font-bold p-8">Bangumi</h1>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<Dashboard />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
