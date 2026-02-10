@@ -29,6 +29,8 @@ export class CoreApi extends Context.Tag("CoreApi")<
       limit?: number
     }) => Effect.Effect<FilterPreviewResponse>
     readonly getParsers: Effect.Effect<readonly TitleParser[]>
+    readonly createParser: (req: Record<string, unknown>) => Effect.Effect<TitleParser>
+    readonly deleteParser: (id: number) => Effect.Effect<void>
     readonly previewParser: (req: Record<string, unknown>) => Effect.Effect<ParserPreviewResponse>
     readonly getRawItems: (params: {
       status?: string
