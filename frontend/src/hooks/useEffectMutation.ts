@@ -2,8 +2,9 @@ import { useState, useCallback, useRef } from "react"
 import type { Effect } from "effect"
 import { AppRuntime } from "@/runtime/AppRuntime"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useEffectMutation<Args extends unknown[], A>(
-  effectFn: (...args: Args) => Effect.Effect<A, unknown, never>,
+  effectFn: (...args: Args) => Effect.Effect<A, any, any>,
 ) {
   const [data, setData] = useState<A | null>(null)
   const [error, setError] = useState<unknown>(null)

@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { Effect } from "effect"
 import { AppRuntime } from "@/runtime/AppRuntime"
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useEffectQuery<A>(
-  effectFn: () => Effect.Effect<A, unknown, never>,
+  effectFn: () => Effect.Effect<A, any, any>,
   deps: unknown[] = [],
 ) {
   const [data, setData] = useState<A | null>(null)
