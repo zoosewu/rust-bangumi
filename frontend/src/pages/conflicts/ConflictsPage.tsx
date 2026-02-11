@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -8,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 
 export default function ConflictsPage() {
+  const { t } = useTranslation()
   const { data: conflicts, isLoading, refetch } = useEffectQuery(
     () =>
       Effect.gen(function* () {
@@ -31,25 +34,25 @@ export default function ConflictsPage() {
     setResolvingId(conflictId)
     resolveConflict({ conflictId, fetcherId })
       .then(() => {
-        toast.success("Conflict resolved successfully")
+        toast.success(t("conflicts.resolved"))
         refetch()
       })
       .catch(() => {
-        toast.error("Failed to resolve conflict")
+        toast.error(t("conflicts.resolveFailed"))
       })
       .finally(() => setResolvingId(null))
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Subscription Conflicts</h1>
+      <h1 className="text-2xl font-bold">{t("conflicts.title")}</h1>
 
       {isLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : !conflicts?.length ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No pending conflicts.
+            {t("conflicts.noConflicts")}
           </CardContent>
         </Card>
       ) : (
@@ -64,26 +67,32 @@ export default function ConflictsPage() {
               <Card key={id}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center justify-between">
-                    <span>Conflict #{id}</span>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      Subscription #{String(conflict.subscription_id)}
+                    <span>{t("conflicts.conflict")} #{id}</span>
+                    <span className="text-xs font-normal">
+                      {t("conflicts.subscription")}{" "}
+                      <Link
+                        to="/subscriptions"
+                        className="text-primary underline cursor-pointer"
+                      >
+                        #{String(conflict.subscription_id)}
+                      </Link>
                     </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-sm">
-                    <span className="text-muted-foreground">RSS URL: </span>
+                    <span className="text-muted-foreground">{t("conflicts.rssUrl")}: </span>
                     <code className="text-xs font-mono">
                       {String(conflict.rss_url)}
                     </code>
                   </div>
                   <div className="text-sm">
-                    <span className="text-muted-foreground">Type: </span>
+                    <span className="text-muted-foreground">{t("conflicts.conflictType")}: </span>
                     {String(conflict.conflict_type)}
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">
-                      Select a fetcher to resolve:
+                      {t("conflicts.selectFetcher")}
                     </p>
                     <div className="flex gap-2 flex-wrap">
                       {candidates.map((f) => (

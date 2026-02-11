@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -9,25 +10,29 @@ import {
   Filter,
   FileCode,
   AlertTriangle,
+  Users,
 } from "lucide-react"
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/anime", icon: Film, label: "Anime" },
-  { to: "/subscriptions", icon: Rss, label: "Subscriptions" },
-  { to: "/raw-items", icon: FileText, label: "Raw Items" },
-  { to: "/downloads", icon: Download, label: "Downloads" },
-  { to: "/filters", icon: Filter, label: "Filters" },
-  { to: "/parsers", icon: FileCode, label: "Parsers" },
-  { to: "/conflicts", icon: AlertTriangle, label: "Conflicts" },
+  { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard" },
+  { to: "/anime", icon: Film, labelKey: "sidebar.anime" },
+  { to: "/subtitle-groups", icon: Users, labelKey: "sidebar.subtitleGroups" },
+  { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions" },
+  { to: "/raw-items", icon: FileText, labelKey: "sidebar.rawItems" },
+  { to: "/downloads", icon: Download, labelKey: "sidebar.downloads" },
+  { to: "/filters", icon: Filter, labelKey: "sidebar.filters" },
+  { to: "/parsers", icon: FileCode, labelKey: "sidebar.parsers" },
+  { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
 ]
 
 export function Sidebar() {
+  const { t } = useTranslation()
+
   return (
     <aside className="w-60 border-r bg-card h-screen sticky top-0 flex flex-col">
-      <div className="p-4 font-bold text-lg border-b">Bangumi</div>
+      <div className="p-4 font-bold text-lg border-b">{t("sidebar.title")}</div>
       <nav className="flex-1 p-2 space-y-1">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, labelKey }) => (
           <NavLink
             key={to}
             to={to}
@@ -42,7 +47,7 @@ export function Sidebar() {
             }
           >
             <Icon className="h-4 w-4" />
-            {label}
+            {t(labelKey)}
           </NavLink>
         ))}
       </nav>

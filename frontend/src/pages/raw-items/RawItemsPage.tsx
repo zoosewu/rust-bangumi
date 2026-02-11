@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -18,6 +20,7 @@ const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
 
 export default function RawItemsPage() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState("all")
   const [offset, setOffset] = useState(0)
 
@@ -37,12 +40,12 @@ export default function RawItemsPage() {
   const columns: Column<Record<string, unknown>>[] = [
     {
       key: "item_id",
-      header: "ID",
+      header: t("common.id"),
       render: (item) => String(item.item_id),
     },
     {
       key: "title",
-      header: "Title",
+      header: t("rawItems.itemTitle"),
       render: (item) => (
         <span className="text-sm font-mono truncate max-w-[400px] block">
           {String(item.title)}
@@ -51,22 +54,41 @@ export default function RawItemsPage() {
     },
     {
       key: "status",
-      header: "Status",
+      header: t("common.status"),
       render: (item) => <StatusBadge status={String(item.status)} />,
     },
     {
       key: "subscription_id",
-      header: "Sub ID",
-      render: (item) => String(item.subscription_id),
+      header: t("rawItems.subId"),
+      render: (item) => (
+        <Link
+          to={`/subscriptions`}
+          className="text-primary underline cursor-pointer"
+          onClick={(e) => e.stopPropagation()}
+        >
+          #{String(item.subscription_id)}
+        </Link>
+      ),
     },
     {
       key: "parser_id",
-      header: "Parser",
-      render: (item) => (item.parser_id != null ? String(item.parser_id) : "-"),
+      header: t("rawItems.parser"),
+      render: (item) =>
+        item.parser_id != null ? (
+          <Link
+            to={`/parsers`}
+            className="text-primary underline cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            #{String(item.parser_id)}
+          </Link>
+        ) : (
+          "-"
+        ),
     },
     {
       key: "created_at",
-      header: "Created",
+      header: t("rawItems.created"),
       render: (item) => String(item.created_at).slice(0, 19).replace("T", " "),
     },
   ]
@@ -74,7 +96,7 @@ export default function RawItemsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Raw Items</h1>
+        <h1 className="text-2xl font-bold">{t("rawItems.title")}</h1>
         <div className="flex items-center gap-4">
           <Select
             value={status}
@@ -84,12 +106,12 @@ export default function RawItemsPage() {
             }}
           >
             <SelectTrigger className="w-[150px]">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("common.status")} />
             </SelectTrigger>
             <SelectContent>
               {STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s === "all" ? "All Statuses" : s}
+                  {s === "all" ? t("common.allStatuses") : s}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -98,7 +120,7 @@ export default function RawItemsPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <>
           <DataTable
@@ -113,10 +135,10 @@ export default function RawItemsPage() {
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             >
-              Previous
+              {t("common.previous")}
             </Button>
             <span className="text-sm text-muted-foreground">
-              Showing {offset + 1} - {offset + (items?.length ?? 0)}
+              {t("common.showing", { from: offset + 1, to: offset + (items?.length ?? 0) })}
             </span>
             <Button
               variant="outline"
@@ -124,7 +146,7 @@ export default function RawItemsPage() {
               disabled={(items?.length ?? 0) < PAGE_SIZE}
               onClick={() => setOffset(offset + PAGE_SIZE)}
             >
-              Next
+              {t("common.next")}
             </Button>
           </div>
         </>

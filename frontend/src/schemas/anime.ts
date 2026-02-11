@@ -35,3 +35,15 @@ export const SubtitleGroup = Schema.Struct({
   created_at: Schema.String,
 })
 export type SubtitleGroup = typeof SubtitleGroup.Type
+
+export const AnimeLink = Schema.Struct({
+  link_id: Schema.Number,
+  series_id: Schema.Number,
+  group_id: Schema.Number,
+  episode_no: Schema.Number,
+  title: Schema.NullOr(Schema.String),
+  url: Schema.String,
+  source_hash: Schema.String,
+  created_at: Schema.String,
+})
+export type AnimeLink = typeof AnimeLink.Type

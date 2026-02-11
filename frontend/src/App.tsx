@@ -10,6 +10,9 @@ import FiltersPage from "@/pages/filters/FiltersPage"
 import ParsersPage from "@/pages/parsers/ParsersPage"
 import DownloadsPage from "@/pages/downloads/DownloadsPage"
 import ConflictsPage from "@/pages/conflicts/ConflictsPage"
+import SubtitleGroupsPage from "@/pages/subtitle-groups/SubtitleGroupsPage"
+import SubtitleGroupDetailPage from "@/pages/subtitle-groups/SubtitleGroupDetailPage"
+import AnimeSeriesDetailPage from "@/pages/anime-series/AnimeSeriesDetailPage"
 
 export default function App() {
   return (
@@ -25,6 +28,9 @@ export default function App() {
           <Route path="parsers" element={<ParsersPage />} />
           <Route path="downloads" element={<DownloadsPage />} />
           <Route path="conflicts" element={<ConflictsPage />} />
+          <Route path="subtitle-groups" element={<SubtitleGroupsPage />} />
+          <Route path="subtitle-groups/:groupId" element={<SubtitleGroupDetailPage />} />
+          <Route path="anime-series/:seriesId" element={<AnimeSeriesDetailPage />} />
         </Route>
       </Routes>
       <Toaster />

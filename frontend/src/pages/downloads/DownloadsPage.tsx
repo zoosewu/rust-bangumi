@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -32,6 +33,7 @@ function formatBytes(bytes: number | null | undefined): string {
 }
 
 export default function DownloadsPage() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState("all")
   const [offset, setOffset] = useState(0)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -61,12 +63,12 @@ export default function DownloadsPage() {
   const columns: Column<Record<string, unknown>>[] = [
     {
       key: "download_id",
-      header: "ID",
+      header: t("common.id"),
       render: (item) => String(item.download_id),
     },
     {
       key: "title",
-      header: "Title",
+      header: t("rawItems.itemTitle"),
       render: (item) => (
         <span className="text-sm font-mono truncate max-w-[300px] block">
           {String(item.title ?? `Link #${item.link_id}`)}
@@ -74,13 +76,22 @@ export default function DownloadsPage() {
       ),
     },
     {
+      key: "link_id",
+      header: "Link ID",
+      render: (item) => (
+        <span className="text-sm text-muted-foreground">
+          #{String(item.link_id)}
+        </span>
+      ),
+    },
+    {
       key: "status",
-      header: "Status",
+      header: t("common.status"),
       render: (item) => <StatusBadge status={String(item.status)} />,
     },
     {
       key: "progress",
-      header: "Progress",
+      header: t("downloads.progress"),
       render: (item) => {
         const progress = item.progress as number | null
         if (progress == null) return "-"
@@ -101,7 +112,7 @@ export default function DownloadsPage() {
     },
     {
       key: "size",
-      header: "Size",
+      header: t("downloads.size"),
       render: (item) => {
         const dl = item.downloaded_bytes as number | null
         const total = item.total_bytes as number | null
@@ -112,12 +123,12 @@ export default function DownloadsPage() {
     },
     {
       key: "downloader_type",
-      header: "Type",
+      header: t("downloads.downloaderType"),
       render: (item) => String(item.downloader_type),
     },
     {
       key: "updated_at",
-      header: "Updated",
+      header: t("downloads.updated"),
       render: (item) => String(item.updated_at).slice(0, 19).replace("T", " "),
     },
   ]
@@ -125,11 +136,11 @@ export default function DownloadsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Downloads</h1>
+        <h1 className="text-2xl font-bold">{t("downloads.title")}</h1>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
-            <Label className="text-sm">Auto-refresh</Label>
+            <Label className="text-sm">{t("downloads.autoRefresh")}</Label>
           </div>
           <Select
             value={status}
@@ -139,12 +150,12 @@ export default function DownloadsPage() {
             }}
           >
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={t("common.status")} />
             </SelectTrigger>
             <SelectContent>
               {STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s === "all" ? "All Statuses" : s}
+                  {s === "all" ? t("common.allStatuses") : s}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -153,7 +164,7 @@ export default function DownloadsPage() {
       </div>
 
       {isLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <>
           <DataTable
@@ -168,10 +179,10 @@ export default function DownloadsPage() {
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             >
-              Previous
+              {t("common.previous")}
             </Button>
             <span className="text-sm text-muted-foreground">
-              Showing {offset + 1} - {offset + (downloads?.length ?? 0)}
+              {t("common.showing", { from: offset + 1, to: offset + (downloads?.length ?? 0) })}
             </span>
             <Button
               variant="outline"
@@ -179,7 +190,7 @@ export default function DownloadsPage() {
               disabled={(downloads?.length ?? 0) < PAGE_SIZE}
               onClick={() => setOffset(offset + PAGE_SIZE)}
             >
-              Next
+              {t("common.next")}
             </Button>
           </div>
         </>

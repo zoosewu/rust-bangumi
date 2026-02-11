@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
-import { Anime } from "@/schemas/anime"
+import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
@@ -37,8 +37,8 @@ const makeCoreApi = Effect.gen(function* () {
   return CoreApi.of({
     getAnimes: fetchJson(
       HttpClientRequest.get("/api/core/anime"),
-      Schema.Array(Anime),
-    ),
+      Schema.Struct({ animes: Schema.Array(Anime) }),
+    ).pipe(Effect.map((r) => r.animes)),
 
     createAnime: (title) => postJson("/api/core/anime", { title }, Anime),
 
@@ -49,8 +49,8 @@ const makeCoreApi = Effect.gen(function* () {
 
     getSubscriptions: fetchJson(
       HttpClientRequest.get("/api/core/subscriptions"),
-      Schema.Array(Subscription),
-    ),
+      Schema.Struct({ subscriptions: Schema.Array(Subscription) }),
+    ).pipe(Effect.map((r) => r.subscriptions)),
 
     getFilterRules: (targetType, targetId) =>
       fetchJson(
@@ -129,6 +129,48 @@ const makeCoreApi = Effect.gen(function* () {
       HttpClientRequest.get("/api/core/health"),
       Schema.Struct({ status: Schema.String, service: Schema.String }),
     ),
+
+    getSubtitleGroups: fetchJson(
+      HttpClientRequest.get("/api/core/subtitle-groups"),
+      Schema.Struct({ groups: Schema.Array(SubtitleGroup) }),
+    ).pipe(Effect.map((r) => r.groups)),
+
+    createSubtitleGroup: (name) =>
+      postJson("/api/core/subtitle-groups", { group_name: name }, SubtitleGroup),
+
+    deleteSubtitleGroup: (groupId) =>
+      client
+        .execute(HttpClientRequest.del(`/api/core/subtitle-groups/${groupId}`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    getAnimeSeries: (animeId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/anime/${animeId}/series`),
+        Schema.Struct({ series: Schema.Array(AnimeSeries) }),
+      ).pipe(Effect.map((r) => r.series)),
+
+    getOneAnimeSeries: (seriesId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/anime/series/${seriesId}`),
+        AnimeSeries,
+      ),
+
+    createAnimeSeries: (req) =>
+      postJson("/api/core/anime/series", req, AnimeSeries),
+
+    getSeasons: fetchJson(
+      HttpClientRequest.get("/api/core/seasons"),
+      Schema.Struct({ seasons: Schema.Array(Season) }),
+    ).pipe(Effect.map((r) => r.seasons)),
+
+    createSeason: (req) =>
+      postJson("/api/core/seasons", req, Season),
+
+    getAnimeLinks: (seriesId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/links/${seriesId}`),
+        Schema.Struct({ links: Schema.Array(AnimeLink) }),
+      ).pipe(Effect.map((r) => r.links)),
   })
 })
 

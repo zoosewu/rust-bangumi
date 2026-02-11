@@ -21,72 +21,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 
-export default function AnimeDetailPage() {
+export default function SubtitleGroupDetailPage() {
   const { t } = useTranslation()
-  const { animeId } = useParams<{ animeId: string }>()
+  const { groupId } = useParams<{ groupId: string }>()
   const navigate = useNavigate()
-  const id = Number(animeId)
+  const id = Number(groupId)
 
-  // Filter rule state
   const [createOpen, setCreateOpen] = useState(false)
   const [newRegex, setNewRegex] = useState("")
   const [newPositive, setNewPositive] = useState(true)
   const [newOrder, setNewOrder] = useState("1")
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
 
-  // Add series state
-  const [addSeriesOpen, setAddSeriesOpen] = useState(false)
-  const [seriesNo, setSeriesNo] = useState("1")
-  const [seriesSeasonId, setSeriesSeasonId] = useState("")
-  const [seriesDescription, setSeriesDescription] = useState("")
-  const [seriesAiredDate, setSeriesAiredDate] = useState("")
-  const [seriesEndDate, setSeriesEndDate] = useState("")
-
-  const { data: animes, isLoading } = useEffectQuery(
+  const { data: groups, isLoading } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAnimes
+        return yield* api.getSubtitleGroups
       }),
     [],
   )
 
-  const anime = animes?.find((a) => a.anime_id === id)
+  const group = groups?.find((g) => g.group_id === id)
 
   const { data: filterRules, refetch: refetchRules } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getFilterRules("anime", id)
+        return yield* api.getFilterRules("subtitle_group", id)
       }),
     [id],
-  )
-
-  const { data: seriesList, refetch: refetchSeries } = useEffectQuery(
-    () =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getAnimeSeries(id)
-      }),
-    [id],
-  )
-
-  const { data: seasons } = useEffectQuery(
-    () =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getSeasons
-      }),
-    [],
   )
 
   const { mutate: createRule, isLoading: creating } = useEffectMutation(
@@ -94,7 +60,7 @@ export default function AnimeDetailPage() {
       Effect.gen(function* () {
         const api = yield* CoreApi
         return yield* api.createFilterRule({
-          target_type: "anime",
+          target_type: "subtitle_group",
           target_id: id,
           rule_order: req.rule_order,
           is_positive: req.is_positive,
@@ -110,22 +76,6 @@ export default function AnimeDetailPage() {
         return yield* api.deleteFilterRule(ruleId)
       }),
   )
-
-  const { mutate: createSeries, isLoading: creatingSeries } = useEffectMutation(
-    (req: {
-      anime_id: number; series_no: number; season_id: number;
-      description?: string; aired_date?: string; end_date?: string;
-    }) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.createAnimeSeries(req)
-      }),
-  )
-
-  const seasonName = (seasonId: number) => {
-    const s = seasons?.find((s) => s.season_id === seasonId)
-    return s ? `${s.year} ${s.season}` : String(seasonId)
-  }
 
   const filterColumns: Column<Record<string, unknown>>[] = [
     {
@@ -168,50 +118,22 @@ export default function AnimeDetailPage() {
     },
   ]
 
-  const seriesColumns: Column<Record<string, unknown>>[] = [
-    {
-      key: "series_id",
-      header: t("common.id"),
-      render: (item) => String(item.series_id),
-    },
-    {
-      key: "series_no",
-      header: t("animeSeries.seriesNo"),
-      render: (item) => String(item.series_no),
-    },
-    {
-      key: "season_id",
-      header: t("animeSeries.season"),
-      render: (item) => seasonName(item.season_id as number),
-    },
-    {
-      key: "description",
-      header: t("animeSeries.description"),
-      render: (item) => item.description ? String(item.description) : "-",
-    },
-    {
-      key: "aired_date",
-      header: t("animeSeries.airedDate"),
-      render: (item) => item.aired_date ? String(item.aired_date) : "-",
-    },
-  ]
-
   if (isLoading) {
     return <p className="text-muted-foreground">{t("common.loading")}</p>
   }
 
-  if (!anime) {
-    return <p className="text-destructive">{t("anime.notFound")}</p>
+  if (!group) {
+    return <p className="text-destructive">{t("subtitleGroups.notFound")}</p>
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/anime")}>
+        <Button variant="ghost" size="sm" onClick={() => navigate("/subtitle-groups")}>
           <ArrowLeft className="h-4 w-4 mr-1" />
           {t("common.back")}
         </Button>
-        <h1 className="text-2xl font-bold">{anime.title}</h1>
+        <h1 className="text-2xl font-bold">{group.group_name}</h1>
       </div>
 
       <Card>
@@ -220,11 +142,11 @@ export default function AnimeDetailPage() {
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-muted-foreground">{t("common.id")}:</span> {anime.anime_id}
+            <span className="text-muted-foreground">{t("common.id")}:</span> {group.group_id}
           </div>
           <div>
-            <span className="text-muted-foreground">{t("anime.created")}:</span>{" "}
-            {anime.created_at.slice(0, 10)}
+            <span className="text-muted-foreground">{t("rawItems.created")}:</span>{" "}
+            {group.created_at.slice(0, 10)}
           </div>
         </CardContent>
       </Card>
@@ -232,9 +154,7 @@ export default function AnimeDetailPage() {
       <Tabs defaultValue="filters">
         <TabsList>
           <TabsTrigger value="filters">{t("anime.filterRules")}</TabsTrigger>
-          <TabsTrigger value="series">{t("animeSeries.series")}</TabsTrigger>
         </TabsList>
-
         <TabsContent value="filters" className="mt-4 space-y-4">
           <div className="flex justify-end">
             <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -250,34 +170,12 @@ export default function AnimeDetailPage() {
             />
           ) : (
             <p className="text-sm text-muted-foreground">
-              {t("anime.noRules")}
-            </p>
-          )}
-        </TabsContent>
-
-        <TabsContent value="series" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => setAddSeriesOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t("animeSeries.addSeries")}
-            </Button>
-          </div>
-          {seriesList && seriesList.length > 0 ? (
-            <DataTable
-              columns={seriesColumns}
-              data={seriesList as unknown as Record<string, unknown>[]}
-              keyField="series_id"
-              onRowClick={(row) => navigate(`/anime-series/${row.series_id}`)}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {t("animeSeries.noSeries")}
+              {t("subtitleGroups.noRules")}
             </p>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Create Filter Rule Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
@@ -332,92 +230,6 @@ export default function AnimeDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Series Dialog */}
-      <Dialog open={addSeriesOpen} onOpenChange={setAddSeriesOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("animeSeries.addSeries")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t("animeSeries.seriesNo")}</Label>
-              <Input
-                type="number"
-                value={seriesNo}
-                onChange={(e) => setSeriesNo(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>{t("animeSeries.season")}</Label>
-              <Select value={seriesSeasonId} onValueChange={setSeriesSeasonId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={t("animeSeries.season")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(seasons ?? []).map((s) => (
-                    <SelectItem key={s.season_id} value={String(s.season_id)}>
-                      {s.year} {s.season}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{t("animeSeries.description")}</Label>
-              <Input
-                value={seriesDescription}
-                onChange={(e) => setSeriesDescription(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>{t("animeSeries.airedDate")}</Label>
-              <Input
-                type="date"
-                value={seriesAiredDate}
-                onChange={(e) => setSeriesAiredDate(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>{t("animeSeries.endDate")}</Label>
-              <Input
-                type="date"
-                value={seriesEndDate}
-                onChange={(e) => setSeriesEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddSeriesOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={!seriesSeasonId || creatingSeries}
-              onClick={() => {
-                createSeries({
-                  anime_id: id,
-                  series_no: Number(seriesNo) || 1,
-                  season_id: Number(seriesSeasonId),
-                  description: seriesDescription || undefined,
-                  aired_date: seriesAiredDate || undefined,
-                  end_date: seriesEndDate || undefined,
-                }).then(() => {
-                  setSeriesNo("1")
-                  setSeriesSeasonId("")
-                  setSeriesDescription("")
-                  setSeriesAiredDate("")
-                  setSeriesEndDate("")
-                  setAddSeriesOpen(false)
-                  refetchSeries()
-                })
-              }}
-            >
-              {creatingSeries ? t("common.creating") : t("common.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Filter Rule Confirm */}
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
