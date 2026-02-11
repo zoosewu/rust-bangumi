@@ -20,6 +20,7 @@
 ### 前置條件
 
 - **Rust 1.75+**
+- **Node.js 22+**（Frontend 開發）
 - **Docker & Docker Compose v2+**
 - **PostgreSQL client** (可選，用於 CLI 操作)
 
@@ -58,6 +59,15 @@ rust-bangumi/
 ├── fetchers/mikanani/                  # Mikanani RSS Fetcher
 ├── downloaders/qbittorrent/            # qBittorrent Downloader
 ├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
+├── frontend/                           # React SPA 前端管理介面
+│   ├── src/
+│   │   ├── pages/                      # 頁面元件
+│   │   ├── components/                 # UI 元件（Shadcn/UI + 共用元件）
+│   │   ├── services/                   # Effect-TS API 服務層
+│   │   ├── schemas/                    # Effect Schema 型別定義
+│   │   └── hooks/                      # React hooks
+│   ├── Dockerfile                      # 多階段建構（Node + Caddy）
+│   └── Caddyfile                       # 反向代理設定
 ├── cli/                                # CLI 工具
 ├── docker-compose.yaml                 # 生產環境
 ├── docker-compose.dev.yaml             # 開發環境 ← 使用這個
@@ -487,9 +497,99 @@ git worktree remove .worktrees/my-feature
 
 ---
 
+## Frontend 開發
+
+### 技術棧
+
+- **React 19** + TypeScript + Vite 7
+- **Effect-TS** — 類型安全的 API 呼叫與錯誤處理
+- **Shadcn/UI** — Radix UI + Tailwind CSS 元件庫（New York 風格）
+- **Caddy** — 生產環境反向代理
+
+### 安裝與啟動
+
+```bash
+cd frontend
+
+# 安裝依賴
+npm install
+
+# 啟動開發伺服器（port 5173）
+npm run dev
+```
+
+開發伺服器會自動代理 API 請求：
+
+| URL 前綴 | 代理至 |
+|----------|--------|
+| `/api/core/` | `http://localhost:8000` |
+| `/api/downloader/` | `http://localhost:8002` |
+| `/api/viewer/` | `http://localhost:8003` |
+
+> 確保後端服務已啟動後再開啟前端開發伺服器。
+
+### 建構
+
+```bash
+cd frontend
+
+# TypeScript 檢查 + 建構生產版本
+npm run build
+
+# 預覽建構結果
+npm run preview
+```
+
+### 頁面一覽
+
+| 路由 | 頁面 | 功能 |
+|------|------|------|
+| `/` | Dashboard | 服務健康狀態、系統總覽 |
+| `/anime` | Anime 管理 | 新增/刪除動畫 |
+| `/anime/:id` | Anime 詳情 | 系列管理、Filter 規則 |
+| `/subscriptions` | 訂閱管理 | 瀏覽 RSS 訂閱 |
+| `/raw-items` | Raw Items | 原始 RSS 項目（含狀態篩選、分頁） |
+| `/downloads` | 下載管理 | 下載進度（自動 5 秒刷新） |
+| `/filters` | Filter 規則 | CRUD + 即時 before/after 預覽 |
+| `/parsers` | Title Parser | CRUD + 即時解析預覽 |
+| `/conflicts` | 衝突解決 | Fetcher 衝突解決 |
+
+### 前端架構
+
+```
+src/
+├── services/CoreApi.ts    # Effect.Context.Tag API 介面（17 個端點）
+├── schemas/               # Effect Schema 型別驗證
+├── hooks/                 # useEffectQuery / useEffectMutation
+├── layers/ApiLayer.ts     # Effect-TS Layer（HttpClient → CoreApi）
+├── runtime/AppRuntime.ts  # ManagedRuntime 初始化
+├── components/
+│   ├── ui/                # Shadcn/UI 元件（15 個）
+│   ├── layout/            # AppLayout, Sidebar, Header
+│   └── shared/            # DataTable, StatusBadge, ConfirmDialog, RegexInput
+└── pages/                 # 各功能頁面
+```
+
+### Docker 建構
+
+```bash
+# 單獨建構 Frontend 映像
+docker compose build frontend
+
+# 啟動 Frontend（依賴 core-service）
+docker compose up -d frontend
+```
+
+Frontend Docker 映像使用多階段建構：
+1. **Builder**: Node 22 Alpine — `npm ci` + `npm run build`
+2. **Runtime**: Caddy Alpine — 提供靜態檔案 + 反向代理
+
+---
+
 ## 相關文檔
 
 - [API 規格](docs/API-SPECIFICATIONS.md)
 - [架構設計](docs/plans/2025-01-21-rust-bangumi-architecture-design.md)
 - [CORS 設定](docs/CORS-CONFIGURATION.md)
 - [Viewer Jellyfin](viewers/jellyfin/README.md)
+- [Frontend 實作計劃](docs/plans/frontend-implementation-plan.md)

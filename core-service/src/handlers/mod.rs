@@ -1,5 +1,6 @@
 pub mod anime;
 pub mod conflict_resolution;
+pub mod downloads;
 pub mod fetcher_results;
 pub mod filters;
 pub mod links;

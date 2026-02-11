@@ -124,9 +124,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/filters", post(handlers::filters::create_filter_rule))
         .route("/filters", get(handlers::filters::get_filter_rules))
         .route(
+            "/filters/preview",
+            post(handlers::filters::preview_filter),
+        )
+        .route(
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
         )
+        // 下載記錄
+        .route("/downloads", get(handlers::downloads::list_downloads))
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
         .route("/links/:series_id", get(handlers::links::get_anime_links))
@@ -164,6 +170,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/parsers",
             get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser),
+        )
+        .route(
+            "/parsers/preview",
+            post(handlers::parsers::preview_parser),
         )
         .route(
             "/parsers/:parser_id",

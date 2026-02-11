@@ -220,6 +220,34 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  # ============================================================================
+  # Frontend (Caddy + SPA)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bangumi-frontend
+    depends_on:
+      core-service:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.20
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 # ============================================================================
 # 網絡
 # ============================================================================

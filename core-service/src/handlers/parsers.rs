@@ -7,8 +7,10 @@ use axum::{
 };
 use chrono::Utc;
 use diesel::prelude::*;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate::db::repository::raw_item::RawItemFilter;
 use crate::models::{NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
 use crate::schema::{raw_anime_items, title_parsers};
 use crate::services::title_parser::ParseStatus;
@@ -336,4 +338,230 @@ async fn reparse_failed_items(
             tracing::warn!("reparse_failed_items: dispatch 失敗: {}", e);
         }
     }
+}
+
+// ============ Preview DTOs ============
+
+#[derive(Debug, Deserialize)]
+pub struct ParserPreviewRequest {
+    pub condition_regex: String,
+    pub parse_regex: String,
+    pub priority: i32,
+    pub anime_title_source: String,
+    pub anime_title_value: String,
+    pub episode_no_source: String,
+    pub episode_no_value: String,
+    pub series_no_source: Option<String>,
+    pub series_no_value: Option<String>,
+    pub subtitle_group_source: Option<String>,
+    pub subtitle_group_value: Option<String>,
+    pub resolution_source: Option<String>,
+    pub resolution_value: Option<String>,
+    pub season_source: Option<String>,
+    pub season_value: Option<String>,
+    pub year_source: Option<String>,
+    pub year_value: Option<String>,
+    pub exclude_parser_id: Option<i32>,
+    pub subscription_id: Option<i32>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParsedFields {
+    pub anime_title: String,
+    pub episode_no: i32,
+    pub series_no: i32,
+    pub subtitle_group: Option<String>,
+    pub resolution: Option<String>,
+    pub season: Option<String>,
+    pub year: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParserPreviewResult {
+    pub title: String,
+    pub before_matched_by: Option<String>,
+    pub after_matched_by: Option<String>,
+    pub is_newly_matched: bool,
+    pub is_override: bool,
+    pub parse_result: Option<ParsedFields>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParserPreviewResponse {
+    pub condition_regex_valid: bool,
+    pub parse_regex_valid: bool,
+    pub regex_error: Option<String>,
+    pub results: Vec<ParserPreviewResult>,
+}
+
+/// POST /parsers/preview
+pub async fn preview_parser(
+    State(state): State<AppState>,
+    Json(req): Json<ParserPreviewRequest>,
+) -> Result<Json<ParserPreviewResponse>, (StatusCode, String)> {
+    // Validate regexes
+    if let Err(e) = Regex::new(&req.condition_regex) {
+        return Ok(Json(ParserPreviewResponse {
+            condition_regex_valid: false,
+            parse_regex_valid: true,
+            regex_error: Some(format!("condition_regex: {}", e)),
+            results: vec![],
+        }));
+    }
+    if let Err(e) = Regex::new(&req.parse_regex) {
+        return Ok(Json(ParserPreviewResponse {
+            condition_regex_valid: true,
+            parse_regex_valid: false,
+            regex_error: Some(format!("parse_regex: {}", e)),
+            results: vec![],
+        }));
+    }
+
+    let limit = req.limit.unwrap_or(20).min(200);
+
+    // Load raw items
+    let items = state
+        .repos
+        .raw_item
+        .find_with_filters(RawItemFilter {
+            status: None,
+            subscription_id: req.subscription_id,
+            limit,
+            offset: 0,
+        })
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Load existing enabled parsers
+    let all_parsers = state
+        .repos
+        .title_parser
+        .find_enabled_sorted_by_priority()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Build "before" parsers (exclude current)
+    let before_parsers: Vec<&TitleParser> = all_parsers
+        .iter()
+        .filter(|p| Some(p.parser_id) != req.exclude_parser_id)
+        .collect();
+
+    // Build a temporary TitleParser for the "current" parser being previewed
+    let now = Utc::now().naive_utc();
+    let current_parser = TitleParser {
+        parser_id: -1, // sentinel
+        name: "(preview)".to_string(),
+        description: None,
+        priority: req.priority,
+        is_enabled: true,
+        condition_regex: req.condition_regex.clone(),
+        parse_regex: req.parse_regex.clone(),
+        anime_title_source: parse_source_type(&req.anime_title_source)?,
+        anime_title_value: req.anime_title_value.clone(),
+        episode_no_source: parse_source_type(&req.episode_no_source)?,
+        episode_no_value: req.episode_no_value.clone(),
+        series_no_source: req
+            .series_no_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        series_no_value: req.series_no_value.clone(),
+        subtitle_group_source: req
+            .subtitle_group_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        subtitle_group_value: req.subtitle_group_value.clone(),
+        resolution_source: req
+            .resolution_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        resolution_value: req.resolution_value.clone(),
+        season_source: req
+            .season_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        season_value: req.season_value.clone(),
+        year_source: req
+            .year_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        year_value: req.year_value.clone(),
+        created_at: now,
+        updated_at: now,
+    };
+
+    // Build "after" parsers list: before_parsers + current_parser, sorted by priority desc
+    let mut after_parsers: Vec<&TitleParser> = before_parsers.clone();
+    after_parsers.push(&current_parser);
+    after_parsers.sort_by(|a, b| b.priority.cmp(&a.priority));
+
+    // Process each item
+    let mut results = Vec::new();
+    for item in &items {
+        let before_match = find_matching_parser(&before_parsers, &item.title);
+        let after_match = find_matching_parser(&after_parsers, &item.title);
+
+        let before_name = before_match.map(|p| p.name.clone());
+        let after_name = after_match.map(|p| {
+            if p.parser_id == -1 {
+                "(current)".to_string()
+            } else {
+                p.name.clone()
+            }
+        });
+
+        let is_current_after = after_match.map(|p| p.parser_id == -1).unwrap_or(false);
+        let is_newly_matched = before_match.is_none() && is_current_after;
+        let is_override =
+            before_match.is_some() && is_current_after && before_match.map(|p| p.parser_id) != Some(-1);
+
+        // Parse result only if current parser matched in "after"
+        let parse_result = if is_current_after {
+            TitleParserService::try_parser(&current_parser, &item.title)
+                .ok()
+                .flatten()
+                .map(|r| ParsedFields {
+                    anime_title: r.anime_title,
+                    episode_no: r.episode_no,
+                    series_no: r.series_no,
+                    subtitle_group: r.subtitle_group,
+                    resolution: r.resolution,
+                    season: r.season,
+                    year: r.year,
+                })
+        } else {
+            None
+        };
+
+        results.push(ParserPreviewResult {
+            title: item.title.clone(),
+            before_matched_by: before_name,
+            after_matched_by: after_name,
+            is_newly_matched,
+            is_override,
+            parse_result,
+        });
+    }
+
+    Ok(Json(ParserPreviewResponse {
+        condition_regex_valid: true,
+        parse_regex_valid: true,
+        regex_error: None,
+        results,
+    }))
+}
+
+/// Find the first parser that matches a title (parsers must be pre-sorted by priority desc)
+fn find_matching_parser<'a>(parsers: &[&'a TitleParser], title: &str) -> Option<&'a TitleParser> {
+    for parser in parsers {
+        if let Ok(Some(_)) = TitleParserService::try_parser(parser, title) {
+            return Some(parser);
+        }
+    }
+    None
 }

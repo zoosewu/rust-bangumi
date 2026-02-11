@@ -1,0 +1,22 @@
+:80 {
+    encode gzip
+
+    handle /api/core/* {
+        uri strip_prefix /api/core
+        reverse_proxy core-service:8000
+    }
+    handle /api/downloader/* {
+        uri strip_prefix /api/downloader
+        reverse_proxy downloader-qbittorrent:8002
+    }
+    handle /api/viewer/* {
+        uri strip_prefix /api/viewer
+        reverse_proxy viewer-jellyfin:8003
+    }
+
+    handle {
+        root * /srv
+        file_server
+        try_files {path} /index.html
+    }
+}
