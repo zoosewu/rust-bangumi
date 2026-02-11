@@ -35,13 +35,13 @@ ENABLE_CORS=true
 CORS_ALLOWED_ORIGINS=*
 
 # 允許特定本地域名
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+CORS_ALLOWED_ORIGINS=http://localhost:8004,http://localhost:3001
 
 # 允許生產域名
 CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 
 # 混合配置
-CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.example.com
+CORS_ALLOWED_ORIGINS=http://localhost:8004,https://app.example.com
 ```
 
 ## 使用場景
@@ -61,7 +61,7 @@ CORS_ALLOWED_ORIGINS=*
 ```bash
 # .env
 ENABLE_CORS=true
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+CORS_ALLOWED_ORIGINS=http://localhost:8004,http://localhost:3001
 ```
 
 只允許運行在本機指定端口的應用訪問 API。
@@ -178,12 +178,12 @@ Fetcher 服務使用相同的 CORS 實現，確保一致性。
 ```bash
 # 測試 CORS 預檢請求
 curl -X OPTIONS http://localhost:8000/health \
-  -H "Origin: http://localhost:3000" \
+  -H "Origin: http://localhost:8004" \
   -H "Access-Control-Request-Method: GET" \
   -v
 
 # 應該看到類似的 Response Header：
-# < Access-Control-Allow-Origin: http://localhost:3000
+# < Access-Control-Allow-Origin: http://localhost:8004
 # < Access-Control-Allow-Methods: GET, POST, DELETE, ...
 ```
 

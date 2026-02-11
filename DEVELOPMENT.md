@@ -514,7 +514,7 @@ cd frontend
 # 安裝依賴
 bun install
 
-# 啟動開發伺服器（port 5173）
+# 啟動開發伺服器（port 8004）
 bun run dev
 ```
 

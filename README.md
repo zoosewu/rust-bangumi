@@ -8,7 +8,7 @@
                         ┌──────────────┐
                         │   Frontend   │
                         │ (React SPA)  │
-                        │    :3000     │
+                        │    :8004     │
                         └──────┬───────┘
                                │ Caddy reverse proxy
 ┌──────────┐     ┌─────────────┴┐     ┌───────────────────┐     ┌────────────────┐
@@ -26,7 +26,7 @@
 
 | 服務 | 說明 | Port |
 |------|------|------|
-| **Frontend** | React SPA 管理介面，透過 Caddy 反向代理存取後端 API | 3000 |
+| **Frontend** | React SPA 管理介面，透過 Caddy 反向代理存取後端 API | 8004 |
 | Core Service | 主協調器，管理資料庫、調度抓取與下載、接收回呼 | 8000 |
 | Fetcher (Mikanani) | 從 Mikanani RSS 抓取動畫資訊，解析標題 | 8001 |
 | Downloader (qBittorrent) | 批次管理 BT 下載任務（magnet/torrent） | 8002 |
@@ -100,7 +100,7 @@ curl http://localhost:8002/health
 curl http://localhost:8003/health
 
 # 開啟 Frontend 管理介面
-open http://localhost:3000
+open http://localhost:8004
 
 # 查看日誌
 docker compose logs -f core-service
@@ -132,7 +132,7 @@ docker compose logs -f core-service
 
 > 完整 API 文件見 [docs/API-SPECIFICATIONS.md](docs/API-SPECIFICATIONS.md) 和 [docs/api/](docs/api/)
 
-### Frontend (3000)
+### Frontend (8004)
 
 Frontend 透過 Caddy 反向代理存取後端 API：
 
@@ -183,7 +183,7 @@ Frontend 透過 Caddy 反向代理存取後端 API：
 | `FETCHER_PORT` | 8001 | Fetcher port |
 | `DOWNLOADER_PORT` | 8002 | Downloader port |
 | `VIEWER_PORT` | 8003 | Viewer port |
-| `FRONTEND_PORT` | 3000 | Frontend port |
+| `FRONTEND_PORT` | 8004 | Frontend port |
 | `QBITTORRENT_URL` | http://qbittorrent:8080 | qBittorrent WebUI |
 | `DOWNLOADS_DIR` | /downloads | 下載檔案目錄 |
 | `JELLYFIN_LIBRARY_DIR` | /media/jellyfin | Jellyfin 媒體庫目錄 |

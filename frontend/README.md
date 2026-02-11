@@ -16,7 +16,7 @@ Bangumi 動畫管理系統的 Web 前端介面。
 # 安裝依賴
 bun install
 
-# 啟動開發伺服器（http://localhost:5173）
+# 啟動開發伺服器（http://localhost:8004）
 bun run dev
 
 # TypeScript 檢查 + 建構
@@ -78,7 +78,7 @@ src/
 docker build -t bangumi-frontend .
 
 # 運行（需要後端服務在同一 Docker network）
-docker run -p 3000:80 bangumi-frontend
+docker run -p 8004:80 bangumi-frontend
 ```
 
 生產環境使用 Caddy 提供靜態檔案並反向代理 API 至後端服務。設定見 `Caddyfile`。

@@ -232,7 +232,7 @@ services:
       core-service:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-8004}:80"
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.20

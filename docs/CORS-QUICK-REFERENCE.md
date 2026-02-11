@@ -40,7 +40,7 @@ CORS_ALLOWED_ORIGINS=*
 ### 多端口開發
 ```bash
 ENABLE_CORS=true
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:8080
+CORS_ALLOWED_ORIGINS=http://localhost:8004,http://localhost:3001,http://localhost:8080
 ```
 
 ### 單一生產域名
@@ -76,7 +76,7 @@ ENABLE_CORS=false
 ```bash
 # curl 測試
 curl -X OPTIONS http://localhost:8000/health \
-  -H "Origin: http://localhost:3000" \
+  -H "Origin: http://localhost:8004" \
   -v
 ```
 

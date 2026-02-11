@@ -99,7 +99,7 @@ frontend:
   container_name: bangumi-frontend
   depends_on:
     core-service: { condition: service_healthy }
-  ports: ["${FRONTEND_PORT:-3000}:80"]
+  ports: ["${FRONTEND_PORT:-8004}:80"]
   networks:
     bangumi-network: { ipv4_address: 172.25.0.20 }
 ```
@@ -115,7 +115,7 @@ frontend:
 
 ### 開發環境
 
-- `bun run dev` — Vite dev server on :5173
+- `bun run dev` — Vite dev server on :8004
 - Vite proxy 配置對應 Caddy 代理路徑
 - `bun run build` — TypeScript check + Vite production build
 
