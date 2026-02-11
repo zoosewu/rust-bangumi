@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -34,6 +35,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export default function FiltersPage() {
+  const { t } = useTranslation()
   const [regexPattern, setRegexPattern] = useState("")
   const [isPositive, setIsPositive] = useState(true)
   const [preview, setPreview] = useState<FilterPreviewResponse | null>(null)
@@ -99,17 +101,17 @@ export default function FiltersPage() {
   }, [debouncedRegex, isPositive])
 
   const ruleColumns: Column<Record<string, unknown>>[] = [
-    { key: "rule_id", header: "ID", render: (item) => String(item.rule_id) },
-    { key: "rule_order", header: "Order", render: (item) => String(item.rule_order) },
+    { key: "rule_id", header: t("common.id"), render: (item) => String(item.rule_id) },
+    { key: "rule_order", header: t("common.order"), render: (item) => String(item.rule_order) },
     {
       key: "regex_pattern",
-      header: "Pattern",
+      header: t("common.pattern"),
       render: (item) => <code className="text-sm font-mono">{String(item.regex_pattern)}</code>,
     },
     {
       key: "is_positive",
-      header: "Type",
-      render: (item) => (item.is_positive ? "Include" : "Exclude"),
+      header: t("common.type"),
+      render: (item) => (item.is_positive ? t("common.include") : t("common.exclude")),
     },
     {
       key: "actions",
@@ -132,16 +134,16 @@ export default function FiltersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Filter Rules</h1>
+        <h1 className="text-2xl font-bold">{t("filters.title")}</h1>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Rule
+          {t("filters.addRule")}
         </Button>
       </div>
 
       {/* Existing Rules Table */}
       {rulesLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <DataTable
           columns={ruleColumns}
@@ -153,12 +155,12 @@ export default function FiltersPage() {
       {/* Preview Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Preview Filter</CardTitle>
+          <CardTitle className="text-sm">{t("filters.previewFilter")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Regex Pattern</Label>
+              <Label>{t("filters.regexPattern")}</Label>
               <RegexInput
                 value={regexPattern}
                 onChange={setRegexPattern}
@@ -167,7 +169,7 @@ export default function FiltersPage() {
             </div>
             <div className="flex items-center gap-2 pt-6">
               <Switch checked={isPositive} onCheckedChange={setIsPositive} />
-              <Label>{isPositive ? "Include (positive)" : "Exclude (negative)"}</Label>
+              <Label>{isPositive ? t("common.include") : t("common.exclude")}</Label>
             </div>
           </div>
         </CardContent>
@@ -176,14 +178,18 @@ export default function FiltersPage() {
       {preview && (
         <div className="grid grid-cols-2 gap-4">
           <PreviewPanel
-            title="Before (without this filter)"
+            title={t("filters.before")}
             passed={preview.before.passed_items}
             filtered={preview.before.filtered_items}
+            passedLabel={t("filters.passed")}
+            filteredLabel={t("filters.filtered")}
           />
           <PreviewPanel
-            title="After (with this filter)"
+            title={t("filters.after")}
             passed={preview.after.passed_items}
             filtered={preview.after.filtered_items}
+            passedLabel={t("filters.passed")}
+            filteredLabel={t("filters.filtered")}
             highlightDiff
           />
         </div>
@@ -193,11 +199,11 @@ export default function FiltersPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Filter Rule</DialogTitle>
+            <DialogTitle>{t("filters.addFilterRule")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Regex Pattern</Label>
+              <Label>{t("filters.regexPattern")}</Label>
               <Input
                 className="font-mono"
                 value={newRegex}
@@ -206,7 +212,7 @@ export default function FiltersPage() {
               />
             </div>
             <div>
-              <Label>Rule Order</Label>
+              <Label>{t("filters.ruleOrder")}</Label>
               <Input
                 type="number"
                 value={newOrder}
@@ -215,12 +221,12 @@ export default function FiltersPage() {
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={newPositive} onCheckedChange={setNewPositive} />
-              <Label>{newPositive ? "Include" : "Exclude"}</Label>
+              <Label>{newPositive ? t("common.include") : t("common.exclude")}</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               disabled={!newRegex.trim() || creating}
@@ -236,7 +242,7 @@ export default function FiltersPage() {
                 })
               }}
             >
-              {creating ? "Creating..." : "Create"}
+              {creating ? t("common.creating") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -246,8 +252,8 @@ export default function FiltersPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Filter Rule"
-        description="Are you sure you want to delete this filter rule?"
+        title={t("filters.deleteRule")}
+        description={t("filters.deleteRuleConfirm")}
         loading={deleting}
         onConfirm={() => {
           if (deleteTarget !== null) {
@@ -266,11 +272,15 @@ function PreviewPanel({
   title,
   passed,
   filtered,
+  passedLabel,
+  filteredLabel,
   highlightDiff,
 }: {
   title: string
   passed: readonly { readonly item_id: number; readonly title: string }[]
   filtered: readonly { readonly item_id: number; readonly title: string }[]
+  passedLabel: string
+  filteredLabel: string
   highlightDiff?: boolean
 }) {
   return (
@@ -278,8 +288,8 @@ function PreviewPanel({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">{title}</CardTitle>
         <div className="flex gap-4 text-xs">
-          <span className="text-green-600">Passed: {passed.length}</span>
-          <span className="text-red-600">Filtered: {filtered.length}</span>
+          <span className="text-green-600">{passedLabel}: {passed.length}</span>
+          <span className="text-red-600">{filteredLabel}: {filtered.length}</span>
         </div>
       </CardHeader>
       <CardContent>

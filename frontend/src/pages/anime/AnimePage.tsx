@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -19,6 +20,7 @@ import {
 import { Plus } from "lucide-react"
 
 export default function AnimePage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(false)
   const [newTitle, setNewTitle] = useState("")
@@ -53,11 +55,11 @@ export default function AnimePage() {
   )
 
   const columns: Column<Record<string, unknown>>[] = [
-    { key: "anime_id", header: "ID", render: (item) => String(item.anime_id) },
-    { key: "title", header: "Title", render: (item) => String(item.title) },
+    { key: "anime_id", header: t("common.id"), render: (item) => String(item.anime_id) },
+    { key: "title", header: t("common.name"), render: (item) => String(item.title) },
     {
       key: "created_at",
-      header: "Created",
+      header: t("anime.created"),
       render: (item) => String(item.created_at).slice(0, 10),
     },
     {
@@ -76,7 +78,7 @@ export default function AnimePage() {
             })
           }}
         >
-          Delete
+          {t("common.delete")}
         </Button>
       ),
     },
@@ -85,15 +87,15 @@ export default function AnimePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Anime</h1>
+        <h1 className="text-2xl font-bold">{t("anime.title")}</h1>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Anime
+          {t("anime.addAnime")}
         </Button>
       </div>
 
       {isLoading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <DataTable
           columns={columns}
@@ -107,16 +109,16 @@ export default function AnimePage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Anime</DialogTitle>
+            <DialogTitle>{t("anime.addAnime")}</DialogTitle>
           </DialogHeader>
           <Input
-            placeholder="Anime title"
+            placeholder={t("anime.animeTitle")}
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               disabled={!newTitle.trim() || creating}
@@ -128,7 +130,7 @@ export default function AnimePage() {
                 })
               }}
             >
-              {creating ? "Creating..." : "Create"}
+              {creating ? t("common.creating") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -138,8 +140,8 @@ export default function AnimePage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Delete Anime"
-        description={`Are you sure you want to delete "${deleteTarget?.title}"?`}
+        title={t("anime.deleteAnime")}
+        description={t("anime.deleteConfirm", { title: deleteTarget?.title })}
         loading={deleting}
         onConfirm={() => {
           if (deleteTarget) {
