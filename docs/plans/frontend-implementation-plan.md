@@ -15,6 +15,7 @@
 | Routing | React Router | 7.13 |
 | Icons | Lucide React | 0.563 |
 | Toast | Sonner | 2.0 |
+| Runtime / Build | Bun | Alpine |
 | Production Server | Caddy | Alpine |
 
 ## Backend Changes
@@ -69,7 +70,7 @@ frontend/                          # 68 files, ~14,400 lines
 │       ├── filters/                # FiltersPage (CRUD + debounced before/after preview)
 │       ├── parsers/                # ParsersPage (CRUD + priority-based match preview)
 │       └── conflicts/              # ConflictsPage (resolve with fetcher selection)
-├── Dockerfile                     # Multi-stage: Node 22 → Caddy Alpine
+├── Dockerfile                     # Multi-stage: Bun Alpine → Caddy Alpine
 ├── Caddyfile                      # Reverse proxy + SPA fallback
 └── .dockerignore
 ```
@@ -114,9 +115,9 @@ frontend:
 
 ### 開發環境
 
-- `npm run dev` — Vite dev server on :5173
+- `bun run dev` — Vite dev server on :5173
 - Vite proxy 配置對應 Caddy 代理路徑
-- `npm run build` — TypeScript check + Vite production build
+- `bun run build` — TypeScript check + Vite production build
 
 ## Commit History
 

@@ -14,19 +14,19 @@ Bangumi 動畫管理系統的 Web 前端介面。
 
 ```bash
 # 安裝依賴
-npm install
+bun install
 
 # 啟動開發伺服器（http://localhost:5173）
-npm run dev
+bun run dev
 
 # TypeScript 檢查 + 建構
-npm run build
+bun run build
 
 # 預覽建構結果
-npm run preview
+bun run preview
 
 # ESLint 檢查
-npm run lint
+bun run lint
 ```
 
 ### API 代理

@@ -20,7 +20,7 @@
 ### 前置條件
 
 - **Rust 1.75+**
-- **Node.js 22+**（Frontend 開發）
+- **Bun**（Frontend 開發）
 - **Docker & Docker Compose v2+**
 - **PostgreSQL client** (可選，用於 CLI 操作)
 
@@ -66,7 +66,7 @@ rust-bangumi/
 │   │   ├── services/                   # Effect-TS API 服務層
 │   │   ├── schemas/                    # Effect Schema 型別定義
 │   │   └── hooks/                      # React hooks
-│   ├── Dockerfile                      # 多階段建構（Node + Caddy）
+│   ├── Dockerfile                      # 多階段建構（Bun + Caddy）
 │   └── Caddyfile                       # 反向代理設定
 ├── cli/                                # CLI 工具
 ├── docker-compose.yaml                 # 生產環境
@@ -512,10 +512,10 @@ git worktree remove .worktrees/my-feature
 cd frontend
 
 # 安裝依賴
-npm install
+bun install
 
 # 啟動開發伺服器（port 5173）
-npm run dev
+bun run dev
 ```
 
 開發伺服器會自動代理 API 請求：
@@ -534,10 +534,10 @@ npm run dev
 cd frontend
 
 # TypeScript 檢查 + 建構生產版本
-npm run build
+bun run build
 
 # 預覽建構結果
-npm run preview
+bun run preview
 ```
 
 ### 頁面一覽
@@ -581,7 +581,7 @@ docker compose up -d frontend
 ```
 
 Frontend Docker 映像使用多階段建構：
-1. **Builder**: Node 22 Alpine — `npm ci` + `npm run build`
+1. **Builder**: Bun Alpine — `bun install` + `bun run build`
 2. **Runtime**: Caddy Alpine — 提供靜態檔案 + 反向代理
 
 ---
