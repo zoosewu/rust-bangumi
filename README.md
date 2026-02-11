@@ -5,7 +5,13 @@
 ## 系統架構
 
 ```
-┌──────────┐     ┌──────────────┐     ┌───────────────────┐     ┌────────────────┐
+                        ┌──────────────┐
+                        │   Frontend   │
+                        │ (React SPA)  │
+                        │    :3000     │
+                        └──────┬───────┘
+                               │ Caddy reverse proxy
+┌──────────┐     ┌─────────────┴┐     ┌───────────────────┐     ┌────────────────┐
 │  Fetcher │◄────│ Core Service │────►│    Downloader     │────►│    Viewer      │
 │ Mikanani │     │  (協調器)    │     │  (qBittorrent)    │     │  (Jellyfin)    │
 │  :8001   │     │    :8000     │     │      :8002        │     │    :8003       │
@@ -16,10 +22,11 @@
                    └─────────┘
 ```
 
-系統由 4 個微服務 + CLI 工具組成：
+系統由 4 個微服務 + Frontend + CLI 工具組成：
 
 | 服務 | 說明 | Port |
 |------|------|------|
+| **Frontend** | React SPA 管理介面，透過 Caddy 反向代理存取後端 API | 3000 |
 | Core Service | 主協調器，管理資料庫、調度抓取與下載、接收回呼 | 8000 |
 | Fetcher (Mikanani) | 從 Mikanani RSS 抓取動畫資訊，解析標題 | 8001 |
 | Downloader (qBittorrent) | 批次管理 BT 下載任務（magnet/torrent） | 8002 |
@@ -35,7 +42,7 @@
 ## 完整資料流
 
 ```
-1. 使用者透過 CLI 或 API 新增 RSS 訂閱
+1. 使用者透過 Frontend 介面、CLI 或 API 新增 RSS 訂閱
 2. Core FetchScheduler 定期觸發 Fetcher 抓取 RSS
 3. Fetcher 回呼 Core 提交原始結果，Core 解析標題並存入資料庫
 4. Core DownloadScheduler 偵測新連結，派送至 Downloader 下載
@@ -73,7 +80,7 @@ POSTGRES_PASSWORD=<your-secure-password>
 ### 2. 啟動服務
 
 ```bash
-# 啟動核心服務（不含外部依賴）
+# 啟動核心服務 + Frontend（不含外部依賴）
 docker compose up -d
 
 # 啟動含 qBittorrent 和 Jellyfin
@@ -91,6 +98,9 @@ curl http://localhost:8000/health
 curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
+
+# 開啟 Frontend 管理介面
+open http://localhost:3000
 
 # 查看日誌
 docker compose logs -f core-service
@@ -116,8 +126,22 @@ docker compose logs -f core-service
 | POST | `/raw-fetcher-results` | 接收原始 Fetcher 結果（自動解析） |
 | POST | `/sync-callback` | 接收 Viewer 同步回呼 |
 | GET | `/conflicts` | 列出待解決衝突 |
+| GET | `/downloads` | 列出下載記錄（`?status=X&limit=Y&offset=Z`） |
+| POST | `/filters/preview` | 預覽 Filter 規則匹配結果（即時比較 before/after） |
+| POST | `/parsers/preview` | 預覽 Parser 解析結果（含 priority-based 匹配比較） |
 
 > 完整 API 文件見 [docs/API-SPECIFICATIONS.md](docs/API-SPECIFICATIONS.md) 和 [docs/api/](docs/api/)
+
+### Frontend (3000)
+
+Frontend 透過 Caddy 反向代理存取後端 API：
+
+| URL 前綴 | 代理目標 | 說明 |
+|----------|----------|------|
+| `/api/core/*` | core-service:8000 | Core Service API |
+| `/api/downloader/*` | downloader-qbittorrent:8002 | Downloader API |
+| `/api/viewer/*` | viewer-jellyfin:8003 | Viewer API |
+| `/*` | 靜態檔案 | React SPA（fallback 至 index.html） |
 
 ### Fetcher (8001)
 
@@ -159,6 +183,7 @@ docker compose logs -f core-service
 | `FETCHER_PORT` | 8001 | Fetcher port |
 | `DOWNLOADER_PORT` | 8002 | Downloader port |
 | `VIEWER_PORT` | 8003 | Viewer port |
+| `FRONTEND_PORT` | 3000 | Frontend port |
 | `QBITTORRENT_URL` | http://qbittorrent:8080 | qBittorrent WebUI |
 | `DOWNLOADS_DIR` | /downloads | 下載檔案目錄 |
 | `JELLYFIN_LIBRARY_DIR` | /media/jellyfin | Jellyfin 媒體庫目錄 |
@@ -168,7 +193,7 @@ docker compose logs -f core-service
 
 | 檔案 | 用途 |
 |------|------|
-| `docker-compose.yaml` | 主要服務配置（Core, Fetcher, Downloader, Viewer） |
+| `docker-compose.yaml` | 主要服務配置（Frontend, Core, Fetcher, Downloader, Viewer） |
 | `docker-compose.override.yaml` | 外部服務（qBittorrent + Jellyfin） |
 | `docker-compose.dev.yaml` | 開發環境（PostgreSQL, Adminer, qBittorrent, Jellyfin） |
 

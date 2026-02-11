@@ -1,73 +1,84 @@
-# React + TypeScript + Vite
+# Bangumi Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Bangumi 動畫管理系統的 Web 前端介面。
 
-Currently, two official plugins are available:
+## 技術棧
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 19** + TypeScript
+- **Vite 7** — 開發伺服器與建構工具
+- **Effect-TS** — 類型安全的 API 呼叫、Schema 驗證、錯誤處理
+- **Shadcn/UI** — Radix UI + Tailwind CSS 4 元件庫
+- **Caddy** — 生產環境反向代理與靜態檔案伺服器
 
-## React Compiler
+## 開發
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# 安裝依賴
+npm install
 
-## Expanding the ESLint configuration
+# 啟動開發伺服器（http://localhost:5173）
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# TypeScript 檢查 + 建構
+npm run build
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# 預覽建構結果
+npm run preview
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# ESLint 檢查
+npm run lint
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### API 代理
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+開發伺服器（Vite）自動代理 API 請求至後端服務：
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| 前綴 | 目標 |
+|------|------|
+| `/api/core/` | `http://localhost:8000` (Core Service) |
+| `/api/downloader/` | `http://localhost:8002` (Downloader) |
+| `/api/viewer/` | `http://localhost:8003` (Viewer) |
+
+> 啟動前端前，請確保後端服務已在本地運行。
+
+## 頁面功能
+
+| 路由 | 功能 |
+|------|------|
+| `/` | Dashboard — 服務健康狀態 |
+| `/anime` | Anime CRUD 管理 |
+| `/anime/:id` | Anime 詳情 — 系列、Filter 規則 |
+| `/subscriptions` | RSS 訂閱瀏覽 |
+| `/raw-items` | 原始 RSS 項目（狀態篩選、分頁） |
+| `/downloads` | 下載進度管理（自動刷新） |
+| `/filters` | Filter 規則 CRUD + 即時 before/after 預覽 |
+| `/parsers` | Title Parser CRUD + 即時解析預覽 |
+| `/conflicts` | Fetcher 衝突解決 |
+
+## 架構
+
 ```
+src/
+├── services/CoreApi.ts    # Effect.Context.Tag — 定義所有 API 方法
+├── layers/ApiLayer.ts     # Effect Layer — HttpClient 實作 CoreApi
+├── runtime/AppRuntime.ts  # ManagedRuntime — 提供 BrowserHttpClient
+├── schemas/               # Effect Schema — 後端 DTO 型別定義與驗證
+├── hooks/                 # useEffectQuery / useEffectMutation
+├── components/
+│   ├── ui/                # Shadcn/UI 生成的元件
+│   ├── layout/            # AppLayout, Sidebar, Header
+│   └── shared/            # DataTable, StatusBadge, ConfirmDialog, RegexInput
+└── pages/                 # 各功能頁面元件
+```
+
+## Docker 部署
+
+```bash
+# 建構映像
+docker build -t bangumi-frontend .
+
+# 運行（需要後端服務在同一 Docker network）
+docker run -p 3000:80 bangumi-frontend
+```
+
+生產環境使用 Caddy 提供靜態檔案並反向代理 API 至後端服務。設定見 `Caddyfile`。
