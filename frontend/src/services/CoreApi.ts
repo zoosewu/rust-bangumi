@@ -65,5 +65,11 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getAllAnimeSeries: Effect.Effect<readonly AnimeSeriesRich[]>
     readonly getDashboardStats: Effect.Effect<DashboardStats>
     readonly getAnimeLinksRich: (seriesId: number) => Effect.Effect<readonly AnimeLinkRich[]>
+    readonly updateAnimeSeries: (seriesId: number, req: {
+      description?: string | null
+      aired_date?: string | null
+      end_date?: string | null
+    }) => Effect.Effect<AnimeSeries>
+    readonly getRawItem: (itemId: number) => Effect.Effect<RawAnimeItem>
   }
 >() {}

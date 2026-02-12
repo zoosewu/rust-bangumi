@@ -31,6 +31,13 @@ export default function AnimeSeriesPage() {
       ),
     },
     {
+      key: "series_no",
+      header: t("animeSeries.seriesNo", "Season #"),
+      render: (item) => (
+        <span className="tabular-nums">S{String(item.series_no)}</span>
+      ),
+    },
+    {
       key: "season",
       header: t("animeSeries.season", "Season"),
       render: (item) => {

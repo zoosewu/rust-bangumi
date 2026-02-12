@@ -194,6 +194,26 @@ const makeCoreApi = Effect.gen(function* () {
         HttpClientRequest.get(`/api/core/links/${seriesId}`),
         Schema.Struct({ links: Schema.Array(AnimeLinkRich) }),
       ).pipe(Effect.map((r) => r.links)),
+
+    updateAnimeSeries: (seriesId, req) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/anime/series/${seriesId}`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((response) => response.json),
+          Effect.flatMap(Schema.decodeUnknown(AnimeSeries)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    getRawItem: (itemId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/raw-items/${itemId}`),
+        RawAnimeItem,
+      ),
   })
 })
 

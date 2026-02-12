@@ -54,6 +54,13 @@ pub struct AnimeSeriesResponse {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UpdateAnimeSeriesRequest {
+    pub description: Option<String>,
+    pub aired_date: Option<NaiveDate>,
+    pub end_date: Option<NaiveDate>,
+}
+
 // ============ SubtitleGroup DTO ============
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SubtitleGroupRequest {

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { RawItemDialog } from "./RawItemDialog"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
@@ -23,6 +24,7 @@ export default function RawItemsPage() {
   const { t } = useTranslation()
   const [status, setStatus] = useState("all")
   const [offset, setOffset] = useState(0)
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
 
   const { data: items, isLoading } = useEffectQuery(
     () =>
@@ -36,6 +38,40 @@ export default function RawItemsPage() {
       }),
     [status, offset],
   )
+
+  const { data: subscriptions } = useEffectQuery(
+    () =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getSubscriptions
+      }),
+    [],
+  )
+
+  const { data: parsers } = useEffectQuery(
+    () =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getParsers()
+      }),
+    [],
+  )
+
+  const subMap = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const s of subscriptions ?? []) {
+      m.set(s.subscription_id, s.name ?? `#${s.subscription_id}`)
+    }
+    return m
+  }, [subscriptions])
+
+  const parserMap = useMemo(() => {
+    const m = new Map<number, string>()
+    for (const p of parsers ?? []) {
+      m.set(p.parser_id, p.name)
+    }
+    return m
+  }, [parsers])
 
   const columns: Column<Record<string, unknown>>[] = [
     {
@@ -60,31 +96,37 @@ export default function RawItemsPage() {
     {
       key: "subscription_id",
       header: t("rawItems.subId"),
-      render: (item) => (
-        <Link
-          to={`/subscriptions`}
-          className="text-primary underline cursor-pointer"
-          onClick={(e) => e.stopPropagation()}
-        >
-          #{String(item.subscription_id)}
-        </Link>
-      ),
+      render: (item) => {
+        const id = Number(item.subscription_id)
+        const name = subMap.get(id) ?? `#${id}`
+        return (
+          <Link
+            to="/subscriptions"
+            className="text-primary underline cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {name}
+          </Link>
+        )
+      },
     },
     {
       key: "parser_id",
       header: t("rawItems.parser"),
-      render: (item) =>
-        item.parser_id != null ? (
+      render: (item) => {
+        if (item.parser_id == null) return "-"
+        const id = Number(item.parser_id)
+        const name = parserMap.get(id) ?? `#${id}`
+        return (
           <Link
-            to={`/parsers`}
+            to="/parsers"
             className="text-primary underline cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
-            #{String(item.parser_id)}
+            {name}
           </Link>
-        ) : (
-          "-"
-        ),
+        )
+      },
     },
     {
       key: "created_at",
@@ -127,6 +169,7 @@ export default function RawItemsPage() {
             columns={columns}
             data={(items ?? []) as unknown as Record<string, unknown>[]}
             keyField="item_id"
+            onRowClick={(row) => setSelectedItemId(Number(row.item_id))}
           />
           <div className="flex items-center justify-between">
             <Button
@@ -150,6 +193,18 @@ export default function RawItemsPage() {
             </Button>
           </div>
         </>
+      )}
+
+      {selectedItemId != null && (
+        <RawItemDialog
+          itemId={selectedItemId}
+          open={selectedItemId != null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedItemId(null)
+          }}
+          subMap={subMap}
+          parserMap={parserMap}
+        />
       )}
     </div>
   )

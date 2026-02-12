@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Users,
   Library,
+  ScanText,
 } from "lucide-react"
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
   { to: "/anime", icon: Library, labelKey: "sidebar.anime" },
   { to: "/subtitle-groups", icon: Users, labelKey: "sidebar.subtitleGroups" },
+  { to: "/parsers", icon: ScanText, labelKey: "sidebar.parsers" },
 ]
 
 export function Sidebar() {

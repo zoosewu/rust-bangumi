@@ -12,7 +12,7 @@ use crate::db::CreateAnimeSeriesParams;
 use crate::dto::{
     AnimeRequest, AnimeResponse, AnimeSeriesRequest, AnimeSeriesResponse, AnimeSeriesRichResponse,
     DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse, SubtitleGroupRequest,
-    SubtitleGroupResponse, SubscriptionInfo,
+    SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeSeriesRequest,
 };
 use crate::models::{Anime, AnimeSeries, Download, Season};
 use crate::schema::{anime_links, anime_series, animes, downloads, raw_anime_items, seasons, subscriptions};
@@ -405,6 +405,64 @@ pub async fn get_anime_series(
                 })),
             )
         }
+    }
+}
+
+/// Update anime series by ID (partial update: description, aired_date, end_date)
+pub async fn update_anime_series(
+    State(state): State<AppState>,
+    Path(series_id): Path<i32>,
+    Json(payload): Json<UpdateAnimeSeriesRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            );
+        }
+    };
+
+    use diesel::prelude::*;
+    match diesel::update(anime_series::table.find(series_id))
+        .set((
+            anime_series::description.eq(payload.description),
+            anime_series::aired_date.eq(payload.aired_date),
+            anime_series::end_date.eq(payload.end_date),
+            anime_series::updated_at.eq(chrono::Utc::now().naive_utc()),
+        ))
+        .get_result::<crate::models::AnimeSeries>(&mut conn)
+    {
+        Ok(series) => {
+            tracing::info!("Updated anime series: {}", series_id);
+            let response = AnimeSeriesResponse {
+                series_id: series.series_id,
+                anime_id: series.anime_id,
+                series_no: series.series_no,
+                season_id: series.season_id,
+                description: series.description,
+                aired_date: series.aired_date,
+                end_date: series.end_date,
+                created_at: series.created_at,
+                updated_at: series.updated_at,
+            };
+            (StatusCode::OK, Json(json!(response)))
+        }
+        Err(diesel::result::Error::NotFound) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "not_found",
+                "message": format!("Anime series {} not found", series_id)
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": "database_error",
+                "message": format!("Failed to update anime series: {:?}", e)
+            })),
+        ),
     }
 }
 

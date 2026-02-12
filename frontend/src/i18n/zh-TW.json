@@ -7,7 +7,8 @@
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
     "rawItems": "原始項目",
-    "conflicts": "衝突"
+    "conflicts": "衝突",
+    "parsers": "解析器"
   },
   "header": {
     "title": "番組管理系統",

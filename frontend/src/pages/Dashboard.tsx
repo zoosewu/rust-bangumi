@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
@@ -62,7 +61,7 @@ export default function Dashboard() {
           )}
 
           {/* Stats cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             <StatCard icon={Film} label={t("dashboard.totalAnime", "Anime")} value={stats.total_anime} />
             <StatCard icon={Film} label={t("dashboard.totalSeries", "Series")} value={stats.total_series} />
             <StatCard icon={Rss} label={t("dashboard.activeSubs", "Subscriptions")} value={stats.active_subscriptions} />
@@ -111,18 +110,14 @@ function StatCard({
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5" />
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <span className={`text-2xl font-bold tabular-nums ${color ? colorClasses[color] : ""}`}>
-          {value}
-        </span>
-      </CardContent>
-    </Card>
+    <div className="flex items-center justify-between rounded-md border px-3 py-2">
+      <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </span>
+      <span className={`text-lg font-bold tabular-nums ${color ? colorClasses[color] : ""}`}>
+        {value}
+      </span>
+    </div>
   )
 }

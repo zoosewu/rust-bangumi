@@ -19,6 +19,10 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 8004,
+      watch: {
+        interval: 1000,
+        usePolling: true,
+      },
       proxy: {
         '/api/core': {
           target: `http://localhost:${corePort}`,

@@ -1,6 +1,6 @@
 use axum::{
     response::Json,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use std::net::SocketAddr;
@@ -108,7 +108,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/anime/series/:series_id",
-            get(handlers::anime::get_anime_series),
+            get(handlers::anime::get_anime_series)
+                .put(handlers::anime::update_anime_series),
         )
         .route(
             "/anime/:anime_id/series",
