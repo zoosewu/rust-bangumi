@@ -106,7 +106,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <InfoItem label={t("animeSeries.animeTitle", "Anime")} value={series.anime_title} />
               <InfoItem
-                label={t("animeSeries.season", "Season")}
+                label={t("animeSeries.season", "Aired Season")}
                 value={`${series.season.year} ${series.season.season}`}
               />
               <InfoItem
@@ -201,7 +201,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
                 ))}
                 {(links ?? []).length === 0 && (
                   <div className="px-3 py-4 text-center text-muted-foreground font-sans">
-                    {t("animeSeries.noLinks", "No links for this series.")}
+                    {t("animeSeries.noLinks", "No links for this season.")}
                   </div>
                 )}
               </div>

@@ -50,7 +50,7 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
 
           {/* Series list */}
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold">{t("animeSeries.series", "Series")}</h3>
+            <h3 className="text-sm font-semibold">{t("animeSeries.series", "Seasons")}</h3>
             {animeSeries.length > 0 ? (
               <div className="rounded-md border divide-y">
                 {animeSeries.map((s) => (
@@ -79,7 +79,7 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">{t("animeSeries.noSeries", "No series for this anime.")}</p>
+              <p className="text-sm text-muted-foreground">{t("animeSeries.noSeries", "No seasons for this anime.")}</p>
             )}
           </div>
 

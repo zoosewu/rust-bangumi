@@ -63,7 +63,7 @@ export default function Dashboard() {
           {/* Stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             <StatCard icon={Film} label={t("dashboard.totalAnime", "Anime")} value={stats.total_anime} />
-            <StatCard icon={Film} label={t("dashboard.totalSeries", "Series")} value={stats.total_series} />
+            <StatCard icon={Film} label={t("dashboard.totalSeries", "Seasons")} value={stats.total_series} />
             <StatCard icon={Rss} label={t("dashboard.activeSubs", "Subscriptions")} value={stats.active_subscriptions} />
             <StatCard icon={Download} label={t("dashboard.downloading", "Downloading")} value={stats.downloading} color="blue" />
             <StatCard icon={CheckCircle2} label={t("dashboard.completed", "Completed")} value={stats.completed} color="green" />

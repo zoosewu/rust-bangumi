@@ -39,7 +39,7 @@ export default function AnimeSeriesPage() {
     },
     {
       key: "season",
-      header: t("animeSeries.season", "Season"),
+      header: t("animeSeries.season", "Aired Season"),
       render: (item) => {
         const s = item.season as { year: number; season: string }
         return (
@@ -79,7 +79,7 @@ export default function AnimeSeriesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t("animeSeries.title", "Anime Series")}</h1>
+      <h1 className="text-2xl font-bold">{t("animeSeries.title", "Anime Seasons")}</h1>
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
