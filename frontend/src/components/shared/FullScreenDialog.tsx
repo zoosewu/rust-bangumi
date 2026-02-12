@@ -44,7 +44,7 @@ export function FullScreenDialog({
               <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
           </div>
-          <ScrollArea className="flex-1 px-6 py-4">
+          <ScrollArea className="flex-1 min-h-0 px-6 py-4">
             {children}
           </ScrollArea>
         </DialogPrimitive.Content>

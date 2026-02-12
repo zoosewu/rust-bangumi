@@ -202,7 +202,9 @@
     "override": "Override",
     "existing": "Existing",
     "unmatched": "Unmatched",
-    "regexError": "Regex Error"
+    "regexError": "Regex Error",
+    "matchedBy": "Matched by",
+    "searchPlaceholder": "Search titles..."
   },
   "conflicts": {
     "title": "Subscription Conflicts",

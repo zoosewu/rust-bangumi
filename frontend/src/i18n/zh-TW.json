@@ -202,7 +202,9 @@
     "override": "覆蓋",
     "existing": "已存在",
     "unmatched": "未匹配",
-    "regexError": "正規表達式錯誤"
+    "regexError": "正規表達式錯誤",
+    "matchedBy": "匹配的解析器",
+    "searchPlaceholder": "搜尋標題..."
   },
   "conflicts": {
     "title": "訂閱衝突",

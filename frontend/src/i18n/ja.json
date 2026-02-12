@@ -202,7 +202,9 @@
     "override": "上書き",
     "existing": "既存",
     "unmatched": "未一致",
-    "regexError": "正規表現エラー"
+    "regexError": "正規表現エラー",
+    "matchedBy": "一致パーサー",
+    "searchPlaceholder": "タイトルを検索..."
   },
   "conflicts": {
     "title": "サブスクリプションコンフリクト",
