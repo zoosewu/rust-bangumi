@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,7 @@ export function ParserEditor({
   const [form, setForm] = useState(EMPTY_FORM)
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TitleParser | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load parsers for this target
   const { data: parsers, refetch } = useEffectQuery(
@@ -85,38 +86,50 @@ export function ParserEditor({
       Effect.flatMap(CoreApi, (api) => api.deleteParser(id)),
   )
 
-  // Preview
-  const handlePreview = useCallback(() => {
-    if (!form.condition_regex || !form.parse_regex) return
-    AppRuntime.runPromise(
-      Effect.flatMap(CoreApi, (api) =>
-        api.previewParser({
-          target_type: createdFromType,
-          target_id: createdFromId,
-          condition_regex: form.condition_regex,
-          parse_regex: form.parse_regex,
-          priority: form.priority,
-          anime_title_source: form.anime_title_source,
-          anime_title_value: form.anime_title_value,
-          episode_no_source: form.episode_no_source,
-          episode_no_value: form.episode_no_value,
-          series_no_source: form.series_no_source,
-          series_no_value: form.series_no_value,
-          subtitle_group_source: form.subtitle_group_source,
-          subtitle_group_value: form.subtitle_group_value,
-          resolution_source: form.resolution_source,
-          resolution_value: form.resolution_value,
-          season_source: form.season_source,
-          season_value: form.season_value,
-          year_source: form.year_source,
-          year_value: form.year_value,
-        }),
-      ),
-    ).then(setPreview).catch((e) => {
-      console.error("Parser preview failed:", e)
+  // Debounced auto-preview (300ms)
+  useEffect(() => {
+    if (!form.condition_regex || !form.parse_regex) {
       setPreview(null)
-    })
-  }, [form])
+      return
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    debounceRef.current = setTimeout(() => {
+      AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) =>
+          api.previewParser({
+            target_type: createdFromType,
+            target_id: createdFromId,
+            condition_regex: form.condition_regex,
+            parse_regex: form.parse_regex,
+            priority: form.priority,
+            anime_title_source: form.anime_title_source,
+            anime_title_value: form.anime_title_value,
+            episode_no_source: form.episode_no_source,
+            episode_no_value: form.episode_no_value,
+            series_no_source: form.series_no_source,
+            series_no_value: form.series_no_value,
+            subtitle_group_source: form.subtitle_group_source,
+            subtitle_group_value: form.subtitle_group_value,
+            resolution_source: form.resolution_source,
+            resolution_value: form.resolution_value,
+            season_source: form.season_source,
+            season_value: form.season_value,
+            year_source: form.year_source,
+            year_value: form.year_value,
+          }),
+        ),
+      ).then(setPreview).catch((e) => {
+        console.error("Parser preview failed:", e)
+        setPreview(null)
+      })
+    }, 300)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [form, createdFromType, createdFromId])
 
   const handleCreate = useCallback(async () => {
     await createParser()
@@ -183,9 +196,10 @@ export function ParserEditor({
       {/* Add form */}
       {showForm && (
         <div className="space-y-3 rounded-md border p-4">
+          {/* Name + Priority */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Name</Label>
+              <Label className="text-xs">{t("common.name", "Name")}</Label>
               <Input
                 value={form.name}
                 onChange={(e) => updateForm("name", e.target.value)}
@@ -193,7 +207,7 @@ export function ParserEditor({
               />
             </div>
             <div>
-              <Label className="text-xs">Priority</Label>
+              <Label className="text-xs">{t("parsers.priority", "Priority")}</Label>
               <Input
                 type="number"
                 value={form.priority}
@@ -201,63 +215,128 @@ export function ParserEditor({
               />
             </div>
           </div>
+
+          {/* Condition Regex */}
           <div>
-            <Label className="text-xs">Condition Regex</Label>
+            <Label className="text-xs">{t("parsers.conditionRegex", "Condition Regex")}</Label>
             <Input
               className="font-mono text-sm"
               value={form.condition_regex}
               onChange={(e) => updateForm("condition_regex", e.target.value)}
-              placeholder="Must match to activate this parser"
+              placeholder={t("parsers.conditionRegexPlaceholder", "Must match to activate this parser")}
             />
           </div>
+
+          {/* Parse Regex */}
           <div>
-            <Label className="text-xs">Parse Regex</Label>
+            <Label className="text-xs">{t("parsers.parseRegex", "Parse Regex")}</Label>
             <Input
               className="font-mono text-sm"
               value={form.parse_regex}
               onChange={(e) => updateForm("parse_regex", e.target.value)}
-              placeholder="Capture groups for field extraction"
+              placeholder={t("parsers.parseRegexPlaceholder", "Capture groups for field extraction")}
             />
           </div>
 
-          {/* Field source/value pairs */}
-          <div className="grid grid-cols-2 gap-3">
-            <FieldSourceInput
-              label="Anime Title"
-              source={form.anime_title_source}
-              value={form.anime_title_value}
-              onSourceChange={(v) => updateForm("anime_title_source", v)}
-              onValueChange={(v) => updateForm("anime_title_value", v)}
-            />
-            <FieldSourceInput
-              label="Episode No"
-              source={form.episode_no_source}
-              value={form.episode_no_value}
-              onSourceChange={(v) => updateForm("episode_no_source", v)}
-              onValueChange={(v) => updateForm("episode_no_value", v)}
-            />
+          {/* Field extraction */}
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold">{t("parsers.fieldExtraction", "Field Extraction")}</Label>
+
+            {/* Required fields: anime_title, episode_no */}
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSourceInput
+                label={t("parsers.animeTitle", "Anime Title")}
+                source={form.anime_title_source}
+                value={form.anime_title_value}
+                onSourceChange={(v) => updateForm("anime_title_source", v)}
+                onValueChange={(v) => updateForm("anime_title_value", v)}
+                required
+              />
+              <FieldSourceInput
+                label={t("parsers.episodeNo", "Episode No")}
+                source={form.episode_no_source}
+                value={form.episode_no_value}
+                onSourceChange={(v) => updateForm("episode_no_source", v)}
+                onValueChange={(v) => updateForm("episode_no_value", v)}
+                required
+              />
+            </div>
+
+            {/* Optional fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSourceInput
+                label={t("parsers.seriesNo", "Series No")}
+                source={form.series_no_source}
+                value={form.series_no_value ?? ""}
+                onSourceChange={(v) => {
+                  updateForm("series_no_source", v || null)
+                  if (!v) updateForm("series_no_value", null)
+                }}
+                onValueChange={(v) => updateForm("series_no_value", v || null)}
+              />
+              <FieldSourceInput
+                label={t("parsers.subtitleGroup", "Subtitle Group")}
+                source={form.subtitle_group_source}
+                value={form.subtitle_group_value ?? ""}
+                onSourceChange={(v) => {
+                  updateForm("subtitle_group_source", v || null)
+                  if (!v) updateForm("subtitle_group_value", null)
+                }}
+                onValueChange={(v) => updateForm("subtitle_group_value", v || null)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSourceInput
+                label={t("parsers.resolution", "Resolution")}
+                source={form.resolution_source}
+                value={form.resolution_value ?? ""}
+                onSourceChange={(v) => {
+                  updateForm("resolution_source", v || null)
+                  if (!v) updateForm("resolution_value", null)
+                }}
+                onValueChange={(v) => updateForm("resolution_value", v || null)}
+              />
+              <FieldSourceInput
+                label={t("parsers.season", "Season")}
+                source={form.season_source}
+                value={form.season_value ?? ""}
+                onSourceChange={(v) => {
+                  updateForm("season_source", v || null)
+                  if (!v) updateForm("season_value", null)
+                }}
+                onValueChange={(v) => updateForm("season_value", v || null)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FieldSourceInput
+                label={t("parsers.year", "Year")}
+                source={form.year_source}
+                value={form.year_value ?? ""}
+                onSourceChange={(v) => {
+                  updateForm("year_source", v || null)
+                  if (!v) updateForm("year_value", null)
+                }}
+                onValueChange={(v) => updateForm("year_value", v || null)}
+              />
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={handlePreview}>
-              {t("parser.preview", "Preview")}
-            </Button>
-            <Button size="sm" onClick={handleCreate} disabled={creating || !form.name || !form.condition_regex}>
-              {t("parser.create", "Create")}
-            </Button>
-          </div>
+          {/* Create button */}
+          <Button size="sm" onClick={handleCreate} disabled={creating || !form.name || !form.condition_regex || !form.parse_regex}>
+            {t("parser.create", "Create")}
+          </Button>
 
-          {/* Preview results */}
+          {/* Live preview results */}
           {preview && (
             <div className="space-y-2">
               {!preview.condition_regex_valid && (
                 <p className="text-sm text-destructive">
-                  Condition regex error: {preview.regex_error}
+                  {t("parsers.regexError", "Regex error")}: {preview.regex_error}
                 </p>
               )}
               {!preview.parse_regex_valid && (
                 <p className="text-sm text-destructive">
-                  Parse regex error: {preview.regex_error}
+                  {t("parsers.regexError", "Regex error")}: {preview.regex_error}
                 </p>
               )}
               {preview.condition_regex_valid && preview.parse_regex_valid && (
@@ -266,13 +345,15 @@ export function ParserEditor({
                     <table className="w-full text-xs">
                       <thead className="bg-muted sticky top-0">
                         <tr>
-                          <th className="px-2 py-1 text-left">Status</th>
-                          <th className="px-2 py-1 text-left">Title</th>
-                          <th className="px-2 py-1 text-left">Anime</th>
+                          <th className="px-2 py-1 text-left">{t("common.status", "Status")}</th>
+                          <th className="px-2 py-1 text-left">{t("rawItems.itemTitle", "Title")}</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.animeTitle", "Anime")}</th>
                           <th className="px-2 py-1 text-left">Ep</th>
-                          <th className="px-2 py-1 text-left">Season</th>
-                          <th className="px-2 py-1 text-left">Group</th>
-                          <th className="px-2 py-1 text-left">Res</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.seriesNo", "Series")}</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.season", "Season")}</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.subtitleGroup", "Group")}</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.resolution", "Res")}</th>
+                          <th className="px-2 py-1 text-left">{t("parsers.year", "Year")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -305,9 +386,11 @@ export function ParserEditor({
                             <td className="px-2 py-1 font-mono truncate max-w-48">{result.title}</td>
                             <td className="px-2 py-1">{result.parse_result?.anime_title ?? "—"}</td>
                             <td className="px-2 py-1">{result.parse_result?.episode_no ?? "—"}</td>
+                            <td className="px-2 py-1">{result.parse_result?.series_no ?? "—"}</td>
                             <td className="px-2 py-1">{result.parse_result?.season ?? "—"}</td>
                             <td className="px-2 py-1">{result.parse_result?.subtitle_group ?? "—"}</td>
                             <td className="px-2 py-1">{result.parse_result?.resolution ?? "—"}</td>
+                            <td className="px-2 py-1">{result.parse_result?.year ?? "—"}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -342,22 +425,25 @@ function FieldSourceInput({
   value,
   onSourceChange,
   onValueChange,
+  required,
 }: {
   label: string
-  source: string
+  source: string | null
   value: string
   onSourceChange: (v: string) => void
   onValueChange: (v: string) => void
+  required?: boolean
 }) {
   return (
     <div className="space-y-1">
       <Label className="text-xs">{label}</Label>
       <div className="flex gap-2">
-        <Select value={source} onValueChange={onSourceChange}>
+        <Select value={source ?? "none"} onValueChange={(v) => onSourceChange(v === "none" ? "" : v)}>
           <SelectTrigger className="w-24">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
+            {!required && <SelectItem value="none">—</SelectItem>}
             <SelectItem value="regex">regex</SelectItem>
             <SelectItem value="static">static</SelectItem>
           </SelectContent>
@@ -366,7 +452,8 @@ function FieldSourceInput({
           className="font-mono text-sm"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          placeholder={source === "regex" ? "Group index (e.g. 1)" : "Fixed value"}
+          placeholder={source === "static" ? "Fixed value" : "Capture group (e.g. $1)"}
+          disabled={!source || source === "none"}
         />
       </div>
     </div>
