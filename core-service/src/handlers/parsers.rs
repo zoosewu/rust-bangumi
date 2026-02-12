@@ -10,9 +10,9 @@ use diesel::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::db::repository::raw_item::RawItemFilter;
 use crate::models::{FilterTargetType, NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
-use crate::schema::{raw_anime_items, title_parsers};
+use crate::schema::raw_anime_items;
+use crate::schema::title_parsers;
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
@@ -378,6 +378,8 @@ async fn reparse_failed_items(
 
 #[derive(Debug, Deserialize)]
 pub struct ParserPreviewRequest {
+    pub target_type: Option<String>,
+    pub target_id: Option<i32>,
     pub condition_regex: String,
     pub parse_regex: String,
     pub priority: i32,
@@ -396,7 +398,6 @@ pub struct ParserPreviewRequest {
     pub year_source: Option<String>,
     pub year_value: Option<String>,
     pub exclude_parser_id: Option<i32>,
-    pub subscription_id: Option<i32>,
     pub limit: Option<i64>,
 }
 
@@ -452,20 +453,17 @@ pub async fn preview_parser(
         }));
     }
 
-    let limit = req.limit.unwrap_or(20).min(200);
+    let limit = req.limit.unwrap_or(50).min(200);
 
-    // Load raw items
-    let items = state
-        .repos
-        .raw_item
-        .find_with_filters(RawItemFilter {
-            status: None,
-            subscription_id: req.subscription_id,
-            limit,
-            offset: 0,
-        })
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Load raw items scoped by target_type/target_id
+    let items = {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        find_scoped_raw_items(&mut conn, req.target_type.as_deref(), req.target_id, limit)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
+    };
 
     // Load existing enabled parsers
     let all_parsers = state
@@ -600,4 +598,129 @@ fn find_matching_parser<'a>(parsers: &[&'a TitleParser], title: &str) -> Option<
         }
     }
     None
+}
+
+/// Load raw_anime_items scoped by target_type/target_id.
+///
+/// - global / None: all items
+/// - anime_series: items from subscriptions that feed this series (via anime_links)
+/// - anime: items from subscriptions that feed any series of this anime
+/// - subtitle_group: items from subscriptions that produced links for this group
+/// - fetcher: items from this subscription directly
+fn find_scoped_raw_items(
+    conn: &mut diesel::PgConnection,
+    target_type: Option<&str>,
+    target_id: Option<i32>,
+    limit: i64,
+) -> Result<Vec<RawAnimeItem>, String> {
+    use crate::schema::{anime_links, anime_series};
+
+    let target_type = match target_type {
+        Some(t) => t,
+        None => {
+            return raw_anime_items::table
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string());
+        }
+    };
+
+    match target_type {
+        "global" => {
+            raw_anime_items::table
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string())
+        }
+        "anime_series" => {
+            let sid = target_id.ok_or("anime_series requires target_id")?;
+            let sub_ids: Vec<i32> = anime_links::table
+                .inner_join(
+                    raw_anime_items::table
+                        .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
+                )
+                .filter(anime_links::series_id.eq(sid))
+                .select(raw_anime_items::subscription_id)
+                .distinct()
+                .load(conn)
+                .map_err(|e| e.to_string())?;
+
+            if sub_ids.is_empty() {
+                return Ok(vec![]);
+            }
+
+            raw_anime_items::table
+                .filter(raw_anime_items::subscription_id.eq_any(&sub_ids))
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string())
+        }
+        "anime" => {
+            let aid = target_id.ok_or("anime requires target_id")?;
+            let series_ids: Vec<i32> = anime_series::table
+                .filter(anime_series::anime_id.eq(aid))
+                .select(anime_series::series_id)
+                .load(conn)
+                .map_err(|e| e.to_string())?;
+
+            let sub_ids: Vec<i32> = anime_links::table
+                .inner_join(
+                    raw_anime_items::table
+                        .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
+                )
+                .filter(anime_links::series_id.eq_any(&series_ids))
+                .select(raw_anime_items::subscription_id)
+                .distinct()
+                .load(conn)
+                .map_err(|e| e.to_string())?;
+
+            if sub_ids.is_empty() {
+                return Ok(vec![]);
+            }
+
+            raw_anime_items::table
+                .filter(raw_anime_items::subscription_id.eq_any(&sub_ids))
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string())
+        }
+        "subtitle_group" => {
+            let gid = target_id.ok_or("subtitle_group requires target_id")?;
+            let sub_ids: Vec<i32> = anime_links::table
+                .inner_join(
+                    raw_anime_items::table
+                        .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
+                )
+                .filter(anime_links::group_id.eq(gid))
+                .select(raw_anime_items::subscription_id)
+                .distinct()
+                .load(conn)
+                .map_err(|e| e.to_string())?;
+
+            if sub_ids.is_empty() {
+                return Ok(vec![]);
+            }
+
+            raw_anime_items::table
+                .filter(raw_anime_items::subscription_id.eq_any(&sub_ids))
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string())
+        }
+        "fetcher" | "subscription" => {
+            let fid = target_id.ok_or("fetcher/subscription requires target_id")?;
+            raw_anime_items::table
+                .filter(raw_anime_items::subscription_id.eq(fid))
+                .order(raw_anime_items::item_id.desc())
+                .limit(limit)
+                .load::<RawAnimeItem>(conn)
+                .map_err(|e| e.to_string())
+        }
+        other => Err(format!("Unknown target_type: {}", other)),
+    }
 }

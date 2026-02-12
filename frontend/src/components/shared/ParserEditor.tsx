@@ -91,6 +91,8 @@ export function ParserEditor({
     AppRuntime.runPromise(
       Effect.flatMap(CoreApi, (api) =>
         api.previewParser({
+          target_type: createdFromType,
+          target_id: createdFromId,
           condition_regex: form.condition_regex,
           parse_regex: form.parse_regex,
           priority: form.priority,
