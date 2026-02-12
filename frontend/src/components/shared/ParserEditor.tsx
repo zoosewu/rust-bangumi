@@ -349,66 +349,57 @@ export function ParserEditor({
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="text-sm"
                     />
-                    <div className="rounded-md border overflow-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted sticky top-0">
-                          <tr>
-                            <th className="px-2 py-1 text-left">{t("common.status", "Status")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.matchedBy", "Matched by")}</th>
-                            <th className="px-2 py-1 text-left">{t("rawItems.itemTitle", "Title")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.animeTitle", "Anime")}</th>
-                            <th className="px-2 py-1 text-left">Ep</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.seriesNo", "Series")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.season", "Season")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.subtitleGroup", "Group")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.resolution", "Res")}</th>
-                            <th className="px-2 py-1 text-left">{t("parsers.year", "Year")}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {preview.results
-                            .filter((r) => !searchQuery || r.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                            .map((result, i) => (
-                            <tr
-                              key={i}
-                              className={cn(
-                                result.is_newly_matched && "bg-green-50 dark:bg-green-950/30",
-                                result.is_override && "bg-yellow-50 dark:bg-yellow-950/30",
+                    <div className="rounded-md border divide-y">
+                      {preview.results
+                        .filter((r) => !searchQuery || r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .map((result, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "px-3 py-2 text-xs",
+                            result.is_newly_matched && "bg-green-50 dark:bg-green-950/30",
+                            result.is_override && "bg-yellow-50 dark:bg-yellow-950/30",
+                          )}
+                        >
+                          {/* Row 1: status badge + full title */}
+                          <div className="flex items-start gap-2">
+                            <span className="shrink-0 mt-0.5">
+                              {result.is_newly_matched && (
+                                <Badge variant="default" className="text-xs">
+                                  {t("parsers.newlyMatched", "new")}
+                                </Badge>
                               )}
-                            >
-                              <td className="px-2 py-1">
-                                {result.is_newly_matched && (
-                                  <Badge variant="default" className="text-xs">
-                                    {t("parsers.newlyMatched", "new")}
-                                  </Badge>
-                                )}
-                                {result.is_override && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    <AlertTriangle className="h-3 w-3 mr-1" />
-                                    {t("parsers.override", "override")}
-                                  </Badge>
-                                )}
-                                {!result.is_newly_matched && !result.is_override && (
-                                  <span className="text-muted-foreground">
-                                    {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-2 py-1 text-muted-foreground whitespace-nowrap">
-                                {result.after_matched_by ?? "—"}
-                              </td>
-                              <td className="px-2 py-1 font-mono truncate max-w-48">{result.title}</td>
-                              <td className="px-2 py-1">{result.parse_result?.anime_title ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.episode_no ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.series_no ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.season ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.subtitle_group ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.resolution ?? "—"}</td>
-                              <td className="px-2 py-1">{result.parse_result?.year ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                              {result.is_override && (
+                                <Badge variant="secondary" className="text-xs">
+                                  <AlertTriangle className="h-3 w-3 mr-1" />
+                                  {t("parsers.override", "override")}
+                                </Badge>
+                              )}
+                              {!result.is_newly_matched && !result.is_override && (
+                                <Badge variant="outline" className="text-xs text-muted-foreground">
+                                  {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
+                                </Badge>
+                              )}
+                            </span>
+                            <span className="font-mono break-all">{result.title}</span>
+                          </div>
+                          {/* Row 2: parsed details */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 ml-1 text-muted-foreground">
+                            <span>{t("parsers.matchedBy", "Matched by")}: <span className="text-foreground">{result.after_matched_by ?? "—"}</span></span>
+                            {result.parse_result && (
+                              <>
+                                <span>{t("parsers.animeTitle", "Anime")}: <span className="text-foreground">{result.parse_result.anime_title}</span></span>
+                                <span>Ep: <span className="text-foreground">{result.parse_result.episode_no}</span></span>
+                                {result.parse_result.series_no != null && <span>S{result.parse_result.series_no}</span>}
+                                {result.parse_result.season && <span>{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result.season}</span></span>}
+                                {result.parse_result.subtitle_group && <span>{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result.subtitle_group}</span></span>}
+                                {result.parse_result.resolution && <span>{result.parse_result.resolution}</span>}
+                                {result.parse_result.year && <span>{result.parse_result.year}</span>}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </>
                 ) : (
