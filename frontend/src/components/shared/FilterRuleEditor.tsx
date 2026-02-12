@@ -196,7 +196,6 @@ export function FilterRuleEditor({
                   </span>
                 </div>
                 <DiffList
-                  className="max-h-48 overflow-y-auto"
                   items={[
                     ...preview.after.passed_items.map((item) => ({
                       id: `pass-${item.item_id}`,

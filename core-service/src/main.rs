@@ -99,8 +99,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/seasons", get(handlers::anime::list_seasons))
         // 動畫系列管理
         .route(
+            "/series",
+            get(handlers::anime::list_all_anime_series),
+        )
+        .route(
             "/anime/series",
-            get(handlers::anime::list_all_anime_series).post(handlers::anime::create_anime_series),
+            post(handlers::anime::create_anime_series),
         )
         .route(
             "/anime/series/:series_id",

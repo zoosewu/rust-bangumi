@@ -110,7 +110,10 @@ export function ParserEditor({
           year_value: form.year_value,
         }),
       ),
-    ).then(setPreview).catch(() => setPreview(null))
+    ).then(setPreview).catch((e) => {
+      console.error("Parser preview failed:", e)
+      setPreview(null)
+    })
   }, [form])
 
   const handleCreate = useCallback(async () => {
@@ -255,24 +258,23 @@ export function ParserEditor({
                   Parse regex error: {preview.regex_error}
                 </p>
               )}
-              {preview.condition_regex_valid && preview.parse_regex_valid && preview.results.length > 0 && (
-                <div className="rounded-md border overflow-auto max-h-64">
-                  <table className="w-full text-xs">
-                    <thead className="bg-muted">
-                      <tr>
-                        <th className="px-2 py-1 text-left">Status</th>
-                        <th className="px-2 py-1 text-left">Title</th>
-                        <th className="px-2 py-1 text-left">Anime</th>
-                        <th className="px-2 py-1 text-left">Ep</th>
-                        <th className="px-2 py-1 text-left">Season</th>
-                        <th className="px-2 py-1 text-left">Group</th>
-                        <th className="px-2 py-1 text-left">Res</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {preview.results
-                        .filter((r) => r.is_newly_matched || r.is_override)
-                        .map((result, i) => (
+              {preview.condition_regex_valid && preview.parse_regex_valid && (
+                preview.results.length > 0 ? (
+                  <div className="rounded-md border overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted sticky top-0">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Status</th>
+                          <th className="px-2 py-1 text-left">Title</th>
+                          <th className="px-2 py-1 text-left">Anime</th>
+                          <th className="px-2 py-1 text-left">Ep</th>
+                          <th className="px-2 py-1 text-left">Season</th>
+                          <th className="px-2 py-1 text-left">Group</th>
+                          <th className="px-2 py-1 text-left">Res</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {preview.results.map((result, i) => (
                           <tr
                             key={i}
                             className={cn(
@@ -281,12 +283,21 @@ export function ParserEditor({
                             )}
                           >
                             <td className="px-2 py-1">
-                              {result.is_newly_matched && <Badge variant="default" className="text-xs">new</Badge>}
+                              {result.is_newly_matched && (
+                                <Badge variant="default" className="text-xs">
+                                  {t("parsers.newlyMatched", "new")}
+                                </Badge>
+                              )}
                               {result.is_override && (
                                 <Badge variant="secondary" className="text-xs">
                                   <AlertTriangle className="h-3 w-3 mr-1" />
-                                  override
+                                  {t("parsers.override", "override")}
                                 </Badge>
+                              )}
+                              {!result.is_newly_matched && !result.is_override && (
+                                <span className="text-muted-foreground">
+                                  {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
+                                </span>
                               )}
                             </td>
                             <td className="px-2 py-1 font-mono truncate max-w-48">{result.title}</td>
@@ -297,9 +308,12 @@ export function ParserEditor({
                             <td className="px-2 py-1">{result.parse_result?.resolution ?? "—"}</td>
                           </tr>
                         ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("common.noMatch", "No matching items")}</p>
+                )
               )}
             </div>
           )}

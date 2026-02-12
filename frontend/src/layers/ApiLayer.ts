@@ -180,7 +180,7 @@ const makeCoreApi = Effect.gen(function* () {
       ).pipe(Effect.map((r) => r.links)),
 
     getAllAnimeSeries: fetchJson(
-      HttpClientRequest.get("/api/core/anime/series"),
+      HttpClientRequest.get("/api/core/series"),
       Schema.Struct({ series: Schema.Array(AnimeSeriesRich) }),
     ).pipe(Effect.map((r) => r.series)),
 
