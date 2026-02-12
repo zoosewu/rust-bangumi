@@ -23,11 +23,11 @@ export class CoreApi extends Context.Tag("CoreApi")<
     }) => Effect.Effect<FilterRule>
     readonly deleteFilterRule: (ruleId: number) => Effect.Effect<void>
     readonly previewFilter: (req: {
+      target_type: string
+      target_id?: number | null
       regex_pattern: string
       is_positive: boolean
-      subscription_id?: number
       exclude_filter_id?: number
-      limit?: number
     }) => Effect.Effect<FilterPreviewResponse>
     readonly getParsers: (params?: {
       created_from_type?: string

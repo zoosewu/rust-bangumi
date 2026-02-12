@@ -72,7 +72,7 @@ pub fn compute_filtered_flag_for_link(
 }
 
 /// Find all AnimeLinks affected by a rule change on the given target.
-fn find_affected_links(
+pub fn find_affected_links(
     conn: &mut PgConnection,
     target_type: FilterTargetType,
     target_id: Option<i32>,
@@ -136,7 +136,7 @@ fn find_affected_links(
 ///
 /// Rules come from: global, anime (via series→anime), anime_series, subtitle_group,
 /// and fetcher (via raw_item_id→raw_anime_items→subscription_id).
-fn collect_all_rules_for_link(
+pub fn collect_all_rules_for_link(
     conn: &mut PgConnection,
     link: &AnimeLink,
 ) -> Result<Vec<FilterRule>, String> {

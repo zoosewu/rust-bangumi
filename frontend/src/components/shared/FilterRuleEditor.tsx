@@ -78,6 +78,8 @@ export function FilterRuleEditor({
       AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) =>
           api.previewFilter({
+            target_type: targetType,
+            target_id: targetId,
             regex_pattern: newPattern,
             is_positive: isPositive,
           }),
@@ -88,7 +90,7 @@ export function FilterRuleEditor({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [newPattern, isPositive])
+  }, [newPattern, isPositive, targetType, targetId])
 
   // Handle add rule
   const handleAdd = useCallback(async () => {
@@ -108,6 +110,8 @@ export function FilterRuleEditor({
       AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) =>
           api.previewFilter({
+            target_type: targetType,
+            target_id: targetId,
             regex_pattern: rule.regex_pattern,
             is_positive: rule.is_positive,
             exclude_filter_id: rule.rule_id,
