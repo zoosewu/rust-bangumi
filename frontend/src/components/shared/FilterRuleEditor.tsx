@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Trash2, Plus } from "lucide-react"
-import { DiffList } from "./DiffList"
+import { FilterPreviewPanel } from "./FilterPreviewPanel"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
@@ -32,6 +32,7 @@ export function FilterRuleEditor({
   // State
   const [newPattern, setNewPattern] = useState("")
   const [isPositive, setIsPositive] = useState(true)
+  const [baseline, setBaseline] = useState<FilterPreviewResponse | null>(null)
   const [preview, setPreview] = useState<FilterPreviewResponse | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FilterRule | null>(null)
   const [deletePreview, setDeletePreview] = useState<FilterPreviewResponse | null>(null)
@@ -45,6 +46,24 @@ export function FilterRuleEditor({
     () => Effect.flatMap(CoreApi, (api) => api.getFilterRules(targetType, targetId)),
     [targetType, targetId],
   )
+
+  // Load baseline (current filter state without any new rule)
+  const loadBaseline = useCallback(() => {
+    AppRuntime.runPromise(
+      Effect.flatMap(CoreApi, (api) =>
+        api.previewFilter({
+          target_type: targetType,
+          target_id: targetId,
+          regex_pattern: "^$",
+          is_positive: false,
+        }),
+      ),
+    ).then(setBaseline).catch(() => setBaseline(null))
+  }, [targetType, targetId])
+
+  useEffect(() => {
+    loadBaseline()
+  }, [loadBaseline])
 
   // Mutations
   const { mutate: createRule, isLoading: creating } = useEffectMutation(
@@ -99,14 +118,14 @@ export function FilterRuleEditor({
     setNewPattern("")
     setPreview(null)
     refetchRules()
+    loadBaseline()
     onRulesChange?.()
-  }, [newPattern, isPositive, createRule, refetchRules, onRulesChange])
+  }, [newPattern, isPositive, createRule, refetchRules, loadBaseline, onRulesChange])
 
   // Handle delete with preview
   const handleDeleteClick = useCallback(
     (rule: FilterRule) => {
       setDeleteTarget(rule)
-      // Load preview for what happens when this rule is removed
       AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) =>
           api.previewFilter({
@@ -119,7 +138,7 @@ export function FilterRuleEditor({
         ),
       ).then(setDeletePreview).catch(() => setDeletePreview(null))
     },
-    [],
+    [targetType, targetId],
   )
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -128,8 +147,13 @@ export function FilterRuleEditor({
     setDeleteTarget(null)
     setDeletePreview(null)
     refetchRules()
+    loadBaseline()
     onRulesChange?.()
-  }, [deleteTarget, deleteRule, refetchRules, onRulesChange])
+  }, [deleteTarget, deleteRule, refetchRules, loadBaseline, onRulesChange])
+
+  // Determine what to show in preview
+  const showBefore = baseline?.before ?? null
+  const showAfter = preview?.regex_valid ? preview.after : null
 
   return (
     <div className="space-y-4">
@@ -183,39 +207,29 @@ export function FilterRuleEditor({
           </Button>
         </div>
 
-        {/* Live preview */}
-        {preview && (
-          <div className="space-y-2">
-            {!preview.regex_valid && preview.regex_error && (
-              <p className="text-sm text-destructive">{preview.regex_error}</p>
-            )}
-            {preview.regex_valid && (
-              <>
-                <div className="flex gap-4 text-xs text-muted-foreground">
-                  <span>
-                    {t("filter.passed", "Passed")}: {preview.before.passed_items.length} → {preview.after.passed_items.length}
-                  </span>
-                  <span>
-                    {t("filter.filtered", "Filtered")}: {preview.before.filtered_items.length} → {preview.after.filtered_items.length}
-                  </span>
-                </div>
-                <DiffList
-                  items={[
-                    ...preview.after.passed_items.map((item) => ({
-                      id: `pass-${item.item_id}`,
-                      label: item.title,
-                      passed: true,
-                    })),
-                    ...preview.after.filtered_items.map((item) => ({
-                      id: `filter-${item.item_id}`,
-                      label: item.title,
-                      passed: false,
-                    })),
-                  ]}
-                />
-              </>
-            )}
+        {/* Regex error */}
+        {preview && !preview.regex_valid && preview.regex_error && (
+          <p className="text-sm text-destructive">{preview.regex_error}</p>
+        )}
+
+        {/* Stats summary when preview is active */}
+        {preview?.regex_valid && showBefore && (
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>
+              {t("filter.passed", "Passed")}: {showBefore.passed_items.length} → {preview.after.passed_items.length}
+            </span>
+            <span>
+              {t("filter.filtered", "Filtered")}: {showBefore.filtered_items.length} → {preview.after.filtered_items.length}
+            </span>
           </div>
+        )}
+
+        {/* Preview panel: baseline (left) + diff (right) */}
+        {showBefore && (
+          <FilterPreviewPanel
+            before={showBefore}
+            after={showAfter}
+          />
         )}
       </div>
 
@@ -236,7 +250,14 @@ export function FilterRuleEditor({
         }
         onConfirm={handleDeleteConfirm}
         loading={deleting}
-      />
+      >
+        {deletePreview?.regex_valid && (
+          <FilterPreviewPanel
+            before={deletePreview.after}
+            after={deletePreview.before}
+          />
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

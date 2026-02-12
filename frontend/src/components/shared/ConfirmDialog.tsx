@@ -15,6 +15,7 @@ interface ConfirmDialogProps {
   description: string
   onConfirm: () => void
   loading?: boolean
+  children?: React.ReactNode
 }
 
 export function ConfirmDialog({
@@ -24,6 +25,7 @@ export function ConfirmDialog({
   description,
   onConfirm,
   loading,
+  children,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -32,6 +34,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {children}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
