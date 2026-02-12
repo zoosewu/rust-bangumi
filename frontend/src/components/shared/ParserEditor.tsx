@@ -386,17 +386,13 @@ export function ParserEditor({
                           {/* Row 2: parsed details */}
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 ml-1 text-muted-foreground">
                             <span>{t("parsers.matchedBy", "Matched by")}: <span className="text-foreground">{result.after_matched_by ?? "—"}</span></span>
-                            {result.parse_result && (
-                              <>
-                                <span>{t("parsers.animeTitle", "Anime")}: <span className="text-foreground">{result.parse_result.anime_title}</span></span>
-                                <span>Ep: <span className="text-foreground">{result.parse_result.episode_no}</span></span>
-                                {result.parse_result.series_no != null && <span>S{result.parse_result.series_no}</span>}
-                                {result.parse_result.season && <span>{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result.season}</span></span>}
-                                {result.parse_result.subtitle_group && <span>{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result.subtitle_group}</span></span>}
-                                {result.parse_result.resolution && <span>{result.parse_result.resolution}</span>}
-                                {result.parse_result.year && <span>{result.parse_result.year}</span>}
-                              </>
-                            )}
+                            <span>{t("parsers.animeTitle", "Anime")}: <span className={cn("text-foreground", !result.parse_result?.anime_title && "text-destructive")}>{result.parse_result?.anime_title || "—"}</span></span>
+                            <span>Ep: <span className={cn("text-foreground", result.parse_result?.episode_no == null && "text-destructive")}>{result.parse_result?.episode_no ?? "—"}</span></span>
+                            <span>S: <span className="text-foreground">{result.parse_result?.series_no ?? "—"}</span></span>
+                            <span>{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result?.season || "—"}</span></span>
+                            <span>{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result?.subtitle_group || "—"}</span></span>
+                            <span>{t("parsers.resolution", "Res")}: <span className="text-foreground">{result.parse_result?.resolution || "—"}</span></span>
+                            <span>{t("parsers.year", "Year")}: <span className="text-foreground">{result.parse_result?.year || "—"}</span></span>
                           </div>
                         </div>
                       ))}
