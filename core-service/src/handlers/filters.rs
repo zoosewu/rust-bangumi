@@ -74,6 +74,20 @@ pub async fn create_filter_rule(
     match state.repos.filter_rule.create(new_rule).await {
         Ok(rule) => {
             tracing::info!("Created filter rule: {}", rule.rule_id);
+
+            // Trigger async recalculation of filtered_flag on affected links
+            let db = state.db.clone();
+            let tt = rule.target_type;
+            let tid = rule.target_id;
+            tokio::spawn(async move {
+                if let Ok(mut conn) = db.get() {
+                    match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
+                        Ok(n) => tracing::info!("filter_recalc after create: updated {} links", n),
+                        Err(e) => tracing::error!("filter_recalc after create failed: {}", e),
+                    }
+                }
+            });
+
             let response = FilterRuleResponse {
                 rule_id: rule.rule_id,
                 target_type: rule.target_type.to_string(),
@@ -166,10 +180,30 @@ pub async fn delete_filter_rule(
     State(state): State<AppState>,
     Path(rule_id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    // Read the rule first to know its target for recalculation
+    let rule_info = match state.repos.filter_rule.find_by_id(rule_id).await {
+        Ok(Some(r)) => Some((r.target_type, r.target_id)),
+        _ => None,
+    };
+
     match state.repos.filter_rule.delete(rule_id).await {
         Ok(deleted) => {
             if deleted {
                 tracing::info!("Deleted filter rule: {}", rule_id);
+
+                // Trigger async recalculation
+                if let Some((tt, tid)) = rule_info {
+                    let db = state.db.clone();
+                    tokio::spawn(async move {
+                        if let Ok(mut conn) = db.get() {
+                            match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
+                                Ok(n) => tracing::info!("filter_recalc after delete: updated {} links", n),
+                                Err(e) => tracing::error!("filter_recalc after delete failed: {}", e),
+                            }
+                        }
+                    });
+                }
+
                 (StatusCode::NO_CONTENT, Json(json!({})))
             } else {
                 tracing::warn!("Filter rule not found for deletion: {}", rule_id);

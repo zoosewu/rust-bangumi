@@ -1,9 +1,10 @@
 import { Effect, Context } from "effect"
-import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink } from "@/schemas/anime"
+import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
 import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
+import type { DashboardStats } from "@/schemas/dashboard"
 
 export class CoreApi extends Context.Tag("CoreApi")<
   CoreApi,
@@ -28,7 +29,10 @@ export class CoreApi extends Context.Tag("CoreApi")<
       exclude_filter_id?: number
       limit?: number
     }) => Effect.Effect<FilterPreviewResponse>
-    readonly getParsers: Effect.Effect<readonly TitleParser[]>
+    readonly getParsers: (params?: {
+      created_from_type?: string
+      created_from_id?: number
+    }) => Effect.Effect<readonly TitleParser[]>
     readonly createParser: (req: Record<string, unknown>) => Effect.Effect<TitleParser>
     readonly deleteParser: (id: number) => Effect.Effect<void>
     readonly previewParser: (req: Record<string, unknown>) => Effect.Effect<ParserPreviewResponse>
@@ -58,5 +62,8 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getSeasons: Effect.Effect<readonly Season[]>
     readonly createSeason: (req: { year: number; season: string }) => Effect.Effect<Season>
     readonly getAnimeLinks: (seriesId: number) => Effect.Effect<readonly AnimeLink[]>
+    readonly getAllAnimeSeries: Effect.Effect<readonly AnimeSeriesRich[]>
+    readonly getDashboardStats: Effect.Effect<DashboardStats>
+    readonly getAnimeLinksRich: (seriesId: number) => Effect.Effect<readonly AnimeLinkRich[]>
   }
 >() {}

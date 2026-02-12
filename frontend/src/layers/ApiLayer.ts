@@ -2,11 +2,12 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
-import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink } from "@/schemas/anime"
+import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
+import { DashboardStats } from "@/schemas/dashboard"
 
 const makeCoreApi = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient
@@ -73,10 +74,16 @@ const makeCoreApi = Effect.gen(function* () {
     previewFilter: (req) =>
       postJson("/api/core/filters/preview", req, FilterPreviewResponse),
 
-    getParsers: fetchJson(
-      HttpClientRequest.get("/api/core/parsers"),
-      Schema.Array(TitleParser),
-    ),
+    getParsers: (params) => {
+      const qs = new URLSearchParams()
+      if (params?.created_from_type) qs.set("created_from_type", params.created_from_type)
+      if (params?.created_from_id != null) qs.set("created_from_id", String(params.created_from_id))
+      const query = qs.toString()
+      return fetchJson(
+        HttpClientRequest.get(`/api/core/parsers${query ? `?${query}` : ""}`),
+        Schema.Array(TitleParser),
+      )
+    },
 
     createParser: (req) =>
       postJson("/api/core/parsers", req, TitleParser),
@@ -170,6 +177,22 @@ const makeCoreApi = Effect.gen(function* () {
       fetchJson(
         HttpClientRequest.get(`/api/core/links/${seriesId}`),
         Schema.Struct({ links: Schema.Array(AnimeLink) }),
+      ).pipe(Effect.map((r) => r.links)),
+
+    getAllAnimeSeries: fetchJson(
+      HttpClientRequest.get("/api/core/anime/series"),
+      Schema.Struct({ series: Schema.Array(AnimeSeriesRich) }),
+    ).pipe(Effect.map((r) => r.series)),
+
+    getDashboardStats: fetchJson(
+      HttpClientRequest.get("/api/core/dashboard/stats"),
+      DashboardStats,
+    ),
+
+    getAnimeLinksRich: (seriesId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/links/${seriesId}`),
+        Schema.Struct({ links: Schema.Array(AnimeLinkRich) }),
       ).pipe(Effect.map((r) => r.links)),
   })
 })

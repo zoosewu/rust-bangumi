@@ -2,13 +2,11 @@
   "sidebar": {
     "title": "Bangumi",
     "dashboard": "Dashboard",
+    "animeSeries": "Anime Series",
     "anime": "Anime",
     "subtitleGroups": "Subtitle Groups",
     "subscriptions": "Subscriptions",
     "rawItems": "Raw Items",
-    "downloads": "Downloads",
-    "filters": "Filters",
-    "parsers": "Parsers",
     "conflicts": "Conflicts"
   },
   "header": {
@@ -47,15 +45,23 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "coreService": "Core Service",
+    "services": "Services",
+    "totalAnime": "Anime",
+    "totalSeries": "Series",
+    "activeSubs": "Subscriptions",
+    "downloading": "Downloading",
+    "completed": "Completed",
+    "failed": "Failed",
+    "pendingRawItems": "Pending Items",
+    "pendingConflicts": "Conflicts",
     "globalFilterRules": "Global Filter Rules",
-    "noGlobalRules": "No global filter rules configured.",
-    "addRule": "Add Rule",
-    "addGlobalRule": "Add Global Filter Rule",
-    "deleteRule": "Delete Filter Rule",
-    "deleteRuleConfirm": "Are you sure you want to delete this global filter rule?",
-    "regexPattern": "Regex Pattern",
-    "ruleOrder": "Rule Order"
+    "globalParsers": "Global Parsers"
+  },
+  "dialog": {
+    "details": "Details",
+    "animeLinks": "Anime Links",
+    "filterRules": "Filter Rules",
+    "parsers": "Parsers"
   },
   "anime": {
     "title": "Anime",
@@ -87,10 +93,13 @@
   },
   "animeSeries": {
     "title": "Anime Series",
+    "animeTitle": "Anime",
     "series": "Series",
+    "season": "Season",
+    "episodes": "Episodes",
+    "subscriptions": "Subscriptions",
     "addSeries": "Add Series",
     "seriesNo": "Series No.",
-    "season": "Season",
     "description": "Description",
     "airedDate": "Aired Date",
     "endDate": "End Date",
@@ -131,6 +140,19 @@
     "size": "Size",
     "downloaderType": "Type",
     "updated": "Updated"
+  },
+  "filter": {
+    "addRule": "Add",
+    "regexPlaceholder": "Enter regex pattern...",
+    "passed": "Passed",
+    "filtered": "Filtered",
+    "confirmRemove": "Remove filter rule?"
+  },
+  "parser": {
+    "addParser": "Add Parser",
+    "preview": "Preview",
+    "create": "Create",
+    "confirmDelete": "Delete parser?"
   },
   "filters": {
     "title": "Filter Rules",

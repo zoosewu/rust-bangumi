@@ -22,6 +22,8 @@ export const TitleParser = Schema.Struct({
   season_value: Schema.NullOr(Schema.String),
   year_source: Schema.NullOr(Schema.String),
   year_value: Schema.NullOr(Schema.String),
+  created_from_type: Schema.NullOr(Schema.String),
+  created_from_id: Schema.NullOr(Schema.Number),
   created_at: Schema.String,
   updated_at: Schema.String,
 })

@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -18,12 +17,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Plus } from "lucide-react"
+import { AnimeDialog } from "./AnimeDialog"
+import type { Anime } from "@/schemas/anime"
 
 export default function AnimePage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(false)
   const [newTitle, setNewTitle] = useState("")
+  const [selectedAnime, setSelectedAnime] = useState<Anime | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number
     title: string
@@ -101,7 +102,23 @@ export default function AnimePage() {
           columns={columns}
           data={(animes ?? []) as unknown as Record<string, unknown>[]}
           keyField="anime_id"
-          onRowClick={(item) => navigate(`/anime/${item.anime_id}`)}
+          onRowClick={(item) => {
+            const found = (animes ?? []).find((a) => a.anime_id === item.anime_id)
+            if (found) setSelectedAnime(found)
+          }}
+        />
+      )}
+
+      {selectedAnime && (
+        <AnimeDialog
+          anime={selectedAnime}
+          open={!!selectedAnime}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedAnime(null)
+              refetch()
+            }
+          }}
         />
       )}
 

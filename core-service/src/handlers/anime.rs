@@ -5,11 +5,17 @@ use axum::{
 };
 use serde_json::json;
 
+use diesel::prelude::*;
+use diesel::dsl::count_distinct;
+
 use crate::db::CreateAnimeSeriesParams;
 use crate::dto::{
-    AnimeRequest, AnimeResponse, AnimeSeriesRequest, AnimeSeriesResponse, SeasonRequest,
-    SeasonResponse, SubtitleGroupRequest, SubtitleGroupResponse,
+    AnimeRequest, AnimeResponse, AnimeSeriesRequest, AnimeSeriesResponse, AnimeSeriesRichResponse,
+    DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse, SubtitleGroupRequest,
+    SubtitleGroupResponse, SubscriptionInfo,
 };
+use crate::models::{Anime, AnimeSeries, Download, Season};
+use crate::schema::{anime_links, anime_series, animes, downloads, raw_anime_items, seasons, subscriptions};
 use crate::state::AppState;
 
 // ============ Anime Handlers ============
@@ -212,6 +218,108 @@ pub async fn list_seasons(State(state): State<AppState>) -> (StatusCode, Json<se
 }
 
 // ============ AnimeSeries Handlers ============
+
+/// List all anime series with enriched data (anime_title, season, episode counts, subscriptions)
+pub async fn list_all_anime_series(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string(), "series": [] })),
+            );
+        }
+    };
+
+    // Load all series with joined anime and season
+    let series_with_joins: Vec<(AnimeSeries, Anime, Season)> = match anime_series::table
+        .inner_join(animes::table.on(animes::anime_id.eq(anime_series::anime_id)))
+        .inner_join(seasons::table.on(seasons::season_id.eq(anime_series::season_id)))
+        .select((
+            AnimeSeries::as_select(),
+            Anime::as_select(),
+            Season::as_select(),
+        ))
+        .order(anime_series::series_id.desc())
+        .load::<(AnimeSeries, Anime, Season)>(&mut conn)
+    {
+        Ok(data) => data,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string(), "series": [] })),
+            );
+        }
+    };
+
+    let mut results = Vec::new();
+
+    for (series, anime, season) in &series_with_joins {
+        // episode_found: distinct episode_no where filtered_flag = false
+        let episode_found: i64 = anime_links::table
+            .filter(anime_links::series_id.eq(series.series_id))
+            .filter(anime_links::filtered_flag.eq(false))
+            .select(count_distinct(anime_links::episode_no))
+            .first(&mut conn)
+            .unwrap_or(0);
+
+        // episode_downloaded: distinct episode_no where filtered_flag = false AND download completed
+        let episode_downloaded: i64 = anime_links::table
+            .inner_join(downloads::table.on(downloads::link_id.eq(anime_links::link_id)))
+            .filter(anime_links::series_id.eq(series.series_id))
+            .filter(anime_links::filtered_flag.eq(false))
+            .filter(downloads::status.eq("completed"))
+            .select(count_distinct(anime_links::episode_no))
+            .first(&mut conn)
+            .unwrap_or(0);
+
+        // subscriptions: via anime_links → raw_anime_items → subscriptions
+        let sub_infos: Vec<SubscriptionInfo> = match anime_links::table
+            .inner_join(raw_anime_items::table.on(
+                raw_anime_items::item_id.nullable().eq(anime_links::raw_item_id),
+            ))
+            .inner_join(subscriptions::table.on(
+                subscriptions::subscription_id.eq(raw_anime_items::subscription_id),
+            ))
+            .filter(anime_links::series_id.eq(series.series_id))
+            .select((subscriptions::subscription_id, subscriptions::name))
+            .distinct()
+            .load::<(i32, Option<String>)>(&mut conn)
+        {
+            Ok(subs) => subs
+                .into_iter()
+                .map(|(id, name)| SubscriptionInfo {
+                    subscription_id: id,
+                    name,
+                })
+                .collect(),
+            Err(_) => vec![],
+        };
+
+        results.push(AnimeSeriesRichResponse {
+            series_id: series.series_id,
+            anime_id: series.anime_id,
+            anime_title: anime.title.clone(),
+            series_no: series.series_no,
+            season: SeasonInfo {
+                year: season.year,
+                season: season.season.clone(),
+            },
+            episode_downloaded,
+            episode_found,
+            subscriptions: sub_infos,
+            description: series.description.clone(),
+            aired_date: series.aired_date,
+            end_date: series.end_date,
+            created_at: series.created_at,
+            updated_at: series.updated_at,
+        });
+    }
+
+    (StatusCode::OK, Json(json!({ "series": results })))
+}
 
 /// Create a new anime series
 pub async fn create_anime_series(

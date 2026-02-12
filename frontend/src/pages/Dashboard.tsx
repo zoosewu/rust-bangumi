@@ -1,225 +1,128 @@
-import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { useEffectQuery } from "@/hooks/useEffectQuery"
-import { useEffectMutation } from "@/hooks/useEffectMutation"
-import { DataTable } from "@/components/shared/DataTable"
-import type { Column } from "@/components/shared/DataTable"
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
-import { Plus, Trash2 } from "lucide-react"
+import { useEffectQuery } from "@/hooks/useEffectQuery"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
+import { ParserEditor } from "@/components/shared/ParserEditor"
+import {
+  Film,
+  Rss,
+  Download,
+  AlertTriangle,
+  FileText,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react"
 
 export default function Dashboard() {
   const { t } = useTranslation()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [newRegex, setNewRegex] = useState("")
-  const [newPositive, setNewPositive] = useState(true)
-  const [newOrder, setNewOrder] = useState("1")
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
 
-  const health = useEffectQuery(
+  const { data: stats, isLoading } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getHealth
+        return yield* api.getDashboardStats
       }),
     [],
   )
-
-  const { data: rules, isLoading: rulesLoading, refetch: refetchRules } = useEffectQuery(
-    () =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getFilterRules("global")
-      }),
-    [],
-  )
-
-  const { mutate: createRule, isLoading: creating } = useEffectMutation(
-    (req: { regex_pattern: string; is_positive: boolean; rule_order: number }) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.createFilterRule({
-          target_type: "global",
-          rule_order: req.rule_order,
-          is_positive: req.is_positive,
-          regex_pattern: req.regex_pattern,
-        })
-      }),
-  )
-
-  const { mutate: deleteRule, isLoading: deleting } = useEffectMutation(
-    (ruleId: number) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.deleteFilterRule(ruleId)
-      }),
-  )
-
-  const ruleColumns: Column<Record<string, unknown>>[] = [
-    { key: "rule_id", header: t("common.id"), render: (item) => String(item.rule_id) },
-    { key: "rule_order", header: t("common.order"), render: (item) => String(item.rule_order) },
-    {
-      key: "regex_pattern",
-      header: t("common.pattern"),
-      render: (item) => <code className="text-sm font-mono">{String(item.regex_pattern)}</code>,
-    },
-    {
-      key: "is_positive",
-      header: t("common.type"),
-      render: (item) => (item.is_positive ? t("common.include") : t("common.exclude")),
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (item) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation()
-            setDeleteTarget(item.rule_id as number)
-          }}
-        >
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      ),
-    },
-  ]
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">{t("dashboard.title")}</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("dashboard.coreService")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {health.isLoading ? (
-              <span className="text-muted-foreground">{t("common.checking")}</span>
-            ) : health.error ? (
-              <Badge variant="destructive">{t("common.offline")}</Badge>
-            ) : (
-              <Badge className="bg-green-100 text-green-800">{t("common.online")}</Badge>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Service health */}
+      {isLoading ? (
+        <p className="text-muted-foreground">{t("common.loading")}</p>
+      ) : stats ? (
+        <>
+          {/* Services */}
+          {stats.services.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">{t("dashboard.services", "Services")}</h2>
+              <div className="flex flex-wrap gap-2">
+                {stats.services.map((svc) => (
+                  <Badge
+                    key={svc.name}
+                    variant={svc.is_healthy ? "default" : "destructive"}
+                    className="gap-1"
+                  >
+                    {svc.is_healthy ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <XCircle className="h-3 w-3" />
+                    )}
+                    {svc.name} ({svc.module_type})
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {/* Global Filter Rules */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{t("dashboard.globalFilterRules")}</h2>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            {t("dashboard.addRule")}
-          </Button>
-        </div>
-        {rulesLoading ? (
-          <p className="text-muted-foreground">{t("common.loading")}</p>
-        ) : rules && rules.length > 0 ? (
-          <DataTable
-            columns={ruleColumns}
-            data={rules as unknown as Record<string, unknown>[]}
-            keyField="rule_id"
-          />
-        ) : (
-          <Card>
-            <CardContent className="py-6 text-center text-muted-foreground">
-              {t("dashboard.noGlobalRules")}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Create Rule Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("dashboard.addGlobalRule")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t("dashboard.regexPattern")}</Label>
-              <Input
-                className="font-mono"
-                value={newRegex}
-                onChange={(e) => setNewRegex(e.target.value)}
-                placeholder="e.g. 1080p"
-              />
-            </div>
-            <div>
-              <Label>{t("dashboard.ruleOrder")}</Label>
-              <Input
-                type="number"
-                value={newOrder}
-                onChange={(e) => setNewOrder(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={newPositive} onCheckedChange={setNewPositive} />
-              <Label>{newPositive ? t("common.include") : t("common.exclude")}</Label>
-            </div>
+          {/* Stats cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <StatCard icon={Film} label={t("dashboard.totalAnime", "Anime")} value={stats.total_anime} />
+            <StatCard icon={Film} label={t("dashboard.totalSeries", "Series")} value={stats.total_series} />
+            <StatCard icon={Rss} label={t("dashboard.activeSubs", "Subscriptions")} value={stats.active_subscriptions} />
+            <StatCard icon={Download} label={t("dashboard.downloading", "Downloading")} value={stats.downloading} color="blue" />
+            <StatCard icon={CheckCircle2} label={t("dashboard.completed", "Completed")} value={stats.completed} color="green" />
+            <StatCard icon={XCircle} label={t("dashboard.failed", "Failed")} value={stats.failed} color="red" />
+            <StatCard icon={FileText} label={t("dashboard.pendingRawItems", "Pending Items")} value={stats.pending_raw_items} />
+            <StatCard icon={AlertTriangle} label={t("dashboard.pendingConflicts", "Conflicts")} value={stats.pending_conflicts} color={stats.pending_conflicts > 0 ? "yellow" : undefined} />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={!newRegex.trim() || creating}
-              onClick={() => {
-                createRule({
-                  regex_pattern: newRegex.trim(),
-                  is_positive: newPositive,
-                  rule_order: Number(newOrder) || 1,
-                }).then(() => {
-                  setNewRegex("")
-                  setNewPositive(true)
-                  setNewOrder("1")
-                  setCreateOpen(false)
-                  refetchRules()
-                })
-              }}
-            >
-              {creating ? t("common.creating") : t("common.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </>
+      ) : null}
 
-      {/* Delete Confirm */}
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t("dashboard.deleteRule")}
-        description={t("dashboard.deleteRuleConfirm")}
-        loading={deleting}
-        onConfirm={() => {
-          if (deleteTarget !== null) {
-            deleteRule(deleteTarget).then(() => {
-              setDeleteTarget(null)
-              refetchRules()
-            })
-          }
-        }}
-      />
+      {/* Global filters and parsers */}
+      <Tabs defaultValue="filters">
+        <TabsList variant="line">
+          <TabsTrigger value="filters">{t("dashboard.globalFilterRules", "Global Filter Rules")}</TabsTrigger>
+          <TabsTrigger value="parsers">{t("dashboard.globalParsers", "Global Parsers")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="filters" className="mt-4">
+          <FilterRuleEditor targetType="global" targetId={null} />
+        </TabsContent>
+        <TabsContent value="parsers" className="mt-4">
+          <ParserEditor createdFromType="global" createdFromId={null} />
+        </TabsContent>
+      </Tabs>
     </div>
+  )
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: React.ElementType
+  label: string
+  value: number
+  color?: "blue" | "green" | "red" | "yellow"
+}) {
+  const colorClasses = {
+    blue: "text-blue-600 dark:text-blue-400",
+    green: "text-green-600 dark:text-green-400",
+    red: "text-red-600 dark:text-red-400",
+    yellow: "text-yellow-600 dark:text-yellow-400",
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <span className={`text-2xl font-bold tabular-nums ${color ? colorClasses[color] : ""}`}>
+          {value}
+        </span>
+      </CardContent>
+    </Card>
   )
 }

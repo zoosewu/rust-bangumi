@@ -6,23 +6,19 @@ import {
   Film,
   Rss,
   FileText,
-  Download,
-  Filter,
-  FileCode,
   AlertTriangle,
   Users,
+  Library,
 } from "lucide-react"
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard" },
-  { to: "/anime", icon: Film, labelKey: "sidebar.anime" },
-  { to: "/subtitle-groups", icon: Users, labelKey: "sidebar.subtitleGroups" },
+  { to: "/series", icon: Film, labelKey: "sidebar.animeSeries" },
   { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions" },
   { to: "/raw-items", icon: FileText, labelKey: "sidebar.rawItems" },
-  { to: "/downloads", icon: Download, labelKey: "sidebar.downloads" },
-  { to: "/filters", icon: Filter, labelKey: "sidebar.filters" },
-  { to: "/parsers", icon: FileCode, labelKey: "sidebar.parsers" },
   { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
+  { to: "/anime", icon: Library, labelKey: "sidebar.anime" },
+  { to: "/subtitle-groups", icon: Users, labelKey: "sidebar.subtitleGroups" },
 ]
 
 export function Sidebar() {

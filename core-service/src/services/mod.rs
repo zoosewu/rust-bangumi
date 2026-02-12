@@ -2,6 +2,7 @@ pub mod download_dispatch;
 pub mod download_scheduler;
 pub mod download_type_detector;
 pub mod filter;
+pub mod filter_recalc;
 pub mod registry;
 pub mod scheduler;
 pub mod sync_service;

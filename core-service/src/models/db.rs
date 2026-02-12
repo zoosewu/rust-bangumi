@@ -535,6 +535,8 @@ pub struct TitleParser {
     pub year_value: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub created_from_type: Option<FilterTargetType>,
+    pub created_from_id: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -562,6 +564,8 @@ pub struct NewTitleParser {
     pub year_value: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub created_from_type: Option<FilterTargetType>,
+    pub created_from_id: Option<i32>,
 }
 
 // ============ RawAnimeItems ============

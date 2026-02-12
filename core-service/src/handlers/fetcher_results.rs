@@ -679,5 +679,19 @@ pub(crate) fn process_parsed_result(
         .get_result(conn)
         .map_err(|e| format!("Failed to create anime link: {}", e))?;
 
+    // Compute and update filtered_flag based on current filter rules
+    match crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link) {
+        Ok(flag) if flag != created_link.filtered_flag => {
+            diesel::update(anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)))
+                .set(anime_links::filtered_flag.eq(flag))
+                .execute(conn)
+                .map_err(|e| format!("Failed to update filtered_flag: {}", e))?;
+        }
+        Err(e) => {
+            tracing::warn!("Failed to compute filtered_flag for link {}: {}", created_link.link_id, e);
+        }
+        _ => {}
+    }
+
     Ok(created_link.link_id)
 }

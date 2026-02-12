@@ -1,7 +1,7 @@
 //! 解析器管理 API
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::db::repository::raw_item::RawItemFilter;
-use crate::models::{NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
+use crate::models::{FilterTargetType, NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
 use crate::schema::{raw_anime_items, title_parsers};
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
@@ -41,6 +41,8 @@ pub struct CreateParserRequest {
     pub season_value: Option<String>,
     pub year_source: Option<String>,
     pub year_value: Option<String>,
+    pub created_from_type: Option<String>,
+    pub created_from_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,6 +68,8 @@ pub struct ParserResponse {
     pub season_value: Option<String>,
     pub year_source: Option<String>,
     pub year_value: Option<String>,
+    pub created_from_type: Option<String>,
+    pub created_from_id: Option<i32>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -94,6 +98,8 @@ impl From<TitleParser> for ParserResponse {
             season_value: p.season_value,
             year_source: p.year_source.map(|s| s.to_string()),
             year_value: p.year_value,
+            created_from_type: p.created_from_type.map(|t| t.to_string()),
+            created_from_id: p.created_from_id,
             created_at: p.created_at.to_string(),
             updated_at: p.updated_at.to_string(),
         }
@@ -102,17 +108,38 @@ impl From<TitleParser> for ParserResponse {
 
 // ============ Handlers ============
 
-/// GET /parsers - 列出所有解析器
+#[derive(Debug, Deserialize)]
+pub struct ListParsersQuery {
+    pub created_from_type: Option<String>,
+    pub created_from_id: Option<i32>,
+}
+
+/// GET /parsers - 列出所有解析器（可選 created_from 篩選）
 pub async fn list_parsers(
     State(state): State<AppState>,
+    Query(query): Query<ListParsersQuery>,
 ) -> Result<Json<Vec<ParserResponse>>, (StatusCode, String)> {
     let mut conn = state
         .db
         .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let parsers = title_parsers::table
+    let mut q = title_parsers::table
         .order(title_parsers::priority.desc())
+        .into_boxed();
+
+    if let Some(ref type_str) = query.created_from_type {
+        let target_type: FilterTargetType = type_str
+            .parse()
+            .map_err(|e: String| (StatusCode::BAD_REQUEST, e))?;
+        q = q.filter(title_parsers::created_from_type.eq(target_type));
+    }
+
+    if let Some(id) = query.created_from_id {
+        q = q.filter(title_parsers::created_from_id.eq(id));
+    }
+
+    let parsers = q
         .load::<TitleParser>(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -194,6 +221,13 @@ pub async fn create_parser(
         year_value: req.year_value,
         created_at: now,
         updated_at: now,
+        created_from_type: req
+            .created_from_type
+            .as_ref()
+            .map(|s| s.parse::<FilterTargetType>())
+            .transpose()
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
+        created_from_id: req.created_from_id,
     };
 
     let parser = diesel::insert_into(title_parsers::table)
@@ -493,6 +527,8 @@ pub async fn preview_parser(
         year_value: req.year_value.clone(),
         created_at: now,
         updated_at: now,
+        created_from_type: None,
+        created_from_id: None,
     };
 
     // Build "after" parsers list: before_parsers + current_parser, sorted by priority desc

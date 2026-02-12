@@ -89,6 +89,82 @@ pub struct FilterRuleResponse {
     pub updated_at: NaiveDateTime,
 }
 
+// ============ AnimeSeriesRich DTO (for list_all_anime_series) ============
+#[derive(Debug, Serialize, Clone)]
+pub struct SeasonInfo {
+    pub year: i32,
+    pub season: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct SubscriptionInfo {
+    pub subscription_id: i32,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AnimeSeriesRichResponse {
+    pub series_id: i32,
+    pub anime_id: i32,
+    pub anime_title: String,
+    pub series_no: i32,
+    pub season: SeasonInfo,
+    pub episode_downloaded: i64,
+    pub episode_found: i64,
+    pub subscriptions: Vec<SubscriptionInfo>,
+    pub description: Option<String>,
+    pub aired_date: Option<NaiveDate>,
+    pub end_date: Option<NaiveDate>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ AnimeLinkRich DTO (for get_anime_links) ============
+#[derive(Debug, Serialize, Clone)]
+pub struct DownloadInfo {
+    pub download_id: i32,
+    pub status: String,
+    pub progress: Option<f32>,
+    pub torrent_hash: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AnimeLinkRichResponse {
+    pub link_id: i32,
+    pub series_id: i32,
+    pub group_id: i32,
+    pub group_name: String,
+    pub episode_no: i32,
+    pub title: Option<String>,
+    pub url: String,
+    pub source_hash: String,
+    pub filtered_flag: bool,
+    pub download: Option<DownloadInfo>,
+    pub created_at: NaiveDateTime,
+}
+
+// ============ DashboardStats DTO ============
+#[derive(Debug, Serialize, Clone)]
+pub struct ServiceInfo {
+    pub name: String,
+    pub module_type: String,
+    pub is_healthy: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct DashboardStats {
+    pub total_anime: i64,
+    pub total_series: i64,
+    pub active_subscriptions: i64,
+    pub total_downloads: i64,
+    pub downloading: i64,
+    pub completed: i64,
+    pub failed: i64,
+    pub pending_raw_items: i64,
+    pub pending_conflicts: i64,
+    pub services: Vec<ServiceInfo>,
+}
+
 // ============ AnimeLink DTO ============
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AnimeLinkRequest {

@@ -98,7 +98,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))
         // 動畫系列管理
-        .route("/anime/series", post(handlers::anime::create_anime_series))
+        .route(
+            "/anime/series",
+            get(handlers::anime::list_all_anime_series).post(handlers::anime::create_anime_series),
+        )
         .route(
             "/anime/series/:series_id",
             get(handlers::anime::get_anime_series),
@@ -204,6 +207,11 @@ async fn main() -> anyhow::Result<()> {
         )
         // Viewer 同步回呼
         .route("/sync-callback", post(handlers::sync::sync_callback))
+        // Dashboard 概覽
+        .route(
+            "/dashboard/stats",
+            get(handlers::dashboard::get_dashboard_stats),
+        )
         // 健康檢查
         .route("/health", get(health_check))
         // 應用狀態

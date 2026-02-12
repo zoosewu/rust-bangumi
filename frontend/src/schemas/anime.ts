@@ -47,3 +47,52 @@ export const AnimeLink = Schema.Struct({
   created_at: Schema.String,
 })
 export type AnimeLink = typeof AnimeLink.Type
+
+export const SeasonInfo = Schema.Struct({
+  year: Schema.Number,
+  season: Schema.String,
+})
+
+export const SubscriptionInfo = Schema.Struct({
+  subscription_id: Schema.Number,
+  name: Schema.NullOr(Schema.String),
+})
+
+export const AnimeSeriesRich = Schema.Struct({
+  series_id: Schema.Number,
+  anime_id: Schema.Number,
+  anime_title: Schema.String,
+  series_no: Schema.Number,
+  season: SeasonInfo,
+  episode_downloaded: Schema.Number,
+  episode_found: Schema.Number,
+  subscriptions: Schema.Array(SubscriptionInfo),
+  description: Schema.NullOr(Schema.String),
+  aired_date: Schema.NullOr(Schema.String),
+  end_date: Schema.NullOr(Schema.String),
+  created_at: Schema.String,
+  updated_at: Schema.String,
+})
+export type AnimeSeriesRich = typeof AnimeSeriesRich.Type
+
+export const DownloadInfo = Schema.Struct({
+  download_id: Schema.Number,
+  status: Schema.String,
+  progress: Schema.NullOr(Schema.Number),
+  torrent_hash: Schema.NullOr(Schema.String),
+})
+
+export const AnimeLinkRich = Schema.Struct({
+  link_id: Schema.Number,
+  series_id: Schema.Number,
+  group_id: Schema.Number,
+  group_name: Schema.String,
+  episode_no: Schema.Number,
+  title: Schema.NullOr(Schema.String),
+  url: Schema.String,
+  source_hash: Schema.String,
+  filtered_flag: Schema.Boolean,
+  download: Schema.NullOr(DownloadInfo),
+  created_at: Schema.String,
+})
+export type AnimeLinkRich = typeof AnimeLinkRich.Type

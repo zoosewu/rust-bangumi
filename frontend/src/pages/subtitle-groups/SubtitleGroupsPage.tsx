@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -19,12 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Plus, Trash2 } from "lucide-react"
+import { SubtitleGroupDialog } from "./SubtitleGroupDialog"
 
 export default function SubtitleGroupsPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState("")
+  const [selectedGroup, setSelectedGroup] = useState<{ id: number; name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
 
   const { data: groups, isLoading, refetch } = useEffectQuery(
@@ -103,10 +103,24 @@ export default function SubtitleGroupsPage() {
           columns={columns}
           data={groups as unknown as Record<string, unknown>[]}
           keyField="group_id"
-          onRowClick={(row) => navigate(`/subtitle-groups/${row.group_id}`)}
+          onRowClick={(row) => setSelectedGroup({ id: row.group_id as number, name: row.group_name as string })}
         />
       ) : (
         <p className="text-sm text-muted-foreground">{t("subtitleGroups.noGroups")}</p>
+      )}
+
+      {selectedGroup && (
+        <SubtitleGroupDialog
+          groupId={selectedGroup.id}
+          groupName={selectedGroup.name}
+          open={!!selectedGroup}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectedGroup(null)
+              refetch()
+            }
+          }}
+        />
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

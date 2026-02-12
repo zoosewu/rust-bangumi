@@ -2,13 +2,11 @@
   "sidebar": {
     "title": "番組管理",
     "dashboard": "ダッシュボード",
+    "animeSeries": "アニメシリーズ",
     "anime": "アニメ",
     "subtitleGroups": "字幕グループ",
     "subscriptions": "サブスクリプション",
     "rawItems": "生データ",
-    "downloads": "ダウンロード",
-    "filters": "フィルター",
-    "parsers": "パーサー",
     "conflicts": "コンフリクト"
   },
   "header": {
@@ -47,15 +45,23 @@
   },
   "dashboard": {
     "title": "ダッシュボード",
-    "coreService": "コアサービス",
+    "services": "サービス",
+    "totalAnime": "アニメ",
+    "totalSeries": "シリーズ",
+    "activeSubs": "サブスクリプション",
+    "downloading": "ダウンロード中",
+    "completed": "完了",
+    "failed": "失敗",
+    "pendingRawItems": "保留中アイテム",
+    "pendingConflicts": "コンフリクト",
     "globalFilterRules": "グローバルフィルタールール",
-    "noGlobalRules": "グローバルフィルタールールは設定されていません。",
-    "addRule": "ルール追加",
-    "addGlobalRule": "グローバルフィルタールールを追加",
-    "deleteRule": "フィルタールールを削除",
-    "deleteRuleConfirm": "このグローバルフィルタールールを削除してもよろしいですか？",
-    "regexPattern": "正規表現パターン",
-    "ruleOrder": "ルール順序"
+    "globalParsers": "グローバルパーサー"
+  },
+  "dialog": {
+    "details": "詳細",
+    "animeLinks": "アニメリンク",
+    "filterRules": "フィルタールール",
+    "parsers": "パーサー"
   },
   "anime": {
     "title": "アニメ",
@@ -87,10 +93,13 @@
   },
   "animeSeries": {
     "title": "アニメシリーズ",
+    "animeTitle": "アニメ",
     "series": "シリーズ",
+    "season": "シーズン",
+    "episodes": "話数",
+    "subscriptions": "サブスクリプション",
     "addSeries": "シリーズ追加",
     "seriesNo": "シリーズ番号",
-    "season": "シーズン",
     "description": "説明",
     "airedDate": "放送開始日",
     "endDate": "放送終了日",
@@ -131,6 +140,19 @@
     "size": "サイズ",
     "downloaderType": "タイプ",
     "updated": "更新日時"
+  },
+  "filter": {
+    "addRule": "追加",
+    "regexPlaceholder": "正規表現パターンを入力...",
+    "passed": "通過",
+    "filtered": "フィルター済み",
+    "confirmRemove": "フィルタールールを削除しますか？"
+  },
+  "parser": {
+    "addParser": "パーサー追加",
+    "preview": "プレビュー",
+    "create": "作成",
+    "confirmDelete": "パーサーを削除しますか？"
   },
   "filters": {
     "title": "フィルタールール",

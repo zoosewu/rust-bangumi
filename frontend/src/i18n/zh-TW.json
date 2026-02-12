@@ -2,13 +2,11 @@
   "sidebar": {
     "title": "番組管理",
     "dashboard": "儀表板",
+    "animeSeries": "動畫系列",
     "anime": "動畫",
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
     "rawItems": "原始項目",
-    "downloads": "下載",
-    "filters": "篩選規則",
-    "parsers": "解析器",
     "conflicts": "衝突"
   },
   "header": {
@@ -47,15 +45,23 @@
   },
   "dashboard": {
     "title": "儀表板",
-    "coreService": "核心服務",
+    "services": "服務",
+    "totalAnime": "動畫",
+    "totalSeries": "系列",
+    "activeSubs": "訂閱",
+    "downloading": "下載中",
+    "completed": "已完成",
+    "failed": "失敗",
+    "pendingRawItems": "待處理項目",
+    "pendingConflicts": "衝突",
     "globalFilterRules": "全域篩選規則",
-    "noGlobalRules": "尚未設定全域篩選規則。",
-    "addRule": "新增規則",
-    "addGlobalRule": "新增全域篩選規則",
-    "deleteRule": "刪除篩選規則",
-    "deleteRuleConfirm": "確定要刪除此全域篩選規則嗎？",
-    "regexPattern": "正規表達式",
-    "ruleOrder": "規則順序"
+    "globalParsers": "全域解析器"
+  },
+  "dialog": {
+    "details": "詳細資訊",
+    "animeLinks": "動畫連結",
+    "filterRules": "篩選規則",
+    "parsers": "解析器"
   },
   "anime": {
     "title": "動畫",
@@ -87,10 +93,13 @@
   },
   "animeSeries": {
     "title": "動畫系列",
+    "animeTitle": "動畫",
     "series": "系列",
+    "season": "季度",
+    "episodes": "集數",
+    "subscriptions": "訂閱",
     "addSeries": "新增系列",
     "seriesNo": "系列編號",
-    "season": "季度",
     "description": "描述",
     "airedDate": "播出日期",
     "endDate": "結束日期",
@@ -131,6 +140,19 @@
     "size": "大小",
     "downloaderType": "類型",
     "updated": "更新時間"
+  },
+  "filter": {
+    "addRule": "新增",
+    "regexPlaceholder": "輸入正規表達式...",
+    "passed": "通過",
+    "filtered": "已篩選",
+    "confirmRemove": "移除篩選規則？"
+  },
+  "parser": {
+    "addParser": "新增解析器",
+    "preview": "預覽",
+    "create": "建立",
+    "confirmDelete": "刪除解析器？"
   },
   "filters": {
     "title": "篩選規則",

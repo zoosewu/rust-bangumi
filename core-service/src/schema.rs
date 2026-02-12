@@ -220,6 +220,7 @@ diesel::table! {
 diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::ParserSourceType;
+    use super::sql_types::FilterTargetType;
 
     title_parsers (parser_id) {
         parser_id -> Int4,
@@ -253,6 +254,8 @@ diesel::table! {
         year_value -> Nullable<Varchar>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        created_from_type -> Nullable<FilterTargetType>,
+        created_from_id -> Nullable<Int4>,
     }
 }
 
