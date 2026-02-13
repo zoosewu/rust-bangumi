@@ -46,6 +46,7 @@ export const ParserPreviewResult = Schema.Struct({
   is_newly_matched: Schema.Boolean,
   is_override: Schema.Boolean,
   parse_result: Schema.NullOr(ParsedFields),
+  parse_error: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
 })
 
 export const ParserPreviewResponse = Schema.Struct({

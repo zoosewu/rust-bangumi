@@ -55,7 +55,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange }: Subscri
           <TabsContent value="filters" className="mt-4">
             <FilterRuleEditor
               targetType="fetcher"
-              targetId={subscription.fetcher_id}
+              targetId={subscription.subscription_id}
             />
           </TabsContent>
           <TabsContent value="parsers" className="mt-4">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -8,10 +8,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { RegexInput } from "@/components/shared/RegexInput"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import {
@@ -21,56 +18,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Plus, Trash2, Eye } from "lucide-react"
 import type { ParserPreviewResponse } from "@/schemas/parser"
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debouncedValue
-}
-
-const DEFAULT_FORM = {
-  name: "",
-  priority: "50",
-  condition_regex: "",
-  parse_regex: "",
-  anime_title_source: "regex" as string,
-  anime_title_value: "",
-  episode_no_source: "regex" as string,
-  episode_no_value: "",
-  series_no_source: "none" as string,
-  series_no_value: "",
-  subtitle_group_source: "none" as string,
-  subtitle_group_value: "",
-  resolution_source: "none" as string,
-  resolution_value: "",
-  season_source: "none" as string,
-  season_value: "",
-  year_source: "none" as string,
-  year_value: "",
-}
-
-type FormState = typeof DEFAULT_FORM
+import {
+  type ParserFormState,
+  EMPTY_PARSER_FORM,
+  buildParserRequest,
+  ParserFormFields,
+  ParserAIButtons,
+} from "@/components/shared/ParserForm"
+import { AppRuntime } from "@/runtime/AppRuntime"
 
 export default function ParsersPage() {
   const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
-  const [form, setForm] = useState<FormState>({ ...DEFAULT_FORM })
+  const [form, setForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewForm, setPreviewForm] = useState<FormState>({ ...DEFAULT_FORM })
+  const [previewForm, setPreviewForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
+  const [previewDebounce, setPreviewDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const { data: parsers, isLoading, refetch } = useEffectQuery(
     () =>
@@ -97,31 +64,59 @@ export default function ParsersPage() {
       }),
   )
 
-  const { mutate: fetchPreview } = useEffectMutation(
-    (req: Record<string, unknown>) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.previewParser(req)
-      }),
-  )
-
-  const debouncedPreviewForm = useDebounce(previewForm, 600)
-
+  // Debounced preview
   useEffect(() => {
     if (!previewOpen) return
-    if (!debouncedPreviewForm.condition_regex || !debouncedPreviewForm.parse_regex) {
+    if (!previewForm.condition_regex || !previewForm.parse_regex) {
       setPreview(null)
       return
     }
-    const req = buildRequest(debouncedPreviewForm)
-    fetchPreview(req)
-      .then(setPreview)
-      .catch(() => setPreview(null))
-  }, [debouncedPreviewForm, previewOpen])
+    if (previewDebounce) clearTimeout(previewDebounce)
+    const timer = setTimeout(() => {
+      const req = buildParserRequest(previewForm)
+      AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.previewParser(req)),
+      ).then(setPreview).catch(() => setPreview(null))
+    }, 600)
+    setPreviewDebounce(timer)
+    return () => clearTimeout(timer)
+  }, [previewForm, previewOpen])
 
-  const setField = (setter: React.Dispatch<React.SetStateAction<FormState>>) =>
-    (key: keyof FormState, value: string) =>
-      setter((prev) => ({ ...prev, [key]: value }))
+  const updateForm = (key: string, value: string | number | null) =>
+    setForm((prev) => ({ ...prev, [key]: value }))
+
+  const updatePreviewForm = (key: string, value: string | number | null) =>
+    setPreviewForm((prev) => ({ ...prev, [key]: value }))
+
+  const handleImportForCreate = useCallback((imported: ParserFormState) => {
+    setForm(imported)
+    setCreateOpen(true)
+  }, [])
+
+  const handleImportForPreview = useCallback((imported: ParserFormState) => {
+    setPreviewForm(imported)
+  }, [])
+
+  const parserToPreviewForm = (p: Record<string, unknown>): ParserFormState => ({
+    name: String(p.name ?? ""),
+    priority: Number(p.priority) || 50,
+    condition_regex: String(p.condition_regex ?? ""),
+    parse_regex: String(p.parse_regex ?? ""),
+    anime_title_source: String(p.anime_title_source ?? "regex"),
+    anime_title_value: String(p.anime_title_value ?? ""),
+    episode_no_source: String(p.episode_no_source ?? "regex"),
+    episode_no_value: String(p.episode_no_value ?? ""),
+    series_no_source: p.series_no_source ? String(p.series_no_source) : null,
+    series_no_value: p.series_no_value ? String(p.series_no_value) : null,
+    subtitle_group_source: p.subtitle_group_source ? String(p.subtitle_group_source) : null,
+    subtitle_group_value: p.subtitle_group_value ? String(p.subtitle_group_value) : null,
+    resolution_source: p.resolution_source ? String(p.resolution_source) : null,
+    resolution_value: p.resolution_value ? String(p.resolution_value) : null,
+    season_source: p.season_source ? String(p.season_source) : null,
+    season_value: p.season_value ? String(p.season_value) : null,
+    year_source: p.year_source ? String(p.year_source) : null,
+    year_value: p.year_value ? String(p.year_value) : null,
+  })
 
   const columns: Column<Record<string, unknown>>[] = [
     { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
@@ -147,28 +142,7 @@ export default function ParsersPage() {
             size="sm"
             onClick={(e) => {
               e.stopPropagation()
-              const p = item as Record<string, unknown>
-              const pf: FormState = {
-                name: String(p.name ?? ""),
-                priority: String(p.priority ?? "50"),
-                condition_regex: String(p.condition_regex ?? ""),
-                parse_regex: String(p.parse_regex ?? ""),
-                anime_title_source: String(p.anime_title_source ?? "regex"),
-                anime_title_value: String(p.anime_title_value ?? ""),
-                episode_no_source: String(p.episode_no_source ?? "regex"),
-                episode_no_value: String(p.episode_no_value ?? ""),
-                series_no_source: String(p.series_no_source || "none"),
-                series_no_value: String(p.series_no_value ?? ""),
-                subtitle_group_source: String(p.subtitle_group_source || "none"),
-                subtitle_group_value: String(p.subtitle_group_value ?? ""),
-                resolution_source: String(p.resolution_source || "none"),
-                resolution_value: String(p.resolution_value ?? ""),
-                season_source: String(p.season_source || "none"),
-                season_value: String(p.season_value ?? ""),
-                year_source: String(p.year_source || "none"),
-                year_value: String(p.year_value ?? ""),
-              }
-              setPreviewForm(pf)
+              setPreviewForm(parserToPreviewForm(item))
               setPreview(null)
               setPreviewOpen(true)
             }}
@@ -198,7 +172,7 @@ export default function ParsersPage() {
           <Button
             variant="outline"
             onClick={() => {
-              setPreviewForm({ ...DEFAULT_FORM })
+              setPreviewForm({ ...EMPTY_PARSER_FORM })
               setPreview(null)
               setPreviewOpen(true)
             }}
@@ -206,7 +180,7 @@ export default function ParsersPage() {
             <Eye className="h-4 w-4 mr-2" />
             {t("parsers.preview")}
           </Button>
-          <Button onClick={() => { setForm({ ...DEFAULT_FORM }); setCreateOpen(true) }}>
+          <Button onClick={() => { setForm({ ...EMPTY_PARSER_FORM }); setCreateOpen(true) }}>
             <Plus className="h-4 w-4 mr-2" />
             {t("parsers.addParser")}
           </Button>
@@ -229,7 +203,14 @@ export default function ParsersPage() {
           <DialogHeader>
             <DialogTitle>{t("parsers.addParser")}</DialogTitle>
           </DialogHeader>
-          <ParserForm form={form} onChange={setField(setForm)} />
+          <ParserFormFields form={form} onChange={updateForm} />
+          <div className="flex gap-2">
+            <ParserAIButtons
+              onImport={handleImportForCreate}
+              targetType="global"
+              targetId={null}
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               {t("common.cancel")}
@@ -237,8 +218,8 @@ export default function ParsersPage() {
             <Button
               disabled={!form.name.trim() || !form.condition_regex.trim() || creating}
               onClick={() => {
-                createParser(buildRequest(form)).then(() => {
-                  setForm({ ...DEFAULT_FORM })
+                createParser(buildParserRequest(form)).then(() => {
+                  setForm({ ...EMPTY_PARSER_FORM })
                   setCreateOpen(false)
                   refetch()
                 })
@@ -256,7 +237,14 @@ export default function ParsersPage() {
           <DialogHeader>
             <DialogTitle>{t("parsers.parserPreview")}</DialogTitle>
           </DialogHeader>
-          <ParserForm form={previewForm} onChange={setField(setPreviewForm)} />
+          <ParserFormFields form={previewForm} onChange={updatePreviewForm} />
+          <div className="flex gap-2">
+            <ParserAIButtons
+              onImport={handleImportForPreview}
+              targetType="global"
+              targetId={null}
+            />
+          </div>
           {preview && <PreviewResults preview={preview} />}
         </DialogContent>
       </Dialog>
@@ -277,180 +265,6 @@ export default function ParsersPage() {
           }
         }}
       />
-    </div>
-  )
-}
-
-function buildRequest(form: FormState): Record<string, unknown> {
-  const req: Record<string, unknown> = {
-    name: form.name,
-    priority: Number(form.priority) || 50,
-    condition_regex: form.condition_regex,
-    parse_regex: form.parse_regex,
-    anime_title_source: form.anime_title_source,
-    anime_title_value: form.anime_title_value,
-    episode_no_source: form.episode_no_source,
-    episode_no_value: form.episode_no_value,
-  }
-  if (form.series_no_source && form.series_no_source !== "none") {
-    req.series_no_source = form.series_no_source
-    req.series_no_value = form.series_no_value
-  }
-  if (form.subtitle_group_source && form.subtitle_group_source !== "none") {
-    req.subtitle_group_source = form.subtitle_group_source
-    req.subtitle_group_value = form.subtitle_group_value
-  }
-  if (form.resolution_source && form.resolution_source !== "none") {
-    req.resolution_source = form.resolution_source
-    req.resolution_value = form.resolution_value
-  }
-  if (form.season_source && form.season_source !== "none") {
-    req.season_source = form.season_source
-    req.season_value = form.season_value
-  }
-  if (form.year_source && form.year_source !== "none") {
-    req.year_source = form.year_source
-    req.year_value = form.year_value
-  }
-  return req
-}
-
-function SourceSelect({
-  label,
-  sourceKey,
-  valueKey,
-  form,
-  onChange,
-}: {
-  label: string
-  sourceKey: keyof FormState
-  valueKey: keyof FormState
-  form: FormState
-  onChange: (key: keyof FormState, value: string) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <div className="grid grid-cols-3 gap-2 items-end">
-      <div>
-        <Label className="text-xs">{label} {t("parsers.source")}</Label>
-        <Select value={form[sourceKey] || "none"} onValueChange={(v) => onChange(sourceKey, v)}>
-          <SelectTrigger>
-            <SelectValue placeholder={t("common.none")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t("common.none")}</SelectItem>
-            <SelectItem value="regex">{t("parsers.regex")}</SelectItem>
-            <SelectItem value="static">{t("parsers.static")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="col-span-2">
-        <Label className="text-xs">{label} {t("parsers.value")}</Label>
-        <Input
-          className="font-mono text-sm"
-          value={form[valueKey]}
-          onChange={(e) => onChange(valueKey, e.target.value)}
-          disabled={!form[sourceKey] || form[sourceKey] === "none"}
-          placeholder={form[sourceKey] === "regex" ? t("parsers.regexPlaceholder") : t("parsers.staticPlaceholder")}
-        />
-      </div>
-    </div>
-  )
-}
-
-function ParserForm({
-  form,
-  onChange,
-}: {
-  form: FormState
-  onChange: (key: keyof FormState, value: string) => void
-}) {
-  const { t } = useTranslation()
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>{t("common.name")}</Label>
-          <Input value={form.name} onChange={(e) => onChange("name", e.target.value)} />
-        </div>
-        <div>
-          <Label>{t("parsers.priority")}</Label>
-          <Input
-            type="number"
-            value={form.priority}
-            onChange={(e) => onChange("priority", e.target.value)}
-          />
-        </div>
-      </div>
-      <div>
-        <Label>{t("parsers.conditionRegex")}</Label>
-        <RegexInput
-          value={form.condition_regex}
-          onChange={(v) => onChange("condition_regex", v)}
-          placeholder={t("parsers.conditionRegexPlaceholder")}
-        />
-      </div>
-      <div>
-        <Label>{t("parsers.parseRegex")}</Label>
-        <RegexInput
-          value={form.parse_regex}
-          onChange={(v) => onChange("parse_regex", v)}
-          placeholder={t("parsers.parseRegexPlaceholder")}
-        />
-      </div>
-
-      <div className="border-t pt-4 space-y-3">
-        <p className="text-sm font-medium">{t("parsers.fieldExtraction")}</p>
-        <SourceSelect
-          label={t("parsers.animeTitle")}
-          sourceKey="anime_title_source"
-          valueKey="anime_title_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.episodeNo")}
-          sourceKey="episode_no_source"
-          valueKey="episode_no_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.seriesNo")}
-          sourceKey="series_no_source"
-          valueKey="series_no_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.subtitleGroup")}
-          sourceKey="subtitle_group_source"
-          valueKey="subtitle_group_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.resolution")}
-          sourceKey="resolution_source"
-          valueKey="resolution_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.season")}
-          sourceKey="season_source"
-          valueKey="season_value"
-          form={form}
-          onChange={onChange}
-        />
-        <SourceSelect
-          label={t("parsers.year")}
-          sourceKey="year_source"
-          valueKey="year_value"
-          form={form}
-          onChange={onChange}
-        />
-      </div>
     </div>
   )
 }
@@ -514,6 +328,11 @@ function PreviewResults({ preview }: { preview: ParserPreviewResponse }) {
                   {r.parse_result.resolution && (
                     <span>Res: {r.parse_result.resolution}</span>
                   )}
+                </div>
+              )}
+              {r.parse_error && (
+                <div className="mt-1 text-[10px] text-destructive">
+                  {t("parsers.parseError")}: {r.parse_error}
                 </div>
               )}
             </div>

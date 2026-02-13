@@ -727,6 +727,7 @@ pub struct ParserPreviewResult {
     pub is_newly_matched: bool,
     pub is_override: bool,
     pub parse_result: Option<ParsedFields>,
+    pub parse_error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -848,25 +849,16 @@ pub async fn preview_parser(
         let after_match = find_matching_parser(&after_parsers, &item.title);
 
         let before_name = before_match.map(|p| p.name.clone());
-        let after_name = after_match.map(|p| {
-            if p.parser_id == -1 {
-                "(current)".to_string()
-            } else {
-                p.name.clone()
-            }
-        });
 
         let is_current_after = after_match.map(|p| p.parser_id == -1).unwrap_or(false);
-        let is_newly_matched = before_match.is_none() && is_current_after;
-        let is_override =
-            before_match.is_some() && is_current_after && before_match.map(|p| p.parser_id) != Some(-1);
 
-        // Parse result only if current parser matched in "after"
-        let parse_result = if is_current_after {
-            TitleParserService::try_parser(&current_parser, &item.title)
-                .ok()
-                .flatten()
-                .map(|r| ParsedFields {
+        // Try current parser to capture parse errors.
+        // Only meaningful when current parser is the winner (is_current_after)
+        // OR when it errored (condition_regex matched but extraction failed,
+        // causing find_matching_parser to skip it).
+        let (parse_result, parse_error) = if is_current_after {
+            match TitleParserService::try_parser(&current_parser, &item.title) {
+                Ok(Some(r)) => (Some(ParsedFields {
                     anime_title: r.anime_title,
                     episode_no: r.episode_no,
                     series_no: r.series_no,
@@ -874,10 +866,31 @@ pub async fn preview_parser(
                     resolution: r.resolution,
                     season: r.season,
                     year: r.year,
-                })
+                }), None),
+                Ok(None) => (None, None),
+                Err(e) => (None, Some(e)),
+            }
         } else {
-            None
+            // Current parser didn't win via find_matching_parser. Check if it
+            // was skipped due to error (condition_regex matched but parse failed).
+            match TitleParserService::try_parser(&current_parser, &item.title) {
+                Err(e) => (None, Some(e)),
+                _ => (None, None),
+            }
         };
+
+        // Current parser is relevant if it won or if it errored on this title.
+        let current_matched = is_current_after || parse_error.is_some();
+
+        let after_name = if current_matched {
+            Some("(current)".to_string())
+        } else {
+            after_match.map(|p| p.name.clone())
+        };
+
+        let is_newly_matched = before_match.is_none() && current_matched;
+        let is_override =
+            before_match.is_some() && current_matched && before_match.map(|p| p.parser_id) != Some(-1);
 
         results.push(ParserPreviewResult {
             title: item.title.clone(),
@@ -886,6 +899,7 @@ pub async fn preview_parser(
             is_newly_matched,
             is_override,
             parse_result,
+            parse_error,
         });
     }
 

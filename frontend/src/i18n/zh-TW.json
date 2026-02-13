@@ -158,7 +158,13 @@
     "addParser": "新增解析器",
     "preview": "預覽",
     "create": "建立",
-    "confirmDelete": "刪除解析器？"
+    "confirmDelete": "刪除解析器？",
+    "import": "匯入",
+    "importTitle": "匯入解析器 JSON",
+    "importDescription": "貼上 AI 產生的解析器 JSON，自動填入表單欄位。",
+    "exportPrompt": "匯出 Prompt",
+    "importError": "JSON 格式無效，請檢查後重試。",
+    "copied": "已複製！"
   },
   "filters": {
     "title": "篩選規則",
@@ -210,7 +216,8 @@
     "unmatched": "未匹配",
     "regexError": "正規表達式錯誤",
     "matchedBy": "匹配的解析器",
-    "searchPlaceholder": "搜尋標題..."
+    "searchPlaceholder": "搜尋標題...",
+    "parseError": "解析錯誤"
   },
   "conflicts": {
     "title": "訂閱衝突",

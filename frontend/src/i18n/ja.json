@@ -158,7 +158,13 @@
     "addParser": "パーサー追加",
     "preview": "プレビュー",
     "create": "作成",
-    "confirmDelete": "パーサーを削除しますか？"
+    "confirmDelete": "パーサーを削除しますか？",
+    "import": "インポート",
+    "importTitle": "パーサーJSONをインポート",
+    "importDescription": "AI生成のパーサーJSONを貼り付けて、フォームに自動入力します。",
+    "exportPrompt": "プロンプトをエクスポート",
+    "importError": "無効なJSON形式です。確認してもう一度お試しください。",
+    "copied": "コピーしました！"
   },
   "filters": {
     "title": "フィルタールール",
@@ -210,7 +216,8 @@
     "unmatched": "未一致",
     "regexError": "正規表現エラー",
     "matchedBy": "一致パーサー",
-    "searchPlaceholder": "タイトルを検索..."
+    "searchPlaceholder": "タイトルを検索...",
+    "parseError": "解析エラー"
   },
   "conflicts": {
     "title": "サブスクリプションコンフリクト",

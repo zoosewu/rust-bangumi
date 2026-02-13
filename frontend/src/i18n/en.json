@@ -158,7 +158,13 @@
     "addParser": "Add Parser",
     "preview": "Preview",
     "create": "Create",
-    "confirmDelete": "Delete parser?"
+    "confirmDelete": "Delete parser?",
+    "import": "Import",
+    "importTitle": "Import Parser JSON",
+    "importDescription": "Paste AI-generated parser JSON to auto-fill the form fields.",
+    "exportPrompt": "Export Prompt",
+    "importError": "Invalid JSON format. Please check and try again.",
+    "copied": "Copied!"
   },
   "filters": {
     "title": "Filter Rules",
@@ -210,7 +216,8 @@
     "unmatched": "Unmatched",
     "regexError": "Regex Error",
     "matchedBy": "Matched by",
-    "searchPlaceholder": "Search titles..."
+    "searchPlaceholder": "Search titles...",
+    "parseError": "Parse error"
   },
   "conflicts": {
     "title": "Subscription Conflicts",
