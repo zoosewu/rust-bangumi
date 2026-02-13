@@ -185,7 +185,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/parsers/:parser_id",
-            get(handlers::parsers::get_parser).delete(handlers::parsers::delete_parser),
+            get(handlers::parsers::get_parser)
+                .put(handlers::parsers::update_parser)
+                .delete(handlers::parsers::delete_parser),
         )
         // 原始資料管理
         .route("/raw-items", get(handlers::raw_items::list_raw_items))
