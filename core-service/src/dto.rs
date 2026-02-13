@@ -56,6 +56,7 @@ pub struct AnimeSeriesResponse {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateAnimeSeriesRequest {
+    pub season_id: Option<i32>,
     pub description: Option<String>,
     pub aired_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,

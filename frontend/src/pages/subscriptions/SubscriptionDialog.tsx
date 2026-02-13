@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
-import { Badge } from "@/components/ui/badge"
+import { CopyButton } from "@/components/shared/CopyButton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Subscription } from "@/schemas/subscription"
 
@@ -22,11 +22,19 @@ export function SubscriptionDialog({ subscription, open, onOpenChange }: Subscri
       title={subscription.name ?? String(subscription.source_url)}
     >
       <div className="space-y-6">
+        {/* Source URL — standalone at top */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-1">{t("subscriptions.sourceUrl", "Source URL")}</p>
+          <div className="flex items-start gap-1 bg-muted/50 rounded p-2">
+            <p className="text-sm font-mono break-all flex-1">{String(subscription.source_url)}</p>
+            <CopyButton text={String(subscription.source_url)} />
+          </div>
+        </div>
+
         {/* Subscription info */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <InfoItem label={t("common.id")} value={String(subscription.subscription_id)} />
           <InfoItem label={t("common.name")} value={subscription.name ?? "-"} />
-          <InfoItem label={t("subscriptions.sourceUrl", "Source URL")} value={String(subscription.source_url)} />
           <InfoItem label={t("subscriptions.interval", "Interval")} value={`${subscription.fetch_interval_minutes} min`} />
           <InfoItem
             label={t("common.status")}

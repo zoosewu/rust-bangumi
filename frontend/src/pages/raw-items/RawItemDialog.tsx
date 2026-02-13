@@ -5,6 +5,7 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { CopyButton } from "@/components/shared/CopyButton"
 
 interface RawItemDialogProps {
   itemId: number
@@ -42,7 +43,30 @@ export function RawItemDialog({
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <div className="space-y-6">
-          {/* Basic info */}
+          {/* Download URL — first */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.downloadUrl", "Download URL")}</p>
+            <div className="flex items-start gap-1 bg-muted/50 rounded p-2">
+              <p className="text-sm font-mono break-all flex-1">{item.download_url}</p>
+              <CopyButton text={item.download_url} />
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.itemTitle")}</p>
+            <p className="text-sm font-mono break-all bg-muted/50 rounded p-2">{item.title}</p>
+          </div>
+
+          {/* Description */}
+          {item.description && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">{t("rawItems.description", "Description")}</p>
+              <p className="text-sm bg-muted/50 rounded p-2 whitespace-pre-wrap">{item.description}</p>
+            </div>
+          )}
+
+          {/* Metadata grid */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <InfoItem label={t("common.id")} value={String(item.item_id)} />
             <InfoItem label={t("common.status")}>
@@ -64,18 +88,6 @@ export function RawItemDialog({
                 value={item.parsed_at.slice(0, 19).replace("T", " ")}
               />
             )}
-          </div>
-
-          {/* Title */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.itemTitle")}</p>
-            <p className="text-sm font-mono break-all bg-muted/50 rounded p-2">{item.title}</p>
-          </div>
-
-          {/* Download URL */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.downloadUrl", "Download URL")}</p>
-            <p className="text-sm font-mono break-all bg-muted/50 rounded p-2">{item.download_url}</p>
           </div>
 
           {/* Error message */}
@@ -109,14 +121,6 @@ export function RawItemDialog({
               >
                 {parserMap.get(item.parser_id) ?? `#${item.parser_id}`}
               </Link>
-            </div>
-          )}
-
-          {/* Description */}
-          {item.description && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t("rawItems.description", "Description")}</p>
-              <p className="text-sm bg-muted/50 rounded p-2 whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
         </div>

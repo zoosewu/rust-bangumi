@@ -425,14 +425,27 @@ pub async fn update_anime_series(
     };
 
     use diesel::prelude::*;
-    match diesel::update(anime_series::table.find(series_id))
+    let mut query = diesel::update(anime_series::table.find(series_id))
         .set((
             anime_series::description.eq(payload.description),
             anime_series::aired_date.eq(payload.aired_date),
             anime_series::end_date.eq(payload.end_date),
             anime_series::updated_at.eq(chrono::Utc::now().naive_utc()),
         ))
-        .get_result::<crate::models::AnimeSeries>(&mut conn)
+        .get_result::<crate::models::AnimeSeries>(&mut conn);
+
+    // If season_id provided, do a separate update for it
+    if let Some(sid) = payload.season_id {
+        let _ = diesel::update(anime_series::table.find(series_id))
+            .set(anime_series::season_id.eq(sid))
+            .execute(&mut conn);
+        // Re-fetch after both updates
+        query = anime_series::table
+            .find(series_id)
+            .first::<crate::models::AnimeSeries>(&mut conn);
+    }
+
+    match query
     {
         Ok(series) => {
             tracing::info!("Updated anime series: {}", series_id);
