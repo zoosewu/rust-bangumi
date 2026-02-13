@@ -54,7 +54,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
     [series.series_id],
   )
 
-  const { data: seasons } = useEffectQuery(
+  const { data: seasons, refetch: refetchSeasons } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
@@ -101,6 +101,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
       setAddingNewSeason(false)
       setNewSeasonYear(String(new Date().getFullYear()))
       setNewSeasonName("")
+      refetchSeasons()
       toast.success(t("common.saved", "Saved"))
     }).catch(() => {
       toast.error(t("common.saveFailed", "Save failed"))
