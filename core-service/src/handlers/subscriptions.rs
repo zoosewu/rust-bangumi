@@ -592,40 +592,62 @@ pub async fn list_fetcher_modules(
     }
 }
 
-/// Delete a subscription by source URL
+/// Delete a subscription by ID, cascade-deleting pending/failed raw items
 pub async fn delete_subscription(
     State(state): State<AppState>,
-    Path(source_url): Path<String>,
+    Path(subscription_id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
+            // First, delete pending/failed raw items for this subscription
+            let raw_deleted = diesel::delete(
+                crate::schema::raw_anime_items::table
+                    .filter(crate::schema::raw_anime_items::subscription_id.eq(subscription_id))
+                    .filter(crate::schema::raw_anime_items::status.eq_any(vec!["pending", "failed"])),
+            )
+            .execute(&mut conn);
+
+            let raw_count = match raw_deleted {
+                Ok(count) => count,
+                Err(e) => {
+                    tracing::error!("Failed to delete raw items: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({
+                            "error": "database_error",
+                            "message": format!("Failed to delete raw items: {}", e)
+                        })),
+                    );
+                }
+            };
+
             match diesel::delete(
-                subscriptions::table.filter(subscriptions::source_url.eq(&source_url)),
+                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
             )
             .execute(&mut conn)
             {
                 Ok(rows_deleted) => {
                     if rows_deleted > 0 {
                         tracing::info!(
-                            "Deleted {} subscription(s) for URL: {}",
-                            rows_deleted,
-                            source_url
+                            "Deleted subscription {} (and {} raw items)",
+                            subscription_id,
+                            raw_count
                         );
                         (
                             StatusCode::OK,
                             Json(json!({
                                 "message": "Subscription deleted successfully",
-                                "source_url": source_url,
-                                "rows_deleted": rows_deleted
+                                "subscription_id": subscription_id,
+                                "raw_items_deleted": raw_count
                             })),
                         )
                     } else {
-                        tracing::warn!("Subscription not found for URL: {}", source_url);
+                        tracing::warn!("Subscription not found: {}", subscription_id);
                         (
                             StatusCode::NOT_FOUND,
                             Json(json!({
                                 "error": "not_found",
-                                "message": format!("Subscription not found for URL: {}", source_url)
+                                "message": format!("Subscription not found: {}", subscription_id)
                             })),
                         )
                     }

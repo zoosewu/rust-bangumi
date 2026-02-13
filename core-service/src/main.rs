@@ -162,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
             get(handlers::subscriptions::list_fetcher_modules),
         )
         .route(
-            "/subscriptions/:rss_url",
+            "/subscriptions/:id",
             delete(handlers::subscriptions::delete_subscription),
         )
         // Fetcher 結果接收
