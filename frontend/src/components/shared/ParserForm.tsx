@@ -145,14 +145,31 @@ function FieldSourceInput({
 export function ParserFormFields({
   form,
   onChange,
+  onImport,
+  targetType,
+  targetId,
 }: {
   form: ParserFormState
   onChange: (key: string, value: string | number | null) => void
+  onImport?: (form: ParserFormState) => void
+  targetType?: string
+  targetId?: number | null
 }) {
   const { t } = useTranslation()
 
   return (
     <div className="space-y-3">
+      {/* AI Import/Export buttons at top */}
+      {onImport && targetType && (
+        <div className="flex gap-2">
+          <ParserAIButtons
+            onImport={onImport}
+            targetType={targetType}
+            targetId={targetId ?? null}
+          />
+        </div>
+      )}
+
       {/* Name + Priority */}
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -195,12 +212,11 @@ export function ParserFormFields({
         />
       </div>
 
-      {/* Field extraction */}
-      <div className="space-y-1">
-        <Label className="text-xs font-semibold">{t("parsers.fieldExtraction", "Field Extraction")}</Label>
+      {/* Field extraction — 3 per row */}
+      <div className="space-y-2">
+        <Label className="text-sm font-semibold">{t("parsers.fieldExtraction", "Field Extraction")}</Label>
 
-        {/* Required fields */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <FieldSourceInput
             label={t("parsers.animeTitle", "Anime Title")}
             source={form.anime_title_source}
@@ -217,10 +233,6 @@ export function ParserFormFields({
             onValueChange={(v) => onChange("episode_no_value", v)}
             required
           />
-        </div>
-
-        {/* Optional fields */}
-        <div className="grid grid-cols-2 gap-3">
           <FieldSourceInput
             label={t("parsers.seriesNo", "Series No")}
             source={form.series_no_source}
@@ -231,6 +243,9 @@ export function ParserFormFields({
             }}
             onValueChange={(v) => onChange("series_no_value", v || null)}
           />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
           <FieldSourceInput
             label={t("parsers.subtitleGroup", "Subtitle Group")}
             source={form.subtitle_group_source}
@@ -241,8 +256,6 @@ export function ParserFormFields({
             }}
             onValueChange={(v) => onChange("subtitle_group_value", v || null)}
           />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <FieldSourceInput
             label={t("parsers.resolution", "Resolution")}
             source={form.resolution_source}
@@ -264,7 +277,8 @@ export function ParserFormFields({
             onValueChange={(v) => onChange("season_value", v || null)}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+
+        <div className="grid grid-cols-3 gap-3">
           <FieldSourceInput
             label={t("parsers.year", "Year")}
             source={form.year_source}
@@ -409,9 +423,9 @@ export function ParserAIButtons({
 \`\`\`json
 {
   "name": "string - descriptive name for this parser",
-  "condition_regex": "string - regex pattern to match titles this parser should handle",
-  "parse_regex": "string - regex with named/numbered capture groups to extract fields",
-  "priority": "number - parser priority (lower = higher priority, default 50)",
+  "condition_regex": "string - regex pattern to match titles this parser should handle. Make this as strict and specific as possible.",
+  "parse_regex": "string - regex with numbered capture groups to extract fields",
+  "priority": "number - see Priority Rules below",
   "anime_title_source": "'regex' or 'static' - how to determine the anime title",
   "anime_title_value": "string - capture group ref (e.g. $1) if regex, or fixed value if static",
   "episode_no_source": "'regex' or 'static' - how to determine the episode number",
@@ -429,15 +443,28 @@ export function ParserAIButtons({
 }
 \`\`\`
 
+## Capture Group Index Convention
+When source is "regex", the value uses \`$N\` format where N is the capture group index:
+- \`$1\` = 1st capture group in parse_regex
+- \`$2\` = 2nd capture group in parse_regex
+- etc.
+The backend reads \`$1\` as index 1.
+
+## Priority Rules
+- If this parser targets a **single specific anime** (e.g. one show title), set priority to **9999**. The condition_regex should be very strict, matching only that specific anime's naming pattern.
+- If this parser is **general purpose** (handles many different anime), set priority to **50**.
+- Analyze the titles below to determine which case applies.
+
 ## Raw Item Titles
 ${titles.length > 0 ? titles.map((t) => `- ${t}`).join("\n") : "(no titles available)"}
 
 ## Instructions
 Analyze the titles above and generate a parser JSON that can:
-1. Match these titles with \`condition_regex\`
-2. Extract anime_title, episode_no, and other fields using \`parse_regex\` with capture groups
-3. Set appropriate source/value pairs for each extracted field
+1. Match these titles with \`condition_regex\` — make it as strict as possible
+2. Extract anime_title, episode_no, and other fields using \`parse_regex\` with numbered capture groups
+3. Set appropriate source/value pairs for each extracted field using \`$N\` notation
 4. Use null for optional fields that cannot be reliably extracted
+5. Determine priority based on the Priority Rules above
 
 Return ONLY the JSON object, no extra text.`
 
