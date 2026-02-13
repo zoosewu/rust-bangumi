@@ -34,6 +34,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
       created_from_id?: number
     }) => Effect.Effect<readonly TitleParser[]>
     readonly createParser: (req: Record<string, unknown>) => Effect.Effect<TitleParser>
+    readonly updateParser: (id: number, req: Record<string, unknown>) => Effect.Effect<TitleParser>
     readonly deleteParser: (id: number) => Effect.Effect<void>
     readonly previewParser: (req: Record<string, unknown>) => Effect.Effect<ParserPreviewResponse>
     readonly getRawItems: (params: {

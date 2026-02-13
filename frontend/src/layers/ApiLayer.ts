@@ -88,6 +88,20 @@ const makeCoreApi = Effect.gen(function* () {
     createParser: (req) =>
       postJson("/api/core/parsers", req, TitleParser),
 
+    updateParser: (id, req) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/parsers/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((response) => response.json),
+          Effect.flatMap(Schema.decodeUnknown(TitleParser)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
     deleteParser: (id) =>
       client
         .execute(HttpClientRequest.del(`/api/core/parsers/${id}`))
