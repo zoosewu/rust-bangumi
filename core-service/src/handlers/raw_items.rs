@@ -207,6 +207,39 @@ pub async fn reparse_item(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CountRawItemsQuery {
+    pub subscription_id: i32,
+    pub status: Option<String>,
+}
+
+/// GET /raw-items/count - count raw items by subscription and status
+pub async fn count_raw_items(
+    State(state): State<AppState>,
+    Query(query): Query<CountRawItemsQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut conn = state
+        .db
+        .get()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut q = raw_anime_items::table
+        .filter(raw_anime_items::subscription_id.eq(query.subscription_id))
+        .into_boxed();
+
+    if let Some(status) = &query.status {
+        let statuses: Vec<&str> = status.split(',').collect();
+        q = q.filter(raw_anime_items::status.eq_any(statuses));
+    }
+
+    let count: i64 = q
+        .count()
+        .get_result(&mut conn)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "count": count })))
+}
+
 /// POST /raw-items/:item_id/skip - 標記為跳過
 pub async fn skip_item(
     State(state): State<AppState>,

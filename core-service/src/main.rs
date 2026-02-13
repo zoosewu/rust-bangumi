@@ -191,6 +191,7 @@ async fn main() -> anyhow::Result<()> {
         )
         // 原始資料管理
         .route("/raw-items", get(handlers::raw_items::list_raw_items))
+        .route("/raw-items/count", get(handlers::raw_items::count_raw_items))
         .route(
             "/raw-items/:item_id",
             get(handlers::raw_items::get_raw_item),
