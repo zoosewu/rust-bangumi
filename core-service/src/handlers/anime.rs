@@ -161,7 +161,7 @@ pub async fn create_season(
     match state
         .repos
         .season
-        .create(payload.year, payload.season)
+        .find_or_create(payload.year, payload.season)
         .await
     {
         Ok(season) => {

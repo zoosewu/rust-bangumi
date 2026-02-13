@@ -42,7 +42,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
     end_date: series.end_date?.slice(0, 10) ?? "",
   })
   const [addingNewSeason, setAddingNewSeason] = useState(false)
-  const [newSeasonYear, setNewSeasonYear] = useState("")
+  const [newSeasonYear, setNewSeasonYear] = useState(String(new Date().getFullYear()))
   const [newSeasonName, setNewSeasonName] = useState("")
 
   const { data: links, refetch: refetchLinks } = useEffectQuery(
@@ -99,7 +99,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
     doCreateSeason({ year, season: newSeasonName.trim() }).then((created) => {
       setEditForm((f) => ({ ...f, season_id: String(created.season_id) }))
       setAddingNewSeason(false)
-      setNewSeasonYear("")
+      setNewSeasonYear(String(new Date().getFullYear()))
       setNewSeasonName("")
       toast.success(t("common.saved", "Saved"))
     }).catch(() => {
@@ -179,7 +179,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
                         placeholder={t("parsers.year", "Year")}
                         value={newSeasonYear}
                         onChange={(e) => setNewSeasonYear(e.target.value)}
-                        className="h-8 text-sm w-20"
+                        className="h-8 text-sm flex-1"
                       />
                       <Input
                         placeholder={t("parsers.season", "Season")}
