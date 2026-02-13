@@ -43,7 +43,7 @@ export function FilterRuleEditor({
     data: rules,
     refetch: refetchRules,
   } = useEffectQuery(
-    () => Effect.flatMap(CoreApi, (api) => api.getFilterRules(targetType, targetId)),
+    () => Effect.flatMap(CoreApi, (api) => api.getFilterRules(targetType, targetId ?? undefined)),
     [targetType, targetId],
   )
 
@@ -71,7 +71,7 @@ export function FilterRuleEditor({
       Effect.flatMap(CoreApi, (api) =>
         api.createFilterRule({
           target_type: targetType,
-          target_id: targetId,
+          target_id: targetId ?? undefined,
           rule_order: (rules?.length ?? 0) + 1,
           is_positive: positive,
           regex_pattern: pattern,

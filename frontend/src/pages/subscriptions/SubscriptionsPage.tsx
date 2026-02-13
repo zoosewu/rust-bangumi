@@ -3,15 +3,38 @@ import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
+import { useEffectMutation } from "@/hooks/useEffectMutation"
+import { AppRuntime } from "@/runtime/AppRuntime"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Plus } from "lucide-react"
 import { SubscriptionDialog } from "./SubscriptionDialog"
 import type { Subscription } from "@/schemas/subscription"
 
 export default function SubscriptionsPage() {
   const { t } = useTranslation()
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [newUrl, setNewUrl] = useState("")
+  const [newName, setNewName] = useState("")
+  const [newInterval, setNewInterval] = useState("30")
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number
+    name: string
+  } | null>(null)
+  const [affectedCount, setAffectedCount] = useState(0)
 
   const { data: subscriptions, isLoading, refetch } = useEffectQuery(
     () =>
@@ -21,6 +44,34 @@ export default function SubscriptionsPage() {
       }),
     [],
   )
+
+  const { mutate: createSubscription, isLoading: creating } = useEffectMutation(
+    (req: { source_url: string; name?: string; fetch_interval_minutes?: number }) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.createSubscription(req)
+      }),
+  )
+
+  const { mutate: deleteSubscription, isLoading: deleting } = useEffectMutation(
+    (id: number) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.deleteSubscription(id)
+      }),
+  )
+
+  const handleDeleteClick = (id: number, name: string) => {
+    AppRuntime.runPromise(
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getRawItemsCount(id, "pending,failed")
+      }),
+    ).then((count) => {
+      setAffectedCount(count)
+      setDeleteTarget({ id, name })
+    })
+  }
 
   const columns: Column<Record<string, unknown>>[] = [
     {
@@ -62,11 +113,38 @@ export default function SubscriptionsPage() {
           ? String(item.last_fetched_at).slice(0, 19).replace("T", " ")
           : t("common.never"),
     },
+    {
+      key: "actions",
+      header: "",
+      render: (item) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-destructive"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDeleteClick(
+              item.subscription_id as number,
+              (item.name ?? item.source_url) as string,
+            )
+          }}
+        >
+          {t("common.delete")}
+        </Button>
+      ),
+    },
   ]
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t("subscriptions.title")}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t("subscriptions.title")}</h1>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t("subscriptions.addSubscription")}
+        </Button>
+      </div>
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
@@ -75,7 +153,9 @@ export default function SubscriptionsPage() {
           data={(subscriptions ?? []) as unknown as Record<string, unknown>[]}
           keyField="subscription_id"
           onRowClick={(row) => {
-            const found = (subscriptions ?? []).find((s) => s.subscription_id === row.subscription_id)
+            const found = (subscriptions ?? []).find(
+              (s) => s.subscription_id === row.subscription_id,
+            )
             if (found) setSelectedSub(found)
           }}
         />
@@ -93,6 +173,85 @@ export default function SubscriptionsPage() {
           }}
         />
       )}
+
+      {/* Create Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("subscriptions.addSubscription")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>{t("subscriptions.sourceUrl")}</Label>
+              <Input
+                placeholder="https://mikanani.me/RSS/..."
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("subscriptions.name")}</Label>
+              <Input
+                placeholder={t("subscriptions.name")}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("subscriptions.fetchInterval")}</Label>
+              <Input
+                type="number"
+                min="1"
+                value={newInterval}
+                onChange={(e) => setNewInterval(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              disabled={!newUrl.trim() || creating}
+              onClick={() => {
+                createSubscription({
+                  source_url: newUrl.trim(),
+                  name: newName.trim() || undefined,
+                  fetch_interval_minutes: parseInt(newInterval) || 30,
+                }).then(() => {
+                  setNewUrl("")
+                  setNewName("")
+                  setNewInterval("30")
+                  setCreateOpen(false)
+                  refetch()
+                })
+              }}
+            >
+              {creating ? t("common.creating") : t("common.create")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={t("subscriptions.deleteSubscription")}
+        description={t("subscriptions.deleteConfirm", {
+          name: deleteTarget?.name,
+          count: affectedCount,
+        })}
+        loading={deleting}
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteSubscription(deleteTarget.id).then(() => {
+              setDeleteTarget(null)
+              refetch()
+            })
+          }
+        }}
+      />
     </div>
   )
 }
