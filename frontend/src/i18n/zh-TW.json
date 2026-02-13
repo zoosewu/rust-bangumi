@@ -164,7 +164,10 @@
     "importDescription": "貼上 AI 產生的解析器 JSON，自動填入表單欄位。",
     "exportPrompt": "匯出 Prompt",
     "importError": "JSON 格式無效，請檢查後重試。",
-    "copied": "已複製！"
+    "copied": "已複製！",
+    "editParser": "編輯解析器",
+    "save": "儲存",
+    "saving": "儲存中..."
   },
   "filters": {
     "title": "篩選規則",

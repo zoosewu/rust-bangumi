@@ -164,7 +164,10 @@
     "importDescription": "Paste AI-generated parser JSON to auto-fill the form fields.",
     "exportPrompt": "Export Prompt",
     "importError": "Invalid JSON format. Please check and try again.",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "editParser": "Edit Parser",
+    "save": "Save",
+    "saving": "Saving..."
   },
   "filters": {
     "title": "Filter Rules",
