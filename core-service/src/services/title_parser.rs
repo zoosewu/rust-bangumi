@@ -160,7 +160,9 @@ impl TitleParserService {
     ) -> Result<String, String> {
         match source {
             ParserSourceType::Regex => {
-                let index: usize = value
+                // Support both "$1" and "1" formats
+                let index_str = value.strip_prefix('$').unwrap_or(value);
+                let index: usize = index_str
                     .parse()
                     .map_err(|_| format!("Invalid capture group index: {}", value))?;
                 captures
