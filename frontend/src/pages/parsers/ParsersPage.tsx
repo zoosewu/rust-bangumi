@@ -7,35 +7,27 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Plus, Trash2, Eye } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import type { ParserPreviewResponse } from "@/schemas/parser"
 import {
   type ParserFormState,
   EMPTY_PARSER_FORM,
   buildParserRequest,
   ParserFormFields,
-  ParserAIButtons,
 } from "@/components/shared/ParserForm"
 import { AppRuntime } from "@/runtime/AppRuntime"
 
 export default function ParsersPage() {
   const { t } = useTranslation()
-  const [createOpen, setCreateOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null) // null = create mode
   const [form, setForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewForm, setPreviewForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
   const [previewDebounce, setPreviewDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
@@ -56,6 +48,14 @@ export default function ParsersPage() {
       }),
   )
 
+  const { mutate: updateParser, isLoading: updating } = useEffectMutation(
+    (req: { id: number; data: Record<string, unknown> }) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.updateParser(req.id, req.data)
+      }),
+  )
+
   const { mutate: deleteParser, isLoading: deleting } = useEffectMutation(
     (id: number) =>
       Effect.gen(function* () {
@@ -66,35 +66,34 @@ export default function ParsersPage() {
 
   // Debounced preview
   useEffect(() => {
-    if (!previewOpen) return
-    if (!previewForm.condition_regex || !previewForm.parse_regex) {
+    if (!dialogOpen) return
+    if (!form.condition_regex || !form.parse_regex) {
       setPreview(null)
       return
     }
     if (previewDebounce) clearTimeout(previewDebounce)
     const timer = setTimeout(() => {
-      const req = buildParserRequest(previewForm)
+      const req: Record<string, unknown> = {
+        ...buildParserRequest(form),
+        target_type: "global",
+        target_id: null,
+      }
+      if (editTarget) {
+        req.exclude_parser_id = editTarget.parser_id
+      }
       AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.previewParser(req)),
       ).then(setPreview).catch(() => setPreview(null))
     }, 600)
     setPreviewDebounce(timer)
     return () => clearTimeout(timer)
-  }, [previewForm, previewOpen])
+  }, [form, dialogOpen])
 
   const updateForm = (key: string, value: string | number | null) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  const updatePreviewForm = (key: string, value: string | number | null) =>
-    setPreviewForm((prev) => ({ ...prev, [key]: value }))
-
-  const handleImportForCreate = useCallback((imported: ParserFormState) => {
+  const handleImport = useCallback((imported: ParserFormState) => {
     setForm(imported)
-    setCreateOpen(true)
-  }, [])
-
-  const handleImportForPreview = useCallback((imported: ParserFormState) => {
-    setPreviewForm(imported)
   }, [])
 
   const parserToPreviewForm = (p: Record<string, unknown>): ParserFormState => ({
@@ -117,6 +116,19 @@ export default function ParsersPage() {
     year_source: p.year_source ? String(p.year_source) : null,
     year_value: p.year_value ? String(p.year_value) : null,
   })
+
+  const handleSave = useCallback(async () => {
+    if (editTarget) {
+      await updateParser({ id: editTarget.parser_id as number, data: buildParserRequest(form) })
+    } else {
+      await createParser(buildParserRequest(form))
+    }
+    setForm({ ...EMPTY_PARSER_FORM })
+    setDialogOpen(false)
+    setEditTarget(null)
+    setPreview(null)
+    refetch()
+  }, [editTarget, form, updateParser, createParser, refetch])
 
   const columns: Column<Record<string, unknown>>[] = [
     { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
@@ -142,18 +154,6 @@ export default function ParsersPage() {
             size="sm"
             onClick={(e) => {
               e.stopPropagation()
-              setPreviewForm(parserToPreviewForm(item))
-              setPreview(null)
-              setPreviewOpen(true)
-            }}
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation()
               setDeleteTarget({ id: item.parser_id as number, name: item.name as string })
             }}
           >
@@ -168,23 +168,15 @@ export default function ParsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t("parsers.title")}</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setPreviewForm({ ...EMPTY_PARSER_FORM })
-              setPreview(null)
-              setPreviewOpen(true)
-            }}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            {t("parsers.preview")}
-          </Button>
-          <Button onClick={() => { setForm({ ...EMPTY_PARSER_FORM }); setCreateOpen(true) }}>
-            <Plus className="h-4 w-4 mr-2" />
-            {t("parsers.addParser")}
-          </Button>
-        </div>
+        <Button onClick={() => {
+          setEditTarget(null)
+          setForm({ ...EMPTY_PARSER_FORM })
+          setPreview(null)
+          setDialogOpen(true)
+        }}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t("parsers.addParser")}
+        </Button>
       </div>
 
       {isLoading ? (
@@ -194,60 +186,44 @@ export default function ParsersPage() {
           columns={columns}
           data={(parsers ?? []) as unknown as Record<string, unknown>[]}
           keyField="parser_id"
+          onRowClick={(item) => {
+            setEditTarget(item)
+            setForm(parserToPreviewForm(item))
+            setPreview(null)
+            setDialogOpen(true)
+          }}
         />
       )}
 
-      {/* Create Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("parsers.addParser")}</DialogTitle>
-          </DialogHeader>
-          <ParserFormFields form={form} onChange={updateForm} />
-          <div className="flex gap-2">
-            <ParserAIButtons
-              onImport={handleImportForCreate}
-              targetType="global"
-              targetId={null}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={!form.name.trim() || !form.condition_regex.trim() || creating}
-              onClick={() => {
-                createParser(buildParserRequest(form)).then(() => {
-                  setForm({ ...EMPTY_PARSER_FORM })
-                  setCreateOpen(false)
-                  refetch()
-                })
-              }}
-            >
-              {creating ? t("common.creating") : t("common.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create/Edit FullScreenDialog */}
+      <FullScreenDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={editTarget ? t("parser.editParser") : t("parsers.addParser")}
+      >
+        <div className="space-y-4">
+          <ParserFormFields
+            form={form}
+            onChange={updateForm}
+            onImport={handleImport}
+            targetType="global"
+            targetId={null}
+          />
 
-      {/* Preview Panel */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t("parsers.parserPreview")}</DialogTitle>
-          </DialogHeader>
-          <ParserFormFields form={previewForm} onChange={updatePreviewForm} />
-          <div className="flex gap-2">
-            <ParserAIButtons
-              onImport={handleImportForPreview}
-              targetType="global"
-              targetId={null}
-            />
-          </div>
+          {/* Save/Create button */}
+          <Button
+            onClick={handleSave}
+            disabled={(creating || updating) || !form.name || !form.condition_regex || !form.parse_regex}
+          >
+            {editTarget
+              ? (updating ? t("parser.saving") : t("parser.save"))
+              : (creating ? t("common.creating") : t("common.create"))}
+          </Button>
+
+          {/* Preview results */}
           {preview && <PreviewResults preview={preview} />}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </FullScreenDialog>
 
       {/* Delete Confirm */}
       <ConfirmDialog
