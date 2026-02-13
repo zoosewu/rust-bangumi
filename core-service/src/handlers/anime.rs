@@ -270,7 +270,7 @@ pub async fn list_all_anime_series(
             .inner_join(downloads::table.on(downloads::link_id.eq(anime_links::link_id)))
             .filter(anime_links::series_id.eq(series.series_id))
             .filter(anime_links::filtered_flag.eq(false))
-            .filter(downloads::status.eq("completed"))
+            .filter(downloads::status.eq_any(["completed", "synced"]))
             .select(count_distinct(anime_links::episode_no))
             .first(&mut conn)
             .unwrap_or(0);
