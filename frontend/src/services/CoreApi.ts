@@ -72,5 +72,12 @@ export class CoreApi extends Context.Tag("CoreApi")<
       end_date?: string | null
     }) => Effect.Effect<AnimeSeries>
     readonly getRawItem: (itemId: number) => Effect.Effect<RawAnimeItem>
+    readonly createSubscription: (req: {
+      source_url: string
+      name?: string
+      fetch_interval_minutes?: number
+    }) => Effect.Effect<Subscription>
+    readonly deleteSubscription: (id: number) => Effect.Effect<void>
+    readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
   }
 >() {}

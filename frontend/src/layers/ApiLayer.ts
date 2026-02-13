@@ -214,6 +214,22 @@ const makeCoreApi = Effect.gen(function* () {
         HttpClientRequest.get(`/api/core/raw-items/${itemId}`),
         RawAnimeItem,
       ),
+
+    createSubscription: (req) =>
+      postJson("/api/core/subscriptions", req, Subscription),
+
+    deleteSubscription: (id) =>
+      client
+        .execute(HttpClientRequest.del(`/api/core/subscriptions/${id}`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    getRawItemsCount: (subscriptionId, status) =>
+      fetchJson(
+        HttpClientRequest.get(
+          `/api/core/raw-items/count?subscription_id=${subscriptionId}&status=${status}`,
+        ),
+        Schema.Struct({ count: Schema.Number }),
+      ).pipe(Effect.map((r) => r.count)),
   })
 })
 
