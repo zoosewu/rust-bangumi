@@ -2,8 +2,8 @@
   "sidebar": {
     "title": "番組管理",
     "dashboard": "ダッシュボード",
-    "animeSeries": "アニメシーズン",
-    "anime": "アニメ",
+    "animeSeries": "アニメ",
+    "anime": "アニメ作品",
     "subtitleGroups": "字幕グループ",
     "subscriptions": "サブスクリプション",
     "rawItems": "生データ",
@@ -47,8 +47,8 @@
   "dashboard": {
     "title": "ダッシュボード",
     "services": "サービス",
-    "totalAnime": "アニメ",
-    "totalSeries": "シーズン",
+    "totalAnime": "アニメ作品",
+    "totalSeries": "アニメ",
     "activeSubs": "サブスクリプション",
     "downloading": "ダウンロード中",
     "completed": "完了",
@@ -65,17 +65,17 @@
     "parsers": "パーサー"
   },
   "anime": {
-    "title": "アニメ",
-    "addAnime": "アニメ追加",
-    "animeTitle": "アニメタイトル",
-    "deleteAnime": "アニメを削除",
+    "title": "アニメ作品",
+    "addAnime": "アニメ作品追加",
+    "animeTitle": "タイトル",
+    "deleteAnime": "アニメ作品を削除",
     "deleteConfirm": "「{{title}}」を削除してもよろしいですか？",
-    "notFound": "アニメが見つかりません",
+    "notFound": "アニメ作品が見つかりません",
     "details": "詳細",
     "created": "作成日",
     "filterRules": "フィルタールール",
     "addRule": "ルール追加",
-    "noRules": "このアニメにはフィルタールールがありません。",
+    "noRules": "このアニメ作品にはフィルタールールがありません。",
     "addFilterRule": "フィルタールール追加",
     "deleteRule": "フィルタールールを削除",
     "deleteRuleConfirm": "このフィルタールールを削除してもよろしいですか？",
@@ -93,7 +93,7 @@
     "noRules": "この字幕グループにはフィルタールールがありません。"
   },
   "animeSeries": {
-    "title": "アニメシーズン",
+    "title": "アニメ",
     "animeTitle": "アニメ",
     "series": "シーズン",
     "season": "放送クール",
@@ -125,7 +125,12 @@
     "deleteRule": "フィルタールールを削除",
     "deleteRuleConfirm": "このフィルタールールを削除してもよろしいですか？",
     "regexPattern": "正規表現パターン",
-    "ruleOrder": "ルール順序"
+    "ruleOrder": "ルール順序",
+    "addSubscription": "サブスクリプション追加",
+    "deleteSubscription": "サブスクリプションを削除",
+    "deleteConfirm": "「{{name}}」を削除してもよろしいですか？未処理の生データ {{count}} 件も削除されます。",
+    "name": "名前",
+    "fetchInterval": "取得間隔（分）"
   },
   "rawItems": {
     "title": "生データ",

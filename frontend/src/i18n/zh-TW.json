@@ -2,8 +2,8 @@
   "sidebar": {
     "title": "番組管理",
     "dashboard": "儀表板",
-    "animeSeries": "動畫季度",
-    "anime": "動畫",
+    "animeSeries": "動畫",
+    "anime": "動畫作品",
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
     "rawItems": "原始項目",
@@ -47,8 +47,8 @@
   "dashboard": {
     "title": "儀表板",
     "services": "服務",
-    "totalAnime": "動畫",
-    "totalSeries": "季度",
+    "totalAnime": "動畫作品",
+    "totalSeries": "動畫",
     "activeSubs": "訂閱",
     "downloading": "下載中",
     "completed": "已完成",
@@ -65,17 +65,17 @@
     "parsers": "解析器"
   },
   "anime": {
-    "title": "動畫",
-    "addAnime": "新增動畫",
-    "animeTitle": "動畫標題",
-    "deleteAnime": "刪除動畫",
+    "title": "動畫作品",
+    "addAnime": "新增動畫作品",
+    "animeTitle": "標題",
+    "deleteAnime": "刪除動畫作品",
     "deleteConfirm": "確定要刪除「{{title}}」嗎？",
-    "notFound": "找不到動畫",
+    "notFound": "找不到動畫作品",
     "details": "詳細資料",
     "created": "建立日期",
     "filterRules": "篩選規則",
     "addRule": "新增規則",
-    "noRules": "此動畫沒有篩選規則。",
+    "noRules": "此動畫作品沒有篩選規則。",
     "addFilterRule": "新增篩選規則",
     "deleteRule": "刪除篩選規則",
     "deleteRuleConfirm": "確定要刪除此篩選規則嗎？",
@@ -93,7 +93,7 @@
     "noRules": "此字幕組沒有篩選規則。"
   },
   "animeSeries": {
-    "title": "動畫季度",
+    "title": "動畫",
     "animeTitle": "動畫",
     "series": "季度",
     "season": "播出季",
@@ -125,7 +125,12 @@
     "deleteRule": "刪除篩選規則",
     "deleteRuleConfirm": "確定要刪除此篩選規則嗎？",
     "regexPattern": "正規表達式",
-    "ruleOrder": "規則順序"
+    "ruleOrder": "規則順序",
+    "addSubscription": "新增訂閱",
+    "deleteSubscription": "刪除訂閱",
+    "deleteConfirm": "確定要刪除「{{name}}」嗎？將同時刪除 {{count}} 筆未完成的原始項目。",
+    "name": "名稱",
+    "fetchInterval": "擷取間隔（分鐘）"
   },
   "rawItems": {
     "title": "原始項目",
