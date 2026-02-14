@@ -275,6 +275,182 @@ async fn fetch_and_generate_metadata(
     Ok(())
 }
 
+pub async fn resync(State(state): State<AppState>, Json(req): Json<shared::ViewerResyncRequest>) -> StatusCode {
+    tracing::info!(
+        "Received resync request: download_id={}, anime={} S{:02}E{:02}",
+        req.download_id,
+        req.anime_title,
+        req.series_no,
+        req.episode_no
+    );
+
+    // Record resync task
+    let task_id = if let Ok(mut conn) = state.db.get() {
+        let new_task = NewSyncTask {
+            download_id: req.download_id,
+            core_series_id: req.series_id,
+            episode_no: req.episode_no,
+            source_path: req.old_target_path.clone(),
+            status: "processing".to_string(),
+            anime_title: Some(req.anime_title.clone()),
+            series_no: Some(req.series_no),
+            subtitle_group: Some(req.subtitle_group.clone()),
+            task_type: "resync".to_string(),
+        };
+        diesel::insert_into(sync_tasks::table)
+            .values(&new_task)
+            .returning(sync_tasks::task_id)
+            .get_result::<i32>(&mut conn)
+            .ok()
+    } else {
+        None
+    };
+
+    let organizer = state.organizer.clone();
+    let db = state.db.clone();
+    let bangumi = state.bangumi.clone();
+    tokio::spawn(async move {
+        process_resync(organizer, db, bangumi, req, task_id).await;
+    });
+
+    StatusCode::ACCEPTED
+}
+
+async fn process_resync(
+    organizer: Arc<FileOrganizer>,
+    db: DbPool,
+    bangumi: Arc<BangumiClient>,
+    req: shared::ViewerResyncRequest,
+    task_id: Option<i32>,
+) {
+    let result = do_resync(&organizer, &db, &bangumi, &req).await;
+
+    // Update sync_task record
+    if let (Some(tid), Ok(mut conn)) = (task_id, db.get()) {
+        let now = chrono::Utc::now().naive_utc();
+        match &result {
+            Ok(target_path) => {
+                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
+                    .set((
+                        sync_tasks::status.eq("completed"),
+                        sync_tasks::target_path.eq(target_path),
+                        sync_tasks::completed_at.eq(Some(now)),
+                    ))
+                    .execute(&mut conn);
+            }
+            Err(e) => {
+                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
+                    .set((
+                        sync_tasks::status.eq("failed"),
+                        sync_tasks::error_message.eq(Some(e.to_string())),
+                        sync_tasks::completed_at.eq(Some(now)),
+                    ))
+                    .execute(&mut conn);
+            }
+        }
+    }
+
+    // Callback to Core
+    let (status, target_path, error_message) = match result {
+        Ok(path) => ("synced".to_string(), Some(path), None),
+        Err(e) => ("failed".to_string(), None, Some(e.to_string())),
+    };
+
+    let callback = shared::ViewerSyncCallback {
+        download_id: req.download_id,
+        status,
+        target_path,
+        error_message,
+    };
+
+    let client = reqwest::Client::new();
+    if let Err(e) = client
+        .post(&req.callback_url)
+        .json(&callback)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+    {
+        tracing::error!(
+            "Failed to callback Core for resync download {}: {}",
+            req.download_id,
+            e
+        );
+    }
+}
+
+async fn do_resync(
+    organizer: &FileOrganizer,
+    db: &DbPool,
+    bangumi: &BangumiClient,
+    req: &shared::ViewerResyncRequest,
+) -> anyhow::Result<String> {
+    // 1. Find the actual current file path from our DB
+    let current_path = {
+        let mut conn = db.get().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let latest_task: Option<SyncTask> = sync_tasks::table
+            .filter(sync_tasks::download_id.eq(req.download_id))
+            .filter(sync_tasks::status.eq("completed"))
+            .order(sync_tasks::completed_at.desc())
+            .first::<SyncTask>(&mut conn)
+            .optional()
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+
+        match latest_task.and_then(|t| t.target_path) {
+            Some(path) => std::path::PathBuf::from(path),
+            None => {
+                // Fallback to old_target_path from Core
+                std::path::PathBuf::from(&req.old_target_path)
+            }
+        }
+    };
+
+    if !current_path.exists() {
+        return Err(anyhow::anyhow!(
+            "File not found at expected path: {}",
+            current_path.display()
+        ));
+    }
+
+    // 2. Move/rename the file if path-affecting metadata changed
+    let new_path = organizer
+        .move_episode(
+            &current_path,
+            &req.anime_title,
+            req.series_no as u32,
+            req.episode_no as u32,
+        )
+        .await?;
+
+    // 3. Regenerate NFO metadata (delete old NFO first so it gets recreated)
+    let old_nfo = current_path.with_extension("nfo");
+    if old_nfo.exists() && old_nfo != new_path.with_extension("nfo") {
+        let _ = tokio::fs::remove_file(&old_nfo).await;
+    }
+
+    // 4. Fetch/update bangumi metadata and regenerate NFOs
+    if let Err(e) = fetch_and_generate_metadata(
+        db,
+        bangumi,
+        organizer,
+        req.series_id,
+        &req.anime_title,
+        req.series_no,
+        req.episode_no,
+        &new_path,
+    )
+    .await
+    {
+        tracing::warn!(
+            "Metadata fetch failed during resync for download {} (non-fatal): {}",
+            req.download_id,
+            e
+        );
+    }
+
+    Ok(new_path.display().to_string())
+}
+
 fn cache_subject(
     conn: &mut diesel::PgConnection,
     subject: &crate::bangumi_client::SubjectDetail,

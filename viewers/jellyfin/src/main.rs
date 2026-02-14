@@ -82,6 +82,7 @@ async fn main() -> anyhow::Result<()> {
     // Build application routes
     let app = Router::new()
         .route("/sync", post(handlers::sync))
+        .route("/resync", post(handlers::resync))
         .route("/health", get(handlers::health_check))
         .with_state(state);
 
