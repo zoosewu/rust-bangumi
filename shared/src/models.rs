@@ -222,6 +222,19 @@ pub struct ViewerSyncRequest {
     pub callback_url: String,
 }
 
+/// Core → Viewer: request to resync a previously synced download with updated metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerResyncRequest {
+    pub download_id: i32,
+    pub series_id: i32,
+    pub anime_title: String,
+    pub series_no: i32,
+    pub episode_no: i32,
+    pub subtitle_group: String,
+    pub old_target_path: String,
+    pub callback_url: String,
+}
+
 /// Viewer → Core: callback after sync processing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewerSyncCallback {
