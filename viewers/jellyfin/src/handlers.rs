@@ -162,6 +162,7 @@ async fn do_sync(
         req.series_no,
         req.episode_no,
         &target_path,
+        false,
     )
     .await
     {
@@ -185,6 +186,7 @@ async fn fetch_and_generate_metadata(
     series_no: i32,
     episode_no: i32,
     target_path: &std::path::Path,
+    force_nfo: bool,
 ) -> anyhow::Result<()> {
     let mut conn = db.get().map_err(|e| anyhow::anyhow!("{}", e))?;
 
@@ -246,7 +248,7 @@ async fn fetch_and_generate_metadata(
             .join(FileOrganizer::sanitize_filename(anime_title));
 
         let subject_detail = to_subject_detail(&subject);
-        nfo_generator::generate_tvshow_nfo(&anime_dir, &subject_detail).await?;
+        nfo_generator::generate_tvshow_nfo(&anime_dir, &subject_detail, force_nfo).await?;
 
         // Download poster if not exists
         if let Some(cover_url) = &subject.cover_url {
@@ -438,6 +440,7 @@ async fn do_resync(
         req.series_no,
         req.episode_no,
         &new_path,
+        true,
     )
     .await
     {

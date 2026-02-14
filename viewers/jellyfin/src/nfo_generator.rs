@@ -3,11 +3,11 @@ use std::path::Path;
 use tokio::fs;
 
 /// Generate tvshow.nfo in the anime root directory
-pub async fn generate_tvshow_nfo(anime_dir: &Path, subject: &SubjectDetail) -> anyhow::Result<()> {
+pub async fn generate_tvshow_nfo(anime_dir: &Path, subject: &SubjectDetail, force: bool) -> anyhow::Result<()> {
     let nfo_path = anime_dir.join("tvshow.nfo");
 
-    // Skip if already exists
-    if nfo_path.exists() {
+    // Skip if already exists (unless forced, e.g. during resync)
+    if nfo_path.exists() && !force {
         return Ok(());
     }
 
