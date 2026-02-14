@@ -185,6 +185,113 @@ impl SyncService {
         Ok(synced)
     }
 
+    /// Notify viewer to resync a download whose metadata has changed.
+    pub async fn notify_viewer_resync(&self, download: &Download) -> Result<bool, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        // Find a viewer module
+        let viewer = service_modules::table
+            .filter(service_modules::is_enabled.eq(true))
+            .filter(service_modules::module_type.eq(ModuleTypeEnum::Viewer))
+            .order(service_modules::priority.desc())
+            .first::<ServiceModule>(&mut conn)
+            .optional()
+            .map_err(|e| format!("Failed to query viewers: {}", e))?;
+
+        let viewer = match viewer {
+            Some(v) => v,
+            None => {
+                tracing::warn!(
+                    "No viewer module available for resync download {}",
+                    download.download_id
+                );
+                return Ok(false);
+            }
+        };
+
+        let resync_request = self.build_resync_request(&mut conn, download)?;
+
+        let resync_url = format!("{}/resync", viewer.base_url);
+        tracing::info!(
+            "Notifying viewer {} for resync download {} at {}",
+            viewer.name,
+            download.download_id,
+            resync_url
+        );
+
+        let response = self
+            .http_client
+            .post(&resync_url)
+            .json(&resync_request)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to notify viewer for resync: {}", e))?;
+
+        if response.status() == reqwest::StatusCode::ACCEPTED || response.status().is_success() {
+            let now = chrono::Utc::now().naive_utc();
+            diesel::update(
+                downloads::table.filter(downloads::download_id.eq(download.download_id)),
+            )
+            .set((
+                downloads::status.eq("resyncing"),
+                downloads::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to update download status: {}", e))?;
+
+            Ok(true)
+        } else {
+            Err(format!("Viewer returned status: {}", response.status()))
+        }
+    }
+
+    fn build_resync_request(
+        &self,
+        conn: &mut diesel::PgConnection,
+        download: &Download,
+    ) -> Result<shared::ViewerResyncRequest, String> {
+        let link: AnimeLink = anime_links::table
+            .filter(anime_links::link_id.eq(download.link_id))
+            .first::<AnimeLink>(conn)
+            .map_err(|e| format!("Failed to find anime link {}: {}", download.link_id, e))?;
+
+        let series: AnimeSeries = anime_series::table
+            .filter(anime_series::series_id.eq(link.series_id))
+            .first::<AnimeSeries>(conn)
+            .map_err(|e| format!("Failed to find series {}: {}", link.series_id, e))?;
+
+        let anime_title: String = animes::table
+            .filter(animes::anime_id.eq(series.anime_id))
+            .select(animes::title)
+            .first::<String>(conn)
+            .map_err(|e| format!("Failed to find anime {}: {}", series.anime_id, e))?;
+
+        let subtitle_group: String = subtitle_groups::table
+            .filter(subtitle_groups::group_id.eq(link.group_id))
+            .select(subtitle_groups::group_name)
+            .first::<String>(conn)
+            .map_err(|e| format!("Failed to find subtitle group {}: {}", link.group_id, e))?;
+
+        let old_target_path = download
+            .file_path
+            .clone()
+            .ok_or_else(|| "Download has no file_path for resync".to_string())?;
+
+        let callback_url = format!("{}/sync-callback", self.core_service_url);
+
+        Ok(shared::ViewerResyncRequest {
+            download_id: download.download_id,
+            series_id: link.series_id,
+            anime_title,
+            series_no: series.series_no,
+            episode_no: link.episode_no,
+            subtitle_group,
+            old_target_path,
+            callback_url,
+        })
+    }
+
     /// Handle sync callback from viewer
     pub fn handle_callback(
         &self,
