@@ -50,6 +50,7 @@ pub struct ReparseStats {
     pub parsed: usize,
     pub failed: usize,
     pub no_match: usize,
+    pub resync_triggered: usize,
 }
 
 struct UpsertResult {
@@ -592,12 +593,13 @@ async fn reparse_affected_items(
     }
 
     // 觸發 resync（metadata 變更的已 synced downloads）
+    let mut resync_triggered = 0;
     if !resync_link_ids.is_empty() {
         let mut conn_for_resync = match db.get() {
             Ok(c) => c,
             Err(e) => {
                 tracing::error!("reparse: 無法取得 DB 連線用於 resync: {}", e);
-                return ReparseStats { total, parsed: parsed_count, failed: failed_count, no_match: no_match_count };
+                return ReparseStats { total, parsed: parsed_count, failed: failed_count, no_match: no_match_count, resync_triggered };
             }
         };
 
@@ -619,6 +621,7 @@ async fn reparse_affected_items(
             for download in &synced_downloads {
                 match sync_service.notify_viewer_resync(download).await {
                     Ok(true) => {
+                        resync_triggered += 1;
                         tracing::info!("reparse: resync 通知已發送 download_id={}", download.download_id);
                     }
                     Ok(false) => {
@@ -637,6 +640,7 @@ async fn reparse_affected_items(
         parsed: parsed_count,
         failed: failed_count,
         no_match: no_match_count,
+        resync_triggered,
     }
 }
 
