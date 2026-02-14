@@ -52,6 +52,12 @@ pub struct ReparseStats {
     pub no_match: usize,
 }
 
+struct UpsertResult {
+    link_id: i32,
+    is_new: bool,
+    metadata_changed: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ParserWithReparseResponse {
     #[serde(flatten)]
@@ -479,15 +485,20 @@ async fn reparse_affected_items(
     let mut failed_count = 0;
     let mut no_match_count = 0;
     let mut new_link_ids: Vec<i32> = Vec::new();
+    let mut resync_link_ids: Vec<i32> = Vec::new();
 
     for item in &items {
         match TitleParserService::parse_title(&mut conn, &item.title) {
             Ok(Some(parsed)) => {
                 match upsert_anime_link(&mut conn, item, &parsed) {
-                    Ok((link_id, is_new)) => {
-                        if is_new {
-                            new_link_ids.push(link_id);
+                    Ok(result) => {
+                        if result.is_new {
+                            new_link_ids.push(result.link_id);
                         }
+                        if result.metadata_changed {
+                            resync_link_ids.push(result.link_id);
+                        }
+                        let is_new = result.is_new;
                         TitleParserService::update_raw_item_status(
                             &mut conn,
                             item.item_id,
@@ -594,7 +605,7 @@ fn upsert_anime_link(
     conn: &mut diesel::PgConnection,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
-) -> Result<(i32, bool), String> {
+) -> Result<UpsertResult, String> {
     use sha2::{Digest, Sha256};
 
     // 1. 建立或取得 anime / season / series / group
@@ -628,6 +639,8 @@ fn upsert_anime_link(
 
     if let Some(link) = existing_link {
         let old_series_id = link.series_id;
+        let old_group_id = link.group_id;
+        let old_episode_no = link.episode_no;
 
         // 3a. 更新既有 link（保留 link_id → downloads 不受影響）
         diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))
@@ -663,7 +676,15 @@ fn upsert_anime_link(
             }
         }
 
-        Ok((link.link_id, false))
+        let metadata_changed = old_series_id != series.series_id
+            || old_group_id != group.group_id
+            || old_episode_no != parsed.episode_no;
+
+        Ok(UpsertResult {
+            link_id: link.link_id,
+            is_new: false,
+            metadata_changed,
+        })
     } else {
         // 3b. 新建 link
         let mut hasher = Sha256::new();
@@ -706,7 +727,11 @@ fn upsert_anime_link(
             }
         }
 
-        Ok((created_link.link_id, true))
+        Ok(UpsertResult {
+            link_id: created_link.link_id,
+            is_new: true,
+            metadata_changed: false,
+        })
     }
 }
 
