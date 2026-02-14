@@ -29,6 +29,25 @@ export const TitleParser = Schema.Struct({
 })
 export type TitleParser = typeof TitleParser.Type
 
+export const ReparseStats = Schema.Struct({
+  total: Schema.Number,
+  parsed: Schema.Number,
+  failed: Schema.Number,
+  no_match: Schema.Number,
+})
+export type ReparseStats = typeof ReparseStats.Type
+
+export const ParserWithReparseResponse = Schema.Struct({
+  ...TitleParser.fields,
+  reparse: ReparseStats,
+})
+export type ParserWithReparseResponse = typeof ParserWithReparseResponse.Type
+
+export const DeleteWithReparseResponse = Schema.Struct({
+  reparse: ReparseStats,
+})
+export type DeleteWithReparseResponse = typeof DeleteWithReparseResponse.Type
+
 export const ParsedFields = Schema.Struct({
   anime_title: Schema.String,
   episode_no: Schema.Number,

@@ -114,20 +114,19 @@ pub fn find_affected_links(
                 .load::<AnimeLink>(conn)
                 .map_err(|e| format!("Failed to load links for group {}: {}", gid, e))
         }
-        FilterTargetType::Fetcher => {
-            // Links from this fetcher's subscriptions (via raw_item_id → raw_anime_items → subscription)
-            let fid = target_id.ok_or("fetcher target requires target_id")?;
-            // Find raw_item_ids from this fetcher's subscriptions
+        FilterTargetType::Fetcher | FilterTargetType::Subscription => {
+            // Links from this fetcher/subscription (via raw_item_id → raw_anime_items → subscription)
+            let fid = target_id.ok_or("fetcher/subscription target requires target_id")?;
             let raw_item_ids: Vec<i32> = raw_anime_items::table
                 .filter(raw_anime_items::subscription_id.eq(fid))
                 .select(raw_anime_items::item_id)
                 .load(conn)
-                .map_err(|e| format!("Failed to load raw items for fetcher {}: {}", fid, e))?;
+                .map_err(|e| format!("Failed to load raw items for subscription {}: {}", fid, e))?;
 
             anime_links::table
                 .filter(anime_links::raw_item_id.eq_any(&raw_item_ids))
                 .load::<AnimeLink>(conn)
-                .map_err(|e| format!("Failed to load links for fetcher {}: {}", fid, e))
+                .map_err(|e| format!("Failed to load links for subscription {}: {}", fid, e))
         }
     }
 }

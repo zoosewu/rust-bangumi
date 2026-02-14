@@ -1,7 +1,7 @@
 import { Effect, Context } from "effect"
 import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
-import type { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
+import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
 import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
@@ -33,9 +33,9 @@ export class CoreApi extends Context.Tag("CoreApi")<
       created_from_type?: string
       created_from_id?: number
     }) => Effect.Effect<readonly TitleParser[]>
-    readonly createParser: (req: Record<string, unknown>) => Effect.Effect<TitleParser>
-    readonly updateParser: (id: number, req: Record<string, unknown>) => Effect.Effect<TitleParser>
-    readonly deleteParser: (id: number) => Effect.Effect<void>
+    readonly createParser: (req: Record<string, unknown>) => Effect.Effect<ParserWithReparseResponse>
+    readonly updateParser: (id: number, req: Record<string, unknown>) => Effect.Effect<ParserWithReparseResponse>
+    readonly deleteParser: (id: number) => Effect.Effect<DeleteWithReparseResponse>
     readonly previewParser: (req: Record<string, unknown>) => Effect.Effect<ParserPreviewResponse>
     readonly getRawItems: (params: {
       status?: string

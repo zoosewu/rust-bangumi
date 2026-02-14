@@ -31,6 +31,7 @@ impl FilterEngine {
             FilterTargetType::AnimeSeries => 2,
             FilterTargetType::Anime => 3,
             FilterTargetType::SubtitleGroup => 4,
+            FilterTargetType::Subscription => 1,
         }
     }
 

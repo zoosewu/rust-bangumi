@@ -10,8 +10,9 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
-import type { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
+import type { TitleParser, ParserPreviewResponse, ReparseStats } from "@/schemas/parser"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import {
   type ParserFormState,
   EMPTY_PARSER_FORM,
@@ -117,11 +118,21 @@ export function ParserEditor({
     }
   }, [form, createdFromType, createdFromId, editTarget])
 
+  const showReparseToast = useCallback((stats: ReparseStats) => {
+    if (stats.total === 0) return
+    toast.success(
+      `Reparse: ${stats.parsed} parsed, ${stats.no_match} no match, ${stats.failed} failed (${stats.total} total)`,
+    )
+  }, [])
+
   const handleSave = useCallback(async () => {
+    let stats: ReparseStats | undefined
     if (editTarget) {
-      await updateParser({ id: editTarget.parser_id, data: buildParserRequest(form) })
+      const result = await updateParser({ id: editTarget.parser_id, data: buildParserRequest(form) })
+      stats = result.reparse
     } else {
-      await createParser()
+      const result = await createParser()
+      stats = result.reparse
     }
     setForm(EMPTY_PARSER_FORM)
     setShowForm(false)
@@ -129,7 +140,8 @@ export function ParserEditor({
     setPreview(null)
     refetch()
     onParsersChange?.()
-  }, [editTarget, form, updateParser, createParser, refetch, onParsersChange])
+    if (stats) showReparseToast(stats)
+  }, [editTarget, form, updateParser, createParser, refetch, onParsersChange, showReparseToast])
 
   const handleEdit = useCallback((parser: TitleParser) => {
     setEditTarget(parser)
@@ -158,11 +170,12 @@ export function ParserEditor({
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
-    await deleteParser(deleteTarget.parser_id)
+    const result = await deleteParser(deleteTarget.parser_id)
     setDeleteTarget(null)
     refetch()
     onParsersChange?.()
-  }, [deleteTarget, deleteParser, refetch, onParsersChange])
+    if (result.reparse.total > 0) showReparseToast(result.reparse)
+  }, [deleteTarget, deleteParser, refetch, onParsersChange, showReparseToast])
 
   const updateForm = (key: string, value: string | number | null) =>
     setForm((prev) => ({ ...prev, [key]: value }))

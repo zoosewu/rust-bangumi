@@ -13,7 +13,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { Plus, Trash2 } from "lucide-react"
-import type { ParserPreviewResponse } from "@/schemas/parser"
+import type { ParserPreviewResponse, ReparseStats } from "@/schemas/parser"
+import { toast } from "sonner"
 import {
   type ParserFormState,
   EMPTY_PARSER_FORM,
@@ -117,18 +118,27 @@ export default function ParsersPage() {
     year_value: p.year_value ? String(p.year_value) : null,
   })
 
+  const showReparseToast = useCallback((stats: ReparseStats) => {
+    if (stats.total === 0) return
+    toast.success(
+      `Reparse: ${stats.parsed} parsed, ${stats.no_match} no match, ${stats.failed} failed (${stats.total} total)`,
+    )
+  }, [])
+
   const handleSave = useCallback(async () => {
+    let result
     if (editTarget) {
-      await updateParser({ id: editTarget.parser_id as number, data: buildParserRequest(form) })
+      result = await updateParser({ id: editTarget.parser_id as number, data: buildParserRequest(form) })
     } else {
-      await createParser(buildParserRequest(form))
+      result = await createParser(buildParserRequest(form))
     }
     setForm({ ...EMPTY_PARSER_FORM })
     setDialogOpen(false)
     setEditTarget(null)
     setPreview(null)
     refetch()
-  }, [editTarget, form, updateParser, createParser, refetch])
+    if (result.reparse) showReparseToast(result.reparse)
+  }, [editTarget, form, updateParser, createParser, refetch, showReparseToast])
 
   const columns: Column<Record<string, unknown>>[] = [
     { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
@@ -234,9 +244,10 @@ export default function ParsersPage() {
         loading={deleting}
         onConfirm={() => {
           if (deleteTarget) {
-            deleteParser(deleteTarget.id).then(() => {
+            deleteParser(deleteTarget.id).then((result) => {
               setDeleteTarget(null)
               refetch()
+              if (result.reparse.total > 0) showReparseToast(result.reparse)
             })
           }
         }}

@@ -20,6 +20,7 @@ pub enum FilterTargetType {
     SubtitleGroup,
     AnimeSeries,
     Fetcher,
+    Subscription,
 }
 
 impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, diesel::pg::Pg>
@@ -32,6 +33,7 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, di
             b"subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
             b"anime_series" => Ok(FilterTargetType::AnimeSeries),
             b"fetcher" => Ok(FilterTargetType::Fetcher),
+            b"subscription" => Ok(FilterTargetType::Subscription),
             _ => Err("Unrecognized filter_target_type variant".into()),
         }
     }
@@ -50,6 +52,7 @@ impl diesel::serialize::ToSql<crate::schema::sql_types::FilterTargetType, diesel
             FilterTargetType::SubtitleGroup => out.write_all(b"subtitle_group")?,
             FilterTargetType::AnimeSeries => out.write_all(b"anime_series")?,
             FilterTargetType::Fetcher => out.write_all(b"fetcher")?,
+            FilterTargetType::Subscription => out.write_all(b"subscription")?,
         }
         Ok(diesel::serialize::IsNull::No)
     }
@@ -63,6 +66,7 @@ impl std::fmt::Display for FilterTargetType {
             FilterTargetType::SubtitleGroup => write!(f, "subtitle_group"),
             FilterTargetType::AnimeSeries => write!(f, "anime_series"),
             FilterTargetType::Fetcher => write!(f, "fetcher"),
+            FilterTargetType::Subscription => write!(f, "subscription"),
         }
     }
 }
@@ -77,6 +81,7 @@ impl std::str::FromStr for FilterTargetType {
             "subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
             "anime_series" => Ok(FilterTargetType::AnimeSeries),
             "fetcher" => Ok(FilterTargetType::Fetcher),
+            "subscription" => Ok(FilterTargetType::Subscription),
             _ => Err(format!("Unknown filter target type: {}", s)),
         }
     }

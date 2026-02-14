@@ -44,6 +44,26 @@ pub struct CreateParserRequest {
     pub created_from_id: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Default)]
+pub struct ReparseStats {
+    pub total: usize,
+    pub parsed: usize,
+    pub failed: usize,
+    pub no_match: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ParserWithReparseResponse {
+    #[serde(flatten)]
+    pub parser: ParserResponse,
+    pub reparse: ReparseStats,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteWithReparseResponse {
+    pub reparse: ReparseStats,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ParserResponse {
     pub parser_id: i32,
@@ -169,79 +189,84 @@ pub async fn get_parser(
 pub async fn create_parser(
     State(state): State<AppState>,
     Json(req): Json<CreateParserRequest>,
-) -> Result<(StatusCode, Json<ParserResponse>), (StatusCode, String)> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+) -> Result<(StatusCode, Json<ParserWithReparseResponse>), (StatusCode, String)> {
+    let parser = {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let now = Utc::now().naive_utc();
+        let now = Utc::now().naive_utc();
 
-    let new_parser = NewTitleParser {
-        name: req.name,
-        description: req.description,
-        priority: req.priority,
-        is_enabled: req.is_enabled.unwrap_or(true),
-        condition_regex: req.condition_regex,
-        parse_regex: req.parse_regex,
-        anime_title_source: parse_source_type(&req.anime_title_source)?,
-        anime_title_value: req.anime_title_value,
-        episode_no_source: parse_source_type(&req.episode_no_source)?,
-        episode_no_value: req.episode_no_value,
-        series_no_source: req
-            .series_no_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?,
-        series_no_value: req.series_no_value,
-        subtitle_group_source: req
-            .subtitle_group_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?,
-        subtitle_group_value: req.subtitle_group_value,
-        resolution_source: req
-            .resolution_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?,
-        resolution_value: req.resolution_value,
-        season_source: req
-            .season_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?,
-        season_value: req.season_value,
-        year_source: req
-            .year_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?,
-        year_value: req.year_value,
-        created_at: now,
-        updated_at: now,
-        created_from_type: req
-            .created_from_type
-            .as_ref()
-            .map(|s| s.parse::<FilterTargetType>())
-            .transpose()
-            .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
-        created_from_id: req.created_from_id,
-    };
+        let new_parser = NewTitleParser {
+            name: req.name,
+            description: req.description,
+            priority: req.priority,
+            is_enabled: req.is_enabled.unwrap_or(true),
+            condition_regex: req.condition_regex,
+            parse_regex: req.parse_regex,
+            anime_title_source: parse_source_type(&req.anime_title_source)?,
+            anime_title_value: req.anime_title_value,
+            episode_no_source: parse_source_type(&req.episode_no_source)?,
+            episode_no_value: req.episode_no_value,
+            series_no_source: req
+                .series_no_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            series_no_value: req.series_no_value,
+            subtitle_group_source: req
+                .subtitle_group_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            subtitle_group_value: req.subtitle_group_value,
+            resolution_source: req
+                .resolution_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            resolution_value: req.resolution_value,
+            season_source: req
+                .season_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            season_value: req.season_value,
+            year_source: req
+                .year_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            year_value: req.year_value,
+            created_at: now,
+            updated_at: now,
+            created_from_type: req
+                .created_from_type
+                .as_ref()
+                .map(|s| s.parse::<FilterTargetType>())
+                .transpose()
+                .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
+            created_from_id: req.created_from_id,
+        };
 
-    let parser = diesel::insert_into(title_parsers::table)
-        .values(&new_parser)
-        .get_result::<TitleParser>(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        diesel::insert_into(title_parsers::table)
+            .values(&new_parser)
+            .get_result::<TitleParser>(&mut conn)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    }; // conn 在此 drop，釋放連線給 reparse 使用
 
-    // 非同步重新解析所有失敗的 raw_anime_items
-    let db_pool = state.db.clone();
-    let dispatch_service = state.dispatch_service.clone();
-    tokio::spawn(async move {
-        reparse_failed_items(db_pool, dispatch_service).await;
-    });
+    // 同步重新解析所有 raw_anime_items
+    let stats =
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
 
-    Ok((StatusCode::CREATED, Json(ParserResponse::from(parser))))
+    Ok((
+        StatusCode::CREATED,
+        Json(ParserWithReparseResponse {
+            parser: ParserResponse::from(parser),
+            reparse: stats,
+        }),
+    ))
 }
 
 /// PUT /parsers/:parser_id - 更新解析器
@@ -249,188 +274,114 @@ pub async fn update_parser(
     State(state): State<AppState>,
     Path(parser_id): Path<i32>,
     Json(req): Json<CreateParserRequest>,
-) -> Result<Json<ParserResponse>, (StatusCode, String)> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+) -> Result<Json<ParserWithReparseResponse>, (StatusCode, String)> {
+    let updated_parser = {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 確認 parser 存在
-    title_parsers::table
-        .filter(title_parsers::parser_id.eq(parser_id))
-        .first::<TitleParser>(&mut conn)
-        .map_err(|_| (StatusCode::NOT_FOUND, "Parser not found".to_string()))?;
+        // 確認 parser 存在
+        title_parsers::table
+            .filter(title_parsers::parser_id.eq(parser_id))
+            .first::<TitleParser>(&mut conn)
+            .map_err(|_| (StatusCode::NOT_FOUND, "Parser not found".to_string()))?;
 
-    let now = Utc::now().naive_utc();
+        let now = Utc::now().naive_utc();
 
-    let updated_parser = diesel::update(
-        title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)),
-    )
-    .set((
-        title_parsers::name.eq(&req.name),
-        title_parsers::description.eq(&req.description),
-        title_parsers::priority.eq(req.priority),
-        title_parsers::is_enabled.eq(req.is_enabled.unwrap_or(true)),
-        title_parsers::condition_regex.eq(&req.condition_regex),
-        title_parsers::parse_regex.eq(&req.parse_regex),
-        title_parsers::anime_title_source.eq(parse_source_type(&req.anime_title_source)?),
-        title_parsers::anime_title_value.eq(&req.anime_title_value),
-        title_parsers::episode_no_source.eq(parse_source_type(&req.episode_no_source)?),
-        title_parsers::episode_no_value.eq(&req.episode_no_value),
-        title_parsers::series_no_source.eq(req
-            .series_no_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?),
-        title_parsers::series_no_value.eq(&req.series_no_value),
-        title_parsers::subtitle_group_source.eq(req
-            .subtitle_group_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?),
-        title_parsers::subtitle_group_value.eq(&req.subtitle_group_value),
-        title_parsers::resolution_source.eq(req
-            .resolution_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?),
-        title_parsers::resolution_value.eq(&req.resolution_value),
-        title_parsers::season_source.eq(req
-            .season_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?),
-        title_parsers::season_value.eq(&req.season_value),
-        title_parsers::year_source.eq(req
-            .year_source
-            .as_ref()
-            .map(|s| parse_source_type(s))
-            .transpose()?),
-        title_parsers::year_value.eq(&req.year_value),
-        title_parsers::updated_at.eq(now),
-        title_parsers::created_from_type.eq(req
-            .created_from_type
-            .as_ref()
-            .map(|s| s.parse::<FilterTargetType>())
-            .transpose()
-            .map_err(|e| (StatusCode::BAD_REQUEST, e))?),
-        title_parsers::created_from_id.eq(req.created_from_id),
-    ))
-    .get_result::<TitleParser>(&mut conn)
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        diesel::update(
+            title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)),
+        )
+        .set((
+            title_parsers::name.eq(&req.name),
+            title_parsers::description.eq(&req.description),
+            title_parsers::priority.eq(req.priority),
+            title_parsers::is_enabled.eq(req.is_enabled.unwrap_or(true)),
+            title_parsers::condition_regex.eq(&req.condition_regex),
+            title_parsers::parse_regex.eq(&req.parse_regex),
+            title_parsers::anime_title_source.eq(parse_source_type(&req.anime_title_source)?),
+            title_parsers::anime_title_value.eq(&req.anime_title_value),
+            title_parsers::episode_no_source.eq(parse_source_type(&req.episode_no_source)?),
+            title_parsers::episode_no_value.eq(&req.episode_no_value),
+            title_parsers::series_no_source.eq(req
+                .series_no_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::series_no_value.eq(&req.series_no_value),
+            title_parsers::subtitle_group_source.eq(req
+                .subtitle_group_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::subtitle_group_value.eq(&req.subtitle_group_value),
+            title_parsers::resolution_source.eq(req
+                .resolution_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::resolution_value.eq(&req.resolution_value),
+            title_parsers::season_source.eq(req
+                .season_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::season_value.eq(&req.season_value),
+            title_parsers::year_source.eq(req
+                .year_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::year_value.eq(&req.year_value),
+            title_parsers::updated_at.eq(now),
+            title_parsers::created_from_type.eq(req
+                .created_from_type
+                .as_ref()
+                .map(|s| s.parse::<FilterTargetType>())
+                .transpose()
+                .map_err(|e| (StatusCode::BAD_REQUEST, e))?),
+            title_parsers::created_from_id.eq(req.created_from_id),
+        ))
+        .get_result::<TitleParser>(&mut conn)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    }; // conn 在此 drop，釋放連線給 reparse 使用
 
-    // 非同步重新解析：被此 parser 解析過的項目 + no_match/failed 項目
-    let db_pool = state.db.clone();
-    let dispatch_service = state.dispatch_service.clone();
-    tokio::spawn(async move {
-        // 收集被此 parser 解析過的項目 ID
-        let affected_ids = {
-            let mut conn = match db_pool.get() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("update_parser reparse: 無法取得 DB 連線: {}", e);
-                    return;
-                }
-            };
-            match raw_anime_items::table
-                .filter(
-                    raw_anime_items::parser_id
-                        .eq(parser_id)
-                        .and(raw_anime_items::status.eq("parsed")),
-                )
-                .select(raw_anime_items::item_id)
-                .load::<i32>(&mut conn)
-            {
-                Ok(ids) => ids,
-                Err(e) => {
-                    tracing::error!("update_parser reparse: 查詢受影響項目失敗: {}", e);
-                    return;
-                }
-            }
-        };
+    // 同步重新解析所有 raw_anime_items
+    let stats =
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
 
-        // 也收集 no_match/failed 項目 ID
-        let failed_ids = {
-            let mut conn = match db_pool.get() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("update_parser reparse: 無法取得 DB 連線: {}", e);
-                    return;
-                }
-            };
-            match raw_anime_items::table
-                .filter(
-                    raw_anime_items::status
-                        .eq("no_match")
-                        .or(raw_anime_items::status.eq("failed")),
-                )
-                .select(raw_anime_items::item_id)
-                .load::<i32>(&mut conn)
-            {
-                Ok(ids) => ids,
-                Err(e) => {
-                    tracing::error!("update_parser reparse: 查詢失敗項目失敗: {}", e);
-                    return;
-                }
-            }
-        };
-
-        // 合併去重
-        let mut all_ids = affected_ids;
-        for id in failed_ids {
-            if !all_ids.contains(&id) {
-                all_ids.push(id);
-            }
-        }
-
-        if !all_ids.is_empty() {
-            reparse_affected_items(db_pool, dispatch_service, &all_ids).await;
-        }
-    });
-
-    Ok(Json(ParserResponse::from(updated_parser)))
+    Ok(Json(ParserWithReparseResponse {
+        parser: ParserResponse::from(updated_parser),
+        reparse: stats,
+    }))
 }
 
 /// DELETE /parsers/:parser_id - 刪除解析器
 pub async fn delete_parser(
     State(state): State<AppState>,
     Path(parser_id): Path<i32>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // 先查出被此 parser 解析過的項目 ID
-    let affected_ids = raw_anime_items::table
-        .filter(
-            raw_anime_items::parser_id
-                .eq(parser_id)
-                .and(raw_anime_items::status.eq("parsed")),
-        )
-        .select(raw_anime_items::item_id)
-        .load::<i32>(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let deleted =
-        diesel::delete(title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)))
-            .execute(&mut conn)
+) -> Result<Json<DeleteWithReparseResponse>, (StatusCode, String)> {
+    {
+        let mut conn = state
+            .db
+            .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if deleted == 0 {
-        return Err((StatusCode::NOT_FOUND, "Parser not found".to_string()));
-    }
+        let deleted =
+            diesel::delete(title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)))
+                .execute(&mut conn)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 非同步重新解析受影響的項目
-    if !affected_ids.is_empty() {
-        let db_pool = state.db.clone();
-        let dispatch_service = state.dispatch_service.clone();
-        tokio::spawn(async move {
-            reparse_affected_items(db_pool, dispatch_service, &affected_ids).await;
-        });
-    }
+        if deleted == 0 {
+            return Err((StatusCode::NOT_FOUND, "Parser not found".to_string()));
+        }
+    } // conn 在此 drop
 
-    Ok(StatusCode::NO_CONTENT)
+    // 同步重新解析所有 raw_anime_items
+    let stats =
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
+
+    Ok(Json(DeleteWithReparseResponse { reparse: stats }))
 }
 
 fn parse_source_type(s: &str) -> Result<ParserSourceType, (StatusCode, String)> {
@@ -444,149 +395,67 @@ fn parse_source_type(s: &str) -> Result<ParserSourceType, (StatusCode, String)> 
     }
 }
 
-/// 重新解析所有 no_match / failed 的 raw_anime_items
-async fn reparse_failed_items(
+/// 重新解析所有 raw_anime_items（無論原始狀態）
+async fn reparse_all_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
-) {
-    let mut conn = match db.get() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!("reparse_failed_items: 無法取得 DB 連線: {}", e);
-            return;
-        }
-    };
-
-    let failed_items: Vec<RawAnimeItem> = match raw_anime_items::table
-        .filter(
-            raw_anime_items::status
-                .eq("no_match")
-                .or(raw_anime_items::status.eq("failed")),
-        )
-        .load::<RawAnimeItem>(&mut conn)
-    {
-        Ok(items) => items,
-        Err(e) => {
-            tracing::error!("reparse_failed_items: 查詢失敗項目失敗: {}", e);
-            return;
-        }
-    };
-
-    if failed_items.is_empty() {
-        return;
-    }
-
-    tracing::info!(
-        "reparse_failed_items: 開始重新解析 {} 筆失敗項目",
-        failed_items.len()
-    );
-
-    let mut parsed_count = 0;
-    let mut new_link_ids: Vec<i32> = Vec::new();
-
-    for item in &failed_items {
-        match TitleParserService::parse_title(&mut conn, &item.title) {
-            Ok(Some(parsed)) => {
-                match super::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
-                    Ok(link_id) => {
-                        new_link_ids.push(link_id);
-                        TitleParserService::update_raw_item_status(
-                            &mut conn,
-                            item.item_id,
-                            ParseStatus::Parsed,
-                            Some(parsed.parser_id),
-                            None,
-                        )
-                        .ok();
-                        parsed_count += 1;
-                        tracing::info!(
-                            "reparse: {} -> {} EP{}",
-                            item.title,
-                            parsed.anime_title,
-                            parsed.episode_no
-                        );
-                    }
-                    Err(e) => {
-                        TitleParserService::update_raw_item_status(
-                            &mut conn,
-                            item.item_id,
-                            ParseStatus::Failed,
-                            Some(parsed.parser_id),
-                            Some(&e),
-                        )
-                        .ok();
-                        tracing::warn!("reparse: 建立記錄失敗 {}: {}", item.title, e);
-                    }
-                }
-            }
-            Ok(None) => {} // 仍然無匹配，保持原狀
+) -> ReparseStats {
+    let all_ids = {
+        let mut conn = match db.get() {
+            Ok(c) => c,
             Err(e) => {
-                tracing::warn!("reparse: 解析錯誤 {}: {}", item.title, e);
+                tracing::error!("reparse_all_items: 無法取得 DB 連線: {}", e);
+                return ReparseStats::default();
+            }
+        };
+        match raw_anime_items::table
+            .select(raw_anime_items::item_id)
+            .load::<i32>(&mut conn)
+        {
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::error!("reparse_all_items: 查詢項目失敗: {}", e);
+                return ReparseStats::default();
             }
         }
+    };
+
+    if all_ids.is_empty() {
+        tracing::info!("reparse_all_items: 沒有任何項目");
+        return ReparseStats::default();
     }
 
-    tracing::info!(
-        "reparse_failed_items: 完成，成功解析 {}/{} 筆",
-        parsed_count,
-        failed_items.len()
-    );
-
-    // 觸發 dispatch 下載
-    if !new_link_ids.is_empty() {
-        if let Err(e) = dispatch_service.dispatch_new_links(new_link_ids).await {
-            tracing::warn!("reparse_failed_items: dispatch 失敗: {}", e);
-        }
-    }
+    tracing::info!("reparse_all_items: 開始重新解析全部 {} 筆項目", all_ids.len());
+    reparse_affected_items(db, dispatch_service, &all_ids).await
 }
 
-/// 重新解析指定的 raw_anime_items（用於 update/delete parser 時）
+/// 重新解析指定的 raw_anime_items
+///
+/// 使用 upsert 邏輯：更新既有的 anime_link 而非刪除重建，
+/// 確保 downloads 記錄不會因 CASCADE 被刪除。
 ///
 /// 1. 載入指定項目
-/// 2. 刪除這些項目的 anime_links（downloads 會因 ON DELETE CASCADE 自動清除）
-/// 3. 重設狀態為 pending，清除 parser_id
-/// 4. 對每筆項目重新解析
+/// 2. 對每筆項目重新解析
+/// 3. 如果已有 anime_link → 更新欄位（保留 link_id 及關聯的 downloads）
+/// 4. 如果沒有 anime_link → 新建
+/// 5. 如果無匹配 → 刪除既有 anime_link（此項目本來就沒有成功的下載）並更新狀態
 async fn reparse_affected_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
     item_ids: &[i32],
-) {
+) -> ReparseStats {
+
     if item_ids.is_empty() {
-        return;
+        return ReparseStats::default();
     }
 
     let mut conn = match db.get() {
         Ok(c) => c,
         Err(e) => {
             tracing::error!("reparse_affected_items: 無法取得 DB 連線: {}", e);
-            return;
+            return ReparseStats::default();
         }
     };
-
-    // 刪除這些項目的 anime_links（downloads 因 CASCADE 自動刪除）
-    if let Err(e) = diesel::delete(
-        anime_links::table.filter(anime_links::raw_item_id.eq_any(item_ids)),
-    )
-    .execute(&mut conn)
-    {
-        tracing::error!("reparse_affected_items: 刪除 anime_links 失敗: {}", e);
-        return;
-    }
-
-    // 重設狀態為 pending，清除 parser_id
-    if let Err(e) = diesel::update(
-        raw_anime_items::table.filter(raw_anime_items::item_id.eq_any(item_ids)),
-    )
-    .set((
-        raw_anime_items::status.eq("pending"),
-        raw_anime_items::parser_id.eq(None::<i32>),
-        raw_anime_items::error_message.eq(None::<String>),
-    ))
-    .execute(&mut conn)
-    {
-        tracing::error!("reparse_affected_items: 重設項目狀態失敗: {}", e);
-        return;
-    }
 
     // 載入項目
     let items: Vec<RawAnimeItem> = match raw_anime_items::table
@@ -596,7 +465,7 @@ async fn reparse_affected_items(
         Ok(items) => items,
         Err(e) => {
             tracing::error!("reparse_affected_items: 載入項目失敗: {}", e);
-            return;
+            return ReparseStats::default();
         }
     };
 
@@ -605,15 +474,20 @@ async fn reparse_affected_items(
         items.len()
     );
 
+    let total = items.len();
     let mut parsed_count = 0;
+    let mut failed_count = 0;
+    let mut no_match_count = 0;
     let mut new_link_ids: Vec<i32> = Vec::new();
 
     for item in &items {
         match TitleParserService::parse_title(&mut conn, &item.title) {
             Ok(Some(parsed)) => {
-                match super::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
-                    Ok(link_id) => {
-                        new_link_ids.push(link_id);
+                match upsert_anime_link(&mut conn, item, &parsed) {
+                    Ok((link_id, is_new)) => {
+                        if is_new {
+                            new_link_ids.push(link_id);
+                        }
                         TitleParserService::update_raw_item_status(
                             &mut conn,
                             item.item_id,
@@ -624,10 +498,11 @@ async fn reparse_affected_items(
                         .ok();
                         parsed_count += 1;
                         tracing::info!(
-                            "reparse_affected: {} -> {} EP{}",
+                            "reparse: {} -> {} EP{} ({})",
                             item.title,
                             parsed.anime_title,
-                            parsed.episode_no
+                            parsed.episode_no,
+                            if is_new { "new" } else { "updated" }
                         );
                     }
                     Err(e) => {
@@ -639,11 +514,30 @@ async fn reparse_affected_items(
                             Some(&e),
                         )
                         .ok();
-                        tracing::warn!("reparse_affected: 建立記錄失敗 {}: {}", item.title, e);
+                        failed_count += 1;
+                        tracing::warn!("reparse: 建立/更新記錄失敗 {}: {}", item.title, e);
                     }
                 }
             }
             Ok(None) => {
+                // 無匹配：刪除既有 anime_link（沒有正確解析 = 不應有 link）
+                // 先查出舊 link 的 series_id，刪除後清理空 series
+                let old_series_id: Option<i32> = anime_links::table
+                    .filter(anime_links::raw_item_id.eq(item.item_id))
+                    .select(anime_links::series_id)
+                    .first(&mut conn)
+                    .optional()
+                    .ok()
+                    .flatten();
+                diesel::delete(
+                    anime_links::table
+                        .filter(anime_links::raw_item_id.eq(item.item_id)),
+                )
+                .execute(&mut conn)
+                .ok();
+                if let Some(sid) = old_series_id {
+                    cleanup_empty_series(&mut conn, sid);
+                }
                 TitleParserService::update_raw_item_status(
                     &mut conn,
                     item.item_id,
@@ -652,6 +546,7 @@ async fn reparse_affected_items(
                     None,
                 )
                 .ok();
+                no_match_count += 1;
             }
             Err(e) => {
                 TitleParserService::update_raw_item_status(
@@ -662,21 +557,178 @@ async fn reparse_affected_items(
                     Some(&e),
                 )
                 .ok();
-                tracing::warn!("reparse_affected: 解析錯誤 {}: {}", item.title, e);
+                failed_count += 1;
+                tracing::warn!("reparse: 解析錯誤 {}: {}", item.title, e);
             }
         }
     }
 
     tracing::info!(
-        "reparse_affected_items: 完成，成功解析 {}/{} 筆",
+        "reparse_affected_items: 完成，共 {} 筆，成功 {}，失敗 {}，無匹配 {}",
+        total,
         parsed_count,
-        items.len()
+        failed_count,
+        no_match_count
     );
 
-    // 觸發 dispatch 下載
+    // 觸發 dispatch 下載（僅新建的 link 需要 dispatch）
     if !new_link_ids.is_empty() {
         if let Err(e) = dispatch_service.dispatch_new_links(new_link_ids).await {
             tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e);
+        }
+    }
+
+    ReparseStats {
+        total,
+        parsed: parsed_count,
+        failed: failed_count,
+        no_match: no_match_count,
+    }
+}
+
+/// 建立或更新 anime_link。
+/// 如果此 raw_item 已有 anime_link → 更新欄位（保留 link_id 及 downloads）。
+/// 如果沒有 → 新建。
+/// 回傳 (link_id, is_new)。
+fn upsert_anime_link(
+    conn: &mut diesel::PgConnection,
+    raw_item: &RawAnimeItem,
+    parsed: &crate::services::title_parser::ParsedResult,
+) -> Result<(i32, bool), String> {
+    use sha2::{Digest, Sha256};
+
+    // 1. 建立或取得 anime / season / series / group
+    let anime =
+        super::fetcher_results::create_or_get_anime(conn, &parsed.anime_title)?;
+    let year = parsed
+        .year
+        .as_ref()
+        .and_then(|y| y.parse::<i32>().ok())
+        .unwrap_or(2025);
+    let season_name = parsed.season.as_deref().unwrap_or("unknown");
+    let season =
+        super::fetcher_results::create_or_get_season(conn, year, season_name)?;
+    let series = super::fetcher_results::create_or_get_series(
+        conn,
+        anime.anime_id,
+        parsed.series_no,
+        season.season_id,
+        "",
+    )?;
+    let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
+    let group =
+        super::fetcher_results::create_or_get_subtitle_group(conn, group_name)?;
+
+    // 2. 查找既有的 anime_link
+    let existing_link: Option<crate::models::AnimeLink> = anime_links::table
+        .filter(anime_links::raw_item_id.eq(raw_item.item_id))
+        .first(conn)
+        .optional()
+        .map_err(|e| format!("Failed to query existing link: {}", e))?;
+
+    if let Some(link) = existing_link {
+        let old_series_id = link.series_id;
+
+        // 3a. 更新既有 link（保留 link_id → downloads 不受影響）
+        diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))
+            .set((
+                anime_links::series_id.eq(series.series_id),
+                anime_links::group_id.eq(group.group_id),
+                anime_links::episode_no.eq(parsed.episode_no),
+                anime_links::title.eq(Some(&raw_item.title)),
+            ))
+            .execute(conn)
+            .map_err(|e| format!("Failed to update anime link: {}", e))?;
+
+        // series 變更時，清理已無 link 的舊 series
+        if old_series_id != series.series_id {
+            cleanup_empty_series(conn, old_series_id);
+        }
+
+        // 重算 filtered_flag
+        let updated_link: crate::models::AnimeLink = anime_links::table
+            .filter(anime_links::link_id.eq(link.link_id))
+            .first(conn)
+            .map_err(|e| format!("Failed to reload link: {}", e))?;
+        if let Ok(flag) =
+            crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &updated_link)
+        {
+            if flag != updated_link.filtered_flag {
+                diesel::update(
+                    anime_links::table.filter(anime_links::link_id.eq(link.link_id)),
+                )
+                .set(anime_links::filtered_flag.eq(flag))
+                .execute(conn)
+                .ok();
+            }
+        }
+
+        Ok((link.link_id, false))
+    } else {
+        // 3b. 新建 link
+        let mut hasher = Sha256::new();
+        hasher.update(raw_item.download_url.as_bytes());
+        let source_hash = format!("{:x}", hasher.finalize());
+
+        let now = chrono::Utc::now().naive_utc();
+        let detected_type =
+            crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
+
+        let new_link = crate::models::NewAnimeLink {
+            series_id: series.series_id,
+            group_id: group.group_id,
+            episode_no: parsed.episode_no,
+            title: Some(raw_item.title.clone()),
+            url: raw_item.download_url.clone(),
+            source_hash,
+            filtered_flag: false,
+            created_at: now,
+            raw_item_id: Some(raw_item.item_id),
+            download_type: detected_type.map(|dt| dt.to_string()),
+        };
+
+        let created_link: crate::models::AnimeLink = diesel::insert_into(anime_links::table)
+            .values(&new_link)
+            .get_result(conn)
+            .map_err(|e| format!("Failed to create anime link: {}", e))?;
+
+        // 計算 filtered_flag
+        if let Ok(flag) =
+            crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link)
+        {
+            if flag != created_link.filtered_flag {
+                diesel::update(
+                    anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)),
+                )
+                .set(anime_links::filtered_flag.eq(flag))
+                .execute(conn)
+                .ok();
+            }
+        }
+
+        Ok((created_link.link_id, true))
+    }
+}
+
+/// 如果指定的 anime_series 底下已經沒有任何 anime_link，就刪除該 series。
+fn cleanup_empty_series(conn: &mut diesel::PgConnection, series_id: i32) {
+    use crate::schema::anime_series;
+
+    let link_count: i64 = anime_links::table
+        .filter(anime_links::series_id.eq(series_id))
+        .count()
+        .get_result(conn)
+        .unwrap_or(1); // 查詢失敗時保守不刪
+
+    if link_count == 0 {
+        if let Err(e) = diesel::delete(
+            anime_series::table.filter(anime_series::series_id.eq(series_id)),
+        )
+        .execute(conn)
+        {
+            tracing::warn!("cleanup_empty_series: 刪除 series {} 失敗: {}", series_id, e);
+        } else {
+            tracing::info!("cleanup_empty_series: 已移除空的 anime_series {}", series_id);
         }
     }
 }

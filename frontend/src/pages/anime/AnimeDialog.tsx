@@ -21,7 +21,7 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
   const { t } = useTranslation()
   const [selectedSeries, setSelectedSeries] = useState<AnimeSeriesRich | null>(null)
 
-  const { data: allSeries } = useEffectQuery(
+  const { data: allSeries, refetch: refetchSeries } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
@@ -99,6 +99,7 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
               <ParserEditor
                 createdFromType="anime"
                 createdFromId={anime.anime_id}
+                onParsersChange={refetchSeries}
               />
             </TabsContent>
           </Tabs>

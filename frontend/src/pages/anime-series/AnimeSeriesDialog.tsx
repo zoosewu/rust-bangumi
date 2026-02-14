@@ -280,6 +280,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
                   <ParserEditor
                     createdFromType="anime_series"
                     createdFromId={series.series_id}
+                    onParsersChange={refetchLinks}
                   />
                 </TabsContent>
               </Tabs>

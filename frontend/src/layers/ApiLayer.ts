@@ -4,7 +4,7 @@ import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
 import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
-import { TitleParser, ParserPreviewResponse } from "@/schemas/parser"
+import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
@@ -86,7 +86,7 @@ const makeCoreApi = Effect.gen(function* () {
     },
 
     createParser: (req) =>
-      postJson("/api/core/parsers", req, TitleParser),
+      postJson("/api/core/parsers", req, ParserWithReparseResponse),
 
     updateParser: (id, req) =>
       client
@@ -97,7 +97,7 @@ const makeCoreApi = Effect.gen(function* () {
         )
         .pipe(
           Effect.flatMap((response) => response.json),
-          Effect.flatMap(Schema.decodeUnknown(TitleParser)),
+          Effect.flatMap(Schema.decodeUnknown(ParserWithReparseResponse)),
           Effect.scoped,
           Effect.orDie,
         ),
@@ -105,7 +105,12 @@ const makeCoreApi = Effect.gen(function* () {
     deleteParser: (id) =>
       client
         .execute(HttpClientRequest.del(`/api/core/parsers/${id}`))
-        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+        .pipe(
+          Effect.flatMap((response) => response.json),
+          Effect.flatMap(Schema.decodeUnknown(DeleteWithReparseResponse)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
 
     previewParser: (req) =>
       postJson("/api/core/parsers/preview", req, ParserPreviewResponse),
