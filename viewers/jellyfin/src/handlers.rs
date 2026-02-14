@@ -47,6 +47,10 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
             episode_no: req.episode_no,
             source_path: req.file_path.clone(),
             status: "processing".to_string(),
+            anime_title: Some(req.anime_title.clone()),
+            series_no: Some(req.series_no),
+            subtitle_group: Some(req.subtitle_group.clone()),
+            task_type: "sync".to_string(),
         };
         diesel::insert_into(sync_tasks::table)
             .values(&new_task)
