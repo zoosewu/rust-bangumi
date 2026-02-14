@@ -56,7 +56,8 @@
     "pendingRawItems": "保留中アイテム",
     "pendingConflicts": "コンフリクト",
     "globalFilterRules": "グローバルフィルタールール",
-    "globalParsers": "グローバルパーサー"
+    "globalParsers": "グローバルパーサー",
+    "coreUnavailable": "Coreサービスが応答していません。"
   },
   "dialog": {
     "details": "詳細",

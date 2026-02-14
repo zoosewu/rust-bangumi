@@ -56,7 +56,8 @@
     "pendingRawItems": "Pending Items",
     "pendingConflicts": "Conflicts",
     "globalFilterRules": "Global Filter Rules",
-    "globalParsers": "Global Parsers"
+    "globalParsers": "Global Parsers",
+    "coreUnavailable": "Core service is not responding."
   },
   "dialog": {
     "details": "Details",

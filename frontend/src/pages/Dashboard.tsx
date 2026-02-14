@@ -19,7 +19,7 @@ import {
 export default function Dashboard() {
   const { t } = useTranslation()
 
-  const { data: stats, isLoading } = useEffectQuery(
+  const { data: stats, error, isLoading } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
@@ -35,6 +35,11 @@ export default function Dashboard() {
       {/* Service health */}
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
+      ) : error ? (
+        <div className="flex items-center gap-2 rounded-md border border-destructive bg-destructive/10 px-4 py-3">
+          <XCircle className="h-5 w-5 text-destructive shrink-0" />
+          <p className="text-sm text-destructive">{t("dashboard.coreUnavailable", "Core service is not responding.")}</p>
+        </div>
       ) : stats ? (
         <>
           {/* Services */}

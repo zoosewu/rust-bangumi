@@ -56,7 +56,8 @@
     "pendingRawItems": "待處理項目",
     "pendingConflicts": "衝突",
     "globalFilterRules": "全域篩選規則",
-    "globalParsers": "全域解析器"
+    "globalParsers": "全域解析器",
+    "coreUnavailable": "Core 服務沒有回應。"
   },
   "dialog": {
     "details": "詳細資訊",
