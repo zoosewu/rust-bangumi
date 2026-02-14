@@ -53,6 +53,11 @@ diesel::table! {
         error_message -> Nullable<Text>,
         created_at -> Timestamp,
         completed_at -> Nullable<Timestamp>,
+        anime_title -> Nullable<Text>,
+        series_no -> Nullable<Int4>,
+        subtitle_group -> Nullable<Text>,
+        #[max_length = 10]
+        task_type -> Varchar,
     }
 }
 

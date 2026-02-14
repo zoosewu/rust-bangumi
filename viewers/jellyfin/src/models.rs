@@ -96,6 +96,10 @@ pub struct SyncTask {
     pub error_message: Option<String>,
     pub created_at: NaiveDateTime,
     pub completed_at: Option<NaiveDateTime>,
+    pub anime_title: Option<String>,
+    pub series_no: Option<i32>,
+    pub subtitle_group: Option<String>,
+    pub task_type: String,
 }
 
 #[derive(Insertable)]
@@ -106,4 +110,8 @@ pub struct NewSyncTask {
     pub episode_no: i32,
     pub source_path: String,
     pub status: String,
+    pub anime_title: Option<String>,
+    pub series_no: Option<i32>,
+    pub subtitle_group: Option<String>,
+    pub task_type: String,
 }
