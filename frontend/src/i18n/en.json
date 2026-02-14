@@ -136,9 +136,10 @@
   "rawItems": {
     "title": "Raw Items",
     "itemTitle": "Title",
-    "subId": "Sub ID",
+    "subscriptionSource": "Source",
     "parser": "Parser",
-    "created": "Created"
+    "created": "Created",
+    "download": "Download"
   },
   "downloads": {
     "title": "Downloads",

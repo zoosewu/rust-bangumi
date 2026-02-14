@@ -136,9 +136,10 @@
   "rawItems": {
     "title": "原始項目",
     "itemTitle": "標題",
-    "subId": "訂閱 ID",
+    "subscriptionSource": "訂閱來源",
     "parser": "解析器",
-    "created": "建立時間"
+    "created": "建立時間",
+    "download": "下載"
   },
   "downloads": {
     "title": "下載",

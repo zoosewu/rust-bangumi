@@ -136,9 +136,10 @@
   "rawItems": {
     "title": "生データ",
     "itemTitle": "タイトル",
-    "subId": "サブID",
+    "subscriptionSource": "ソース",
     "parser": "パーサー",
-    "created": "作成日時"
+    "created": "作成日時",
+    "download": "ダウンロード"
   },
   "downloads": {
     "title": "ダウンロード",

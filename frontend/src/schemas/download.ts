@@ -1,5 +1,10 @@
 import { Schema } from "effect"
 
+export const RawItemDownloadInfo = Schema.Struct({
+  status: Schema.String,
+  progress: Schema.NullOr(Schema.Number),
+})
+
 export const RawAnimeItem = Schema.Struct({
   item_id: Schema.Number,
   title: Schema.String,
@@ -12,6 +17,7 @@ export const RawAnimeItem = Schema.Struct({
   error_message: Schema.NullOr(Schema.String),
   parsed_at: Schema.NullOr(Schema.String),
   created_at: Schema.String,
+  download: Schema.optionalWith(Schema.NullOr(RawItemDownloadInfo), { default: () => null }),
 })
 export type RawAnimeItem = typeof RawAnimeItem.Type
 

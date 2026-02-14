@@ -5,6 +5,7 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { Badge } from "@/components/ui/badge"
 import { CopyButton } from "@/components/shared/CopyButton"
 
 interface RawItemDialogProps {
@@ -72,6 +73,13 @@ export function RawItemDialog({
             <InfoItem label={t("common.status")}>
               <StatusBadge status={item.status} />
             </InfoItem>
+            <InfoItem label={t("rawItems.download")}>
+              {item.download ? (
+                <DownloadBadge status={item.download.status} progress={item.download.progress} />
+              ) : (
+                <span className="text-sm text-muted-foreground">-</span>
+              )}
+            </InfoItem>
             <InfoItem
               label={t("rawItems.created")}
               value={item.created_at.slice(0, 19).replace("T", " ")}
@@ -102,7 +110,7 @@ export function RawItemDialog({
 
           {/* Subscription */}
           <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.subId")}</p>
+            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.subscriptionSource")}</p>
             <Link
               to="/subscriptions"
               className="text-sm text-primary underline"
@@ -144,4 +152,21 @@ function InfoItem({
       {children ?? <p className="text-sm font-medium">{value}</p>}
     </div>
   )
+}
+
+function DownloadBadge({ status, progress }: { status: string; progress?: number | null }) {
+  if (status === "completed") {
+    return <Badge className="bg-green-600 text-white text-xs">completed</Badge>
+  }
+  if (status === "downloading") {
+    return (
+      <Badge variant="outline" className="text-xs">
+        {progress != null ? `${Math.round(progress)}%` : "downloading"}
+      </Badge>
+    )
+  }
+  if (status === "failed" || status === "no_downloader") {
+    return <Badge variant="destructive" className="text-xs">{status}</Badge>
+  }
+  return <Badge variant="secondary" className="text-xs">{status}</Badge>
 }

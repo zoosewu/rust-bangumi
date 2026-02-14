@@ -8,8 +8,10 @@ use axum::{
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use std::collections::HashMap;
+
 use crate::models::RawAnimeItem;
-use crate::schema::raw_anime_items;
+use crate::schema::{anime_links, downloads, raw_anime_items};
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
@@ -25,6 +27,12 @@ pub struct ListRawItemsQuery {
 }
 
 #[derive(Debug, Serialize)]
+pub struct RawItemDownloadInfo {
+    pub status: String,
+    pub progress: Option<f32>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct RawItemResponse {
     pub item_id: i32,
     pub title: String,
@@ -37,10 +45,11 @@ pub struct RawItemResponse {
     pub error_message: Option<String>,
     pub parsed_at: Option<String>,
     pub created_at: String,
+    pub download: Option<RawItemDownloadInfo>,
 }
 
-impl From<RawAnimeItem> for RawItemResponse {
-    fn from(item: RawAnimeItem) -> Self {
+impl RawItemResponse {
+    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>) -> Self {
         Self {
             item_id: item.item_id,
             title: item.title,
@@ -53,7 +62,52 @@ impl From<RawAnimeItem> for RawItemResponse {
             error_message: item.error_message,
             parsed_at: item.parsed_at.map(|d| d.to_string()),
             created_at: item.created_at.to_string(),
+            download,
         }
+    }
+}
+
+/// Batch-load download info for a set of raw_item_ids.
+/// Returns a map from item_id to RawItemDownloadInfo.
+fn load_download_info(
+    conn: &mut diesel::PgConnection,
+    item_ids: &[i32],
+) -> Result<HashMap<i32, RawItemDownloadInfo>, diesel::result::Error> {
+    let rows: Vec<(Option<i32>, String, Option<f32>)> = anime_links::table
+        .inner_join(downloads::table.on(downloads::link_id.eq(anime_links::link_id)))
+        .filter(anime_links::raw_item_id.eq_any(item_ids))
+        .select((
+            anime_links::raw_item_id,
+            downloads::status,
+            downloads::progress,
+        ))
+        .load(conn)?;
+
+    let mut map = HashMap::new();
+    for (raw_item_id, status, progress) in rows {
+        if let Some(rid) = raw_item_id {
+            // If multiple downloads exist for same item, prefer non-pending / latest
+            map.entry(rid)
+                .and_modify(|existing: &mut RawItemDownloadInfo| {
+                    // Keep the "most progressed" status
+                    if status_priority(&status) > status_priority(&existing.status) {
+                        existing.status = status.clone();
+                        existing.progress = progress;
+                    }
+                })
+                .or_insert(RawItemDownloadInfo { status, progress });
+        }
+    }
+    Ok(map)
+}
+
+fn status_priority(status: &str) -> u8 {
+    match status {
+        "completed" => 4,
+        "downloading" => 3,
+        "failed" | "no_downloader" => 2,
+        "pending" => 1,
+        _ => 0,
     }
 }
 
@@ -97,7 +151,22 @@ pub async fn list_raw_items(
         .load::<RawAnimeItem>(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(items.into_iter().map(RawItemResponse::from).collect()))
+    let item_ids: Vec<i32> = items.iter().map(|i| i.item_id).collect();
+    let dl_map = load_download_info(&mut conn, &item_ids)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(
+        items
+            .into_iter()
+            .map(|item| {
+                let dl = dl_map.get(&item.item_id).map(|d| RawItemDownloadInfo {
+                    status: d.status.clone(),
+                    progress: d.progress,
+                });
+                RawItemResponse::from_item(item, dl)
+            })
+            .collect(),
+    ))
 }
 
 /// GET /raw-items/:item_id - 取得單一項目
@@ -115,7 +184,14 @@ pub async fn get_raw_item(
         .first::<RawAnimeItem>(&mut conn)
         .map_err(|_| (StatusCode::NOT_FOUND, "Item not found".to_string()))?;
 
-    Ok(Json(RawItemResponse::from(item)))
+    let dl_map = load_download_info(&mut conn, &[item_id])
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let dl = dl_map.get(&item_id).map(|d| RawItemDownloadInfo {
+        status: d.status.clone(),
+        progress: d.progress,
+    });
+
+    Ok(Json(RawItemResponse::from_item(item, dl)))
 }
 
 /// POST /raw-items/:item_id/reparse - 重新解析單一項目
