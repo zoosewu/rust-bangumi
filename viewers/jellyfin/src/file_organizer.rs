@@ -93,6 +93,89 @@ impl FileOrganizer {
         Ok(target_path)
     }
 
+    /// Move an already-organized episode to a new location based on updated metadata.
+    /// Returns the new target path.
+    pub async fn move_episode(
+        &self,
+        current_path: &Path,
+        new_anime_title: &str,
+        new_season: u32,
+        new_episode: u32,
+    ) -> anyhow::Result<PathBuf> {
+        if !current_path.exists() {
+            return Err(anyhow::anyhow!(
+                "Current file does not exist: {}",
+                current_path.display()
+            ));
+        }
+
+        let new_target = self
+            .library_dir
+            .join(Self::sanitize_filename(new_anime_title))
+            .join(format!("Season {:02}", new_season));
+
+        fs::create_dir_all(&new_target).await?;
+
+        let extension = current_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mkv");
+
+        let new_filename = format!(
+            "{} - S{:02}E{:02}.{}",
+            Self::sanitize_filename(new_anime_title),
+            new_season,
+            new_episode,
+            extension
+        );
+
+        let new_path = new_target.join(new_filename);
+
+        if new_path == current_path {
+            return Ok(new_path);
+        }
+
+        if let Err(_) = fs::rename(current_path, &new_path).await {
+            fs::copy(current_path, &new_path).await?;
+            let _ = fs::remove_file(current_path).await;
+        }
+
+        tracing::info!(
+            "Resync moved: {} -> {}",
+            current_path.display(),
+            new_path.display()
+        );
+
+        // Clean up empty parent directories
+        self.cleanup_empty_dirs(current_path).await;
+
+        Ok(new_path)
+    }
+
+    /// Remove empty Season and anime directories after a file is moved out.
+    async fn cleanup_empty_dirs(&self, old_file_path: &Path) {
+        if let Some(season_dir) = old_file_path.parent() {
+            if self.is_empty_dir(season_dir).await {
+                let _ = fs::remove_dir(season_dir).await;
+                tracing::info!("Removed empty directory: {}", season_dir.display());
+
+                if let Some(anime_dir) = season_dir.parent() {
+                    if anime_dir != self.library_dir && self.is_empty_dir(anime_dir).await {
+                        let _ = fs::remove_dir(anime_dir).await;
+                        tracing::info!("Removed empty directory: {}", anime_dir.display());
+                    }
+                }
+            }
+        }
+    }
+
+    async fn is_empty_dir(&self, dir: &Path) -> bool {
+        match fs::read_dir(dir).await {
+            Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
+            Err(_) => false,
+        }
+    }
+
     pub fn sanitize_filename(name: &str) -> String {
         name.chars()
             .map(|c| match c {
