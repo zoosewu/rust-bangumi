@@ -264,7 +264,7 @@ pub async fn create_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
 
     Ok((
         StatusCode::CREATED,
@@ -354,7 +354,7 @@ pub async fn update_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
 
     Ok(Json(ParserWithReparseResponse {
         parser: ParserResponse::from(updated_parser),
@@ -385,7 +385,7 @@ pub async fn delete_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
 
     Ok(Json(DeleteWithReparseResponse { reparse: stats }))
 }
@@ -405,6 +405,7 @@ fn parse_source_type(s: &str) -> Result<ParserSourceType, (StatusCode, String)> 
 async fn reparse_all_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
+    sync_service: std::sync::Arc<crate::services::SyncService>,
 ) -> ReparseStats {
     let all_ids = {
         let mut conn = match db.get() {
@@ -432,7 +433,7 @@ async fn reparse_all_items(
     }
 
     tracing::info!("reparse_all_items: 開始重新解析全部 {} 筆項目", all_ids.len());
-    reparse_affected_items(db, dispatch_service, &all_ids).await
+    reparse_affected_items(db, dispatch_service, sync_service, &all_ids).await
 }
 
 /// 重新解析指定的 raw_anime_items
@@ -448,6 +449,7 @@ async fn reparse_all_items(
 async fn reparse_affected_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
+    sync_service: std::sync::Arc<crate::services::SyncService>,
     item_ids: &[i32],
 ) -> ReparseStats {
 
@@ -586,6 +588,47 @@ async fn reparse_affected_items(
     if !new_link_ids.is_empty() {
         if let Err(e) = dispatch_service.dispatch_new_links(new_link_ids).await {
             tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e);
+        }
+    }
+
+    // 觸發 resync（metadata 變更的已 synced downloads）
+    if !resync_link_ids.is_empty() {
+        let mut conn_for_resync = match db.get() {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::error!("reparse: 無法取得 DB 連線用於 resync: {}", e);
+                return ReparseStats { total, parsed: parsed_count, failed: failed_count, no_match: no_match_count };
+            }
+        };
+
+        // Find synced downloads for these links
+        let synced_downloads: Vec<crate::models::Download> = crate::schema::downloads::table
+            .filter(crate::schema::downloads::link_id.eq_any(&resync_link_ids))
+            .filter(crate::schema::downloads::status.eq("synced"))
+            .filter(crate::schema::downloads::file_path.is_not_null())
+            .load::<crate::models::Download>(&mut conn_for_resync)
+            .unwrap_or_default();
+
+        drop(conn_for_resync);
+
+        if !synced_downloads.is_empty() {
+            tracing::info!(
+                "reparse: 偵測到 {} 筆已 synced 的 downloads 需要 resync",
+                synced_downloads.len()
+            );
+            for download in &synced_downloads {
+                match sync_service.notify_viewer_resync(download).await {
+                    Ok(true) => {
+                        tracing::info!("reparse: resync 通知已發送 download_id={}", download.download_id);
+                    }
+                    Ok(false) => {
+                        tracing::warn!("reparse: 無 viewer 可用於 resync download_id={}", download.download_id);
+                    }
+                    Err(e) => {
+                        tracing::error!("reparse: resync 失敗 download_id={}: {}", download.download_id, e);
+                    }
+                }
+            }
         }
     }
 
