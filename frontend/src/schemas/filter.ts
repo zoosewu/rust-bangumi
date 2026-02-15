@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { PreviewItem } from "./common"
+import { PreviewItem, RawPreviewItem } from "./common"
 
 export const FilterRule = Schema.Struct({
   rule_id: Schema.Number,
@@ -25,3 +25,16 @@ export const FilterPreviewResponse = Schema.Struct({
   after: FilterPreviewPanel,
 })
 export type FilterPreviewResponse = typeof FilterPreviewResponse.Type
+
+export const RawFilterPreviewPanel = Schema.Struct({
+  passed_items: Schema.Array(RawPreviewItem),
+  filtered_items: Schema.Array(RawPreviewItem),
+})
+
+export const RawFilterPreviewResponse = Schema.Struct({
+  regex_valid: Schema.Boolean,
+  regex_error: Schema.NullOr(Schema.String),
+  before: RawFilterPreviewPanel,
+  after: RawFilterPreviewPanel,
+})
+export type RawFilterPreviewResponse = typeof RawFilterPreviewResponse.Type

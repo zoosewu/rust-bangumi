@@ -18,6 +18,7 @@ export const RawAnimeItem = Schema.Struct({
   parsed_at: Schema.NullOr(Schema.String),
   created_at: Schema.String,
   download: Schema.optionalWith(Schema.NullOr(RawItemDownloadInfo), { default: () => null }),
+  filter_passed: Schema.optionalWith(Schema.NullOr(Schema.Boolean), { default: () => null }),
 })
 export type RawAnimeItem = typeof RawAnimeItem.Type
 

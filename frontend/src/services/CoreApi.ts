@@ -1,6 +1,6 @@
 import { Effect, Context } from "effect"
 import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
-import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
+import type { FilterRule, FilterPreviewResponse, RawFilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
 import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
@@ -78,7 +78,15 @@ export class CoreApi extends Context.Tag("CoreApi")<
       name?: string
       fetch_interval_minutes?: number
     }) => Effect.Effect<Subscription>
-    readonly deleteSubscription: (id: number) => Effect.Effect<void>
+    readonly updateSubscription: (id: number, req: { name?: string }) => Effect.Effect<Subscription>
+    readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
+    readonly previewFilterRaw: (req: {
+      target_type: string
+      target_id?: number | null
+      regex_pattern: string
+      is_positive: boolean
+      exclude_filter_id?: number
+    }) => Effect.Effect<RawFilterPreviewResponse>
   }
 >() {}

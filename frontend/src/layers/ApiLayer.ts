@@ -3,7 +3,7 @@ import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
 import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
-import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
+import { FilterRule, FilterPreviewResponse, RawFilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
@@ -237,9 +237,23 @@ const makeCoreApi = Effect.gen(function* () {
     createSubscription: (req) =>
       postJson("/api/core/subscriptions", req, Subscription),
 
-    deleteSubscription: (id) =>
+    updateSubscription: (id, req) =>
       client
-        .execute(HttpClientRequest.del(`/api/core/subscriptions/${id}`))
+        .execute(
+          HttpClientRequest.patch(`/api/core/subscriptions/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.flatMap(Schema.decodeUnknown(Subscription)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    deleteSubscription: (id, purge) =>
+      client
+        .execute(HttpClientRequest.del(`/api/core/subscriptions/${id}${purge ? '?purge=true' : ''}`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
     getRawItemsCount: (subscriptionId, status) =>
@@ -249,6 +263,9 @@ const makeCoreApi = Effect.gen(function* () {
         ),
         Schema.Struct({ count: Schema.Number }),
       ).pipe(Effect.map((r) => r.count)),
+
+    previewFilterRaw: (req) =>
+      postJson("/api/core/filters/preview-raw", req, RawFilterPreviewResponse),
   })
 })
 

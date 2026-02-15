@@ -5,3 +5,10 @@ export const PreviewItem = Schema.Struct({
   title: Schema.String,
 })
 export type PreviewItem = typeof PreviewItem.Type
+
+export const RawPreviewItem = Schema.Struct({
+  item_id: Schema.Number,
+  title: Schema.String,
+  status: Schema.String,
+})
+export type RawPreviewItem = typeof RawPreviewItem.Type
