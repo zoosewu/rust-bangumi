@@ -1,10 +1,20 @@
 import { cn } from "@/lib/utils"
 import { Check, X, Plus, Minus } from "lucide-react"
+import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { PreviewItem } from "@/schemas/common"
 
+interface PreviewItemWithStatus extends PreviewItem {
+  status?: string
+}
+
+interface PreviewPanel {
+  passed_items: readonly PreviewItemWithStatus[]
+  filtered_items: readonly PreviewItemWithStatus[]
+}
+
 interface FilterPreviewPanelProps {
-  before: { passed_items: readonly PreviewItem[]; filtered_items: readonly PreviewItem[] }
-  after?: { passed_items: readonly PreviewItem[]; filtered_items: readonly PreviewItem[] } | null
+  before: PreviewPanel
+  after?: PreviewPanel | null
   className?: string
 }
 
@@ -13,6 +23,7 @@ type ItemState = "passed" | "filtered" | "newly-passed" | "newly-filtered"
 interface MergedItem {
   item_id: number
   title: string
+  status?: string
   beforeState: "passed" | "filtered"
   afterState: ItemState
 }
@@ -26,24 +37,24 @@ function mergeItems(
     ? new Set(after.passed_items.map((i) => i.item_id))
     : null
 
-  const allItems = new Map<number, { title: string; beforeState: "passed" | "filtered" }>()
+  const allItems = new Map<number, { title: string; status?: string; beforeState: "passed" | "filtered" }>()
   for (const item of before.passed_items) {
-    allItems.set(item.item_id, { title: item.title, beforeState: "passed" })
+    allItems.set(item.item_id, { title: item.title, status: item.status, beforeState: "passed" })
   }
   for (const item of before.filtered_items) {
-    allItems.set(item.item_id, { title: item.title, beforeState: "filtered" })
+    allItems.set(item.item_id, { title: item.title, status: item.status, beforeState: "filtered" })
   }
   // Include items only in after (shouldn't happen normally, but be safe)
   if (after) {
     for (const item of [...after.passed_items, ...after.filtered_items]) {
       if (!allItems.has(item.item_id)) {
-        allItems.set(item.item_id, { title: item.title, beforeState: "filtered" })
+        allItems.set(item.item_id, { title: item.title, status: item.status, beforeState: "filtered" })
       }
     }
   }
 
   const result: MergedItem[] = []
-  for (const [item_id, { title, beforeState }] of allItems) {
+  for (const [item_id, { title, status, beforeState }] of allItems) {
     let afterState: ItemState
     if (!afterPassedSet) {
       afterState = beforeState
@@ -56,7 +67,7 @@ function mergeItems(
     } else {
       afterState = "newly-filtered"
     }
-    result.push({ item_id, title, beforeState, afterState })
+    result.push({ item_id, title, status, beforeState, afterState })
   }
 
   // Sort: passed first, then filtered; within each group sort by title
@@ -134,6 +145,7 @@ function FilterPreviewRow({
         <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
       )}
       <span className="truncate">{item.title}</span>
+      {item.status && <StatusBadge status={item.status} />}
     </div>
   )
 
@@ -166,6 +178,7 @@ function FilterPreviewRow({
         <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
       )}
       <span className="truncate">{item.title}</span>
+      {item.status && <StatusBadge status={item.status} />}
     </div>
   )
 
