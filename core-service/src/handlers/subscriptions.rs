@@ -9,7 +9,10 @@ use serde_json::json;
 use tokio::time::{timeout, Duration};
 
 use crate::models::{Download, ModuleTypeEnum, NewSubscription, ServiceModule, Subscription};
-use crate::schema::{anime_links, downloads, raw_anime_items, service_modules, subscriptions};
+use crate::schema::{
+    anime_link_conflicts, anime_links, downloads, raw_anime_items, service_modules,
+    subscription_conflicts, subscriptions,
+};
 use crate::state::AppState;
 
 // ============ DTOs ============
@@ -260,23 +263,6 @@ pub async fn create_subscription(
                 })),
             )
         }
-    }
-}
-
-/// Auto-select the best fetcher by priority (highest first)
-fn auto_select_fetcher(conn: &mut PgConnection) -> Result<Option<(i32, i32)>, String> {
-    use crate::schema::service_modules::dsl::*;
-
-    match service_modules
-        .filter(is_enabled.eq(true))
-        .filter(module_type.eq(ModuleTypeEnum::Fetcher))
-        .order_by(priority.desc())
-        .select((module_id, priority))
-        .first::<(i32, i32)>(conn)
-    {
-        Ok(result) => Ok(Some(result)),
-        Err(diesel::result::Error::NotFound) => Ok(None),
-        Err(e) => Err(format!("Database error: {}", e)),
     }
 }
 
@@ -599,7 +585,7 @@ pub async fn list_fetcher_modules(
 }
 
 /// Delete a subscription by ID.
-/// - Default: only delete pending/failed raw items + subscription (FK CASCADE handles raw_anime_items)
+/// - Default: soft delete — set is_active=false, nothing else is touched
 /// - `?purge=true`: full cascade cleanup including anime_links, downloads, viewer files, and downloader torrents
 pub async fn delete_subscription(
     State(state): State<AppState>,
@@ -609,127 +595,64 @@ pub async fn delete_subscription(
     if query.purge {
         delete_subscription_purge(state, subscription_id).await
     } else {
-        delete_subscription_simple(state, subscription_id).await
+        delete_subscription_soft(state, subscription_id).await
     }
 }
 
-/// Simple delete: only pending/failed raw items + subscription
-async fn delete_subscription_simple(
+/// Soft delete: set is_active=false, no data is removed
+async fn delete_subscription_soft(
     state: AppState,
     subscription_id: i32,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    match state.db.get() {
-        Ok(mut conn) => {
-            // Nullify anime_links.raw_item_id references before deleting raw items
-            // (ON DELETE SET NULL may not be applied on older DBs)
-            let raw_item_ids: Vec<i32> = match raw_anime_items::table
-                .filter(raw_anime_items::subscription_id.eq(subscription_id))
-                .select(raw_anime_items::item_id)
-                .load::<i32>(&mut conn)
-            {
-                Ok(ids) => ids,
-                Err(e) => {
-                    tracing::error!("Failed to query raw items: {}", e);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to query raw items: {}", e)
-                        })),
-                    );
-                }
-            };
-
-            if !raw_item_ids.is_empty() {
-                if let Err(e) = diesel::update(
-                    anime_links::table
-                        .filter(anime_links::raw_item_id.eq_any(&raw_item_ids)),
-                )
-                .set(anime_links::raw_item_id.eq(None::<i32>))
-                .execute(&mut conn)
-                {
-                    tracing::error!("Failed to nullify anime_links.raw_item_id: {}", e);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to unlink anime_links: {}", e)
-                        })),
-                    );
-                }
-            }
-
-            // Delete all raw items for this subscription
-            let raw_deleted = diesel::delete(
-                raw_anime_items::table
-                    .filter(raw_anime_items::subscription_id.eq(subscription_id)),
-            )
-            .execute(&mut conn);
-
-            let raw_count = match raw_deleted {
-                Ok(count) => count,
-                Err(e) => {
-                    tracing::error!("Failed to delete raw items: {}", e);
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to delete raw items: {}", e)
-                        })),
-                    );
-                }
-            };
-
-            match diesel::delete(
-                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
-            )
-            .execute(&mut conn)
-            {
-                Ok(rows_deleted) => {
-                    if rows_deleted > 0 {
-                        tracing::info!(
-                            "Deleted subscription {} (and {} raw items)",
-                            subscription_id,
-                            raw_count
-                        );
-                        (
-                            StatusCode::OK,
-                            Json(json!({
-                                "message": "Subscription deleted successfully",
-                                "subscription_id": subscription_id,
-                                "raw_items_deleted": raw_count
-                            })),
-                        )
-                    } else {
-                        tracing::warn!("Subscription not found: {}", subscription_id);
-                        (
-                            StatusCode::NOT_FOUND,
-                            Json(json!({
-                                "error": "not_found",
-                                "message": format!("Subscription not found: {}", subscription_id)
-                            })),
-                        )
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to delete subscription: {}", e);
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to delete subscription: {}", e)
-                        })),
-                    )
-                }
-            }
-        }
+    let mut conn = match state.db.get() {
+        Ok(conn) => conn,
         Err(e) => {
             tracing::error!("Failed to get database connection: {}", e);
-            (
+            return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "error": "connection_error",
                     "message": format!("Failed to get database connection: {}", e)
+                })),
+            );
+        }
+    };
+
+    let now = Utc::now().naive_utc();
+    match diesel::update(
+        subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
+    )
+    .set((
+        subscriptions::is_active.eq(false),
+        subscriptions::updated_at.eq(now),
+    ))
+    .execute(&mut conn)
+    {
+        Ok(rows) if rows > 0 => {
+            tracing::info!("Soft-deleted subscription {}", subscription_id);
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "message": "Subscription deactivated (soft delete)",
+                    "subscription_id": subscription_id,
+                    "is_active": false
+                })),
+            )
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "not_found",
+                "message": format!("Subscription not found: {}", subscription_id)
+            })),
+        ),
+        Err(e) => {
+            tracing::error!("Failed to soft-delete subscription: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to soft-delete subscription: {}", e)
                 })),
             )
         }
@@ -887,7 +810,38 @@ async fn delete_subscription_purge(
             }
         }
 
-        // Step 5: Delete anime_links (downloads cascade-deleted via FK)
+        // Step 5a: Nullify anime_link_conflicts.chosen_link_id references
+        // (ON DELETE SET NULL may not be applied on the DB)
+        let _ = diesel::update(
+            anime_link_conflicts::table
+                .filter(anime_link_conflicts::chosen_link_id.eq_any(&link_ids)),
+        )
+        .set(anime_link_conflicts::chosen_link_id.eq(None::<i32>))
+        .execute(&mut conn);
+
+        // Step 5b: Delete downloads explicitly
+        // (ON DELETE CASCADE on downloads.link_id may not be applied on the DB)
+        match diesel::delete(
+            downloads::table.filter(downloads::link_id.eq_any(&link_ids)),
+        )
+        .execute(&mut conn)
+        {
+            Ok(count) => {
+                tracing::info!("Purge: deleted {} downloads for subscription {}", count, subscription_id);
+            }
+            Err(e) => {
+                tracing::error!("Failed to delete downloads: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "database_error",
+                        "message": format!("Failed to delete downloads: {}", e)
+                    })),
+                );
+            }
+        }
+
+        // Step 5c: Delete anime_links
         match diesel::delete(
             anime_links::table.filter(anime_links::link_id.eq_any(&link_ids)),
         )
@@ -946,7 +900,15 @@ async fn delete_subscription_purge(
         }
     };
 
-    // Step 7: Delete subscription itself
+    // Step 7a: Delete subscription_conflicts
+    // (ON DELETE CASCADE may not be applied on the DB)
+    let _ = diesel::delete(
+        subscription_conflicts::table
+            .filter(subscription_conflicts::subscription_id.eq(subscription_id)),
+    )
+    .execute(&mut conn);
+
+    // Step 7b: Delete subscription itself
     match diesel::delete(
         subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
     )
