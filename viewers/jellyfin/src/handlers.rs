@@ -10,6 +10,7 @@ use chrono::NaiveDate;
 use diesel::prelude::*;
 use serde::Serialize;
 use shared::ViewerSyncRequest;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Debug, Serialize)]
@@ -452,6 +453,97 @@ async fn do_resync(
     }
 
     Ok(new_path.display().to_string())
+}
+
+pub async fn delete_synced(
+    State(state): State<AppState>,
+    Json(req): Json<shared::ViewerDeleteRequest>,
+) -> (StatusCode, Json<shared::ViewerDeleteResponse>) {
+    tracing::info!(
+        "Received delete request for {} downloads",
+        req.download_ids.len()
+    );
+
+    let mut results = Vec::new();
+
+    for download_id in &req.download_ids {
+        let result = delete_single_download(&state, *download_id).await;
+        results.push(result);
+    }
+
+    let success_count = results.iter().filter(|r| r.success).count();
+    tracing::info!(
+        "Delete completed: {}/{} successful",
+        success_count,
+        results.len()
+    );
+
+    (
+        StatusCode::OK,
+        Json(shared::ViewerDeleteResponse { deleted: results }),
+    )
+}
+
+async fn delete_single_download(
+    state: &AppState,
+    download_id: i32,
+) -> shared::ViewerDeleteResult {
+    // Find the latest completed sync task for this download_id
+    let target_path: Option<String> = match state.db.get() {
+        Ok(mut conn) => {
+            sync_tasks::table
+                .filter(sync_tasks::download_id.eq(download_id))
+                .filter(sync_tasks::status.eq("completed"))
+                .order(sync_tasks::completed_at.desc())
+                .select(sync_tasks::target_path)
+                .first::<Option<String>>(&mut conn)
+                .ok()
+                .flatten()
+        }
+        Err(_) => None,
+    };
+
+    let target_path = match target_path {
+        Some(p) => p,
+        None => {
+            return shared::ViewerDeleteResult {
+                download_id,
+                success: false,
+                deleted_path: None,
+                error_message: Some("No completed sync task found for this download".to_string()),
+            };
+        }
+    };
+
+    let file_path = PathBuf::from(&target_path);
+
+    // Delete the episode file
+    if file_path.exists() {
+        if let Err(e) = tokio::fs::remove_file(&file_path).await {
+            return shared::ViewerDeleteResult {
+                download_id,
+                success: false,
+                deleted_path: Some(target_path),
+                error_message: Some(format!("Failed to delete file: {}", e)),
+            };
+        }
+    }
+
+    // Delete associated .nfo file
+    let nfo_path = file_path.with_extension("nfo");
+    if nfo_path.exists() {
+        let _ = tokio::fs::remove_file(&nfo_path).await;
+    }
+
+    // Cleanup empty directories
+    state.organizer.cleanup_empty_dirs(&file_path).await;
+
+    shared::ViewerDeleteResult {
+        download_id,
+        success: true,
+        deleted_path: Some(target_path),
+        error_message: None,
+    }
 }
 
 fn cache_subject(

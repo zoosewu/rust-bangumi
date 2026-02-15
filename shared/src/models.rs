@@ -336,6 +336,27 @@ pub struct RawFetcherResultsResponse {
     pub message: String,
 }
 
+// ============ Viewer Delete ============
+
+/// Core → Viewer: request to delete synced files
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerDeleteRequest {
+    pub download_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerDeleteResponse {
+    pub deleted: Vec<ViewerDeleteResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewerDeleteResult {
+    pub download_id: i32,
+    pub success: bool,
+    pub deleted_path: Option<String>,
+    pub error_message: Option<String>,
+}
+
 // ============ Batch Download API DTOs ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

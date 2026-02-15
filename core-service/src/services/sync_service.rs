@@ -317,6 +317,54 @@ impl SyncService {
         })
     }
 
+    /// Notify viewer to delete synced files (best-effort).
+    pub async fn notify_viewer_delete(
+        &self,
+        download_ids: Vec<i32>,
+    ) -> Result<shared::ViewerDeleteResponse, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        let viewer = service_modules::table
+            .filter(service_modules::is_enabled.eq(true))
+            .filter(service_modules::module_type.eq(ModuleTypeEnum::Viewer))
+            .order(service_modules::priority.desc())
+            .first::<ServiceModule>(&mut conn)
+            .optional()
+            .map_err(|e| format!("Failed to query viewers: {}", e))?;
+
+        let viewer = match viewer {
+            Some(v) => v,
+            None => {
+                tracing::warn!("No viewer module available for delete notification");
+                return Ok(shared::ViewerDeleteResponse { deleted: vec![] });
+            }
+        };
+
+        let delete_url = format!("{}/delete", viewer.base_url);
+        let request = shared::ViewerDeleteRequest { download_ids };
+
+        let response = self
+            .http_client
+            .post(&delete_url)
+            .json(&request)
+            .timeout(std::time::Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to notify viewer for delete: {}", e))?;
+
+        if response.status().is_success() {
+            response
+                .json::<shared::ViewerDeleteResponse>()
+                .await
+                .map_err(|e| format!("Failed to parse viewer delete response: {}", e))
+        } else {
+            Err(format!(
+                "Viewer returned status {} for delete",
+                response.status()
+            ))
+        }
+    }
+
     /// Handle sync callback from viewer
     pub fn handle_callback(
         &self,

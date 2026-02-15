@@ -153,7 +153,7 @@ impl FileOrganizer {
     }
 
     /// Remove empty Season and anime directories after a file is moved out.
-    async fn cleanup_empty_dirs(&self, old_file_path: &Path) {
+    pub async fn cleanup_empty_dirs(&self, old_file_path: &Path) {
         if let Some(season_dir) = old_file_path.parent() {
             if self.is_empty_dir(season_dir).await {
                 let _ = fs::remove_dir(season_dir).await;

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -8,8 +8,8 @@ use diesel::prelude::*;
 use serde_json::json;
 use tokio::time::{timeout, Duration};
 
-use crate::models::{ModuleTypeEnum, NewSubscription, ServiceModule, Subscription};
-use crate::schema::{service_modules, subscriptions};
+use crate::models::{Download, ModuleTypeEnum, NewSubscription, ServiceModule, Subscription};
+use crate::schema::{anime_links, downloads, raw_anime_items, service_modules, subscriptions};
 use crate::state::AppState;
 
 // ============ DTOs ============
@@ -69,6 +69,12 @@ pub struct CanHandleRequest {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CanHandleResponse {
     pub can_handle: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct DeleteSubscriptionQuery {
+    #[serde(default)]
+    pub purge: bool,
 }
 
 // ============ Handlers ============
@@ -592,18 +598,33 @@ pub async fn list_fetcher_modules(
     }
 }
 
-/// Delete a subscription by ID, cascade-deleting pending/failed raw items
+/// Delete a subscription by ID.
+/// - Default: only delete pending/failed raw items + subscription (FK CASCADE handles raw_anime_items)
+/// - `?purge=true`: full cascade cleanup including anime_links, downloads, viewer files, and downloader torrents
 pub async fn delete_subscription(
     State(state): State<AppState>,
     Path(subscription_id): Path<i32>,
+    Query(query): Query<DeleteSubscriptionQuery>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    if query.purge {
+        delete_subscription_purge(state, subscription_id).await
+    } else {
+        delete_subscription_simple(state, subscription_id).await
+    }
+}
+
+/// Simple delete: only pending/failed raw items + subscription
+async fn delete_subscription_simple(
+    state: AppState,
+    subscription_id: i32,
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
             // First, delete pending/failed raw items for this subscription
             let raw_deleted = diesel::delete(
-                crate::schema::raw_anime_items::table
-                    .filter(crate::schema::raw_anime_items::subscription_id.eq(subscription_id))
-                    .filter(crate::schema::raw_anime_items::status.eq_any(vec!["pending", "failed"])),
+                raw_anime_items::table
+                    .filter(raw_anime_items::subscription_id.eq(subscription_id))
+                    .filter(raw_anime_items::status.eq_any(vec!["pending", "failed"])),
             )
             .execute(&mut conn);
 
@@ -671,6 +692,239 @@ pub async fn delete_subscription(
                 Json(json!({
                     "error": "connection_error",
                     "message": format!("Failed to get database connection: {}", e)
+                })),
+            )
+        }
+    }
+}
+
+/// Purge delete: full cascade cleanup of all associated data
+async fn delete_subscription_purge(
+    state: AppState,
+    subscription_id: i32,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(conn) => conn,
+        Err(e) => {
+            tracing::error!("Failed to get database connection: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "connection_error",
+                    "message": format!("Failed to get database connection: {}", e)
+                })),
+            );
+        }
+    };
+
+    // Verify subscription exists
+    let exists = subscriptions::table
+        .filter(subscriptions::subscription_id.eq(subscription_id))
+        .count()
+        .get_result::<i64>(&mut conn);
+
+    match exists {
+        Ok(0) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "error": "not_found",
+                    "message": format!("Subscription not found: {}", subscription_id)
+                })),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to check subscription: {}", e)
+                })),
+            );
+        }
+        _ => {}
+    }
+
+    // Step 1: Find all anime_link_ids associated with this subscription
+    let link_ids: Vec<i32> = match anime_links::table
+        .inner_join(raw_anime_items::table.on(
+            anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())
+        ))
+        .filter(raw_anime_items::subscription_id.eq(subscription_id))
+        .select(anime_links::link_id)
+        .load::<i32>(&mut conn)
+    {
+        Ok(ids) => ids,
+        Err(e) => {
+            tracing::error!("Failed to query anime links for subscription {}: {}", subscription_id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to query anime links: {}", e)
+                })),
+            );
+        }
+    };
+
+    let mut links_deleted = 0usize;
+    let mut downloads_affected = 0usize;
+
+    if !link_ids.is_empty() {
+        // Step 2: Find all downloads for these links
+        let download_records: Vec<Download> = match downloads::table
+            .filter(downloads::link_id.eq_any(&link_ids))
+            .load::<Download>(&mut conn)
+        {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!("Failed to query downloads for purge: {}", e);
+                vec![]
+            }
+        };
+
+        downloads_affected = download_records.len();
+
+        // Step 3: Best-effort notify viewer to delete synced files
+        let synced_download_ids: Vec<i32> = download_records
+            .iter()
+            .filter(|d| d.status == "synced")
+            .map(|d| d.download_id)
+            .collect();
+
+        if !synced_download_ids.is_empty() {
+            match state
+                .sync_service
+                .notify_viewer_delete(synced_download_ids.clone())
+                .await
+            {
+                Ok(response) => {
+                    let success_count = response.deleted.iter().filter(|r| r.success).count();
+                    tracing::info!(
+                        "Viewer delete: {}/{} files deleted successfully",
+                        success_count,
+                        response.deleted.len()
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Best-effort viewer delete failed (continuing): {}",
+                        e
+                    );
+                }
+            }
+        }
+
+        // Step 4: Best-effort notify downloader to cancel torrents
+        let torrent_hashes: Vec<String> = download_records
+            .iter()
+            .filter_map(|d| d.torrent_hash.clone())
+            .collect();
+
+        if !torrent_hashes.is_empty() {
+            // Find downloader module
+            let downloader = service_modules::table
+                .filter(service_modules::is_enabled.eq(true))
+                .filter(service_modules::module_type.eq(ModuleTypeEnum::Downloader))
+                .order(service_modules::priority.desc())
+                .first::<ServiceModule>(&mut conn)
+                .optional();
+
+            if let Ok(Some(dl)) = downloader {
+                let cancel_url = format!("{}/downloads/cancel", dl.base_url);
+                let cancel_req = shared::BatchCancelRequest {
+                    hashes: torrent_hashes,
+                };
+                let client = reqwest::Client::new();
+                match client
+                    .post(&cancel_url)
+                    .json(&cancel_req)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+                    .await
+                {
+                    Ok(_) => tracing::info!("Downloader cancel request sent for subscription {}", subscription_id),
+                    Err(e) => tracing::warn!("Best-effort downloader cancel failed (continuing): {}", e),
+                }
+            }
+        }
+
+        // Step 5: Delete anime_links (downloads cascade-deleted via FK)
+        match diesel::delete(
+            anime_links::table.filter(anime_links::link_id.eq_any(&link_ids)),
+        )
+        .execute(&mut conn)
+        {
+            Ok(count) => {
+                links_deleted = count;
+                tracing::info!("Purge: deleted {} anime_links for subscription {}", count, subscription_id);
+            }
+            Err(e) => {
+                tracing::error!("Failed to delete anime_links: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "database_error",
+                        "message": format!("Failed to delete anime_links: {}", e)
+                    })),
+                );
+            }
+        }
+    }
+
+    // Step 6: Delete ALL raw_anime_items (not just pending/failed)
+    let raw_count = match diesel::delete(
+        raw_anime_items::table
+            .filter(raw_anime_items::subscription_id.eq(subscription_id)),
+    )
+    .execute(&mut conn)
+    {
+        Ok(count) => count,
+        Err(e) => {
+            tracing::error!("Failed to delete raw items: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to delete raw items: {}", e)
+                })),
+            );
+        }
+    };
+
+    // Step 7: Delete subscription itself
+    match diesel::delete(
+        subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
+    )
+    .execute(&mut conn)
+    {
+        Ok(_) => {
+            tracing::info!(
+                "Purge-deleted subscription {} ({} raw items, {} links, {} downloads)",
+                subscription_id,
+                raw_count,
+                links_deleted,
+                downloads_affected
+            );
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "message": "Subscription purge-deleted successfully",
+                    "subscription_id": subscription_id,
+                    "purged": true,
+                    "raw_items_deleted": raw_count,
+                    "links_deleted": links_deleted,
+                    "downloads_deleted": downloads_affected
+                })),
+            )
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete subscription: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to delete subscription: {}", e)
                 })),
             )
         }
