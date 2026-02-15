@@ -13,8 +13,7 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
-import type { FilterRule } from "@/schemas/filter"
-import type { FilterPreviewResponse } from "@/schemas/filter"
+import type { FilterRule, FilterPreviewResponse, RawFilterPreviewResponse } from "@/schemas/filter"
 
 interface FilterRuleEditorProps {
   targetType: "global" | "anime" | "anime_series" | "subtitle_group" | "fetcher"
@@ -32,10 +31,11 @@ export function FilterRuleEditor({
   // State
   const [newPattern, setNewPattern] = useState("")
   const [isPositive, setIsPositive] = useState(true)
-  const [baseline, setBaseline] = useState<FilterPreviewResponse | null>(null)
-  const [preview, setPreview] = useState<FilterPreviewResponse | null>(null)
+  type PreviewResponse = FilterPreviewResponse | RawFilterPreviewResponse
+  const [baseline, setBaseline] = useState<PreviewResponse | null>(null)
+  const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FilterRule | null>(null)
-  const [deletePreview, setDeletePreview] = useState<FilterPreviewResponse | null>(null)
+  const [deletePreview, setDeletePreview] = useState<PreviewResponse | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load current rules
@@ -48,18 +48,20 @@ export function FilterRuleEditor({
   )
 
   // Load baseline (current filter state without any new rule)
+  const useRawPreview = targetType === "fetcher"
+
   const loadBaseline = useCallback(() => {
-    AppRuntime.runPromise(
-      Effect.flatMap(CoreApi, (api) =>
-        api.previewFilter({
-          target_type: targetType,
-          target_id: targetId,
-          regex_pattern: "^$",
-          is_positive: false,
-        }),
-      ),
-    ).then(setBaseline).catch(() => setBaseline(null))
-  }, [targetType, targetId])
+    const req = {
+      target_type: targetType,
+      target_id: targetId,
+      regex_pattern: "^$",
+      is_positive: false,
+    }
+    const apiCall = useRawPreview
+      ? Effect.flatMap(CoreApi, (api) => api.previewFilterRaw(req))
+      : Effect.flatMap(CoreApi, (api) => api.previewFilter(req))
+    AppRuntime.runPromise(apiCall).then(setBaseline).catch(() => setBaseline(null))
+  }, [targetType, targetId, useRawPreview])
 
   useEffect(() => {
     loadBaseline()
@@ -94,16 +96,16 @@ export function FilterRuleEditor({
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     debounceRef.current = setTimeout(() => {
-      AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) =>
-          api.previewFilter({
-            target_type: targetType,
-            target_id: targetId,
-            regex_pattern: newPattern,
-            is_positive: isPositive,
-          }),
-        ),
-      ).then(setPreview).catch(() => setPreview(null))
+      const req = {
+        target_type: targetType,
+        target_id: targetId,
+        regex_pattern: newPattern,
+        is_positive: isPositive,
+      }
+      const apiCall = useRawPreview
+        ? Effect.flatMap(CoreApi, (api) => api.previewFilterRaw(req))
+        : Effect.flatMap(CoreApi, (api) => api.previewFilter(req))
+      AppRuntime.runPromise(apiCall).then(setPreview).catch(() => setPreview(null))
     }, 300)
 
     return () => {
@@ -126,17 +128,17 @@ export function FilterRuleEditor({
   const handleDeleteClick = useCallback(
     (rule: FilterRule) => {
       setDeleteTarget(rule)
-      AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) =>
-          api.previewFilter({
-            target_type: targetType,
-            target_id: targetId,
-            regex_pattern: rule.regex_pattern,
-            is_positive: rule.is_positive,
-            exclude_filter_id: rule.rule_id,
-          }),
-        ),
-      ).then(setDeletePreview).catch(() => setDeletePreview(null))
+      const req = {
+        target_type: targetType,
+        target_id: targetId,
+        regex_pattern: rule.regex_pattern,
+        is_positive: rule.is_positive,
+        exclude_filter_id: rule.rule_id,
+      }
+      const apiCall = useRawPreview
+        ? Effect.flatMap(CoreApi, (api) => api.previewFilterRaw(req))
+        : Effect.flatMap(CoreApi, (api) => api.previewFilter(req))
+      AppRuntime.runPromise(apiCall).then(setDeletePreview).catch(() => setDeletePreview(null))
     },
     [targetType, targetId],
   )
