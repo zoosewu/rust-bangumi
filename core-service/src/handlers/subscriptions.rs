@@ -620,11 +620,11 @@ async fn delete_subscription_simple(
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
-            // First, delete pending/failed raw items for this subscription
+            // Delete all raw items for this subscription
+            // (FK CASCADE should handle this, but may not be applied on older DBs)
             let raw_deleted = diesel::delete(
                 raw_anime_items::table
-                    .filter(raw_anime_items::subscription_id.eq(subscription_id))
-                    .filter(raw_anime_items::status.eq_any(vec!["pending", "failed"])),
+                    .filter(raw_anime_items::subscription_id.eq(subscription_id)),
             )
             .execute(&mut conn);
 
