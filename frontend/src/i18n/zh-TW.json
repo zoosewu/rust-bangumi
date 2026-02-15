@@ -131,7 +131,11 @@
     "deleteSubscription": "刪除訂閱",
     "deleteConfirm": "確定要刪除「{{name}}」嗎？將同時刪除 {{count}} 筆未完成的原始項目。",
     "name": "名稱",
-    "fetchInterval": "擷取間隔（分鐘）"
+    "fetchInterval": "擷取間隔（分鐘）",
+    "deactivate": "停用訂閱",
+    "purgeDelete": "完全刪除（含已下載動畫）",
+    "deactivateDesc": "訂閱將停用，所有資料保留，可隨時重新啟用。",
+    "purgeDesc": "將刪除此訂閱的所有資料，包含已下載的動畫檔案，此操作無法復原。"
   },
   "rawItems": {
     "title": "原始項目",

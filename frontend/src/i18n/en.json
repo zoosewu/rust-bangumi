@@ -131,7 +131,11 @@
     "deleteSubscription": "Delete Subscription",
     "deleteConfirm": "Are you sure you want to delete \"{{name}}\"? This will also delete {{count}} pending/failed raw items.",
     "name": "Name",
-    "fetchInterval": "Fetch Interval (min)"
+    "fetchInterval": "Fetch Interval (min)",
+    "deactivate": "Deactivate",
+    "purgeDelete": "Delete Everything (incl. downloaded anime)",
+    "deactivateDesc": "The subscription will be deactivated. All data is preserved and can be reactivated anytime.",
+    "purgeDesc": "All data for this subscription will be permanently deleted, including downloaded anime files. This cannot be undone."
   },
   "rawItems": {
     "title": "Raw Items",

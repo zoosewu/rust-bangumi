@@ -131,7 +131,11 @@
     "deleteSubscription": "サブスクリプションを削除",
     "deleteConfirm": "「{{name}}」を削除してもよろしいですか？未処理の生データ {{count}} 件も削除されます。",
     "name": "名前",
-    "fetchInterval": "取得間隔（分）"
+    "fetchInterval": "取得間隔（分）",
+    "deactivate": "無効化",
+    "purgeDelete": "完全削除（ダウンロード済みアニメ含む）",
+    "deactivateDesc": "サブスクリプションを無効化します。すべてのデータは保持され、いつでも再有効化できます。",
+    "purgeDesc": "このサブスクリプションのすべてのデータが完全に削除されます。ダウンロード済みのアニメファイルも含まれ、元に戻せません。"
   },
   "rawItems": {
     "title": "生データ",
