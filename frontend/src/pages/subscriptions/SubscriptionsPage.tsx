@@ -4,11 +4,10 @@ import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
-import { AppRuntime } from "@/runtime/AppRuntime"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { DeleteSubscriptionDialog } from "@/components/shared/DeleteSubscriptionDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,7 +33,6 @@ export default function SubscriptionsPage() {
     id: number
     name: string
   } | null>(null)
-  const [affectedCount, setAffectedCount] = useState(0)
 
   const { data: subscriptions, isLoading, refetch } = useEffectQuery(
     () =>
@@ -54,23 +52,15 @@ export default function SubscriptionsPage() {
   )
 
   const { mutate: deleteSubscription, isLoading: deleting } = useEffectMutation(
-    (id: number) =>
+    ({ id, purge }: { id: number; purge: boolean }) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.deleteSubscription(id)
+        return yield* api.deleteSubscription(id, purge)
       }),
   )
 
   const handleDeleteClick = (id: number, name: string) => {
-    AppRuntime.runPromise(
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getRawItemsCount(id, "pending,failed")
-      }),
-    ).then((count) => {
-      setAffectedCount(count)
-      setDeleteTarget({ id, name })
-    })
+    setDeleteTarget({ id, name })
   }
 
   const columns: Column<Record<string, unknown>>[] = [
@@ -234,18 +224,22 @@ export default function SubscriptionsPage() {
       </Dialog>
 
       {/* Delete Confirm */}
-      <ConfirmDialog
+      <DeleteSubscriptionDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t("subscriptions.deleteSubscription")}
-        description={t("subscriptions.deleteConfirm", {
-          name: deleteTarget?.name,
-          count: affectedCount,
-        })}
+        subscriptionName={deleteTarget?.name ?? ""}
         loading={deleting}
-        onConfirm={() => {
+        onDeactivate={() => {
           if (deleteTarget) {
-            deleteSubscription(deleteTarget.id).then(() => {
+            deleteSubscription({ id: deleteTarget.id, purge: false }).then(() => {
+              setDeleteTarget(null)
+              refetch()
+            })
+          }
+        }}
+        onPurge={() => {
+          if (deleteTarget) {
+            deleteSubscription({ id: deleteTarget.id, purge: true }).then(() => {
               setDeleteTarget(null)
               refetch()
             })
