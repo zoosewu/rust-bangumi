@@ -46,10 +46,11 @@ pub struct RawItemResponse {
     pub parsed_at: Option<String>,
     pub created_at: String,
     pub download: Option<RawItemDownloadInfo>,
+    pub filter_passed: Option<bool>,
 }
 
 impl RawItemResponse {
-    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>) -> Self {
+    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>, filter_passed: Option<bool>) -> Self {
         Self {
             item_id: item.item_id,
             title: item.title,
@@ -63,6 +64,7 @@ impl RawItemResponse {
             parsed_at: item.parsed_at.map(|d| d.to_string()),
             created_at: item.created_at.to_string(),
             download,
+            filter_passed,
         }
     }
 }
@@ -163,7 +165,7 @@ pub async fn list_raw_items(
                     status: d.status.clone(),
                     progress: d.progress,
                 });
-                RawItemResponse::from_item(item, dl)
+                RawItemResponse::from_item(item, dl, None)
             })
             .collect(),
     ))
@@ -191,7 +193,37 @@ pub async fn get_raw_item(
         progress: d.progress,
     });
 
-    Ok(Json(RawItemResponse::from_item(item, dl)))
+    // Evaluate filter rules for this item
+    let filter_passed = {
+        use crate::models::{FilterRule, FilterTargetType};
+        use crate::schema::filter_rules;
+        use crate::services::filter::FilterEngine;
+
+        let global_rules: Vec<FilterRule> = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::Global))
+            .filter(filter_rules::target_id.is_null())
+            .order(filter_rules::rule_order.asc())
+            .load(&mut conn)
+            .unwrap_or_default();
+
+        let sub_rules: Vec<FilterRule> = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::Fetcher))
+            .filter(filter_rules::target_id.eq(item.subscription_id))
+            .order(filter_rules::rule_order.asc())
+            .load(&mut conn)
+            .unwrap_or_default();
+
+        let all_rules: Vec<FilterRule> = global_rules.into_iter().chain(sub_rules).collect();
+
+        if all_rules.is_empty() {
+            None
+        } else {
+            let engine = FilterEngine::with_priority_sorted(all_rules);
+            Some(engine.should_include(&item.title))
+        }
+    };
+
+    Ok(Json(RawItemResponse::from_item(item, dl, filter_passed)))
 }
 
 /// POST /raw-items/:item_id/reparse - 重新解析單一項目
