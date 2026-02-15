@@ -265,7 +265,7 @@ pub async fn create_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
 
     Ok((
         StatusCode::CREATED,
@@ -355,7 +355,7 @@ pub async fn update_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
 
     Ok(Json(ParserWithReparseResponse {
         parser: ParserResponse::from(updated_parser),
@@ -386,7 +386,7 @@ pub async fn delete_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
 
     Ok(Json(DeleteWithReparseResponse { reparse: stats }))
 }
@@ -407,6 +407,7 @@ async fn reparse_all_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
     sync_service: std::sync::Arc<crate::services::SyncService>,
+    conflict_detection: std::sync::Arc<crate::services::ConflictDetectionService>,
 ) -> ReparseStats {
     let all_ids = {
         let mut conn = match db.get() {
@@ -434,7 +435,7 @@ async fn reparse_all_items(
     }
 
     tracing::info!("reparse_all_items: 開始重新解析全部 {} 筆項目", all_ids.len());
-    reparse_affected_items(db, dispatch_service, sync_service, &all_ids).await
+    reparse_affected_items(db, dispatch_service, sync_service, conflict_detection, &all_ids).await
 }
 
 /// 重新解析指定的 raw_anime_items
@@ -451,6 +452,7 @@ async fn reparse_affected_items(
     db: crate::db::DbPool,
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
     sync_service: std::sync::Arc<crate::services::SyncService>,
+    conflict_detection: std::sync::Arc<crate::services::ConflictDetectionService>,
     item_ids: &[i32],
 ) -> ReparseStats {
 
@@ -584,6 +586,11 @@ async fn reparse_affected_items(
         failed_count,
         no_match_count
     );
+
+    // 觸發衝突偵測
+    if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
+        tracing::warn!("reparse_affected_items: conflict detection 失敗: {}", e);
+    }
 
     // 觸發 dispatch 下載（僅新建的 link 需要 dispatch）
     if !new_link_ids.is_empty() {
@@ -753,6 +760,8 @@ fn upsert_anime_link(
             created_at: now,
             raw_item_id: Some(raw_item.item_id),
             download_type: detected_type.map(|dt| dt.to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
         };
 
         let created_link: crate::models::AnimeLink = diesel::insert_into(anime_links::table)

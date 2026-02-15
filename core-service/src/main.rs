@@ -204,7 +204,7 @@ async fn main() -> anyhow::Result<()> {
             "/raw-items/:item_id/skip",
             post(handlers::raw_items::skip_item),
         )
-        // 衝突解決
+        // 訂閱衝突解決
         .route(
             "/conflicts",
             get(handlers::conflict_resolution::get_pending_conflicts),
@@ -212,6 +212,15 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/conflicts/:conflict_id/resolve",
             post(handlers::conflict_resolution::resolve_conflict),
+        )
+        // Anime Link 衝突
+        .route(
+            "/link-conflicts",
+            get(handlers::anime_link_conflicts::list_link_conflicts),
+        )
+        .route(
+            "/link-conflicts/:conflict_id/resolve",
+            post(handlers::anime_link_conflicts::resolve_link_conflict),
         )
         // Viewer 同步回呼
         .route("/sync-callback", post(handlers::sync::sync_callback))

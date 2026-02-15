@@ -27,6 +27,31 @@ impl SyncService {
     pub async fn notify_viewer(&self, download: &Download) -> Result<bool, String> {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
+        // Check if the associated anime_link is in conflict or resolved
+        let link: AnimeLink = anime_links::table
+            .filter(anime_links::link_id.eq(download.link_id))
+            .first::<AnimeLink>(&mut conn)
+            .map_err(|e| format!("Failed to find anime link {}: {}", download.link_id, e))?;
+
+        if link.conflict_flag {
+            tracing::info!(
+                "Skipping sync for download {} - link {} has conflict_flag=true",
+                download.download_id,
+                link.link_id
+            );
+            return Ok(false);
+        }
+
+        if link.link_status != "active" {
+            tracing::info!(
+                "Skipping sync for download {} - link {} has link_status={}",
+                download.download_id,
+                link.link_id,
+                link.link_status
+            );
+            return Ok(false);
+        }
+
         // Find a viewer module
         let viewer = service_modules::table
             .filter(service_modules::is_enabled.eq(true))

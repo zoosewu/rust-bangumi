@@ -364,6 +364,8 @@ pub fn create_anime_link(
         created_at: now,
         raw_item_id: None,
         download_type: None,
+        conflict_flag: false,
+        link_status: "active".to_string(),
     };
 
     diesel::insert_into(anime_links::table)

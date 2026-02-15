@@ -1,13 +1,16 @@
 use crate::db::{
-    AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository, ConflictRepository, DbPool,
-    DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeSeriesRepository,
-    DieselConflictRepository, DieselFilterRuleRepository, DieselRawItemRepository,
-    DieselSeasonRepository, DieselServiceModuleRepository, DieselSubscriptionRepository,
-    DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,
-    RawItemRepository, SeasonRepository, ServiceModuleRepository, SubscriptionRepository,
-    SubtitleGroupRepository, TitleParserRepository,
+    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository,
+    ConflictRepository, DbPool, DieselAnimeLinkConflictRepository, DieselAnimeLinkRepository,
+    DieselAnimeRepository, DieselAnimeSeriesRepository, DieselConflictRepository,
+    DieselFilterRuleRepository, DieselRawItemRepository, DieselSeasonRepository,
+    DieselServiceModuleRepository, DieselSubscriptionRepository, DieselSubtitleGroupRepository,
+    DieselTitleParserRepository, FilterRuleRepository, RawItemRepository, SeasonRepository,
+    ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
+    TitleParserRepository,
 };
-use crate::services::{DownloadDispatchService, ServiceRegistry, SyncService};
+use crate::services::{
+    ConflictDetectionService, DownloadDispatchService, ServiceRegistry, SyncService,
+};
 use std::sync::Arc;
 
 pub struct Repositories {
@@ -22,6 +25,7 @@ pub struct Repositories {
     pub title_parser: Arc<dyn TitleParserRepository>,
     pub raw_item: Arc<dyn RawItemRepository>,
     pub conflict: Arc<dyn ConflictRepository>,
+    pub anime_link_conflict: Arc<dyn AnimeLinkConflictRepository>,
 }
 
 impl Repositories {
@@ -37,7 +41,8 @@ impl Repositories {
             anime_link: Arc::new(DieselAnimeLinkRepository::new(pool.clone())),
             title_parser: Arc::new(DieselTitleParserRepository::new(pool.clone())),
             raw_item: Arc::new(DieselRawItemRepository::new(pool.clone())),
-            conflict: Arc::new(DieselConflictRepository::new(pool)),
+            conflict: Arc::new(DieselConflictRepository::new(pool.clone())),
+            anime_link_conflict: Arc::new(DieselAnimeLinkConflictRepository::new(pool)),
         }
     }
 }
@@ -49,6 +54,7 @@ pub struct AppState {
     pub repos: Arc<Repositories>,
     pub dispatch_service: Arc<DownloadDispatchService>,
     pub sync_service: Arc<SyncService>,
+    pub conflict_detection: Arc<ConflictDetectionService>,
 }
 
 impl AppState {
@@ -56,12 +62,17 @@ impl AppState {
         let repos = Repositories::new(db.clone());
         let dispatch_service = DownloadDispatchService::new(db.clone());
         let sync_service = SyncService::new(db.clone());
+        let conflict_detection = ConflictDetectionService::new(
+            repos.anime_link.clone(),
+            repos.anime_link_conflict.clone(),
+        );
         Self {
             db,
             registry: Arc::new(registry),
             repos: Arc::new(repos),
             dispatch_service: Arc::new(dispatch_service),
             sync_service: Arc::new(sync_service),
+            conflict_detection: Arc::new(conflict_detection),
         }
     }
 }
@@ -80,6 +91,7 @@ impl Repositories {
         title_parser: Arc<dyn TitleParserRepository>,
         raw_item: Arc<dyn RawItemRepository>,
         conflict: Arc<dyn ConflictRepository>,
+        anime_link_conflict: Arc<dyn AnimeLinkConflictRepository>,
     ) -> Self {
         Self {
             anime,
@@ -93,6 +105,7 @@ impl Repositories {
             title_parser,
             raw_item,
             conflict,
+            anime_link_conflict,
         }
     }
 }

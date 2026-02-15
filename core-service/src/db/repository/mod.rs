@@ -1,5 +1,6 @@
 pub mod anime;
 pub mod anime_link;
+pub mod anime_link_conflict;
 pub mod anime_series;
 pub mod conflict;
 pub mod error;
@@ -13,6 +14,7 @@ pub mod title_parser;
 
 pub use anime::{AnimeRepository, DieselAnimeRepository};
 pub use anime_link::{AnimeLinkRepository, DieselAnimeLinkRepository};
+pub use anime_link_conflict::{AnimeLinkConflictRepository, DieselAnimeLinkConflictRepository};
 pub use anime_series::{
     AnimeSeriesRepository, CreateAnimeSeriesParams, DieselAnimeSeriesRepository,
 };

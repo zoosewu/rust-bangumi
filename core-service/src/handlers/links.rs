@@ -30,10 +30,17 @@ pub async fn create_anime_link(
         raw_item_id: None,
         download_type: crate::services::download_type_detector::detect_download_type(&payload.url)
             .map(|dt| dt.to_string()),
+        conflict_flag: false,
+        link_status: "active".to_string(),
     };
 
     match state.repos.anime_link.create(new_link).await {
         Ok(link) => {
+            // Trigger conflict detection
+            if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
+                tracing::warn!("Conflict detection failed: {}", e);
+            }
+
             tracing::info!("Created anime link: {}", link.link_id);
             let response = AnimeLinkResponse {
                 link_id: link.link_id,

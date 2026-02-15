@@ -208,6 +208,8 @@ pub mod mock {
                 year_value: parser.year_value,
                 created_at: parser.created_at,
                 updated_at: parser.updated_at,
+                created_from_type: parser.created_from_type,
+                created_from_id: parser.created_from_id,
             };
             *next_id += 1;
             parsers.push(new_parser.clone());
@@ -260,6 +262,8 @@ mod tests {
             year_value: None,
             created_at: now,
             updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
         }
     }
 

@@ -192,6 +192,13 @@ pub async fn receive_fetcher_results(
                 }
             }
 
+            // Trigger conflict detection after all links created
+            if links_created > 0 {
+                if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
+                    tracing::warn!("Conflict detection failed: {}", e);
+                }
+            }
+
             let response = FetcherResultsResponse {
                 success: errors.is_empty(),
                 animes_created,
@@ -397,6 +404,8 @@ fn create_anime_link(
         created_at: now,
         raw_item_id: None,
         download_type: None,
+        conflict_flag: false,
+        link_status: "active".to_string(),
     };
 
     diesel::insert_into(anime_links::table)
@@ -565,6 +574,12 @@ pub async fn receive_raw_fetcher_results(
             // 批次派發新建的下載連結
             if !new_link_ids.is_empty() {
                 let link_count = new_link_ids.len();
+
+                // Trigger conflict detection before dispatch
+                if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
+                    tracing::warn!("Conflict detection failed: {}", e);
+                }
+
                 match state
                     .dispatch_service
                     .dispatch_new_links(new_link_ids)
@@ -672,6 +687,8 @@ pub(crate) fn process_parsed_result(
         created_at: now,
         raw_item_id: Some(raw_item.item_id),
         download_type: detected_type.map(|dt| dt.to_string()),
+        conflict_flag: false,
+        link_status: "active".to_string(),
     };
 
     let created_link: AnimeLink = diesel::insert_into(anime_links::table)

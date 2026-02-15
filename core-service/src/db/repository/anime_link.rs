@@ -1,10 +1,21 @@
 use async_trait::async_trait;
 use diesel::prelude::*;
+use diesel::sql_types::Int4;
 
 use super::RepositoryError;
 use crate::db::DbPool;
 use crate::models::{AnimeLink, NewAnimeLink};
 use crate::schema::anime_links;
+
+#[derive(QueryableByName, Debug)]
+struct ConflictGroup {
+    #[diesel(sql_type = Int4)]
+    series_id: i32,
+    #[diesel(sql_type = Int4)]
+    group_id: i32,
+    #[diesel(sql_type = Int4)]
+    episode_no: i32,
+}
 
 #[async_trait]
 pub trait AnimeLinkRepository: Send + Sync {
@@ -16,6 +27,27 @@ pub trait AnimeLinkRepository: Send + Sync {
     ) -> Result<Vec<AnimeLink>, RepositoryError>;
     async fn create(&self, link: NewAnimeLink) -> Result<AnimeLink, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
+    /// Find all active (series_id, group_id, episode_no) groups that have COUNT > 1
+    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError>;
+    /// Find all active link_ids for a given (series_id, group_id, episode_no)
+    async fn find_active_links_for_episode(
+        &self,
+        series_id: i32,
+        group_id: i32,
+        episode_no: i32,
+    ) -> Result<Vec<AnimeLink>, RepositoryError>;
+    /// Batch set conflict_flag for given link_ids
+    async fn set_conflict_flags(
+        &self,
+        link_ids: &[i32],
+        flag: bool,
+    ) -> Result<(), RepositoryError>;
+    /// Batch set link_status for given link_ids
+    async fn set_link_status(
+        &self,
+        link_ids: &[i32],
+        status: &str,
+    ) -> Result<(), RepositoryError>;
 }
 
 pub struct DieselAnimeLinkRepository {
@@ -86,6 +118,82 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
             let deleted = diesel::delete(anime_links::table.filter(anime_links::link_id.eq(id)))
                 .execute(&mut conn)?;
             Ok(deleted > 0)
+        })
+        .await?
+    }
+
+    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            // Use raw SQL for GROUP BY + HAVING
+            let results: Vec<(i32, i32, i32)> = diesel::sql_query(
+                "SELECT series_id, group_id, episode_no \
+                 FROM anime_links \
+                 WHERE link_status = 'active' \
+                 GROUP BY series_id, group_id, episode_no \
+                 HAVING COUNT(*) > 1"
+            )
+            .load::<ConflictGroup>(&mut conn)?
+            .into_iter()
+            .map(|cg| (cg.series_id, cg.group_id, cg.episode_no))
+            .collect();
+            Ok(results)
+        })
+        .await?
+    }
+
+    async fn find_active_links_for_episode(
+        &self,
+        sid: i32,
+        gid: i32,
+        ep: i32,
+    ) -> Result<Vec<AnimeLink>, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            anime_links::table
+                .filter(anime_links::series_id.eq(sid))
+                .filter(anime_links::group_id.eq(gid))
+                .filter(anime_links::episode_no.eq(ep))
+                .filter(anime_links::link_status.eq("active"))
+                .load::<AnimeLink>(&mut conn)
+                .map_err(RepositoryError::from)
+        })
+        .await?
+    }
+
+    async fn set_conflict_flags(
+        &self,
+        link_ids: &[i32],
+        flag: bool,
+    ) -> Result<(), RepositoryError> {
+        let pool = self.pool.clone();
+        let ids = link_ids.to_vec();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            diesel::update(anime_links::table.filter(anime_links::link_id.eq_any(&ids)))
+                .set(anime_links::conflict_flag.eq(flag))
+                .execute(&mut conn)?;
+            Ok(())
+        })
+        .await?
+    }
+
+    async fn set_link_status(
+        &self,
+        link_ids: &[i32],
+        status: &str,
+    ) -> Result<(), RepositoryError> {
+        let pool = self.pool.clone();
+        let ids = link_ids.to_vec();
+        let status = status.to_string();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            diesel::update(anime_links::table.filter(anime_links::link_id.eq_any(&ids)))
+                .set(anime_links::link_status.eq(&status))
+                .execute(&mut conn)?;
+            Ok(())
         })
         .await?
     }
@@ -184,6 +292,8 @@ pub mod mock {
                 created_at: link.created_at,
                 raw_item_id: link.raw_item_id,
                 download_type: link.download_type,
+                conflict_flag: link.conflict_flag,
+                link_status: link.link_status,
             };
             *next_id += 1;
             links.push(new_link.clone());
@@ -199,6 +309,35 @@ pub mod mock {
             let original_len = links.len();
             links.retain(|l| l.link_id != id);
             Ok(links.len() < original_len)
+        }
+
+        async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError> {
+            Ok(vec![])
+        }
+
+        async fn find_active_links_for_episode(
+            &self,
+            _series_id: i32,
+            _group_id: i32,
+            _episode_no: i32,
+        ) -> Result<Vec<AnimeLink>, RepositoryError> {
+            Ok(vec![])
+        }
+
+        async fn set_conflict_flags(
+            &self,
+            _link_ids: &[i32],
+            _flag: bool,
+        ) -> Result<(), RepositoryError> {
+            Ok(())
+        }
+
+        async fn set_link_status(
+            &self,
+            _link_ids: &[i32],
+            _status: &str,
+        ) -> Result<(), RepositoryError> {
+            Ok(())
         }
     }
 }
@@ -224,6 +363,8 @@ mod tests {
             created_at: now,
             raw_item_id: None,
             download_type: Some("http".to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
         };
         let created = repo.create(link).await.unwrap();
         assert_eq!(created.link_id, 1);
@@ -245,6 +386,8 @@ mod tests {
             created_at: now,
             raw_item_id: None,
             download_type: Some("http".to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
         };
         let link2 = AnimeLink {
             link_id: 2,
@@ -258,6 +401,8 @@ mod tests {
             created_at: now,
             raw_item_id: None,
             download_type: Some("http".to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link1, link2]);
 
@@ -285,6 +430,8 @@ mod tests {
             created_at: now,
             raw_item_id: None,
             download_type: Some("http".to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link]);
 

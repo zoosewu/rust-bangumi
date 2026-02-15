@@ -195,3 +195,36 @@ pub struct AnimeLinkResponse {
     pub source_hash: String,
     pub created_at: NaiveDateTime,
 }
+
+// ============ AnimeLinkConflict DTOs ============
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AnimeLinkConflictLink {
+    pub link_id: i32,
+    pub title: Option<String>,
+    pub url: String,
+    pub source_hash: String,
+    pub conflict_flag: bool,
+    pub link_status: String,
+    pub download: Option<DownloadInfo>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AnimeLinkConflictInfo {
+    pub conflict_id: i32,
+    pub series_id: i32,
+    pub group_id: i32,
+    pub episode_no: i32,
+    pub anime_title: String,
+    pub group_name: String,
+    pub resolution_status: String,
+    pub chosen_link_id: Option<i32>,
+    pub links: Vec<AnimeLinkConflictLink>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResolveAnimeLinkConflictRequest {
+    pub chosen_link_id: i32,
+}

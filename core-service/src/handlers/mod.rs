@@ -1,4 +1,5 @@
 pub mod anime;
+pub mod anime_link_conflicts;
 pub mod conflict_resolution;
 pub mod dashboard;
 pub mod downloads;

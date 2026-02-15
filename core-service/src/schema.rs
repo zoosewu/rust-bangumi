@@ -15,6 +15,20 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    anime_link_conflicts (conflict_id) {
+        conflict_id -> Int4,
+        series_id -> Int4,
+        group_id -> Int4,
+        episode_no -> Int4,
+        #[max_length = 20]
+        resolution_status -> Varchar,
+        chosen_link_id -> Nullable<Int4>,
+        created_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     anime_links (link_id) {
         link_id -> Int4,
         series_id -> Int4,
@@ -30,6 +44,9 @@ diesel::table! {
         raw_item_id -> Nullable<Int4>,
         #[max_length = 20]
         download_type -> Nullable<Varchar>,
+        conflict_flag -> Bool,
+        #[max_length = 20]
+        link_status -> Varchar,
     }
 }
 
@@ -259,6 +276,9 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(anime_link_conflicts -> anime_links (chosen_link_id));
+diesel::joinable!(anime_link_conflicts -> anime_series (series_id));
+diesel::joinable!(anime_link_conflicts -> subtitle_groups (group_id));
 diesel::joinable!(anime_links -> anime_series (series_id));
 diesel::joinable!(anime_links -> raw_anime_items (raw_item_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));
@@ -272,6 +292,7 @@ diesel::joinable!(raw_anime_items -> title_parsers (parser_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    anime_link_conflicts,
     anime_links,
     anime_series,
     animes,

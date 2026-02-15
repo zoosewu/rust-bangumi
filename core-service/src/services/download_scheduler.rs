@@ -275,11 +275,18 @@ impl DownloadScheduler {
     }
 
     async fn trigger_sync_for_completed(&self, conn: &mut PgConnection) {
-        // Find downloads that are "completed" with file_path set and retry count < 3
+        use crate::schema::anime_links;
+
+        // Find downloads that are "completed" with file_path set, retry count < 3,
+        // and NOT in conflict (conflict_flag=false, link_status='active')
         let completed: Vec<Download> = match downloads::table
+            .inner_join(anime_links::table.on(anime_links::link_id.eq(downloads::link_id)))
             .filter(downloads::status.eq("completed"))
             .filter(downloads::file_path.is_not_null())
             .filter(downloads::sync_retry_count.lt(3))
+            .filter(anime_links::conflict_flag.eq(false))
+            .filter(anime_links::link_status.eq("active"))
+            .select(Download::as_select())
             .load::<Download>(conn)
         {
             Ok(d) => d,

@@ -6,14 +6,14 @@ pub mod models;
 pub mod repository;
 
 pub use repository::{
-    AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository, ConflictRepository,
-    CreateAnimeSeriesParams, DieselAnimeLinkRepository, DieselAnimeRepository,
-    DieselAnimeSeriesRepository, DieselConflictRepository, DieselFilterRuleRepository,
-    DieselRawItemRepository, DieselSeasonRepository, DieselServiceModuleRepository,
-    DieselSubscriptionRepository, DieselSubtitleGroupRepository, DieselTitleParserRepository,
-    FilterRuleRepository, RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository,
-    ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
-    TitleParserRepository,
+    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository,
+    ConflictRepository, CreateAnimeSeriesParams, DieselAnimeLinkConflictRepository,
+    DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeSeriesRepository,
+    DieselConflictRepository, DieselFilterRuleRepository, DieselRawItemRepository,
+    DieselSeasonRepository, DieselServiceModuleRepository, DieselSubscriptionRepository,
+    DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,
+    RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository, ServiceModuleRepository,
+    SubscriptionRepository, SubtitleGroupRepository, TitleParserRepository,
 };
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;

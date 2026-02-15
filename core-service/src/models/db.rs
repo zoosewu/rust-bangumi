@@ -248,6 +248,8 @@ pub struct AnimeLink {
     pub created_at: NaiveDateTime,
     pub raw_item_id: Option<i32>,
     pub download_type: Option<String>,
+    pub conflict_flag: bool,
+    pub link_status: String,
 }
 
 #[derive(Insertable)]
@@ -263,6 +265,32 @@ pub struct NewAnimeLink {
     pub created_at: NaiveDateTime,
     pub raw_item_id: Option<i32>,
     pub download_type: Option<String>,
+    pub conflict_flag: bool,
+    pub link_status: String,
+}
+
+// ============ AnimeLinkConflicts ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = super::super::schema::anime_link_conflicts)]
+pub struct AnimeLinkConflict {
+    pub conflict_id: i32,
+    pub series_id: i32,
+    pub group_id: i32,
+    pub episode_no: i32,
+    pub resolution_status: String,
+    pub chosen_link_id: Option<i32>,
+    pub created_at: NaiveDateTime,
+    pub resolved_at: Option<NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = super::super::schema::anime_link_conflicts)]
+pub struct NewAnimeLinkConflict {
+    pub series_id: i32,
+    pub group_id: i32,
+    pub episode_no: i32,
+    pub resolution_status: String,
+    pub created_at: NaiveDateTime,
 }
 
 // ============ FilterRules ============
