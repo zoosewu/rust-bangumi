@@ -80,6 +80,11 @@ pub struct DeleteSubscriptionQuery {
     pub purge: bool,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct UpdateSubscriptionRequest {
+    pub name: Option<String>,
+}
+
 // ============ Handlers ============
 
 /// Create a new subscription with optional auto-selection or explicit fetcher assignment
@@ -596,6 +601,85 @@ pub async fn delete_subscription(
         delete_subscription_purge(state, subscription_id).await
     } else {
         delete_subscription_soft(state, subscription_id).await
+    }
+}
+
+/// PATCH /subscriptions/:id — update subscription fields
+pub async fn update_subscription(
+    State(state): State<AppState>,
+    Path(subscription_id): Path<i32>,
+    Json(payload): Json<UpdateSubscriptionRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(conn) => conn,
+        Err(e) => {
+            tracing::error!("Failed to get database connection: {}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "connection_error",
+                    "message": format!("Failed to get database connection: {}", e)
+                })),
+            );
+        }
+    };
+
+    let now = Utc::now().naive_utc();
+
+    let result = if let Some(ref name) = payload.name {
+        diesel::update(
+            subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
+        )
+        .set((
+            subscriptions::name.eq(Some(name.as_str())),
+            subscriptions::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "no_fields",
+                "message": "No fields to update"
+            })),
+        );
+    };
+
+    match result {
+        Ok(rows) if rows > 0 => {
+            tracing::info!("Updated subscription {}", subscription_id);
+            match subscriptions::table
+                .filter(subscriptions::subscription_id.eq(subscription_id))
+                .select(Subscription::as_select())
+                .first::<Subscription>(&mut conn)
+            {
+                Ok(sub) => (StatusCode::OK, Json(json!(sub))),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "database_error",
+                        "message": format!("Failed to reload subscription: {}", e)
+                    })),
+                ),
+            }
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "not_found",
+                "message": format!("Subscription not found: {}", subscription_id)
+            })),
+        ),
+        Err(e) => {
+            tracing::error!("Failed to update subscription: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to update subscription: {}", e)
+                })),
+            )
+        }
     }
 }
 

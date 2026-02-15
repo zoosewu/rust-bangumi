@@ -1,6 +1,6 @@
 use axum::{
     response::Json,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use std::net::SocketAddr;
@@ -163,7 +163,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/subscriptions/:id",
-            delete(handlers::subscriptions::delete_subscription),
+            delete(handlers::subscriptions::delete_subscription)
+                .patch(handlers::subscriptions::update_subscription),
         )
         // Fetcher 結果接收
         .route(
