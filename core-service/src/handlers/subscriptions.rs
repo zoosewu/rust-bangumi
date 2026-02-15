@@ -620,8 +620,46 @@ async fn delete_subscription_simple(
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.db.get() {
         Ok(mut conn) => {
+            // Nullify anime_links.raw_item_id references before deleting raw items
+            // (ON DELETE SET NULL may not be applied on older DBs)
+            let raw_item_ids: Vec<i32> = match raw_anime_items::table
+                .filter(raw_anime_items::subscription_id.eq(subscription_id))
+                .select(raw_anime_items::item_id)
+                .load::<i32>(&mut conn)
+            {
+                Ok(ids) => ids,
+                Err(e) => {
+                    tracing::error!("Failed to query raw items: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({
+                            "error": "database_error",
+                            "message": format!("Failed to query raw items: {}", e)
+                        })),
+                    );
+                }
+            };
+
+            if !raw_item_ids.is_empty() {
+                if let Err(e) = diesel::update(
+                    anime_links::table
+                        .filter(anime_links::raw_item_id.eq_any(&raw_item_ids)),
+                )
+                .set(anime_links::raw_item_id.eq(None::<i32>))
+                .execute(&mut conn)
+                {
+                    tracing::error!("Failed to nullify anime_links.raw_item_id: {}", e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({
+                            "error": "database_error",
+                            "message": format!("Failed to unlink anime_links: {}", e)
+                        })),
+                    );
+                }
+            }
+
             // Delete all raw items for this subscription
-            // (FK CASCADE should handle this, but may not be applied on older DBs)
             let raw_deleted = diesel::delete(
                 raw_anime_items::table
                     .filter(raw_anime_items::subscription_id.eq(subscription_id)),
@@ -872,7 +910,23 @@ async fn delete_subscription_purge(
         }
     }
 
-    // Step 6: Delete ALL raw_anime_items (not just pending/failed)
+    // Step 6: Nullify remaining anime_links.raw_item_id references then delete raw items
+    // (ON DELETE SET NULL may not be applied on older DBs)
+    let remaining_raw_ids: Vec<i32> = raw_anime_items::table
+        .filter(raw_anime_items::subscription_id.eq(subscription_id))
+        .select(raw_anime_items::item_id)
+        .load::<i32>(&mut conn)
+        .unwrap_or_default();
+
+    if !remaining_raw_ids.is_empty() {
+        let _ = diesel::update(
+            anime_links::table
+                .filter(anime_links::raw_item_id.eq_any(&remaining_raw_ids)),
+        )
+        .set(anime_links::raw_item_id.eq(None::<i32>))
+        .execute(&mut conn);
+    }
+
     let raw_count = match diesel::delete(
         raw_anime_items::table
             .filter(raw_anime_items::subscription_id.eq(subscription_id)),
