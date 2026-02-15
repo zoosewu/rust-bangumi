@@ -161,6 +161,7 @@ export default function SubscriptionsPage() {
               refetch()
             }
           }}
+          onSubscriptionChange={refetch}
         />
       )}
 

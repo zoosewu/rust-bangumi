@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next"
+import { Effect } from "effect"
+import { CoreApi } from "@/services/CoreApi"
+import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
+import { EditableText } from "@/components/shared/EditableText"
 import { CopyButton } from "@/components/shared/CopyButton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Subscription } from "@/schemas/subscription"
@@ -10,10 +14,19 @@ interface SubscriptionDialogProps {
   subscription: Subscription
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSubscriptionChange?: () => void
 }
 
-export function SubscriptionDialog({ subscription, open, onOpenChange }: SubscriptionDialogProps) {
+export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscriptionChange }: SubscriptionDialogProps) {
   const { t } = useTranslation()
+
+  const { mutate: updateName } = useEffectMutation(
+    ({ id, name }: { id: number; name: string }) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.updateSubscription(id, { name })
+      }),
+  )
 
   return (
     <FullScreenDialog
@@ -34,7 +47,17 @@ export function SubscriptionDialog({ subscription, open, onOpenChange }: Subscri
         {/* Subscription info */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <InfoItem label={t("common.id")} value={String(subscription.subscription_id)} />
-          <InfoItem label={t("common.name")} value={subscription.name ?? "-"} />
+          <div>
+            <p className="text-xs text-muted-foreground">{t("common.name")}</p>
+            <EditableText
+              value={subscription.name ?? ""}
+              placeholder={t("subscriptions.name")}
+              onSave={async (name) => {
+                await updateName({ id: subscription.subscription_id, name })
+                onSubscriptionChange?.()
+              }}
+            />
+          </div>
           <InfoItem label={t("subscriptions.interval", "Interval")} value={`${subscription.fetch_interval_minutes} min`} />
           <InfoItem
             label={t("common.status")}
