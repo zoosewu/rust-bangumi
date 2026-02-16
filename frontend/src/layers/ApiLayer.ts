@@ -3,7 +3,7 @@ import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
 import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
-import { FilterRule, FilterPreviewResponse, RawFilterPreviewResponse } from "@/schemas/filter"
+import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
@@ -264,8 +264,6 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Struct({ count: Schema.Number }),
       ).pipe(Effect.map((r) => r.count)),
 
-    previewFilterRaw: (req) =>
-      postJson("/api/core/filters/preview-raw", req, RawFilterPreviewResponse),
   })
 })
 

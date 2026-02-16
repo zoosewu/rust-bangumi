@@ -254,6 +254,11 @@ pub struct FilterPreviewRequest {
 pub struct PreviewItem {
     pub item_id: i32,
     pub title: String,
+    pub conflict_flag: bool,
+    pub anime_title: Option<String>,
+    pub series_no: Option<i32>,
+    pub episode_no: i32,
+    pub group_name: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -330,6 +335,39 @@ pub async fn preview_filter(
         }
     };
 
+    // Batch-load series→anime info and group names for enrichment
+    use diesel::prelude::*;
+    use std::collections::HashMap;
+
+    // series_id → (anime_title, series_no)
+    let series_ids: Vec<i32> = links.iter().map(|l| l.series_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let series_anime_map: HashMap<i32, (String, i32)> = if series_ids.is_empty() {
+        HashMap::new()
+    } else {
+        use crate::schema::{anime_series, animes};
+        let rows: Vec<(i32, i32, String)> = anime_series::table
+            .inner_join(animes::table)
+            .filter(anime_series::series_id.eq_any(&series_ids))
+            .select((anime_series::series_id, anime_series::series_no, animes::title))
+            .load(&mut conn)
+            .unwrap_or_default();
+        rows.into_iter().map(|(sid, sno, atitle)| (sid, (atitle, sno))).collect()
+    };
+
+    // group_id → group_name
+    let group_ids: Vec<i32> = links.iter().map(|l| l.group_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let group_map: HashMap<i32, String> = if group_ids.is_empty() {
+        HashMap::new()
+    } else {
+        use crate::schema::subtitle_groups;
+        let rows: Vec<(i32, String)> = subtitle_groups::table
+            .filter(subtitle_groups::group_id.eq_any(&group_ids))
+            .select((subtitle_groups::group_id, subtitle_groups::group_name))
+            .load(&mut conn)
+            .unwrap_or_default();
+        rows.into_iter().collect()
+    };
+
     // Build a temporary FilterRule for the new rule being previewed
     let now = Utc::now().naive_utc();
     let new_rule = FilterRule {
@@ -373,16 +411,32 @@ pub async fn preview_filter(
         let after_engine = FilterEngine::with_priority_sorted(after_rules);
         let after_include = after_engine.should_include(title);
 
+        let (anime_title, series_no) = series_anime_map
+            .get(&link.series_id)
+            .map(|(at, sn)| (Some(at.clone()), Some(*sn)))
+            .unwrap_or((None, None));
+        let group_name = group_map.get(&link.group_id).cloned();
+
+        let make_item = || PreviewItem {
+            item_id: link.link_id,
+            title: title.to_string(),
+            conflict_flag: link.conflict_flag,
+            anime_title: anime_title.clone(),
+            series_no,
+            episode_no: link.episode_no,
+            group_name: group_name.clone(),
+        };
+
         if before_include {
-            before_passed.push(PreviewItem { item_id: link.link_id, title: title.to_string() });
+            before_passed.push(make_item());
         } else {
-            before_filtered.push(PreviewItem { item_id: link.link_id, title: title.to_string() });
+            before_filtered.push(make_item());
         }
 
         if after_include {
-            after_passed.push(PreviewItem { item_id: link.link_id, title: title.to_string() });
+            after_passed.push(make_item());
         } else {
-            after_filtered.push(PreviewItem { item_id: link.link_id, title: title.to_string() });
+            after_filtered.push(make_item());
         }
     }
 
@@ -403,180 +457,3 @@ pub async fn preview_filter(
     )
 }
 
-// ============ Raw Preview DTOs ============
-
-#[derive(Debug, Serialize)]
-pub struct RawPreviewItem {
-    pub item_id: i32,
-    pub title: String,
-    pub status: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RawFilterPreviewPanel {
-    pub passed_items: Vec<RawPreviewItem>,
-    pub filtered_items: Vec<RawPreviewItem>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RawFilterPreviewResponse {
-    pub regex_valid: bool,
-    pub regex_error: Option<String>,
-    pub before: RawFilterPreviewPanel,
-    pub after: RawFilterPreviewPanel,
-}
-
-/// POST /filters/preview-raw
-///
-/// Preview the effect of adding/removing a filter rule on raw_anime_items
-/// scoped to a subscription (target_type must be "fetcher" or "subscription").
-pub async fn preview_filter_raw(
-    State(state): State<AppState>,
-    Json(req): Json<FilterPreviewRequest>,
-) -> (StatusCode, Json<serde_json::Value>) {
-    // Validate regex
-    let _new_regex = match Regex::new(&req.regex_pattern) {
-        Ok(r) => r,
-        Err(e) => {
-            return (
-                StatusCode::OK,
-                Json(json!(RawFilterPreviewResponse {
-                    regex_valid: false,
-                    regex_error: Some(e.to_string()),
-                    before: RawFilterPreviewPanel { passed_items: vec![], filtered_items: vec![] },
-                    after: RawFilterPreviewPanel { passed_items: vec![], filtered_items: vec![] },
-                })),
-            );
-        }
-    };
-
-    let subscription_id = match req.target_id {
-        Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(json!({ "error": "target_id (subscription_id) is required for preview-raw" })),
-            );
-        }
-    };
-
-    let mut conn = match state.db.get() {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("DB connection failed: {}", e) })),
-            );
-        }
-    };
-
-    // Load raw_anime_items for this subscription
-    use crate::schema::raw_anime_items;
-    use diesel::prelude::*;
-    let raw_items: Vec<crate::models::RawAnimeItem> = match raw_anime_items::table
-        .filter(raw_anime_items::subscription_id.eq(subscription_id))
-        .order(raw_anime_items::created_at.desc())
-        .load(&mut conn)
-    {
-        Ok(items) => items,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({ "error": format!("Failed to load raw items: {}", e) })),
-            );
-        }
-    };
-
-    // Load existing filter rules for this subscription (fetcher target type)
-    let existing_rules: Vec<FilterRule> = match crate::schema::filter_rules::table
-        .filter(crate::schema::filter_rules::target_type.eq(FilterTargetType::Fetcher))
-        .filter(crate::schema::filter_rules::target_id.eq(subscription_id))
-        .order(crate::schema::filter_rules::rule_order.asc())
-        .load(&mut conn)
-    {
-        Ok(r) => r,
-        Err(_) => vec![],
-    };
-
-    // Also load global rules
-    let global_rules: Vec<FilterRule> = match crate::schema::filter_rules::table
-        .filter(crate::schema::filter_rules::target_type.eq(FilterTargetType::Global))
-        .filter(crate::schema::filter_rules::target_id.is_null())
-        .order(crate::schema::filter_rules::rule_order.asc())
-        .load(&mut conn)
-    {
-        Ok(r) => r,
-        Err(_) => vec![],
-    };
-
-    // Build the new temporary rule
-    let now = Utc::now().naive_utc();
-    let new_rule = FilterRule {
-        rule_id: -1,
-        rule_order: 0,
-        is_positive: req.is_positive,
-        regex_pattern: req.regex_pattern.clone(),
-        created_at: now,
-        updated_at: now,
-        target_type: FilterTargetType::Fetcher,
-        target_id: Some(subscription_id),
-    };
-
-    let mut before_passed = vec![];
-    let mut before_filtered = vec![];
-    let mut after_passed = vec![];
-    let mut after_filtered = vec![];
-
-    for item in &raw_items {
-        let title = &item.title;
-
-        // "Before" rules = global + existing, excluding the one being edited
-        let before_rules: Vec<FilterRule> = global_rules
-            .iter()
-            .chain(existing_rules.iter())
-            .filter(|r| Some(r.rule_id) != req.exclude_filter_id)
-            .cloned()
-            .collect();
-
-        let before_engine = FilterEngine::with_priority_sorted(before_rules.clone());
-        let before_include = before_engine.should_include(title);
-
-        // "After" rules = before + new rule
-        let mut after_rules = before_rules;
-        after_rules.push(new_rule.clone());
-        let after_engine = FilterEngine::with_priority_sorted(after_rules);
-        let after_include = after_engine.should_include(title);
-
-        let preview_item_before = RawPreviewItem {
-            item_id: item.item_id,
-            title: title.clone(),
-            status: item.status.clone(),
-        };
-        let preview_item_after = RawPreviewItem {
-            item_id: item.item_id,
-            title: title.clone(),
-            status: item.status.clone(),
-        };
-
-        if before_include {
-            before_passed.push(preview_item_before);
-        } else {
-            before_filtered.push(preview_item_before);
-        }
-        if after_include {
-            after_passed.push(preview_item_after);
-        } else {
-            after_filtered.push(preview_item_after);
-        }
-    }
-
-    (
-        StatusCode::OK,
-        Json(json!(RawFilterPreviewResponse {
-            regex_valid: true,
-            regex_error: None,
-            before: RawFilterPreviewPanel { passed_items: before_passed, filtered_items: before_filtered },
-            after: RawFilterPreviewPanel { passed_items: after_passed, filtered_items: after_filtered },
-        })),
-    )
-}

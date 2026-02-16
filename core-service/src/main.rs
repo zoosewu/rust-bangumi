@@ -136,10 +136,6 @@ async fn main() -> anyhow::Result<()> {
             post(handlers::filters::preview_filter),
         )
         .route(
-            "/filters/preview-raw",
-            post(handlers::filters::preview_filter_raw),
-        )
-        .route(
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
         )
