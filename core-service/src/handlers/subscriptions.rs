@@ -83,6 +83,8 @@ pub struct DeleteSubscriptionQuery {
 #[derive(Debug, serde::Deserialize)]
 pub struct UpdateSubscriptionRequest {
     pub name: Option<String>,
+    pub fetch_interval_minutes: Option<i32>,
+    pub is_active: Option<bool>,
 }
 
 // ============ Handlers ============
@@ -417,7 +419,6 @@ pub async fn list_subscriptions(
     match state.db.get() {
         Ok(mut conn) => {
             match subscriptions::table
-                .filter(subscriptions::is_active.eq(true))
                 .select(Subscription::as_select())
                 .load::<Subscription>(&mut conn)
             {
@@ -443,7 +444,7 @@ pub async fn list_subscriptions(
                             updated_at: s.updated_at,
                         })
                         .collect();
-                    tracing::info!("Listed {} active subscriptions", responses.len());
+                    tracing::info!("Listed {} subscriptions", responses.len());
                     (StatusCode::OK, Json(json!({ "subscriptions": responses })))
                 }
                 Err(e) => {
@@ -626,16 +627,7 @@ pub async fn update_subscription(
 
     let now = Utc::now().naive_utc();
 
-    let result = if let Some(ref name) = payload.name {
-        diesel::update(
-            subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)),
-        )
-        .set((
-            subscriptions::name.eq(Some(name.as_str())),
-            subscriptions::updated_at.eq(now),
-        ))
-        .execute(&mut conn)
-    } else {
+    if payload.name.is_none() && payload.fetch_interval_minutes.is_none() && payload.is_active.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -643,7 +635,39 @@ pub async fn update_subscription(
                 "message": "No fields to update"
             })),
         );
-    };
+    }
+
+    let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+
+    let result = (|| -> Result<usize, diesel::result::Error> {
+        let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+        let rows = diesel::update(target)
+            .set(subscriptions::updated_at.eq(now))
+            .execute(&mut conn)?;
+        if rows == 0 {
+            return Ok(0);
+        }
+
+        if let Some(ref name) = payload.name {
+            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            diesel::update(target)
+                .set(subscriptions::name.eq(Some(name.as_str())))
+                .execute(&mut conn)?;
+        }
+        if let Some(interval) = payload.fetch_interval_minutes {
+            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            diesel::update(target)
+                .set(subscriptions::fetch_interval_minutes.eq(interval))
+                .execute(&mut conn)?;
+        }
+        if let Some(active) = payload.is_active {
+            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            diesel::update(target)
+                .set(subscriptions::is_active.eq(active))
+                .execute(&mut conn)?;
+        }
+        Ok(1)
+    })();
 
     match result {
         Ok(rows) if rows > 0 => {

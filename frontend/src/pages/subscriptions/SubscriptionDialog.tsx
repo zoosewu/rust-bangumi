@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -5,9 +6,13 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
-import { EditableText } from "@/components/shared/EditableText"
 import { CopyButton } from "@/components/shared/CopyButton"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Pencil, Save, X } from "lucide-react"
+import { toast } from "sonner"
 import type { Subscription } from "@/schemas/subscription"
 
 interface SubscriptionDialogProps {
@@ -19,14 +24,34 @@ interface SubscriptionDialogProps {
 
 export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscriptionChange }: SubscriptionDialogProps) {
   const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: subscription.name ?? "",
+    fetch_interval_minutes: subscription.fetch_interval_minutes,
+    is_active: subscription.is_active,
+  })
 
-  const { mutate: updateName } = useEffectMutation(
-    ({ id, name }: { id: number; name: string }) =>
+  const { mutate: doUpdate, isLoading: saving } = useEffectMutation(
+    (req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean }) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.updateSubscription(id, { name })
+        return yield* api.updateSubscription(subscription.subscription_id, req)
       }),
   )
+
+  const handleSave = () => {
+    doUpdate({
+      name: editForm.name || undefined,
+      fetch_interval_minutes: editForm.fetch_interval_minutes,
+      is_active: editForm.is_active,
+    }).then(() => {
+      toast.success(t("common.saved", "Saved"))
+      setEditing(false)
+      onSubscriptionChange?.()
+    }).catch(() => {
+      toast.error(t("common.saveFailed", "Save failed"))
+    })
+  }
 
   return (
     <FullScreenDialog
@@ -44,29 +69,88 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
           </div>
         </div>
 
-        {/* Subscription info */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <InfoItem label={t("common.id")} value={String(subscription.subscription_id)} />
-          <div>
-            <p className="text-xs text-muted-foreground">{t("common.name")}</p>
-            <EditableText
-              value={subscription.name ?? ""}
-              placeholder={t("subscriptions.name")}
-              onSave={async (name) => {
-                await updateName({ id: subscription.subscription_id, name })
-                onSubscriptionChange?.()
-              }}
+        {/* Info section with edit mode — same pattern as AnimeSeriesDialog */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-muted-foreground">{t("dialog.info", "Info")}</h3>
+            {!editing ? (
+              <Button variant="ghost" size="sm" onClick={() => {
+                setEditForm({
+                  name: subscription.name ?? "",
+                  fetch_interval_minutes: subscription.fetch_interval_minutes,
+                  is_active: subscription.is_active,
+                })
+                setEditing(true)
+              }}>
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                {t("common.edit", "Edit")}
+              </Button>
+            ) : (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  {t("common.cancel", "Cancel")}
+                </Button>
+                <Button size="sm" onClick={handleSave} disabled={saving}>
+                  <Save className="h-3.5 w-3.5 mr-1" />
+                  {t("common.save", "Save")}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <InfoItem label={t("common.id")} value={String(subscription.subscription_id)} />
+            {editing ? (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">{t("common.name")}</p>
+                  <Input
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder={t("subscriptions.name")}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">{t("subscriptions.interval", "Interval")}</p>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min={1}
+                      value={editForm.fetch_interval_minutes}
+                      onChange={(e) => setEditForm((f) => ({ ...f, fetch_interval_minutes: Number(e.target.value) }))}
+                      className="h-8 text-sm w-20"
+                    />
+                    <span className="text-xs text-muted-foreground">min</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">{t("common.status")}</p>
+                  <div className="flex items-center gap-2 h-8">
+                    <Switch
+                      checked={editForm.is_active}
+                      onCheckedChange={(checked) => setEditForm((f) => ({ ...f, is_active: checked }))}
+                    />
+                    <span className="text-sm">{editForm.is_active ? "Active" : "Inactive"}</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <InfoItem label={t("common.name")} value={subscription.name ?? "-"} />
+                <InfoItem label={t("subscriptions.interval", "Interval")} value={`${subscription.fetch_interval_minutes} min`} />
+                <InfoItem
+                  label={t("common.status")}
+                  value={subscription.is_active ? "Active" : "Inactive"}
+                />
+              </>
+            )}
+            <InfoItem
+              label={t("subscriptions.lastFetched", "Last Fetched")}
+              value={subscription.last_fetched_at ? String(subscription.last_fetched_at).slice(0, 19).replace("T", " ") : t("common.never")}
             />
           </div>
-          <InfoItem label={t("subscriptions.interval", "Interval")} value={`${subscription.fetch_interval_minutes} min`} />
-          <InfoItem
-            label={t("common.status")}
-            value={subscription.is_active ? "Active" : "Inactive"}
-          />
-          <InfoItem
-            label={t("subscriptions.lastFetched", "Last Fetched")}
-            value={subscription.last_fetched_at ? String(subscription.last_fetched_at).slice(0, 19).replace("T", " ") : t("common.never")}
-          />
         </div>
 
         {/* Sub-tabs for filter rules and parsers */}
