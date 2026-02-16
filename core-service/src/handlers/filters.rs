@@ -76,8 +76,10 @@ pub async fn create_filter_rule(
         Ok(rule) => {
             tracing::info!("Created filter rule: {}", rule.rule_id);
 
-            // Trigger async recalculation of filtered_flag on affected links
+            // Trigger async recalculation of filtered_flag on affected links,
+            // then re-run conflict detection (filtered links affect conflict state)
             let db = state.db.clone();
+            let conflict_detection = state.conflict_detection.clone();
             let tt = rule.target_type;
             let tid = rule.target_id;
             tokio::spawn(async move {
@@ -86,6 +88,9 @@ pub async fn create_filter_rule(
                         Ok(n) => tracing::info!("filter_recalc after create: updated {} links", n),
                         Err(e) => tracing::error!("filter_recalc after create failed: {}", e),
                     }
+                }
+                if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
+                    tracing::error!("conflict re-detection after filter create failed: {}", e);
                 }
             });
 
@@ -192,15 +197,19 @@ pub async fn delete_filter_rule(
             if deleted {
                 tracing::info!("Deleted filter rule: {}", rule_id);
 
-                // Trigger async recalculation
+                // Trigger async recalculation + conflict re-detection
                 if let Some((tt, tid)) = rule_info {
                     let db = state.db.clone();
+                    let conflict_detection = state.conflict_detection.clone();
                     tokio::spawn(async move {
                         if let Ok(mut conn) = db.get() {
                             match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
                                 Ok(n) => tracing::info!("filter_recalc after delete: updated {} links", n),
                                 Err(e) => tracing::error!("filter_recalc after delete failed: {}", e),
                             }
+                        }
+                        if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
+                            tracing::error!("conflict re-detection after filter delete failed: {}", e);
                         }
                     });
                 }

@@ -48,6 +48,8 @@ pub trait AnimeLinkRepository: Send + Sync {
         link_ids: &[i32],
         status: &str,
     ) -> Result<(), RepositoryError>;
+    /// Clear conflict_flag for all links (reset before re-detection)
+    async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError>;
 }
 
 pub struct DieselAnimeLinkRepository {
@@ -130,7 +132,7 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
             let results: Vec<(i32, i32, i32)> = diesel::sql_query(
                 "SELECT series_id, group_id, episode_no \
                  FROM anime_links \
-                 WHERE link_status = 'active' \
+                 WHERE link_status = 'active' AND filtered_flag = false \
                  GROUP BY series_id, group_id, episode_no \
                  HAVING COUNT(*) > 1"
             )
@@ -157,6 +159,7 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
                 .filter(anime_links::group_id.eq(gid))
                 .filter(anime_links::episode_no.eq(ep))
                 .filter(anime_links::link_status.eq("active"))
+                .filter(anime_links::filtered_flag.eq(false))
                 .load::<AnimeLink>(&mut conn)
                 .map_err(RepositoryError::from)
         })
@@ -194,6 +197,20 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
                 .set(anime_links::link_status.eq(&status))
                 .execute(&mut conn)?;
             Ok(())
+        })
+        .await?
+    }
+
+    async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            let updated = diesel::update(
+                anime_links::table.filter(anime_links::conflict_flag.eq(true)),
+            )
+            .set(anime_links::conflict_flag.eq(false))
+            .execute(&mut conn)?;
+            Ok(updated)
         })
         .await?
     }
@@ -338,6 +355,10 @@ pub mod mock {
             _status: &str,
         ) -> Result<(), RepositoryError> {
             Ok(())
+        }
+
+        async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError> {
+            Ok(0)
         }
     }
 }

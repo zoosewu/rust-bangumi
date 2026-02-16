@@ -18,10 +18,21 @@ impl ConflictDetectionService {
         }
     }
 
-    /// Scan all active anime_links, detect conflicts (same series_id, group_id, episode_no
-    /// with COUNT > 1), set conflict_flag, and upsert anime_link_conflicts records.
+    /// Scan all active unfiltered anime_links, detect conflicts (same series_id, group_id,
+    /// episode_no with COUNT > 1), set conflict_flag, and upsert anime_link_conflicts records.
     /// Also clears conflict_flag for groups that are no longer conflicting.
     pub async fn detect_and_mark_conflicts(&self) -> Result<usize, String> {
+        // First, clear all existing conflict_flags so stale conflicts are removed
+        let cleared = self
+            .link_repo
+            .clear_all_conflict_flags()
+            .await
+            .map_err(|e| format!("Failed to clear conflict flags: {}", e))?;
+
+        if cleared > 0 {
+            tracing::debug!("Cleared {} stale conflict flags", cleared);
+        }
+
         let conflict_groups = self
             .link_repo
             .detect_all_conflicts()
@@ -29,10 +40,6 @@ impl ConflictDetectionService {
             .map_err(|e| format!("Failed to detect conflicts: {}", e))?;
 
         let mut conflicts_found = 0;
-
-        // Track which (s,g,e) groups are actually conflicting
-        let mut conflicting_set: std::collections::HashSet<(i32, i32, i32)> =
-            std::collections::HashSet::new();
 
         for (series_id, group_id, episode_no) in &conflict_groups {
             let links = self
@@ -56,7 +63,6 @@ impl ConflictDetectionService {
                     .await
                     .map_err(|e| format!("Failed to upsert conflict: {}", e))?;
 
-                conflicting_set.insert((*series_id, *group_id, *episode_no));
                 conflicts_found += 1;
 
                 tracing::info!(
@@ -67,6 +73,46 @@ impl ConflictDetectionService {
                     links.len()
                 );
             }
+        }
+
+        // Auto-resolve conflict records that no longer have actual conflicts
+        let unresolved = self
+            .conflict_repo
+            .find_unresolved()
+            .await
+            .map_err(|e| format!("Failed to find unresolved conflicts: {}", e))?;
+
+        let mut auto_resolved = 0;
+        for conflict in &unresolved {
+            let links = self
+                .link_repo
+                .find_active_links_for_episode(
+                    conflict.series_id,
+                    conflict.group_id,
+                    conflict.episode_no,
+                )
+                .await
+                .map_err(|e| format!("Failed to check conflict links: {}", e))?;
+
+            if links.len() <= 1 {
+                // No longer a conflict — delete the conflict record
+                let _ = self
+                    .conflict_repo
+                    .delete_by_episode(
+                        conflict.series_id,
+                        conflict.group_id,
+                        conflict.episode_no,
+                    )
+                    .await;
+                auto_resolved += 1;
+            }
+        }
+
+        if auto_resolved > 0 {
+            tracing::info!(
+                "Auto-resolved {} conflict records (no longer conflicting after filter change)",
+                auto_resolved,
+            );
         }
 
         if conflicts_found > 0 {
