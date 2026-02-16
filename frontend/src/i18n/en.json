@@ -143,7 +143,8 @@
     "subscriptionSource": "Source",
     "parser": "Parser",
     "created": "Created",
-    "download": "Download"
+    "download": "Download",
+    "filterStatus": "Filter Status"
   },
   "downloads": {
     "title": "Downloads",

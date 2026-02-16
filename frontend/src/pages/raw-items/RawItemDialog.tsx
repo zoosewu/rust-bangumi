@@ -73,6 +73,11 @@ export function RawItemDialog({
             <InfoItem label={t("common.status")}>
               <StatusBadge status={item.status} />
             </InfoItem>
+            {item.filter_passed != null && (
+              <InfoItem label={t("rawItems.filterStatus")}>
+                <StatusBadge status={item.filter_passed ? "parsed" : "failed"} />
+              </InfoItem>
+            )}
             <InfoItem label={t("rawItems.download")}>
               {item.download ? (
                 <DownloadBadge status={item.download.status} progress={item.download.progress} />
