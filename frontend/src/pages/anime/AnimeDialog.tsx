@@ -6,6 +6,8 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
+import { InfoSection } from "@/components/shared/InfoSection"
+import { InfoItem } from "@/components/shared/InfoItem"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnimeSeriesDialog } from "@/pages/anime-series/AnimeSeriesDialog"
@@ -42,11 +44,11 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
       >
         <div className="space-y-6">
           {/* Anime info */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <InfoSection>
             <InfoItem label={t("common.id")} value={String(anime.anime_id)} />
             <InfoItem label={t("common.name")} value={anime.title} />
             <InfoItem label={t("anime.created", "Created")} value={anime.created_at.slice(0, 10)} />
-          </div>
+          </InfoSection>
 
           {/* Series list */}
           <div className="space-y-2">
@@ -117,14 +119,5 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
         />
       )}
     </>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{value}</p>
-    </div>
   )
 }

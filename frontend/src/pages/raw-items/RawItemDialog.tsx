@@ -5,8 +5,10 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { Badge } from "@/components/ui/badge"
-import { CopyButton } from "@/components/shared/CopyButton"
+import { InfoSection } from "@/components/shared/InfoSection"
+import { InfoItem } from "@/components/shared/InfoItem"
+import { MonospaceBlock } from "@/components/shared/MonospaceBlock"
+import { DownloadBadge } from "@/components/shared/DownloadBadge"
 
 interface RawItemDialogProps {
   itemId: number
@@ -44,31 +46,31 @@ export function RawItemDialog({
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <div className="space-y-6">
-          {/* Download URL — first */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.downloadUrl", "Download URL")}</p>
-            <div className="flex items-start gap-1 bg-muted/50 rounded p-2">
-              <p className="text-sm font-mono break-all flex-1">{item.download_url}</p>
-              <CopyButton text={item.download_url} />
-            </div>
-          </div>
+          {/* Download URL */}
+          <MonospaceBlock
+            label={t("rawItems.downloadUrl", "Download URL")}
+            text={item.download_url}
+          />
 
           {/* Title */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.itemTitle")}</p>
-            <p className="text-sm font-mono break-all bg-muted/50 rounded p-2">{item.title}</p>
-          </div>
+          <MonospaceBlock
+            label={t("rawItems.itemTitle")}
+            text={item.title}
+            copyable={false}
+          />
 
           {/* Description */}
           {item.description && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t("rawItems.description", "Description")}</p>
-              <p className="text-sm bg-muted/50 rounded p-2 whitespace-pre-wrap">{item.description}</p>
-            </div>
+            <MonospaceBlock
+              label={t("rawItems.description", "Description")}
+              text={item.description}
+              copyable={false}
+              preWrap
+            />
           )}
 
           {/* Metadata grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <InfoSection cols={3}>
             <InfoItem label={t("common.id")} value={String(item.item_id)} />
             <InfoItem label={t("common.status")}>
               <StatusBadge status={item.status} />
@@ -101,7 +103,7 @@ export function RawItemDialog({
                 value={item.parsed_at.slice(0, 19).replace("T", " ")}
               />
             )}
-          </div>
+          </InfoSection>
 
           {/* Error message */}
           {item.error_message && (
@@ -140,38 +142,4 @@ export function RawItemDialog({
       )}
     </FullScreenDialog>
   )
-}
-
-function InfoItem({
-  label,
-  value,
-  children,
-}: {
-  label: string
-  value?: string
-  children?: React.ReactNode
-}) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      {children ?? <p className="text-sm font-medium">{value}</p>}
-    </div>
-  )
-}
-
-function DownloadBadge({ status, progress }: { status: string; progress?: number | null }) {
-  if (status === "completed") {
-    return <Badge className="bg-green-600 text-white text-xs">completed</Badge>
-  }
-  if (status === "downloading") {
-    return (
-      <Badge variant="outline" className="text-xs">
-        {progress != null ? `${Math.round(progress)}%` : "downloading"}
-      </Badge>
-    )
-  }
-  if (status === "failed" || status === "no_downloader") {
-    return <Badge variant="destructive" className="text-xs">{status}</Badge>
-  }
-  return <Badge variant="secondary" className="text-xs">{status}</Badge>
 }

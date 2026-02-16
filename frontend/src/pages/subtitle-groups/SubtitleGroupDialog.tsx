@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
+import { InfoSection } from "@/components/shared/InfoSection"
+import { InfoItem } from "@/components/shared/InfoItem"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface SubtitleGroupDialogProps {
@@ -22,16 +24,10 @@ export function SubtitleGroupDialog({ groupId, groupName, open, onOpenChange }: 
     >
       <div className="space-y-6">
         {/* Group info */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">{t("common.id")}</p>
-            <p className="text-sm font-medium">{groupId}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">{t("subtitleGroups.groupName", "Group Name")}</p>
-            <p className="text-sm font-medium">{groupName}</p>
-          </div>
-        </div>
+        <InfoSection cols={2}>
+          <InfoItem label={t("common.id")} value={String(groupId)} />
+          <InfoItem label={t("subtitleGroups.groupName", "Group Name")} value={groupName} />
+        </InfoSection>
 
         {/* Sub-tabs for filter rules and parsers */}
         <Tabs defaultValue="filters">

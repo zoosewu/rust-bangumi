@@ -7,6 +7,10 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
+import { InfoSection } from "@/components/shared/InfoSection"
+import { InfoItem } from "@/components/shared/InfoItem"
+import { DownloadBadge } from "@/components/shared/DownloadBadge"
+import { CopyButton } from "@/components/shared/CopyButton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,9 +23,8 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
-import { CopyButton } from "@/components/shared/CopyButton"
 import { cn } from "@/lib/utils"
-import { Pencil, Save, X } from "lucide-react"
+import { Save, X } from "lucide-react"
 import { toast } from "sonner"
 import type { AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 
@@ -120,36 +123,21 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
       >
         <div className="space-y-6">
           {/* Info section */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-muted-foreground">{t("dialog.info", "Info")}</h3>
-              {!editing ? (
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setEditForm({
-                    season_id: "",
-                    description: series.description ?? "",
-                    aired_date: series.aired_date?.slice(0, 10) ?? "",
-                    end_date: series.end_date?.slice(0, 10) ?? "",
-                  })
-                  setEditing(true)
-                }}>
-                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                  {t("common.edit", "Edit")}
-                </Button>
-              ) : (
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setAddingNewSeason(false) }} disabled={saving}>
-                    <X className="h-3.5 w-3.5 mr-1" />
-                    {t("common.cancel", "Cancel")}
-                  </Button>
-                  <Button size="sm" onClick={handleSave} disabled={saving}>
-                    <Save className="h-3.5 w-3.5 mr-1" />
-                    {t("common.save", "Save")}
-                  </Button>
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <InfoSection
+            editing={editing}
+            saving={saving}
+            onEdit={() => {
+              setEditForm({
+                season_id: "",
+                description: series.description ?? "",
+                aired_date: series.aired_date?.slice(0, 10) ?? "",
+                end_date: series.end_date?.slice(0, 10) ?? "",
+              })
+              setEditing(true)
+            }}
+            onSave={handleSave}
+            onCancel={() => { setEditing(false); setAddingNewSeason(false) }}
+          >
               <InfoItem label={t("animeSeries.animeTitle", "Anime")} value={series.anime_title} />
               {editing ? (
                 <div>
@@ -252,8 +240,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
                   )}
                 </>
               )}
-            </div>
-          </div>
+          </InfoSection>
 
           {/* Main tabs */}
           <Tabs defaultValue="details">
@@ -317,15 +304,6 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
         />
       )}
     </>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{value}</p>
-    </div>
   )
 }
 
@@ -396,19 +374,3 @@ function LinkRow({
   )
 }
 
-function DownloadBadge({ status, progress }: { status: string; progress?: number | null }) {
-  if (status === "completed") {
-    return <Badge className="bg-green-600 text-white text-xs">completed</Badge>
-  }
-  if (status === "downloading") {
-    return (
-      <Badge variant="outline" className="text-xs">
-        {progress != null ? `${Math.round(progress)}%` : "downloading"}
-      </Badge>
-    )
-  }
-  if (status === "failed" || status === "no_downloader") {
-    return <Badge variant="destructive" className="text-xs">{status}</Badge>
-  }
-  return <Badge variant="secondary" className="text-xs">{status}</Badge>
-}

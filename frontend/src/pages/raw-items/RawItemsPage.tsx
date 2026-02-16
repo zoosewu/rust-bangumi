@@ -7,7 +7,7 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { Badge } from "@/components/ui/badge"
+import { DownloadBadge } from "@/components/shared/DownloadBadge"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -218,21 +218,4 @@ export default function RawItemsPage() {
       )}
     </div>
   )
-}
-
-function DownloadBadge({ status, progress }: { status: string; progress?: number | null }) {
-  if (status === "completed") {
-    return <Badge className="bg-green-600 text-white text-xs">completed</Badge>
-  }
-  if (status === "downloading") {
-    return (
-      <Badge variant="outline" className="text-xs">
-        {progress != null ? `${Math.round(progress)}%` : "downloading"}
-      </Badge>
-    )
-  }
-  if (status === "failed" || status === "no_downloader") {
-    return <Badge variant="destructive" className="text-xs">{status}</Badge>
-  }
-  return <Badge variant="secondary" className="text-xs">{status}</Badge>
 }
