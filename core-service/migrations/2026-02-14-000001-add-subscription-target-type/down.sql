@@ -1,3 +1,0 @@
--- PostgreSQL does not support removing enum values directly.
--- To fully revert, recreate the type without 'subscription'.
--- This is a no-op for safety.

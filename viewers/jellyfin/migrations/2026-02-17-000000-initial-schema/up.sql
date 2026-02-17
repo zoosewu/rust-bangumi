@@ -1,4 +1,11 @@
--- bangumi.tv metadata cache
+-- ============================================================================
+-- Consolidated Initial Schema - Jellyfin Viewer
+-- ============================================================================
+-- Consolidated from 3 incremental migrations on 2026-02-17.
+
+-- ============================================================================
+-- 1. Bangumi.tv Metadata Cache
+-- ============================================================================
 CREATE TABLE bangumi_subjects (
     bangumi_id      INT PRIMARY KEY,
     title           TEXT NOT NULL,
@@ -12,7 +19,9 @@ CREATE TABLE bangumi_subjects (
     fetched_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Single episode metadata cache
+-- ============================================================================
+-- 2. Episode Metadata Cache
+-- ============================================================================
 CREATE TABLE bangumi_episodes (
     bangumi_ep_id   INT PRIMARY KEY,
     bangumi_id      INT NOT NULL REFERENCES bangumi_subjects(bangumi_id) ON DELETE CASCADE,
@@ -24,7 +33,9 @@ CREATE TABLE bangumi_episodes (
     fetched_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Core series_id -> bangumi.tv subject_id mapping
+-- ============================================================================
+-- 3. Core Series → Bangumi.tv Mapping
+-- ============================================================================
 CREATE TABLE bangumi_mapping (
     core_series_id  INT PRIMARY KEY,
     bangumi_id      INT NOT NULL REFERENCES bangumi_subjects(bangumi_id),
@@ -34,7 +45,9 @@ CREATE TABLE bangumi_mapping (
     updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
--- Sync task history
+-- ============================================================================
+-- 4. Sync Tasks
+-- ============================================================================
 CREATE TABLE sync_tasks (
     task_id         SERIAL PRIMARY KEY,
     download_id     INT NOT NULL,
@@ -45,7 +58,11 @@ CREATE TABLE sync_tasks (
     status          VARCHAR(20) NOT NULL DEFAULT 'pending',
     error_message   TEXT,
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at    TIMESTAMP
+    completed_at    TIMESTAMP,
+    anime_title     TEXT,
+    series_no       INT,
+    subtitle_group  TEXT,
+    task_type       VARCHAR(10) NOT NULL DEFAULT 'sync'
 );
 
 CREATE INDEX idx_sync_tasks_status ON sync_tasks(status);
