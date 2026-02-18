@@ -23,8 +23,9 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
+import { AnimeLinkDetailDialog } from "@/pages/anime-series/AnimeLinkDetailDialog"
 import { cn } from "@/lib/utils"
-import { Save, X } from "lucide-react"
+import { Save, X, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import type { AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
 
@@ -37,6 +38,7 @@ interface AnimeSeriesDialogProps {
 export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDialogProps) {
   const { t } = useTranslation()
   const [groupDialog, setGroupDialog] = useState<{ id: number; name: string } | null>(null)
+  const [detailLink, setDetailLink] = useState<AnimeLinkRich | null>(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({
     season_id: "",
@@ -276,10 +278,10 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
             <TabsContent value="links" className="mt-4">
               <div className="rounded-md border divide-y text-sm font-mono">
                 {passedLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed onGroupClick={setGroupDialog} />
+                  <LinkRow key={link.link_id} link={link} passed onGroupClick={setGroupDialog} onConflictClick={setDetailLink} />
                 ))}
                 {filteredLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed={false} onGroupClick={setGroupDialog} />
+                  <LinkRow key={link.link_id} link={link} passed={false} onGroupClick={setGroupDialog} onConflictClick={setDetailLink} />
                 ))}
                 {(links ?? []).length === 0 && (
                   <div className="px-3 py-4 text-center text-muted-foreground font-sans">
@@ -300,6 +302,18 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
           open={!!groupDialog}
           onOpenChange={(open) => {
             if (!open) setGroupDialog(null)
+          }}
+        />
+      )}
+
+      {/* Detail dialog for conflicted links */}
+      {detailLink && (
+        <AnimeLinkDetailDialog
+          link={detailLink}
+          allLinks={links ?? []}
+          open={!!detailLink}
+          onOpenChange={(open) => {
+            if (!open) setDetailLink(null)
           }}
         />
       )}
@@ -335,10 +349,12 @@ function LinkRow({
   link,
   passed,
   onGroupClick,
+  onConflictClick,
 }: {
   link: AnimeLinkRich
   passed: boolean
   onGroupClick: (g: { id: number; name: string }) => void
+  onConflictClick: (link: AnimeLinkRich) => void
 }) {
   const dl = link.download
   return (
@@ -360,6 +376,16 @@ function LinkRow({
         {link.group_name}
       </button>
       <span className="flex-1 truncate text-xs opacity-70">{link.title ?? ""}</span>
+      {link.conflict_flag && (
+        <button
+          type="button"
+          title="This link has a conflict"
+          className="shrink-0 text-amber-500 hover:text-amber-600"
+          onClick={() => onConflictClick(link)}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+        </button>
+      )}
       <CopyButton text={link.url} />
       <span className="shrink-0">
         {passed && dl ? (
