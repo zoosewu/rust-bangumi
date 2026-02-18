@@ -38,10 +38,11 @@ impl DownloadDispatchService {
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
-        // Load the anime_links for these IDs (only unfiltered)
+        // Load the anime_links for these IDs (only unfiltered and non-conflicted)
         let links: Vec<AnimeLink> = anime_links::table
             .filter(anime_links::link_id.eq_any(&link_ids))
             .filter(anime_links::filtered_flag.eq(false))
+            .filter(anime_links::conflict_flag.eq(false))
             .load::<AnimeLink>(&mut conn)
             .map_err(|e| format!("Failed to load anime links: {}", e))?;
 
