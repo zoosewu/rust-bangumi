@@ -100,9 +100,20 @@ pub async fn get_anime_links(
         }
     };
 
+    // Build conflict group map: (group_id, episode_no) -> Vec<link_id> for conflicted links
+    use std::collections::HashMap;
+    let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
+    for (link, _) in &links_with_groups {
+        if link.conflict_flag {
+            conflict_groups
+                .entry((link.group_id, link.episode_no))
+                .or_default()
+                .push(link.link_id);
+        }
+    }
+
     let mut results = Vec::new();
     for (link, group) in &links_with_groups {
-        // Get download info for this link (latest)
         let download_info: Option<DownloadInfo> = downloads::table
             .filter(downloads::link_id.eq(link.link_id))
             .order(downloads::updated_at.desc())
@@ -117,6 +128,15 @@ pub async fn get_anime_links(
                 torrent_hash: d.torrent_hash,
             });
 
+        let conflicting_link_ids = if link.conflict_flag {
+            conflict_groups
+                .get(&(link.group_id, link.episode_no))
+                .map(|ids| ids.iter().filter(|&&id| id != link.link_id).cloned().collect())
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+
         results.push(AnimeLinkRichResponse {
             link_id: link.link_id,
             series_id: link.series_id,
@@ -127,6 +147,8 @@ pub async fn get_anime_links(
             url: link.url.clone(),
             source_hash: link.source_hash.clone(),
             filtered_flag: link.filtered_flag,
+            conflict_flag: link.conflict_flag,
+            conflicting_link_ids,
             download: download_info,
             created_at: link.created_at,
         });
