@@ -120,6 +120,57 @@ pub async fn resolve_link_conflict(
     Path(conflict_id): Path<i32>,
     Json(payload): Json<ResolveAnimeLinkConflictRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            );
+        }
+    };
+
+    // Step 1: Get the conflict to find all links in this group
+    let conflict = match state.repos.anime_link_conflict.find_by_id(conflict_id).await {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "conflict_not_found" })),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            );
+        }
+    };
+
+    // Step 2: Get all active links in the conflict group to find unchosen link_ids
+    let all_links: Vec<AnimeLink> = match anime_links::table
+        .filter(anime_links::series_id.eq(conflict.series_id))
+        .filter(anime_links::group_id.eq(conflict.group_id))
+        .filter(anime_links::episode_no.eq(conflict.episode_no))
+        .filter(anime_links::link_status.eq("active"))
+        .load::<AnimeLink>(&mut conn)
+    {
+        Ok(l) => l,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string() })),
+            );
+        }
+    };
+
+    let unchosen_ids: Vec<i32> = all_links
+        .iter()
+        .filter(|l| l.link_id != payload.chosen_link_id)
+        .map(|l| l.link_id)
+        .collect();
+
+    // Step 3: Resolve via ConflictDetectionService (sets chosen link conflict_flag=false, others to 'resolved' status)
     match state
         .conflict_detection
         .resolve_conflict(conflict_id, payload.chosen_link_id)
@@ -131,24 +182,44 @@ pub async fn resolve_link_conflict(
                 conflict_id,
                 payload.chosen_link_id
             );
-            (
-                StatusCode::OK,
-                Json(json!({
-                    "message": "Conflict resolved successfully",
-                    "conflict_id": conflict_id,
-                    "chosen_link_id": payload.chosen_link_id
-                })),
-            )
         }
         Err(e) => {
             tracing::error!("Failed to resolve link conflict {}: {}", conflict_id, e);
-            (
+            return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "error": "resolve_failed",
-                    "message": e
-                })),
-            )
+                Json(json!({ "error": "resolve_failed", "message": e })),
+            );
         }
     }
+
+    // Step 4: Cancel downloads for unchosen links
+    if !unchosen_ids.is_empty() {
+        if let Err(e) = state.cancel_service.cancel_downloads_for_links(&unchosen_ids).await {
+            tracing::warn!("Failed to cancel unchosen downloads: {}", e);
+        }
+    }
+
+    // Step 5: Dispatch chosen link if it passes filter (filtered_flag=false, conflict_flag=false)
+    // dispatch_new_links already checks both flags, so just pass the chosen link ID
+    let dispatch_result = state
+        .dispatch_service
+        .dispatch_new_links(vec![payload.chosen_link_id])
+        .await;
+
+    match &dispatch_result {
+        Ok(r) => tracing::info!(
+            "Dispatched chosen link {}: dispatched={}, no_downloader={}, failed={}",
+            payload.chosen_link_id, r.dispatched, r.no_downloader, r.failed
+        ),
+        Err(e) => tracing::warn!("Failed to dispatch chosen link: {}", e),
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "message": "Conflict resolved successfully",
+            "conflict_id": conflict_id,
+            "chosen_link_id": payload.chosen_link_id
+        })),
+    )
 }
