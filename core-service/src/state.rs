@@ -9,7 +9,8 @@ use crate::db::{
     TitleParserRepository,
 };
 use crate::services::{
-    ConflictDetectionService, DownloadDispatchService, ServiceRegistry, SyncService,
+    ConflictDetectionService, DownloadCancelService, DownloadDispatchService, ServiceRegistry,
+    SyncService,
 };
 use std::sync::Arc;
 
@@ -55,6 +56,7 @@ pub struct AppState {
     pub dispatch_service: Arc<DownloadDispatchService>,
     pub sync_service: Arc<SyncService>,
     pub conflict_detection: Arc<ConflictDetectionService>,
+    pub cancel_service: Arc<DownloadCancelService>,
 }
 
 impl AppState {
@@ -66,6 +68,7 @@ impl AppState {
             repos.anime_link.clone(),
             repos.anime_link_conflict.clone(),
         );
+        let cancel_service = DownloadCancelService::new(db.clone());
         Self {
             db,
             registry: Arc::new(registry),
@@ -73,6 +76,7 @@ impl AppState {
             dispatch_service: Arc::new(dispatch_service),
             sync_service: Arc::new(sync_service),
             conflict_detection: Arc::new(conflict_detection),
+            cancel_service: Arc::new(cancel_service),
         }
     }
 }
