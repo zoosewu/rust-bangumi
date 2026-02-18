@@ -92,6 +92,8 @@ export const AnimeLinkRich = Schema.Struct({
   url: Schema.String,
   source_hash: Schema.String,
   filtered_flag: Schema.Boolean,
+  conflict_flag: Schema.Boolean,
+  conflicting_link_ids: Schema.Array(Schema.Number),
   download: Schema.NullOr(DownloadInfo),
   created_at: Schema.String,
 })
