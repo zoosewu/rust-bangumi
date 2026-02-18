@@ -44,14 +44,7 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
     let task_id = if let Ok(mut conn) = state.db.get() {
         let new_task = NewSyncTask {
             download_id: req.download_id,
-            core_series_id: req.series_id,
-            episode_no: req.episode_no,
-            source_path: req.file_path.clone(),
             status: "processing".to_string(),
-            anime_title: Some(req.anime_title.clone()),
-            series_no: Some(req.series_no),
-            subtitle_group: Some(req.subtitle_group.clone()),
-            task_type: "sync".to_string(),
         };
         diesel::insert_into(sync_tasks::table)
             .values(&new_task)
@@ -95,11 +88,10 @@ async fn process_sync(
                     ))
                     .execute(&mut conn);
             }
-            Err(e) => {
+            Err(_) => {
                 let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
                     .set((
                         sync_tasks::status.eq("failed"),
-                        sync_tasks::error_message.eq(Some(e.to_string())),
                         sync_tasks::completed_at.eq(Some(now)),
                     ))
                     .execute(&mut conn);
@@ -218,8 +210,6 @@ async fn fetch_and_generate_metadata(
                 let new_mapping = NewBangumiMapping {
                     core_series_id: series_id,
                     bangumi_id: id,
-                    title_cache: Some(anime_title.to_string()),
-                    source: "auto_search".to_string(),
                 };
                 diesel::insert_into(bangumi_mapping::table)
                     .values(&new_mapping)
@@ -291,14 +281,7 @@ pub async fn resync(State(state): State<AppState>, Json(req): Json<shared::Viewe
     let task_id = if let Ok(mut conn) = state.db.get() {
         let new_task = NewSyncTask {
             download_id: req.download_id,
-            core_series_id: req.series_id,
-            episode_no: req.episode_no,
-            source_path: req.old_target_path.clone(),
             status: "processing".to_string(),
-            anime_title: Some(req.anime_title.clone()),
-            series_no: Some(req.series_no),
-            subtitle_group: Some(req.subtitle_group.clone()),
-            task_type: "resync".to_string(),
         };
         diesel::insert_into(sync_tasks::table)
             .values(&new_task)
@@ -341,11 +324,10 @@ async fn process_resync(
                     ))
                     .execute(&mut conn);
             }
-            Err(e) => {
+            Err(_) => {
                 let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
                     .set((
                         sync_tasks::status.eq("failed"),
-                        sync_tasks::error_message.eq(Some(e.to_string())),
                         sync_tasks::completed_at.eq(Some(now)),
                     ))
                     .execute(&mut conn);
@@ -391,15 +373,16 @@ async fn do_resync(
     // 1. Find the actual current file path from our DB
     let current_path = {
         let mut conn = db.get().map_err(|e| anyhow::anyhow!("{}", e))?;
-        let latest_task: Option<SyncTask> = sync_tasks::table
+        let latest_target: Option<Option<String>> = sync_tasks::table
             .filter(sync_tasks::download_id.eq(req.download_id))
             .filter(sync_tasks::status.eq("completed"))
             .order(sync_tasks::completed_at.desc())
-            .first::<SyncTask>(&mut conn)
+            .select(sync_tasks::target_path)
+            .first::<Option<String>>(&mut conn)
             .optional()
             .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-        match latest_task.and_then(|t| t.target_path) {
+        match latest_target.flatten() {
             Some(path) => std::path::PathBuf::from(path),
             None => {
                 // Fallback to old_target_path from Core
@@ -563,8 +546,6 @@ fn cache_subject(
         rating: subject.rating.as_ref().and_then(|r| r.score),
         cover_url: subject.images.as_ref().and_then(|i| i.large.clone()),
         air_date,
-        episode_count: subject.total_episodes,
-        raw_json: None,
     };
 
     diesel::insert_into(bangumi_subjects::table)
@@ -630,7 +611,7 @@ fn to_subject_detail(s: &BangumiSubject) -> crate::bangumi_client::SubjectDetail
             score: Some(score),
             total: None,
         }),
-        total_episodes: s.episode_count,
+        total_episodes: None,
     }
 }
 

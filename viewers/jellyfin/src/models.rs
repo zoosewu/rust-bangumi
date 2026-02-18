@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDate;
 use diesel::prelude::*;
 
 // ============ BangumiSubject ============
@@ -13,9 +13,6 @@ pub struct BangumiSubject {
     pub rating: Option<f32>,
     pub cover_url: Option<String>,
     pub air_date: Option<NaiveDate>,
-    pub episode_count: Option<i32>,
-    pub raw_json: Option<serde_json::Value>,
-    pub fetched_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -28,8 +25,6 @@ pub struct NewBangumiSubject {
     pub rating: Option<f32>,
     pub cover_url: Option<String>,
     pub air_date: Option<NaiveDate>,
-    pub episode_count: Option<i32>,
-    pub raw_json: Option<serde_json::Value>,
 }
 
 // ============ BangumiEpisode ============
@@ -44,7 +39,6 @@ pub struct BangumiEpisode {
     pub title_cn: Option<String>,
     pub air_date: Option<NaiveDate>,
     pub summary: Option<String>,
-    pub fetched_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -66,10 +60,6 @@ pub struct NewBangumiEpisode {
 pub struct BangumiMapping {
     pub core_series_id: i32,
     pub bangumi_id: i32,
-    pub title_cache: Option<String>,
-    pub source: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -77,41 +67,13 @@ pub struct BangumiMapping {
 pub struct NewBangumiMapping {
     pub core_series_id: i32,
     pub bangumi_id: i32,
-    pub title_cache: Option<String>,
-    pub source: String,
 }
 
 // ============ SyncTask ============
-
-#[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = crate::schema::sync_tasks)]
-pub struct SyncTask {
-    pub task_id: i32,
-    pub download_id: i32,
-    pub core_series_id: i32,
-    pub episode_no: i32,
-    pub source_path: String,
-    pub target_path: Option<String>,
-    pub status: String,
-    pub error_message: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub completed_at: Option<NaiveDateTime>,
-    pub anime_title: Option<String>,
-    pub series_no: Option<i32>,
-    pub subtitle_group: Option<String>,
-    pub task_type: String,
-}
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::sync_tasks)]
 pub struct NewSyncTask {
     pub download_id: i32,
-    pub core_series_id: i32,
-    pub episode_no: i32,
-    pub source_path: String,
     pub status: String,
-    pub anime_title: Option<String>,
-    pub series_no: Option<i32>,
-    pub subtitle_group: Option<String>,
-    pub task_type: String,
 }
