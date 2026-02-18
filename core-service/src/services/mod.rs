@@ -1,4 +1,5 @@
 pub mod conflict_detection;
+pub mod download_cancel;
 pub mod download_dispatch;
 pub mod download_scheduler;
 pub mod download_type_detector;
@@ -10,6 +11,7 @@ pub mod sync_service;
 pub mod title_parser;
 
 pub use conflict_detection::ConflictDetectionService;
+pub use download_cancel::DownloadCancelService;
 pub use download_dispatch::DownloadDispatchService;
 pub use download_scheduler::DownloadScheduler;
 pub use registry::ServiceRegistry;

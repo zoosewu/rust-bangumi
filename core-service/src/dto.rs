@@ -147,6 +147,8 @@ pub struct AnimeLinkRichResponse {
     pub url: String,
     pub source_hash: String,
     pub filtered_flag: bool,
+    pub conflict_flag: bool,
+    pub conflicting_link_ids: Vec<i32>,
     pub download: Option<DownloadInfo>,
     pub created_at: NaiveDateTime,
 }
