@@ -11,26 +11,25 @@ use diesel::prelude::*;
 
 /// Recalculate `filtered_flag` for AnimeLinks affected by a filter rule change.
 ///
-/// Returns the number of links updated.
+/// Returns `(updated_count, newly_filtered_link_ids)` where `newly_filtered_link_ids`
+/// contains IDs of links that changed from unfiltered to filtered (false → true).
 pub fn recalculate_filtered_flags(
     conn: &mut PgConnection,
     target_type: FilterTargetType,
     target_id: Option<i32>,
-) -> Result<usize, String> {
+) -> Result<(usize, Vec<i32>), String> {
     // 1. Find affected links
     let affected_links = find_affected_links(conn, target_type, target_id)?;
 
     if affected_links.is_empty() {
-        return Ok(0);
+        return Ok((0, vec![]));
     }
 
     let mut updated = 0;
+    let mut newly_filtered: Vec<i32> = Vec::new();
 
     for link in &affected_links {
-        // 2. Collect all applicable rules for this link
         let rules = collect_all_rules_for_link(conn, link)?;
-
-        // 3. Evaluate
         let engine = FilterEngine::with_priority_sorted(rules);
         let title = link.title.as_deref().unwrap_or("");
         // filtered_flag = true means filtered OUT (should NOT be included)
@@ -43,18 +42,23 @@ pub fn recalculate_filtered_flags(
                 .execute(conn)
                 .map_err(|e| format!("Failed to update filtered_flag for link {}: {}", link.link_id, e))?;
             updated += 1;
+            // Track links that became filtered (false → true): these need download cancellation
+            if new_flag {
+                newly_filtered.push(link.link_id);
+            }
         }
     }
 
     tracing::info!(
-        "filter_recalc: checked {} links, updated {} for {:?}/{:?}",
+        "filter_recalc: checked {} links, updated {} ({} newly filtered) for {:?}/{:?}",
         affected_links.len(),
         updated,
+        newly_filtered.len(),
         target_type,
         target_id
     );
 
-    Ok(updated)
+    Ok((updated, newly_filtered))
 }
 
 /// Calculate filtered_flag for a single newly created AnimeLink.

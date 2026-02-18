@@ -80,15 +80,32 @@ pub async fn create_filter_rule(
             // then re-run conflict detection (filtered links affect conflict state)
             let db = state.db.clone();
             let conflict_detection = state.conflict_detection.clone();
+            let cancel_service = state.cancel_service.clone();
             let tt = rule.target_type;
             let tid = rule.target_id;
             tokio::spawn(async move {
-                if let Ok(mut conn) = db.get() {
+                let newly_filtered = if let Ok(mut conn) = db.get() {
                     match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
-                        Ok(n) => tracing::info!("filter_recalc after create: updated {} links", n),
-                        Err(e) => tracing::error!("filter_recalc after create failed: {}", e),
+                        Ok((n, newly_filtered)) => {
+                            tracing::info!("filter_recalc after create: updated {} links", n);
+                            newly_filtered
+                        }
+                        Err(e) => {
+                            tracing::error!("filter_recalc after create failed: {}", e);
+                            vec![]
+                        }
+                    }
+                } else {
+                    vec![]
+                };
+
+                if !newly_filtered.is_empty() {
+                    match cancel_service.cancel_downloads_for_links(&newly_filtered).await {
+                        Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
+                        Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
                     }
                 }
+
                 if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
                     tracing::error!("conflict re-detection after filter create failed: {}", e);
                 }
@@ -201,13 +218,30 @@ pub async fn delete_filter_rule(
                 if let Some((tt, tid)) = rule_info {
                     let db = state.db.clone();
                     let conflict_detection = state.conflict_detection.clone();
+                    let cancel_service = state.cancel_service.clone();
                     tokio::spawn(async move {
-                        if let Ok(mut conn) = db.get() {
+                        let newly_filtered = if let Ok(mut conn) = db.get() {
                             match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
-                                Ok(n) => tracing::info!("filter_recalc after delete: updated {} links", n),
-                                Err(e) => tracing::error!("filter_recalc after delete failed: {}", e),
+                                Ok((n, newly_filtered)) => {
+                                    tracing::info!("filter_recalc after delete: updated {} links", n);
+                                    newly_filtered
+                                }
+                                Err(e) => {
+                                    tracing::error!("filter_recalc after delete failed: {}", e);
+                                    vec![]
+                                }
+                            }
+                        } else {
+                            vec![]
+                        };
+
+                        if !newly_filtered.is_empty() {
+                            match cancel_service.cancel_downloads_for_links(&newly_filtered).await {
+                                Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
+                                Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
                             }
                         }
+
                         if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
                             tracing::error!("conflict re-detection after filter delete failed: {}", e);
                         }
