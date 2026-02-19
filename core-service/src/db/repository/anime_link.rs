@@ -50,6 +50,13 @@ pub trait AnimeLinkRepository: Send + Sync {
     ) -> Result<(), RepositoryError>;
     /// Clear conflict_flag for all links (reset before re-detection)
     async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError>;
+    /// Find resolved (link_status='resolved') unfiltered links for a given episode
+    async fn find_resolved_links_for_episode(
+        &self,
+        series_id: i32,
+        group_id: i32,
+        episode_no: i32,
+    ) -> Result<Vec<AnimeLink>, RepositoryError>;
 }
 
 pub struct DieselAnimeLinkRepository {
@@ -214,6 +221,27 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
         })
         .await?
     }
+
+    async fn find_resolved_links_for_episode(
+        &self,
+        sid: i32,
+        gid: i32,
+        ep: i32,
+    ) -> Result<Vec<AnimeLink>, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            anime_links::table
+                .filter(anime_links::series_id.eq(sid))
+                .filter(anime_links::group_id.eq(gid))
+                .filter(anime_links::episode_no.eq(ep))
+                .filter(anime_links::link_status.eq("resolved"))
+                .filter(anime_links::filtered_flag.eq(false))
+                .load::<AnimeLink>(&mut conn)
+                .map_err(RepositoryError::from)
+        })
+        .await?
+    }
 }
 
 #[cfg(test)]
@@ -355,6 +383,15 @@ pub mod mock {
             _status: &str,
         ) -> Result<(), RepositoryError> {
             Ok(())
+        }
+
+        async fn find_resolved_links_for_episode(
+            &self,
+            _series_id: i32,
+            _group_id: i32,
+            _episode_no: i32,
+        ) -> Result<Vec<AnimeLink>, RepositoryError> {
+            Ok(vec![])
         }
 
         async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError> {

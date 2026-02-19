@@ -38,13 +38,45 @@ impl DownloadDispatchService {
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
-        // Load the anime_links for these IDs (only unfiltered and non-conflicted)
+        // Load the anime_links for these IDs (only active, unfiltered and non-conflicted)
         let links: Vec<AnimeLink> = anime_links::table
             .filter(anime_links::link_id.eq_any(&link_ids))
+            .filter(anime_links::link_status.eq("active"))
             .filter(anime_links::filtered_flag.eq(false))
             .filter(anime_links::conflict_flag.eq(false))
             .load::<AnimeLink>(&mut conn)
             .map_err(|e| format!("Failed to load anime links: {}", e))?;
+
+        if links.is_empty() {
+            return Ok(DispatchResult {
+                dispatched: 0,
+                no_downloader: 0,
+                failed: 0,
+            });
+        }
+
+        // Skip links that already have an active download
+        let candidate_link_ids: Vec<i32> = links.iter().map(|l| l.link_id).collect();
+        let links_with_active_downloads: Vec<i32> = downloads::table
+            .filter(downloads::link_id.eq_any(&candidate_link_ids))
+            .filter(downloads::status.eq_any(&["downloading", "completed", "syncing", "synced"]))
+            .select(downloads::link_id)
+            .distinct()
+            .load::<i32>(&mut conn)
+            .map_err(|e| format!("Failed to check active downloads: {}", e))?;
+
+        let links: Vec<AnimeLink> = if links_with_active_downloads.is_empty() {
+            links
+        } else {
+            tracing::info!(
+                "dispatch: skipping {} links with active downloads",
+                links_with_active_downloads.len()
+            );
+            links
+                .into_iter()
+                .filter(|l| !links_with_active_downloads.contains(&l.link_id))
+                .collect()
+        };
 
         if links.is_empty() {
             return Ok(DispatchResult {

@@ -194,8 +194,15 @@ pub async fn receive_fetcher_results(
 
             // Trigger conflict detection after all links created
             if links_created > 0 {
-                if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
-                    tracing::warn!("Conflict detection failed: {}", e);
+                match state.conflict_detection.detect_and_mark_conflicts().await {
+                    Ok(result) => {
+                        if !result.auto_dispatch_link_ids.is_empty() {
+                            if let Err(e) = state.dispatch_service.dispatch_new_links(result.auto_dispatch_link_ids).await {
+                                tracing::warn!("Auto-dispatch after conflict detection failed: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => tracing::warn!("Conflict detection failed: {}", e),
                 }
             }
 
@@ -573,12 +580,18 @@ pub async fn receive_raw_fetcher_results(
 
             // 批次派發新建的下載連結
             if !new_link_ids.is_empty() {
-                let link_count = new_link_ids.len();
-
                 // Trigger conflict detection before dispatch
-                if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
-                    tracing::warn!("Conflict detection failed: {}", e);
-                }
+                let auto_dispatch_ids = match state.conflict_detection.detect_and_mark_conflicts().await {
+                    Ok(result) => result.auto_dispatch_link_ids,
+                    Err(e) => {
+                        tracing::warn!("Conflict detection failed: {}", e);
+                        vec![]
+                    }
+                };
+
+                // Merge auto-dispatch IDs (from conflict auto-resolution) into new link IDs
+                new_link_ids.extend(auto_dispatch_ids);
+                let link_count = new_link_ids.len();
 
                 match state
                     .dispatch_service

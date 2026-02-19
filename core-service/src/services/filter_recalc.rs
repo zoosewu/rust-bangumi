@@ -9,24 +9,35 @@ use crate::schema::{anime_links, anime_series, filter_rules, raw_anime_items};
 use crate::services::filter::FilterEngine;
 use diesel::prelude::*;
 
+/// Result of recalculating filtered flags.
+pub struct FilterRecalcResult {
+    pub updated_count: usize,
+    /// Link IDs that changed from unfiltered to filtered (false → true): need download cancellation.
+    pub newly_filtered: Vec<i32>,
+    /// Link IDs that changed from filtered to unfiltered (true → false): need download dispatch.
+    pub newly_unfiltered: Vec<i32>,
+}
+
 /// Recalculate `filtered_flag` for AnimeLinks affected by a filter rule change.
-///
-/// Returns `(updated_count, newly_filtered_link_ids)` where `newly_filtered_link_ids`
-/// contains IDs of links that changed from unfiltered to filtered (false → true).
 pub fn recalculate_filtered_flags(
     conn: &mut PgConnection,
     target_type: FilterTargetType,
     target_id: Option<i32>,
-) -> Result<(usize, Vec<i32>), String> {
+) -> Result<FilterRecalcResult, String> {
     // 1. Find affected links
     let affected_links = find_affected_links(conn, target_type, target_id)?;
 
     if affected_links.is_empty() {
-        return Ok((0, vec![]));
+        return Ok(FilterRecalcResult {
+            updated_count: 0,
+            newly_filtered: vec![],
+            newly_unfiltered: vec![],
+        });
     }
 
     let mut updated = 0;
     let mut newly_filtered: Vec<i32> = Vec::new();
+    let mut newly_unfiltered: Vec<i32> = Vec::new();
 
     for link in &affected_links {
         let rules = collect_all_rules_for_link(conn, link)?;
@@ -42,23 +53,31 @@ pub fn recalculate_filtered_flags(
                 .execute(conn)
                 .map_err(|e| format!("Failed to update filtered_flag for link {}: {}", link.link_id, e))?;
             updated += 1;
-            // Track links that became filtered (false → true): these need download cancellation
             if new_flag {
+                // false → true: newly filtered OUT
                 newly_filtered.push(link.link_id);
+            } else {
+                // true → false: newly unfiltered (eligible for download)
+                newly_unfiltered.push(link.link_id);
             }
         }
     }
 
     tracing::info!(
-        "filter_recalc: checked {} links, updated {} ({} newly filtered) for {:?}/{:?}",
+        "filter_recalc: checked {} links, updated {} ({} newly filtered, {} newly unfiltered) for {:?}/{:?}",
         affected_links.len(),
         updated,
         newly_filtered.len(),
+        newly_unfiltered.len(),
         target_type,
         target_id
     );
 
-    Ok((updated, newly_filtered))
+    Ok(FilterRecalcResult {
+        updated_count: updated,
+        newly_filtered,
+        newly_unfiltered,
+    })
 }
 
 /// Calculate filtered_flag for a single newly created AnimeLink.

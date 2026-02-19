@@ -81,33 +81,62 @@ pub async fn create_filter_rule(
             let db = state.db.clone();
             let conflict_detection = state.conflict_detection.clone();
             let cancel_service = state.cancel_service.clone();
+            let dispatch_service = state.dispatch_service.clone();
             let tt = rule.target_type;
             let tid = rule.target_id;
             tokio::spawn(async move {
-                let newly_filtered = if let Ok(mut conn) = db.get() {
+                let recalc = if let Ok(mut conn) = db.get() {
                     match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
-                        Ok((n, newly_filtered)) => {
-                            tracing::info!("filter_recalc after create: updated {} links", n);
-                            newly_filtered
+                        Ok(r) => {
+                            tracing::info!("filter_recalc after create: updated {} links", r.updated_count);
+                            r
                         }
                         Err(e) => {
                             tracing::error!("filter_recalc after create failed: {}", e);
-                            vec![]
+                            crate::services::filter_recalc::FilterRecalcResult {
+                                updated_count: 0,
+                                newly_filtered: vec![],
+                                newly_unfiltered: vec![],
+                            }
                         }
                     }
                 } else {
-                    vec![]
+                    crate::services::filter_recalc::FilterRecalcResult {
+                        updated_count: 0,
+                        newly_filtered: vec![],
+                        newly_unfiltered: vec![],
+                    }
                 };
 
-                if !newly_filtered.is_empty() {
-                    match cancel_service.cancel_downloads_for_links(&newly_filtered).await {
+                if !recalc.newly_filtered.is_empty() {
+                    match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
                         Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
                         Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
                     }
                 }
 
-                if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
-                    tracing::error!("conflict re-detection after filter create failed: {}", e);
+                // Re-run conflict detection; it may auto-resolve some conflicts
+                let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
+                    Ok(result) => result.auto_dispatch_link_ids,
+                    Err(e) => {
+                        tracing::error!("conflict re-detection after filter create failed: {}", e);
+                        vec![]
+                    }
+                };
+
+                // Dispatch newly unfiltered links + auto-resolved conflict links
+                let mut to_dispatch = recalc.newly_unfiltered;
+                to_dispatch.extend(auto_dispatch_ids);
+                to_dispatch.sort_unstable();
+                to_dispatch.dedup();
+                if !to_dispatch.is_empty() {
+                    match dispatch_service.dispatch_new_links(to_dispatch).await {
+                        Ok(r) => tracing::info!(
+                            "Re-dispatched after filter create: {} dispatched, {} no_downloader, {} failed",
+                            r.dispatched, r.no_downloader, r.failed
+                        ),
+                        Err(e) => tracing::warn!("Failed to re-dispatch after filter create: {}", e),
+                    }
                 }
             });
 
@@ -219,31 +248,60 @@ pub async fn delete_filter_rule(
                     let db = state.db.clone();
                     let conflict_detection = state.conflict_detection.clone();
                     let cancel_service = state.cancel_service.clone();
+                    let dispatch_service = state.dispatch_service.clone();
                     tokio::spawn(async move {
-                        let newly_filtered = if let Ok(mut conn) = db.get() {
+                        let recalc = if let Ok(mut conn) = db.get() {
                             match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
-                                Ok((n, newly_filtered)) => {
-                                    tracing::info!("filter_recalc after delete: updated {} links", n);
-                                    newly_filtered
+                                Ok(r) => {
+                                    tracing::info!("filter_recalc after delete: updated {} links", r.updated_count);
+                                    r
                                 }
                                 Err(e) => {
                                     tracing::error!("filter_recalc after delete failed: {}", e);
-                                    vec![]
+                                    crate::services::filter_recalc::FilterRecalcResult {
+                                        updated_count: 0,
+                                        newly_filtered: vec![],
+                                        newly_unfiltered: vec![],
+                                    }
                                 }
                             }
                         } else {
-                            vec![]
+                            crate::services::filter_recalc::FilterRecalcResult {
+                                updated_count: 0,
+                                newly_filtered: vec![],
+                                newly_unfiltered: vec![],
+                            }
                         };
 
-                        if !newly_filtered.is_empty() {
-                            match cancel_service.cancel_downloads_for_links(&newly_filtered).await {
+                        if !recalc.newly_filtered.is_empty() {
+                            match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
                                 Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
                                 Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
                             }
                         }
 
-                        if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
-                            tracing::error!("conflict re-detection after filter delete failed: {}", e);
+                        // Re-run conflict detection; it may auto-resolve some conflicts
+                        let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
+                            Ok(result) => result.auto_dispatch_link_ids,
+                            Err(e) => {
+                                tracing::error!("conflict re-detection after filter delete failed: {}", e);
+                                vec![]
+                            }
+                        };
+
+                        // Dispatch newly unfiltered links + auto-resolved conflict links
+                        let mut to_dispatch = recalc.newly_unfiltered;
+                        to_dispatch.extend(auto_dispatch_ids);
+                        to_dispatch.sort_unstable();
+                        to_dispatch.dedup();
+                        if !to_dispatch.is_empty() {
+                            match dispatch_service.dispatch_new_links(to_dispatch).await {
+                                Ok(r) => tracing::info!(
+                                    "Re-dispatched after filter delete: {} dispatched, {} no_downloader, {} failed",
+                                    r.dispatched, r.no_downloader, r.failed
+                                ),
+                                Err(e) => tracing::warn!("Failed to re-dispatch after filter delete: {}", e),
+                            }
                         }
                     });
                 }

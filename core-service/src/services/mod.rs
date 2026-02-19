@@ -10,7 +10,7 @@ pub mod scheduler;
 pub mod sync_service;
 pub mod title_parser;
 
-pub use conflict_detection::ConflictDetectionService;
+pub use conflict_detection::{ConflictDetectionResult, ConflictDetectionService};
 pub use download_cancel::DownloadCancelService;
 pub use download_dispatch::DownloadDispatchService;
 pub use download_scheduler::DownloadScheduler;

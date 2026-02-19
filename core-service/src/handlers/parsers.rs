@@ -265,7 +265,7 @@ pub async fn create_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
 
     Ok((
         StatusCode::CREATED,
@@ -355,7 +355,7 @@ pub async fn update_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
 
     Ok(Json(ParserWithReparseResponse {
         parser: ParserResponse::from(updated_parser),
@@ -386,7 +386,7 @@ pub async fn delete_parser(
 
     // 同步重新解析所有 raw_anime_items
     let stats =
-        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone()).await;
+        reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
 
     Ok(Json(DeleteWithReparseResponse { reparse: stats }))
 }
@@ -408,6 +408,7 @@ async fn reparse_all_items(
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
     sync_service: std::sync::Arc<crate::services::SyncService>,
     conflict_detection: std::sync::Arc<crate::services::ConflictDetectionService>,
+    cancel_service: std::sync::Arc<crate::services::DownloadCancelService>,
 ) -> ReparseStats {
     let all_ids = {
         let mut conn = match db.get() {
@@ -435,7 +436,7 @@ async fn reparse_all_items(
     }
 
     tracing::info!("reparse_all_items: 開始重新解析全部 {} 筆項目", all_ids.len());
-    reparse_affected_items(db, dispatch_service, sync_service, conflict_detection, &all_ids).await
+    reparse_affected_items(db, dispatch_service, sync_service, conflict_detection, cancel_service, &all_ids).await
 }
 
 /// 重新解析指定的 raw_anime_items
@@ -453,6 +454,7 @@ async fn reparse_affected_items(
     dispatch_service: std::sync::Arc<crate::services::DownloadDispatchService>,
     sync_service: std::sync::Arc<crate::services::SyncService>,
     conflict_detection: std::sync::Arc<crate::services::ConflictDetectionService>,
+    cancel_service: std::sync::Arc<crate::services::DownloadCancelService>,
     item_ids: &[i32],
 ) -> ReparseStats {
 
@@ -490,6 +492,9 @@ async fn reparse_affected_items(
     let mut failed_count = 0;
     let mut no_match_count = 0;
     let mut new_link_ids: Vec<i32> = Vec::new();
+    let mut updated_link_ids: Vec<i32> = Vec::new();
+    let mut unmatched_link_ids: Vec<i32> = Vec::new(); // links to cancel + delete
+    let mut unmatched_series_ids: Vec<(i32, i32)> = Vec::new(); // (item_id, series_id) for cleanup
     let mut resync_link_ids: Vec<i32> = Vec::new();
 
     for item in &items {
@@ -499,6 +504,8 @@ async fn reparse_affected_items(
                     Ok(result) => {
                         if result.is_new {
                             new_link_ids.push(result.link_id);
+                        } else {
+                            updated_link_ids.push(result.link_id);
                         }
                         if result.metadata_changed {
                             resync_link_ids.push(result.link_id);
@@ -536,23 +543,17 @@ async fn reparse_affected_items(
                 }
             }
             Ok(None) => {
-                // 無匹配：刪除既有 anime_link（沒有正確解析 = 不應有 link）
-                // 先查出舊 link 的 series_id，刪除後清理空 series
-                let old_series_id: Option<i32> = anime_links::table
+                // 無匹配：收集舊 link 資訊，稍後統一取消下載再刪除
+                let old_link: Option<(i32, i32)> = anime_links::table
                     .filter(anime_links::raw_item_id.eq(item.item_id))
-                    .select(anime_links::series_id)
-                    .first(&mut conn)
+                    .select((anime_links::link_id, anime_links::series_id))
+                    .first::<(i32, i32)>(&mut conn)
                     .optional()
                     .ok()
                     .flatten();
-                diesel::delete(
-                    anime_links::table
-                        .filter(anime_links::raw_item_id.eq(item.item_id)),
-                )
-                .execute(&mut conn)
-                .ok();
-                if let Some(sid) = old_series_id {
-                    cleanup_empty_series(&mut conn, sid);
+                if let Some((lid, sid)) = old_link {
+                    unmatched_link_ids.push(lid);
+                    unmatched_series_ids.push((item.item_id, sid));
                 }
                 TitleParserService::update_raw_item_status(
                     &mut conn,
@@ -587,15 +588,50 @@ async fn reparse_affected_items(
         no_match_count
     );
 
-    // 觸發衝突偵測
-    if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
-        tracing::warn!("reparse_affected_items: conflict detection 失敗: {}", e);
+    // Cancel downloads for links that lost their match, BEFORE deleting the links
+    // (downloads has ON DELETE CASCADE from anime_links, so we must cancel first)
+    if !unmatched_link_ids.is_empty() {
+        match cancel_service.cancel_downloads_for_links(&unmatched_link_ids).await {
+            Ok(n) => tracing::info!("reparse: cancelled {} downloads for unmatched links", n),
+            Err(e) => tracing::warn!("reparse: failed to cancel downloads for unmatched links: {}", e),
+        }
+
+        // Now delete the unmatched links and clean up empty series
+        if let Ok(mut del_conn) = db.get() {
+            for &lid in &unmatched_link_ids {
+                diesel::delete(anime_links::table.filter(anime_links::link_id.eq(lid)))
+                    .execute(&mut del_conn)
+                    .ok();
+            }
+            for &(_, sid) in &unmatched_series_ids {
+                cleanup_empty_series(&mut del_conn, sid);
+            }
+        }
     }
 
-    // 觸發 dispatch 下載（僅新建的 link 需要 dispatch）
-    if !new_link_ids.is_empty() {
-        if let Err(e) = dispatch_service.dispatch_new_links(new_link_ids).await {
-            tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e);
+    // 觸發衝突偵測
+    let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
+        Ok(result) => result.auto_dispatch_link_ids,
+        Err(e) => {
+            tracing::warn!("reparse_affected_items: conflict detection 失敗: {}", e);
+            vec![]
+        }
+    };
+
+    // Dispatch: new links + updated links (may have become eligible) + auto-resolved conflict links
+    // dispatch_new_links will automatically skip filtered/conflicted/already-downloading links
+    let mut to_dispatch = new_link_ids;
+    to_dispatch.extend(updated_link_ids);
+    to_dispatch.extend(auto_dispatch_ids);
+    to_dispatch.sort_unstable();
+    to_dispatch.dedup();
+    if !to_dispatch.is_empty() {
+        match dispatch_service.dispatch_new_links(to_dispatch).await {
+            Ok(r) => tracing::info!(
+                "reparse: dispatched {} links, {} no_downloader, {} failed",
+                r.dispatched, r.no_downloader, r.failed
+            ),
+            Err(e) => tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e),
         }
     }
 
