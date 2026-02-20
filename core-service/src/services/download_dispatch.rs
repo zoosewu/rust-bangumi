@@ -55,11 +55,13 @@ impl DownloadDispatchService {
             });
         }
 
-        // Skip links that already have an active download
+        // Skip links that already have a non-terminal download.
+        // Only these terminal-failure statuses allow re-dispatch:
+        let redispatchable = &["cancelled", "failed", "no_downloader"];
         let candidate_link_ids: Vec<i32> = links.iter().map(|l| l.link_id).collect();
         let links_with_active_downloads: Vec<i32> = downloads::table
             .filter(downloads::link_id.eq_any(&candidate_link_ids))
-            .filter(downloads::status.eq_any(&["downloading", "completed", "syncing", "synced"]))
+            .filter(downloads::status.ne_all(redispatchable))
             .select(downloads::link_id)
             .distinct()
             .load::<i32>(&mut conn)
