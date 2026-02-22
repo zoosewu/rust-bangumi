@@ -12,21 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY Cargo.toml Cargo.lock ./
 COPY shared/Cargo.toml ./shared/
 COPY core-service/Cargo.toml ./core-service/
-COPY fetchers/mikanani/Cargo.toml ./fetchers/mikanani/
-COPY downloaders/qbittorrent/Cargo.toml ./downloaders/qbittorrent/
-COPY viewers/jellyfin/Cargo.toml ./viewers/jellyfin/
-COPY cli/Cargo.toml ./cli/
+
+# 只保留本服務相關的 workspace members
+RUN sed -i '/"fetchers/d; /"downloaders/d; /"viewers/d; /"cli"/d' Cargo.toml
 
 # 複製 shared 真實源碼（workspace library，需要真實內容）
 COPY shared/src ./shared/src
 
-# 創建其他 workspace members 的虛擬源碼（讓 cargo 能解析 manifest）
-RUN mkdir -p core-service/src fetchers/mikanani/src downloaders/qbittorrent/src viewers/jellyfin/src cli/src && \
+# 只需本包的虛擬源碼
+RUN mkdir -p core-service/src && \
     echo "fn main() {}" > core-service/src/main.rs && \
-    echo "fn main() {}" > fetchers/mikanani/src/main.rs && \
-    echo "fn main() {}" > downloaders/qbittorrent/src/main.rs && \
-    echo "fn main() {}" > viewers/jellyfin/src/main.rs && \
-    echo "fn main() {}" > cli/src/main.rs && \
     cargo build --release --package core-service 2>&1 | grep -v "warning" || true && \
     rm -rf core-service/src
 
@@ -51,7 +46,6 @@ RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
 # 複製編譯的二進制文件
 COPY --from=builder --chown=bangumi:bangumi /app/target/release/core-service /usr/local/bin/
 
-# 切換用戶
 USER bangumi
 
 EXPOSE 8000
