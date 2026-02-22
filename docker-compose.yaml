@@ -53,6 +53,7 @@ services:
         condition: service_healthy
     environment:
       CORE_DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
       SERVICE_PORT: ${CORE_PORT:-8000}
       RUST_LOG: ${RUST_LOG:-core_service=info}
       RUST_BACKTRACE: "0"
@@ -141,6 +142,7 @@ services:
         condition: service_healthy
     environment:
       CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
+      SERVICE_HOST: downloader-qbittorrent
       SERVICE_PORT: ${DOWNLOADER_PORT:-8002}
       QBITTORRENT_URL: ${QBITTORRENT_URL:-http://qbittorrent:8080}
       RUST_LOG: ${RUST_LOG:-downloader_qbittorrent=info}

@@ -15,7 +15,7 @@ pub struct SyncService {
 impl SyncService {
     pub fn new(db_pool: DbPool) -> Self {
         let core_service_url = std::env::var("CORE_SERVICE_URL")
-            .unwrap_or_else(|_| "http://localhost:8000".to_string());
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
         Self {
             db_pool,
             http_client: reqwest::Client::new(),
