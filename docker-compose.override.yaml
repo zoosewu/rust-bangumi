@@ -21,7 +21,7 @@ services:
       PGID: ${PGID:-1000}
       TZ: ${TZ:-Asia/Taipei}
     ports:
-      - "${QBITTORRENT_WEBUI_PORT:-8080}:8080"
+      - "${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}"
       - "${QBITTORRENT_DHT_PORT:-6881}:6881"
       - "${QBITTORRENT_DHT_PORT:-6881}:6881/udp"
     volumes:
@@ -32,7 +32,7 @@ services:
         ipv4_address: 172.25.0.20
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${QBITTORRENT_WEBUI_PORT:-8080}/"]
       interval: 30s
       timeout: 10s
       retries: 3

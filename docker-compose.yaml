@@ -144,7 +144,9 @@ services:
       CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
       SERVICE_HOST: downloader-qbittorrent
       SERVICE_PORT: ${DOWNLOADER_PORT:-8002}
-      QBITTORRENT_URL: ${QBITTORRENT_URL:-http://qbittorrent:8080}
+      QBITTORRENT_URL: http://qbittorrent:${QBITTORRENT_WEBUI_PORT:-8080}
+      QBITTORRENT_USER: ${QBITTORRENT_USER:?QBITTORRENT_USER is required}
+      QBITTORRENT_PASSWORD: ${QBITTORRENT_PASSWORD:?QBITTORRENT_PASSWORD is required}
       RUST_LOG: ${RUST_LOG:-downloader_qbittorrent=info}
       RUST_BACKTRACE: "0"
       ENABLE_CORS: ${ENABLE_CORS:-true}
