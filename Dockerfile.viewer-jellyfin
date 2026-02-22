@@ -11,7 +11,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY shared/Cargo.toml ./shared/
 COPY viewers/jellyfin/Cargo.toml ./viewers/jellyfin/
 
-RUN sed -i '/"core-service"/d; /"fetchers/d; /"downloaders/d; /"cli"/d' Cargo.toml
+RUN awk '/^members/{p=1; print "members = ["; print "    \"shared\","; print "    \"viewers/jellyfin\","; next} p&&/^\]/{p=0; print; next} p{next} {print}' Cargo.toml > /tmp/c && mv /tmp/c Cargo.toml
 
 COPY shared/src ./shared/src
 

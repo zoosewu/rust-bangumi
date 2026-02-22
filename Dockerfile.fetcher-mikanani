@@ -11,7 +11,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY shared/Cargo.toml ./shared/
 COPY fetchers/mikanani/Cargo.toml ./fetchers/mikanani/
 
-RUN sed -i '/"core-service"/d; /"downloaders/d; /"viewers/d; /"cli"/d' Cargo.toml
+RUN awk '/^members/{p=1; print "members = ["; print "    \"shared\","; print "    \"fetchers/mikanani\","; next} p&&/^\]/{p=0; print; next} p{next} {print}' Cargo.toml > /tmp/c && mv /tmp/c Cargo.toml
 
 COPY shared/src ./shared/src
 
