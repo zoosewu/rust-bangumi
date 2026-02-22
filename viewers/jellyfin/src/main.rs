@@ -87,7 +87,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health_check))
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 8003));
+    let port: u16 = std::env::var("SERVICE_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8003);
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
     let listener = match TcpListener::bind(addr).await {
         Ok(l) => l,
         Err(e) => {
@@ -117,7 +121,10 @@ async fn register_to_core() -> anyhow::Result<()> {
         service_type: shared::ServiceType::Viewer,
         service_name: "jellyfin".to_string(),
         host: service_host,
-        port: 8003,
+        port: std::env::var("SERVICE_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(8003),
         capabilities: shared::Capabilities {
             fetch_endpoint: None,
             download_endpoint: None,

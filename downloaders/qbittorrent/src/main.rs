@@ -58,8 +58,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health_check))
         .with_state(client);
 
-    let addr = "0.0.0.0:8002";
-    let listener = match TcpListener::bind(addr).await {
+    let service_port: u16 = std::env::var("SERVICE_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8002);
+    let addr = format!("0.0.0.0:{}", service_port);
+    let listener = match TcpListener::bind(&addr).await {
         Ok(l) => l,
         Err(e) => {
             tracing::error!("無法綁定 {} — {}", addr, e);
