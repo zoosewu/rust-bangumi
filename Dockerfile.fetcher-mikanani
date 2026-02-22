@@ -1,39 +1,51 @@
 # 構建階段
-FROM rust:alpine as builder
+FROM rust:slim-bookworm AS builder
 
 WORKDIR /app
 
 # 安裝依賴
-RUN apk add --no-cache musl-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 # 複製 Cargo.toml 和工作區配置以利用層快取
 COPY Cargo.toml Cargo.lock ./
+COPY shared/Cargo.toml ./shared/
 COPY core-service/Cargo.toml ./core-service/
-COPY fetcher-mikanani/Cargo.toml ./fetcher-mikanani/
-COPY downloader-qbittorrent/Cargo.toml ./downloader-qbittorrent/
-COPY viewer-jellyfin/Cargo.toml ./viewer-jellyfin/
+COPY fetchers/mikanani/Cargo.toml ./fetchers/mikanani/
+COPY downloaders/qbittorrent/Cargo.toml ./downloaders/qbittorrent/
+COPY viewers/jellyfin/Cargo.toml ./viewers/jellyfin/
 COPY cli/Cargo.toml ./cli/
 
-# 創建虛擬源碼以預編譯依賴
-RUN mkdir -p fetcher-mikanani/src && \
-    echo "fn main() {}" > fetcher-mikanani/src/main.rs && \
+# 複製 shared 真實源碼（workspace library，需要真實內容）
+COPY shared/src ./shared/src
+
+# 創建其他 workspace members 的虛擬源碼（讓 cargo 能解析 manifest）
+RUN mkdir -p core-service/src fetchers/mikanani/src downloaders/qbittorrent/src viewers/jellyfin/src cli/src && \
+    echo "fn main() {}" > core-service/src/main.rs && \
+    echo "fn main() {}" > fetchers/mikanani/src/main.rs && \
+    echo "fn main() {}" > downloaders/qbittorrent/src/main.rs && \
+    echo "fn main() {}" > viewers/jellyfin/src/main.rs && \
+    echo "fn main() {}" > cli/src/main.rs && \
     cargo build --release --package fetcher-mikanani 2>&1 | grep -v "warning" || true && \
-    rm -rf fetcher-mikanani/src
+    rm -rf fetchers/mikanani/src
 
 # 複製實際源碼
-COPY fetcher-mikanani/src ./fetcher-mikanani/src
+COPY fetchers/mikanani/src ./fetchers/mikanani/src
 
 # 編譯實際應用
 RUN cargo build --release --package fetcher-mikanani && \
     strip /app/target/release/fetcher-mikanani
 
 # 運行階段
-FROM alpine:latest
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ca-certificates curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 創建非 root 用戶
-RUN addgroup -S bangumi && adduser -S bangumi -G bangumi
+RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
 
 # 複製編譯的二進制文件
 COPY --from=builder --chown=bangumi:bangumi /app/target/release/fetcher-mikanani /usr/local/bin/
