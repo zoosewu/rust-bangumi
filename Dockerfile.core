@@ -3,35 +3,37 @@ FROM rust:slim-bookworm AS builder
 
 WORKDIR /app
 
-# 安裝依賴
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev libpq-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製 Cargo.toml 和工作區配置以利用層快取
 COPY Cargo.toml Cargo.lock ./
 COPY shared/Cargo.toml ./shared/
 COPY core-service/Cargo.toml ./core-service/
 
-# 只保留本服務相關的 workspace members
 RUN sed -i '/"fetchers/d; /"downloaders/d; /"viewers/d; /"cli"/d' Cargo.toml
 
-# 複製 shared 真實源碼（workspace library，需要真實內容）
 COPY shared/src ./shared/src
 
-# 只需本包的虛擬源碼
-RUN mkdir -p core-service/src && \
+# 預編譯依賴（快取跨 build 共享，shared 只需編譯一次）
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    mkdir -p core-service/src && \
     echo "fn main() {}" > core-service/src/main.rs && \
-    cargo build --release --package core-service 2>&1 | grep -v "warning" || true && \
+    cargo build --release --package core-service || true && \
     rm -rf core-service/src
 
-# 複製實際源碼
 COPY core-service/src ./core-service/src
 COPY core-service/migrations ./core-service/migrations
 
-# 編譯實際應用
-RUN cargo build --release --package core-service && \
-    strip /app/target/release/core-service
+# 最終編譯，binary 複製至 image layer（cache mount 不保留在 image 中）
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    cargo build --release --package core-service && \
+    cp /app/target/release/core-service /usr/local/bin/core-service && \
+    strip /usr/local/bin/core-service
 
 # 運行階段
 FROM debian:bookworm-slim
@@ -40,11 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl libpq5 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-# 創建非 root 用戶
 RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
 
-# 複製編譯的二進制文件
-COPY --from=builder --chown=bangumi:bangumi /app/target/release/core-service /usr/local/bin/
+COPY --from=builder /usr/local/bin/core-service /usr/local/bin/
 
 USER bangumi
 

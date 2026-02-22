@@ -3,34 +3,34 @@ FROM rust:slim-bookworm AS builder
 
 WORKDIR /app
 
-# 安裝依賴
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# 複製 Cargo.toml 和工作區配置以利用層快取
 COPY Cargo.toml Cargo.lock ./
 COPY shared/Cargo.toml ./shared/
 COPY fetchers/mikanani/Cargo.toml ./fetchers/mikanani/
 
-# 只保留本服務相關的 workspace members
 RUN sed -i '/"core-service"/d; /"downloaders/d; /"viewers/d; /"cli"/d' Cargo.toml
 
-# 複製 shared 真實源碼（workspace library，需要真實內容）
 COPY shared/src ./shared/src
 
-# 只需本包的虛擬源碼
-RUN mkdir -p fetchers/mikanani/src && \
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    mkdir -p fetchers/mikanani/src && \
     echo "fn main() {}" > fetchers/mikanani/src/main.rs && \
-    cargo build --release --package fetcher-mikanani 2>&1 | grep -v "warning" || true && \
+    cargo build --release --package fetcher-mikanani || true && \
     rm -rf fetchers/mikanani/src
 
-# 複製實際源碼
 COPY fetchers/mikanani/src ./fetchers/mikanani/src
 
-# 編譯實際應用
-RUN cargo build --release --package fetcher-mikanani && \
-    strip /app/target/release/fetcher-mikanani
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    cargo build --release --package fetcher-mikanani && \
+    cp /app/target/release/fetcher-mikanani /usr/local/bin/fetcher-mikanani && \
+    strip /usr/local/bin/fetcher-mikanani
 
 # 運行階段
 FROM debian:bookworm-slim
@@ -39,11 +39,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-# 創建非 root 用戶
 RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
 
-# 複製編譯的二進制文件
-COPY --from=builder --chown=bangumi:bangumi /app/target/release/fetcher-mikanani /usr/local/bin/
+COPY --from=builder /usr/local/bin/fetcher-mikanani /usr/local/bin/
 
 USER bangumi
 
