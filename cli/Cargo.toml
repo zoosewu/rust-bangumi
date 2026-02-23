@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "bangumi"
+path = "src/main.rs"
+
 [dependencies]
 shared = { path = "../shared" }
 
@@ -26,6 +30,7 @@ dotenv.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 
-prettytable-rs = "0.10"
+tabled = "0.15"
+colored = "2.1"
 
 [dev-dependencies]

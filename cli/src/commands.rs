@@ -1,7 +1,6 @@
 use crate::client::ApiClient;
 use crate::models::*;
 use anyhow::Result;
-use prettytable::{Cell, Row, Table};
 use tracing::info;
 
 /// Task 36: 訂閱 RSS 源
@@ -40,22 +39,16 @@ pub async fn list(api_url: &str, anime_id: Option<i64>, _season: Option<String>)
         return Ok(());
     }
 
-    let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("動畫 ID"),
-        Cell::new("標題"),
-        Cell::new("建立時間"),
-    ]));
-
-    for anime in response.items {
-        table.add_row(Row::new(vec![
-            Cell::new(&anime.anime_id.to_string()),
-            Cell::new(&anime.title),
-            Cell::new(&anime.created_at.to_string()),
-        ]));
+    println!("{:<10} {:<40} {}", "動畫 ID", "標題", "建立時間");
+    println!("{}", "-".repeat(80));
+    for anime in &response.items {
+        println!(
+            "{:<10} {:<40} {}",
+            anime.anime_id,
+            anime.title,
+            anime.created_at
+        );
     }
-
-    table.printstd();
 
     if let Some(total) = response.total {
         println!("\n總計: {} 個動畫", total);
@@ -95,33 +88,23 @@ pub async fn links(
         return Ok(());
     }
 
-    let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("連結 ID"),
-        Cell::new("集數"),
-        Cell::new("字幕組"),
-        Cell::new("標題"),
-        Cell::new("URL"),
-        Cell::new("狀態"),
-    ]));
-
-    for link in links {
-        let status = if link.filtered_flag {
-            "已過濾"
-        } else {
-            "活躍"
-        };
-        table.add_row(Row::new(vec![
-            Cell::new(&link.link_id.to_string()),
-            Cell::new(&link.episode_no.to_string()),
-            Cell::new(&link.group_id.to_string()),
-            Cell::new(&link.title.as_deref().unwrap_or("-")),
-            Cell::new(&link.url),
-            Cell::new(status),
-        ]));
+    println!(
+        "{:<8} {:<6} {:<8} {:<40} {:<50} {}",
+        "連結 ID", "集數", "字幕組", "標題", "URL", "狀態"
+    );
+    println!("{}", "-".repeat(120));
+    for link in &links {
+        let status = if link.filtered_flag { "已過濾" } else { "活躍" };
+        println!(
+            "{:<8} {:<6} {:<8} {:<40} {:<50} {}",
+            link.link_id,
+            link.episode_no,
+            link.group_id,
+            link.title.as_deref().unwrap_or("-"),
+            link.url,
+            status
+        );
     }
-
-    table.printstd();
 
     Ok(())
 }
@@ -177,33 +160,26 @@ pub async fn filter_list(api_url: &str, series_id: i64, group: &str) -> Result<(
         return Ok(());
     }
 
-    let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("規則 ID"),
-        Cell::new("系列 ID"),
-        Cell::new("字幕組 ID"),
-        Cell::new("類型"),
-        Cell::new("正則表達式"),
-        Cell::new("建立時間"),
-    ]));
-
-    for rule in response.items {
+    println!(
+        "{:<8} {:<8} {:<8} {:<6} {:<30} {}",
+        "規則 ID", "系列 ID", "字幕組 ID", "類型", "正則表達式", "建立時間"
+    );
+    println!("{}", "-".repeat(80));
+    for rule in &response.items {
         let rule_type = match rule.rule_type {
             FilterType::Positive => "正向",
             FilterType::Negative => "反向",
         };
-
-        table.add_row(Row::new(vec![
-            Cell::new(&rule.rule_id.to_string()),
-            Cell::new(&rule.series_id.to_string()),
-            Cell::new(&rule.group_id.to_string()),
-            Cell::new(rule_type),
-            Cell::new(&rule.regex_pattern),
-            Cell::new(&rule.created_at.to_string()),
-        ]));
+        println!(
+            "{:<8} {:<8} {:<8} {:<6} {:<30} {}",
+            rule.rule_id,
+            rule.series_id,
+            rule.group_id,
+            rule_type,
+            rule.regex_pattern,
+            rule.created_at
+        );
     }
-
-    table.printstd();
 
     Ok(())
 }
@@ -263,35 +239,24 @@ pub async fn services(api_url: &str) -> Result<()> {
         return Ok(());
     }
 
-    let mut table = Table::new();
-    table.add_row(Row::new(vec![
-        Cell::new("服務 ID"),
-        Cell::new("服務類型"),
-        Cell::new("服務名稱"),
-        Cell::new("主機"),
-        Cell::new("埠口"),
-        Cell::new("狀態"),
-        Cell::new("最後心跳"),
-    ]));
-
-    for service in response.items {
-        let status = if service.is_healthy {
-            "✓ 健康"
-        } else {
-            "✗ 不健康"
-        };
-        table.add_row(Row::new(vec![
-            Cell::new(&service.service_id),
-            Cell::new(&service.service_type),
-            Cell::new(&service.service_name),
-            Cell::new(&service.host),
-            Cell::new(&service.port.to_string()),
-            Cell::new(status),
-            Cell::new(&service.last_heartbeat.to_string()),
-        ]));
+    println!(
+        "{:<36} {:<12} {:<20} {:<16} {:<6} {:<8} {}",
+        "服務 ID", "服務類型", "服務名稱", "主機", "埠口", "狀態", "最後心跳"
+    );
+    println!("{}", "-".repeat(120));
+    for service in &response.items {
+        let status = if service.is_healthy { "健康" } else { "不健康" };
+        println!(
+            "{:<36} {:<12} {:<20} {:<16} {:<6} {:<8} {}",
+            service.service_id,
+            service.service_type,
+            service.service_name,
+            service.host,
+            service.port,
+            status,
+            service.last_heartbeat
+        );
     }
-
-    table.printstd();
 
     Ok(())
 }
