@@ -300,49 +300,7 @@ INSERT INTO title_parsers (
     episode_no_source, episode_no_value,
     series_no_source, series_no_value,
     subtitle_group_source, subtitle_group_value,
-    resolution_source, resolution_value
-) VALUES (
-    'LoliHouse 標準格式',
-    '匹配 [字幕組] 動畫名稱 - 集數 [解析度] 格式',
-    100,
-    '^\[.+\].+\s-\s\d+',
-    '^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)',
-    'regex', '2',
-    'regex', '3',
-    NULL, NULL,
-    'regex', '1',
-    'regex', '4'
-), (
-    '六四位元 星號格式',
-    '匹配以星號分隔的格式',
-    90,
-    '^[^★]+★.+★\d+★',
-    '^([^★]+)★(.+?)★(\d+)★(\d+x\d+)',
-    'regex', '2',
-    'regex', '3',
-    'static', '1',
-    'regex', '1',
-    'regex', '4'
-), (
-    '預設解析器',
-    '嘗試匹配任何包含 - 數字 的標題',
-    1,
-    '.+\s-\s\d+',
-    '^(.+?)\s+-\s*(\d+)',
-    'regex', '1',
-    'regex', '2',
-    'static', '1',
-    'static', '未知字幕組',
-    NULL, NULL
-);
-
-INSERT INTO title_parsers (
-    name, description, priority,
-    condition_regex, parse_regex,
-    anime_title_source, anime_title_value,
-    episode_no_source, episode_no_value,
-    series_no_source, series_no_value,
-    subtitle_group_source, subtitle_group_value
+    created_from_type
 ) VALUES (
     'Catch-All 全匹配',
     '最低優先級，將整個標題作為動畫名稱，集數預設為 1。確保所有標題都能被解析。',
@@ -352,5 +310,6 @@ INSERT INTO title_parsers (
     'regex', '1',
     'static', '1',
     'static', '1',
-    'static', '未知字幕組'
+    'static', '未知字幕組',
+    'global'
 );
