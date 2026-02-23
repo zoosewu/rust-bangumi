@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 mod client;
 mod commands;
 mod models;
+mod output;
 
 #[cfg(test)]
 mod tests;
