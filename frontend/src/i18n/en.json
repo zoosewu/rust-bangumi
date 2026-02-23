@@ -227,7 +227,8 @@
     "regexError": "Regex Error",
     "matchedBy": "Matched by",
     "searchPlaceholder": "Search titles...",
-    "parseError": "Parse error"
+    "parseError": "Parse error",
+    "entity": "Belongs To"
   },
   "conflicts": {
     "title": "Subscription Conflicts",

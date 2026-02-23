@@ -227,7 +227,8 @@
     "regexError": "正規表現エラー",
     "matchedBy": "一致パーサー",
     "searchPlaceholder": "タイトルを検索...",
-    "parseError": "解析エラー"
+    "parseError": "解析エラー",
+    "entity": "所属元"
   },
   "conflicts": {
     "title": "サブスクリプションコンフリクト",

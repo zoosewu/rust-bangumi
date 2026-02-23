@@ -227,7 +227,8 @@
     "regexError": "正規表達式錯誤",
     "matchedBy": "匹配的解析器",
     "searchPlaceholder": "搜尋標題...",
-    "parseError": "解析錯誤"
+    "parseError": "解析錯誤",
+    "entity": "所屬來源"
   },
   "conflicts": {
     "title": "訂閱衝突",

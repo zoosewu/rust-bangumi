@@ -205,7 +205,7 @@ export default function ParsersPage() {
     },
     {
       key: "created_from_name",
-      header: t("parsers.entity", "Entity"),
+      header: t("parsers.entity", "Belongs To"),
       render: (item) => {
         const type = item.created_from_type as string | null
         const name = item.created_from_name as string | null
