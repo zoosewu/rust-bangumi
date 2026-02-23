@@ -96,6 +96,7 @@ pub struct ParserResponse {
     pub year_value: Option<String>,
     pub created_from_type: Option<String>,
     pub created_from_id: Option<i32>,
+    pub created_from_name: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -126,6 +127,7 @@ impl From<TitleParser> for ParserResponse {
             year_value: p.year_value,
             created_from_type: p.created_from_type.map(|t| t.to_string()),
             created_from_id: p.created_from_id,
+            created_from_name: None,
             created_at: p.created_at.to_string(),
             updated_at: p.updated_at.to_string(),
         }
@@ -169,9 +171,30 @@ pub async fn list_parsers(
         .load::<TitleParser>(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(
-        parsers.into_iter().map(ParserResponse::from).collect(),
-    ))
+    let (anime_names, series_names, group_names, sub_names) =
+        resolve_parser_names(&mut conn, &parsers);
+
+    let responses: Vec<ParserResponse> = parsers
+        .into_iter()
+        .map(|p| {
+            let type_ref = p.created_from_type.as_ref();
+            let id = p.created_from_id;
+            let name = match (type_ref, id) {
+                (Some(FilterTargetType::Global), _) => Some("Global".to_string()),
+                (Some(FilterTargetType::Anime), Some(id)) => anime_names.get(&id).cloned(),
+                (Some(FilterTargetType::AnimeSeries), Some(id)) => series_names.get(&id).cloned(),
+                (Some(FilterTargetType::SubtitleGroup), Some(id)) => group_names.get(&id).cloned(),
+                (Some(FilterTargetType::Subscription), Some(id))
+                | (Some(FilterTargetType::Fetcher), Some(id)) => sub_names.get(&id).cloned(),
+                _ => None,
+            };
+            let mut resp = ParserResponse::from(p);
+            resp.created_from_name = name;
+            resp
+        })
+        .collect();
+
+    Ok(Json(responses))
 }
 
 /// GET /parsers/:parser_id - 取得單一解析器
@@ -848,6 +871,93 @@ fn cleanup_empty_series(conn: &mut diesel::PgConnection, series_id: i32) {
             tracing::info!("cleanup_empty_series: 已移除空的 anime_series {}", series_id);
         }
     }
+}
+
+/// 批次查詢各實體名稱，分別按 created_from_type 分組。
+/// 回傳值為 4 個獨立的 HashMap，以各自的主鍵對應名稱。
+fn resolve_parser_names(
+    conn: &mut diesel::PgConnection,
+    parsers: &[TitleParser],
+) -> (
+    std::collections::HashMap<i32, String>, // anime_id -> title
+    std::collections::HashMap<i32, String>, // series_id -> "Title S{n}"
+    std::collections::HashMap<i32, String>, // group_id -> group_name
+    std::collections::HashMap<i32, String>, // subscription_id -> name
+) {
+    use crate::schema::{animes, anime_series, subtitle_groups, subscriptions};
+
+    let mut anime_ids: Vec<i32> = vec![];
+    let mut series_ids: Vec<i32> = vec![];
+    let mut group_ids: Vec<i32> = vec![];
+    let mut sub_ids: Vec<i32> = vec![];
+
+    for p in parsers {
+        if let (Some(t), Some(id)) = (&p.created_from_type, p.created_from_id) {
+            match t {
+                FilterTargetType::Anime => anime_ids.push(id),
+                FilterTargetType::AnimeSeries => series_ids.push(id),
+                FilterTargetType::SubtitleGroup => group_ids.push(id),
+                FilterTargetType::Subscription | FilterTargetType::Fetcher => sub_ids.push(id),
+                FilterTargetType::Global => {}
+            }
+        }
+    }
+
+    let mut anime_names: std::collections::HashMap<i32, String> = Default::default();
+    let mut series_names: std::collections::HashMap<i32, String> = Default::default();
+    let mut group_names: std::collections::HashMap<i32, String> = Default::default();
+    let mut sub_names: std::collections::HashMap<i32, String> = Default::default();
+
+    if !anime_ids.is_empty() {
+        if let Ok(rows) = animes::table
+            .filter(animes::anime_id.eq_any(&anime_ids))
+            .select((animes::anime_id, animes::title))
+            .load::<(i32, String)>(conn)
+        {
+            for (id, title) in rows {
+                anime_names.insert(id, title);
+            }
+        }
+    }
+
+    if !series_ids.is_empty() {
+        if let Ok(rows) = anime_series::table
+            .inner_join(animes::table)
+            .filter(anime_series::series_id.eq_any(&series_ids))
+            .select((anime_series::series_id, animes::title, anime_series::series_no))
+            .load::<(i32, String, i32)>(conn)
+        {
+            for (id, title, series_no) in rows {
+                series_names.insert(id, format!("{} S{}", title, series_no));
+            }
+        }
+    }
+
+    if !group_ids.is_empty() {
+        if let Ok(rows) = subtitle_groups::table
+            .filter(subtitle_groups::group_id.eq_any(&group_ids))
+            .select((subtitle_groups::group_id, subtitle_groups::group_name))
+            .load::<(i32, String)>(conn)
+        {
+            for (id, name) in rows {
+                group_names.insert(id, name);
+            }
+        }
+    }
+
+    if !sub_ids.is_empty() {
+        if let Ok(rows) = subscriptions::table
+            .filter(subscriptions::subscription_id.eq_any(&sub_ids))
+            .select((subscriptions::subscription_id, subscriptions::name))
+            .load::<(i32, Option<String>)>(conn)
+        {
+            for (id, name) in rows {
+                sub_names.insert(id, name.unwrap_or_else(|| format!("#{}", id)));
+            }
+        }
+    }
+
+    (anime_names, series_names, group_names, sub_names)
 }
 
 // ============ Preview DTOs ============
