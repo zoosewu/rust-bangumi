@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -219,9 +219,16 @@ pub async fn list_seasons(State(state): State<AppState>) -> (StatusCode, Json<se
 
 // ============ AnimeSeries Handlers ============
 
+#[derive(serde::Deserialize, Default)]
+pub(crate) struct ExcludeEmptyParams {
+    #[serde(default)]
+    exclude_empty: bool,
+}
+
 /// List all anime series with enriched data (anime_title, season, episode counts, subscriptions)
 pub async fn list_all_anime_series(
     State(state): State<AppState>,
+    Query(params): Query<ExcludeEmptyParams>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let mut conn = match state.db.get() {
         Ok(c) => c,
@@ -316,6 +323,10 @@ pub async fn list_all_anime_series(
             created_at: series.created_at,
             updated_at: series.updated_at,
         });
+    }
+
+    if params.exclude_empty {
+        results.retain(|r| r.episode_found > 0);
     }
 
     (StatusCode::OK, Json(json!({ "series": results })))
