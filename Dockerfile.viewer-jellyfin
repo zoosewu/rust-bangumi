@@ -4,7 +4,7 @@ FROM rust:slim-bookworm AS builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl-dev pkg-config \
+    libssl-dev libpq-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
@@ -37,7 +37,7 @@ RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registr
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl libssl3 \
+    ca-certificates curl libpq5 libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
