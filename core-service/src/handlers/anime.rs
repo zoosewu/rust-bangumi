@@ -219,8 +219,8 @@ pub async fn list_seasons(State(state): State<AppState>) -> (StatusCode, Json<se
 
 // ============ AnimeSeries Handlers ============
 
-#[derive(serde::Deserialize, Default)]
-pub(crate) struct ExcludeEmptyParams {
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct ExcludeEmptyParams {
     #[serde(default)]
     exclude_empty: bool,
 }
