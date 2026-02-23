@@ -1,6 +1,8 @@
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::PgConnection;
-use diesel_migrations::{FileBasedMigrations, MigrationHarness};
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 pub mod models;
 pub mod repository;
@@ -34,14 +36,7 @@ pub fn run_migrations(pool: &DbPool) -> anyhow::Result<()> {
         .get()
         .map_err(|e| anyhow::anyhow!("Failed to get connection from pool: {}", e))?;
 
-    // 使用相對於 Cargo.toml 的路徑，確保不受 CWD 影響
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let migrations_path = std::path::Path::new(manifest_dir).join("migrations");
-
-    let migrations = FileBasedMigrations::from_path(migrations_path)
-        .map_err(|e| anyhow::anyhow!("Failed to load migrations: {}", e))?;
-
-    conn.run_pending_migrations(migrations)
+    conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| anyhow::anyhow!("Failed to run migrations: {}", e))?;
 
     Ok(())
