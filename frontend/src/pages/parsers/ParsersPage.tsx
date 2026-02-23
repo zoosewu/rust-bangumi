@@ -128,9 +128,12 @@ export default function ParsersPage() {
   const handleSave = useCallback(async () => {
     let result
     if (editTarget) {
-      result = await updateParser({ id: editTarget.parser_id as number, data: buildParserRequest(form) })
+      result = await updateParser({
+        id: editTarget.parser_id as number,
+        data: { ...buildParserRequest(form), created_from_type: editTarget.created_from_type ?? "global" },
+      })
     } else {
-      result = await createParser(buildParserRequest(form))
+      result = await createParser({ ...buildParserRequest(form), created_from_type: "global" })
     }
     setForm({ ...EMPTY_PARSER_FORM })
     setDialogOpen(false)
