@@ -3,15 +3,15 @@
 
     handle /api/core/* {
         uri strip_prefix /api/core
-        reverse_proxy core-service:8000
+        reverse_proxy core-service:{env.CORE_PORT}
     }
     handle /api/downloader/* {
         uri strip_prefix /api/downloader
-        reverse_proxy downloader-qbittorrent:8002
+        reverse_proxy downloader-qbittorrent:{env.DOWNLOADER_PORT}
     }
     handle /api/viewer/* {
         uri strip_prefix /api/viewer
-        reverse_proxy viewer-jellyfin:8003
+        reverse_proxy viewer-jellyfin:{env.VIEWER_PORT}
     }
 
     handle {

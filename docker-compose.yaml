@@ -239,6 +239,10 @@ services:
     depends_on:
       core-service:
         condition: service_healthy
+    environment:
+      CORE_PORT: ${CORE_PORT:-8000}
+      DOWNLOADER_PORT: ${DOWNLOADER_PORT:-8002}
+      VIEWER_PORT: ${VIEWER_PORT:-8003}
     ports:
       - "${FRONTEND_PORT:-8004}:80"
     networks:
