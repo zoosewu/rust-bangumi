@@ -909,51 +909,63 @@ fn resolve_parser_names(
     let mut sub_names: std::collections::HashMap<i32, String> = Default::default();
 
     if !anime_ids.is_empty() {
-        if let Ok(rows) = animes::table
+        match animes::table
             .filter(animes::anime_id.eq_any(&anime_ids))
             .select((animes::anime_id, animes::title))
             .load::<(i32, String)>(conn)
         {
-            for (id, title) in rows {
-                anime_names.insert(id, title);
+            Ok(rows) => {
+                for (id, title) in rows {
+                    anime_names.insert(id, title);
+                }
             }
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime 名稱失敗: {}", e),
         }
     }
 
     if !series_ids.is_empty() {
-        if let Ok(rows) = anime_series::table
+        match anime_series::table
             .inner_join(animes::table)
             .filter(anime_series::series_id.eq_any(&series_ids))
             .select((anime_series::series_id, animes::title, anime_series::series_no))
             .load::<(i32, String, i32)>(conn)
         {
-            for (id, title, series_no) in rows {
-                series_names.insert(id, format!("{} S{}", title, series_no));
+            Ok(rows) => {
+                for (id, title, series_no) in rows {
+                    series_names.insert(id, format!("{} S{}", title, series_no));
+                }
             }
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime_series 名稱失敗: {}", e),
         }
     }
 
     if !group_ids.is_empty() {
-        if let Ok(rows) = subtitle_groups::table
+        match subtitle_groups::table
             .filter(subtitle_groups::group_id.eq_any(&group_ids))
             .select((subtitle_groups::group_id, subtitle_groups::group_name))
             .load::<(i32, String)>(conn)
         {
-            for (id, name) in rows {
-                group_names.insert(id, name);
+            Ok(rows) => {
+                for (id, name) in rows {
+                    group_names.insert(id, name);
+                }
             }
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 subtitle_group 名稱失敗: {}", e),
         }
     }
 
     if !sub_ids.is_empty() {
-        if let Ok(rows) = subscriptions::table
+        match subscriptions::table
             .filter(subscriptions::subscription_id.eq_any(&sub_ids))
             .select((subscriptions::subscription_id, subscriptions::name))
             .load::<(i32, Option<String>)>(conn)
         {
-            for (id, name) in rows {
-                sub_names.insert(id, name.unwrap_or_else(|| format!("#{}", id)));
+            Ok(rows) => {
+                for (id, name) in rows {
+                    sub_names.insert(id, name.unwrap_or_else(|| format!("#{}", id)));
+                }
             }
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 subscription 名稱失敗: {}", e),
         }
     }
 
