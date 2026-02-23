@@ -29,18 +29,18 @@ import { SubscriptionDialog } from "@/pages/subscriptions/SubscriptionDialog"
 import type { Anime, AnimeSeriesRich } from "@/schemas/anime"
 import type { Subscription } from "@/schemas/subscription"
 
+type EntityDialog =
+  | { type: "subtitle_group"; id: number; name: string }
+  | { type: "anime"; data: Anime }
+  | { type: "anime_series"; data: AnimeSeriesRich }
+  | { type: "subscription"; data: Subscription }
+
 export default function ParsersPage() {
   const { t } = useTranslation()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null) // null = create mode
   const [form, setForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
-
-  type EntityDialog =
-    | { type: "subtitle_group"; id: number; name: string }
-    | { type: "anime"; data: Anime }
-    | { type: "anime_series"; data: AnimeSeriesRich }
-    | { type: "subscription"; data: Subscription }
 
   const [entityDialog, setEntityDialog] = useState<EntityDialog | null>(null)
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
@@ -168,21 +168,24 @@ export default function ParsersPage() {
     } else if (type === "anime") {
       const animes = await AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.getAnimes),
-      ).catch(() => null)
+      ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const anime = animes?.find((a: Anime) => a.anime_id === id)
       if (anime) setEntityDialog({ type: "anime", data: anime })
+      else if (animes) toast.error(t("common.notFound", "Not found"))
     } else if (type === "anime_series") {
       const allSeries = await AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.getAllAnimeSeries),
-      ).catch(() => null)
+      ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const series = allSeries?.find((s: AnimeSeriesRich) => s.series_id === id)
       if (series) setEntityDialog({ type: "anime_series", data: series })
+      else if (allSeries) toast.error(t("common.notFound", "Not found"))
     } else if (type === "subscription" || type === "fetcher") {
       const subs = await AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.getSubscriptions),
-      ).catch(() => null)
+      ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const sub = subs?.find((s: Subscription) => s.subscription_id === id)
       if (sub) setEntityDialog({ type: "subscription", data: sub })
+      else if (subs) toast.error(t("common.notFound", "Not found"))
     }
   }, [])
 
@@ -310,28 +313,28 @@ export default function ParsersPage() {
         <SubtitleGroupDialog
           groupId={entityDialog.id}
           groupName={entityDialog.name}
-          open={true}
+          open={!!entityDialog}
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
       {entityDialog?.type === "anime" && (
         <AnimeDialog
           anime={entityDialog.data}
-          open={true}
+          open={!!entityDialog}
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
       {entityDialog?.type === "anime_series" && (
         <AnimeSeriesDialog
           series={entityDialog.data}
-          open={true}
+          open={!!entityDialog}
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
       {entityDialog?.type === "subscription" && (
         <SubscriptionDialog
           subscription={entityDialog.data}
-          open={true}
+          open={!!entityDialog}
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
