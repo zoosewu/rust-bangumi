@@ -45,25 +45,21 @@ pub async fn run(client: &ApiClient, action: DownloadAction, json: bool) -> Resu
             if let Some(s) = &status {
                 params.push_str(&format!("&status={}", s));
             }
-            let resp: DownloadsResponse =
+            let downloads: DownloadsResponse =
                 client.get(&format!("/downloads{}", params)).await?;
             if json {
-                output::print_json(&resp);
+                output::print_json(&downloads);
                 return Ok(());
             }
-            if resp.downloads.is_empty() {
+            if downloads.is_empty() {
                 println!("尚無下載記錄");
                 return Ok(());
             }
-            let rows: Vec<DownloadRow> = resp
-                .downloads
+            let rows: Vec<DownloadRow> = downloads
                 .iter()
                 .map(|d| DownloadRow {
                     id: d.download_id,
-                    link_id: d
-                        .link_id
-                        .map(|l| l.to_string())
-                        .unwrap_or_else(|| "-".to_string()),
+                    link_id: d.link_id.to_string(),
                     status: output::format_status(&d.status),
                     progress: d
                         .progress
@@ -72,15 +68,9 @@ pub async fn run(client: &ApiClient, action: DownloadAction, json: bool) -> Resu
                     path: d
                         .file_path
                         .as_deref()
-                        .map(|p| {
-                            if p.len() > 40 {
-                                format!("...{}", &p[p.len() - 40..])
-                            } else {
-                                p.to_string()
-                            }
-                        })
+                        .map(|p| output::truncate_path(p, 40))
                         .unwrap_or_else(|| "-".to_string()),
-                    created_at: d.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                    created_at: d.created_at[..16.min(d.created_at.len())].to_string(),
                 })
                 .collect();
             println!("{}", Table::new(rows));

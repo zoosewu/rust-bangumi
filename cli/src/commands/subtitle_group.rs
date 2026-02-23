@@ -54,7 +54,7 @@ pub async fn run(client: &ApiClient, action: SubtitleGroupAction, json: bool) ->
                 .map(|g| GroupRow {
                     id: g.group_id,
                     name: g.group_name.clone(),
-                    created_at: g.created_at.format("%Y-%m-%d").to_string(),
+                    created_at: g.created_at[..10.min(g.created_at.len())].to_string(),
                 })
                 .collect();
             println!("{}", Table::new(rows));

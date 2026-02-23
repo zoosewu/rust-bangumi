@@ -61,7 +61,7 @@ pub async fn run(client: &ApiClient, action: AnimeAction, json: bool) -> Result<
                 .map(|a| AnimeRow {
                     id: a.anime_id,
                     title: a.title.clone(),
-                    created_at: a.created_at.format("%Y-%m-%d").to_string(),
+                    created_at: a.created_at[..10.min(a.created_at.len())].to_string(),
                 })
                 .collect();
             println!("{}", Table::new(rows));

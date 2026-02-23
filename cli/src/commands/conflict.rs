@@ -72,24 +72,20 @@ pub async fn run(client: &ApiClient, action: ConflictAction, json: bool) -> Resu
                 let fetchers: Vec<String> = c
                     .candidate_fetchers
                     .iter()
-                    .map(|f| format!("{}({})", f.fetcher_name, f.fetcher_id))
+                    .map(|f| format!("{}({})", f.name, f.fetcher_id))
                     .collect();
                 rows.push(ConflictRow {
                     id: c.conflict_id,
                     kind: "訂閱衝突".to_string(),
-                    description: if url.len() > 50 {
-                        format!("{}...", &url[..50])
-                    } else {
-                        url.to_string()
-                    },
+                    description: output::truncate_str(url, 50),
                     candidates: fetchers.join(", "),
-                    created_at: c.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                    created_at: c.created_at[..16.min(c.created_at.len())].to_string(),
                 });
             }
 
             for lc in &link_conflicts.conflicts {
                 let links: Vec<String> = lc
-                    .conflicting_links
+                    .links
                     .iter()
                     .map(|l| format!("Link#{}", l.link_id))
                     .collect();
@@ -98,7 +94,7 @@ pub async fn run(client: &ApiClient, action: ConflictAction, json: bool) -> Resu
                     kind: "Link 衝突".to_string(),
                     description: format!("系列#{} 第{}集", lc.series_id, lc.episode_no),
                     candidates: links.join(", "),
-                    created_at: lc.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                    created_at: lc.created_at[..16.min(lc.created_at.len())].to_string(),
                 });
             }
 

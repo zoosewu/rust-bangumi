@@ -90,16 +90,13 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
             let rows: Vec<SubRow> = resp.subscriptions.iter().map(|s| SubRow {
                 id: s.subscription_id,
                 name: output::opt_str(&s.name),
-                url: if s.source_url.len() > 60 {
-                    format!("{}...", &s.source_url[..60])
-                } else {
-                    s.source_url.clone()
-                },
+                url: output::truncate_str(&s.source_url, 60),
                 interval: s.fetch_interval_minutes,
                 status: output::format_status(if s.is_active { "active" } else { "inactive" }),
                 last_fetched: s
                     .last_fetched_at
-                    .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
+                    .as_deref()
+                    .map(|t| t[..16.min(t.len())].to_string())
                     .unwrap_or_else(|| "-".to_string()),
             }).collect();
             println!("{}", Table::new(rows));
@@ -143,13 +140,15 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
                     (
                         "上次抓取",
                         sub.last_fetched_at
-                            .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                            .as_deref()
+                            .map(|t| t[..19.min(t.len())].to_string())
                             .unwrap_or_else(|| "-".to_string()),
                     ),
                     (
                         "下次抓取",
                         sub.next_fetch_at
-                            .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                            .as_deref()
+                            .map(|t| t[..19.min(t.len())].to_string())
                             .unwrap_or_else(|| "-".to_string()),
                     ),
                 ],

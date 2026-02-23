@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 // ==============================
@@ -42,14 +41,14 @@ pub struct SubscriptionResponse {
     pub source_url: String,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub last_fetched_at: Option<DateTime<Utc>>,
-    pub next_fetch_at: Option<DateTime<Utc>>,
+    pub last_fetched_at: Option<String>,
+    pub next_fetch_at: Option<String>,
     pub fetch_interval_minutes: i32,
     pub is_active: bool,
     pub source_type: Option<String>,
     pub assignment_status: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -84,8 +83,8 @@ pub struct AnimesResponse {
 pub struct AnimeResponse {
     pub anime_id: i64,
     pub title: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -115,8 +114,8 @@ pub struct AnimeSeriesRichResponse {
     pub description: Option<String>,
     pub aired_date: Option<String>,
     pub end_date: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -165,7 +164,7 @@ pub struct AnimeLinkRichResponse {
     pub filtered_flag: bool,
     pub conflict_flag: bool,
     pub download: Option<DownloadInfo>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -193,36 +192,38 @@ pub struct RawItemResponse {
     pub title: String,
     pub description: Option<String>,
     pub download_url: String,
-    pub pub_date: Option<DateTime<Utc>>,
+    pub pub_date: Option<String>,
     pub status: String,
     pub parser_id: Option<i64>,
     pub parsed_title: Option<String>,
     pub parsed_episode_no: Option<i32>,
     pub filtered_flag: Option<bool>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // ==============================
 // Downloads
 // ==============================
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct DownloadsResponse {
-    pub downloads: Vec<DownloadResponse>,
-}
+// The backend GET /downloads returns a plain JSON array (not wrapped in an object).
+pub type DownloadsResponse = Vec<DownloadResponse>;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DownloadResponse {
     pub download_id: i64,
-    pub link_id: Option<i64>,
+    pub link_id: i64,
+    pub title: Option<String>,
+    pub downloader_type: Option<String>,
     pub status: String,
     pub progress: Option<f64>,
+    pub downloaded_bytes: Option<i64>,
+    pub total_bytes: Option<i64>,
+    pub error_message: Option<String>,
     pub torrent_hash: Option<String>,
     pub file_path: Option<String>,
-    pub file_size: Option<i64>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 // ==============================
@@ -240,13 +241,13 @@ pub struct ConflictResponse {
     pub rss_url: Option<String>,
     pub source_url: Option<String>,
     pub candidate_fetchers: Vec<CandidateFetcher>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CandidateFetcher {
     pub fetcher_id: i64,
-    pub fetcher_name: String,
+    pub name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -264,8 +265,8 @@ pub struct LinkConflictResponse {
     pub conflict_id: i64,
     pub series_id: i64,
     pub episode_no: i32,
-    pub conflicting_links: Vec<ConflictingLink>,
-    pub created_at: DateTime<Utc>,
+    pub links: Vec<ConflictingLink>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -297,7 +298,7 @@ pub struct FilterRuleResponse {
     pub rule_order: i32,
     pub is_positive: bool,
     pub regex_pattern: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -328,8 +329,8 @@ pub struct ParserResponse {
     pub enabled: bool,
     pub created_from_type: Option<String>,
     pub created_from_id: Option<i64>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -376,7 +377,7 @@ pub struct SubtitleGroupsResponse {
 pub struct SubtitleGroupResponse {
     pub group_id: i64,
     pub group_name: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize)]

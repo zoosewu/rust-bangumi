@@ -95,22 +95,12 @@ pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Resul
                 .iter()
                 .map(|item| RawItemRow {
                     id: item.item_id,
-                    title: if item.title.len() > 40 {
-                        format!("{}...", &item.title[..40])
-                    } else {
-                        item.title.clone()
-                    },
+                    title: output::truncate_str(&item.title, 40),
                     status: output::format_status(&item.status),
                     parsed_title: item
                         .parsed_title
                         .as_deref()
-                        .map(|t| {
-                            if t.len() > 30 {
-                                format!("{}...", &t[..30])
-                            } else {
-                                t.to_string()
-                            }
-                        })
+                        .map(|t| output::truncate_str(t, 30))
                         .unwrap_or_else(|| "-".to_string()),
                     episode: item
                         .parsed_episode_no
@@ -161,9 +151,7 @@ pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Resul
                     ),
                     (
                         "建立時間",
-                        item.created_at
-                            .format("%Y-%m-%d %H:%M:%S UTC")
-                            .to_string(),
+                        item.created_at[..19.min(item.created_at.len())].to_string(),
                     ),
                 ],
             );

@@ -170,10 +170,7 @@ pub async fn run(client: &ApiClient, action: ParserAction, json: bool) -> Result
                     ("來源 ID", output::opt_i64(parser.created_from_id)),
                     (
                         "建立時間",
-                        parser
-                            .created_at
-                            .format("%Y-%m-%d %H:%M:%S UTC")
-                            .to_string(),
+                        parser.created_at[..19.min(parser.created_at.len())].to_string(),
                     ),
                 ],
             );

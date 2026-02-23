@@ -60,3 +60,23 @@ pub fn print_success(msg: &str) {
 pub fn print_error(msg: &str) {
     eprintln!("{} {}", "✗".red(), msg);
 }
+
+/// 截斷字串到指定字元數（支援多位元組 UTF-8）
+pub fn truncate_str(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() > max_chars {
+        format!("{}...", chars[..max_chars].iter().collect::<String>())
+    } else {
+        s.to_string()
+    }
+}
+
+/// 從右側截斷路徑字串（顯示末尾部分），支援多位元組 UTF-8
+pub fn truncate_path(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() > max_chars {
+        format!("...{}", chars[chars.len() - max_chars..].iter().collect::<String>())
+    } else {
+        s.to_string()
+    }
+}
