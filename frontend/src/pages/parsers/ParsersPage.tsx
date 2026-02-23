@@ -22,6 +22,12 @@ import {
   ParserFormFields,
 } from "@/components/shared/ParserForm"
 import { AppRuntime } from "@/runtime/AppRuntime"
+import { AnimeDialog } from "@/pages/anime/AnimeDialog"
+import { AnimeSeriesDialog } from "@/pages/anime-series/AnimeSeriesDialog"
+import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
+import { SubscriptionDialog } from "@/pages/subscriptions/SubscriptionDialog"
+import type { Anime, AnimeSeriesRich } from "@/schemas/anime"
+import type { Subscription } from "@/schemas/subscription"
 
 export default function ParsersPage() {
   const { t } = useTranslation()
@@ -29,6 +35,14 @@ export default function ParsersPage() {
   const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null) // null = create mode
   const [form, setForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
+
+  type EntityDialog =
+    | { type: "subtitle_group"; id: number; name: string }
+    | { type: "anime"; data: Anime }
+    | { type: "anime_series"; data: AnimeSeriesRich }
+    | { type: "subscription"; data: Subscription }
+
+  const [entityDialog, setEntityDialog] = useState<EntityDialog | null>(null)
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
   const [previewDebounce, setPreviewDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
@@ -143,6 +157,35 @@ export default function ParsersPage() {
     if (result.reparse) showReparseToast(result.reparse)
   }, [editTarget, form, updateParser, createParser, refetch, showReparseToast])
 
+  const handleEntityClick = useCallback(async (row: Record<string, unknown>) => {
+    const type = row.created_from_type as string | null
+    const id = row.created_from_id as number | null
+    const name = row.created_from_name as string | null
+    if (!type || !id) return
+
+    if (type === "subtitle_group") {
+      setEntityDialog({ type: "subtitle_group", id, name: name ?? `#${id}` })
+    } else if (type === "anime") {
+      const animes = await AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.getAnimes),
+      ).catch(() => null)
+      const anime = animes?.find((a: Anime) => a.anime_id === id)
+      if (anime) setEntityDialog({ type: "anime", data: anime })
+    } else if (type === "anime_series") {
+      const allSeries = await AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.getAllAnimeSeries),
+      ).catch(() => null)
+      const series = allSeries?.find((s: AnimeSeriesRich) => s.series_id === id)
+      if (series) setEntityDialog({ type: "anime_series", data: series })
+    } else if (type === "subscription" || type === "fetcher") {
+      const subs = await AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.getSubscriptions),
+      ).catch(() => null)
+      const sub = subs?.find((s: Subscription) => s.subscription_id === id)
+      if (sub) setEntityDialog({ type: "subscription", data: sub })
+    }
+  }, [])
+
   const columns: Column<Record<string, unknown>>[] = [
     { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
     { key: "name", header: t("common.name"), render: (item) => String(item.name) },
@@ -156,6 +199,30 @@ export default function ParsersPage() {
       key: "is_enabled",
       header: t("parsers.enabled"),
       render: (item) => (item.is_enabled ? t("parsers.yes") : t("parsers.no")),
+    },
+    {
+      key: "created_from_name",
+      header: t("parsers.entity", "Entity"),
+      render: (item) => {
+        const type = item.created_from_type as string | null
+        const name = item.created_from_name as string | null
+        const id = item.created_from_id as number | null
+        if (!type || type === "global") {
+          return <span className="text-muted-foreground text-xs">Global</span>
+        }
+        return (
+          <button
+            type="button"
+            className="text-xs underline hover:opacity-70 text-left"
+            onClick={(e) => {
+              e.stopPropagation()
+              handleEntityClick(item)
+            }}
+          >
+            {name ?? `#${id}`}
+          </button>
+        )
+      },
     },
     {
       key: "actions",
@@ -237,6 +304,37 @@ export default function ParsersPage() {
           {preview && <PreviewResults preview={preview} />}
         </div>
       </FullScreenDialog>
+
+      {/* Entity dialogs */}
+      {entityDialog?.type === "subtitle_group" && (
+        <SubtitleGroupDialog
+          groupId={entityDialog.id}
+          groupName={entityDialog.name}
+          open={true}
+          onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
+        />
+      )}
+      {entityDialog?.type === "anime" && (
+        <AnimeDialog
+          anime={entityDialog.data}
+          open={true}
+          onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
+        />
+      )}
+      {entityDialog?.type === "anime_series" && (
+        <AnimeSeriesDialog
+          series={entityDialog.data}
+          open={true}
+          onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
+        />
+      )}
+      {entityDialog?.type === "subscription" && (
+        <SubscriptionDialog
+          subscription={entityDialog.data}
+          open={true}
+          onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
+        />
+      )}
 
       {/* Delete Confirm */}
       <ConfirmDialog
