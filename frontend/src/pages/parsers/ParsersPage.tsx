@@ -187,7 +187,7 @@ export default function ParsersPage() {
       if (sub) setEntityDialog({ type: "subscription", data: sub })
       else if (subs) toast.error(t("common.notFound", "Not found"))
     }
-  }, [])
+  }, [t])
 
   const columns: Column<Record<string, unknown>>[] = [
     { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
