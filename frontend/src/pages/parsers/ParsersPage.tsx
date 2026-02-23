@@ -130,7 +130,7 @@ export default function ParsersPage() {
     if (editTarget) {
       result = await updateParser({
         id: editTarget.parser_id as number,
-        data: { ...buildParserRequest(form), created_from_type: editTarget.created_from_type ?? "global" },
+        data: { ...buildParserRequest(form), created_from_type: String(editTarget.created_from_type ?? "global") },
       })
     } else {
       result = await createParser({ ...buildParserRequest(form), created_from_type: "global" })
