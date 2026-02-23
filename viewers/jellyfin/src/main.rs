@@ -54,7 +54,13 @@ async fn main() -> anyhow::Result<()> {
     let database_url = std::env::var("VIEWER_DATABASE_URL").unwrap_or_else(|_| {
         "postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin".to_string()
     });
-    let db_pool = db::create_pool(&database_url);
+    let db_pool = match db::create_pool(&database_url) {
+        Ok(pool) => pool,
+        Err(e) => {
+            tracing::error!("Database initialization failed: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // Run embedded migrations
     match db_pool.get() {

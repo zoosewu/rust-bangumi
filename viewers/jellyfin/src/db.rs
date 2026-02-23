@@ -4,17 +4,15 @@ use diesel::r2d2::{self, ConnectionManager};
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
-pub fn create_pool(database_url: &str) -> DbPool {
+pub fn create_pool(database_url: &str) -> Result<DbPool, String> {
     // 先測試連線，若資料庫不存在則自動建立
     if let Err(e) = PgConnection::establish(database_url) {
         let err_msg = e.to_string();
         if err_msg.contains("does not exist") {
             tracing::warn!("Database does not exist, attempting to create it...");
-            if let Err(create_err) = create_database(database_url) {
-                panic!("Failed to auto-create database: {}", create_err);
-            }
+            create_database(database_url)?;
         } else {
-            panic!("Failed to connect to database: {}", e);
+            return Err(format!("Failed to connect to database: {}", e));
         }
     }
 
@@ -22,7 +20,7 @@ pub fn create_pool(database_url: &str) -> DbPool {
     r2d2::Pool::builder()
         .max_size(5)
         .build(manager)
-        .expect("Failed to create database pool")
+        .map_err(|e| format!("Failed to create database pool: {}", e))
 }
 
 /// 連到同 host 的 `postgres` 預設庫，建立目標資料庫

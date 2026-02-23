@@ -78,6 +78,19 @@ enum Commands {
         #[arg(long)]
         r#type: String,
     },
+
+    /// 設定 qBittorrent 下載器帳密
+    QbLogin {
+        /// Downloader 服務 URL
+        #[arg(long, default_value = "http://localhost:8002")]
+        downloader_url: String,
+        /// qBittorrent WebUI 帳號
+        #[arg(long)]
+        user: String,
+        /// qBittorrent WebUI 密碼
+        #[arg(long)]
+        password: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -146,6 +159,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Status => commands::status(&cli.api_url).await?,
         Commands::Services => commands::services(&cli.api_url).await?,
         Commands::Logs { r#type } => commands::logs(&cli.api_url, &r#type).await?,
+        Commands::QbLogin { downloader_url, user, password } => {
+            commands::qb_login(&downloader_url, &user, &password).await?;
+        }
     }
 
     Ok(())

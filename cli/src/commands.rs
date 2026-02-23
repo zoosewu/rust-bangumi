@@ -306,3 +306,23 @@ pub async fn logs(_api_url: &str, log_type: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// 設定 qBittorrent downloader 帳密
+pub async fn qb_login(downloader_url: &str, user: &str, password: &str) -> Result<()> {
+    let client = ApiClient::new(downloader_url.to_string());
+
+    #[derive(serde::Serialize)]
+    struct Req<'a> {
+        username: &'a str,
+        password: &'a str,
+    }
+
+    let _: serde_json::Value = client
+        .post("/config/credentials", &Req { username: user, password })
+        .await?;
+
+    println!("✓ qBittorrent 帳密已設定");
+    println!("  帳號: {}", user);
+    println!("  Downloader URL: {}", downloader_url);
+    Ok(())
+}

@@ -23,12 +23,17 @@ async fn main() -> anyhow::Result<()> {
 
     let qb_url =
         std::env::var("QBITTORRENT_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
-    let qb_user = std::env::var("QBITTORRENT_USER").unwrap_or_else(|_| "admin".to_string());
-    let qb_pass =
-        std::env::var("QBITTORRENT_PASSWORD").unwrap_or_else(|_| "adminadmin".to_string());
+    let qb_user = std::env::var("QBITTORRENT_USER").unwrap_or_default();
+    let qb_pass = std::env::var("QBITTORRENT_PASSWORD").unwrap_or_default();
 
     let client = Arc::new(QBittorrentClient::new(qb_url));
-    client.login(&qb_user, &qb_pass).await?;
+    if !qb_user.is_empty() && !qb_pass.is_empty() {
+        if let Err(e) = client.login(&qb_user, &qb_pass).await {
+            tracing::warn!("qBittorrent 登入失敗: {}。請使用 'bangumi qb-login' 指令設定帳密。", e);
+        }
+    } else {
+        tracing::info!("未設定 qBittorrent 帳密，請在 qBittorrent 初始化後執行 'bangumi qb-login' 指令。");
+    }
 
     let app = Router::new()
         .route(
@@ -56,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
             delete(handlers::delete_download::<QBittorrentClient>),
         )
         .route("/health", get(handlers::health_check))
+        .route("/config/credentials", post(handlers::set_credentials::<QBittorrentClient>))
         .with_state(client);
 
     let service_port: u16 = std::env::var("SERVICE_PORT")

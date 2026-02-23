@@ -158,3 +158,25 @@ pub async fn delete_download<C: DownloaderClient + 'static>(
 pub async fn health_check() -> StatusCode {
     StatusCode::OK
 }
+
+#[derive(serde::Deserialize)]
+pub struct SetCredentialsRequest {
+    pub username: String,
+    pub password: String,
+}
+
+pub async fn set_credentials<C: DownloaderClient + 'static>(
+    State(client): State<Arc<C>>,
+    Json(req): Json<SetCredentialsRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    match client.login(&req.username, &req.password).await {
+        Ok(_) => {
+            tracing::info!("qBittorrent 帳密已更新");
+            Ok(Json(serde_json::json!({"message": "Credentials updated successfully"})))
+        }
+        Err(e) => {
+            tracing::error!("設定 qBittorrent 帳密失敗: {}", e);
+            Err(StatusCode::BAD_GATEWAY)
+        }
+    }
+}
