@@ -1,169 +1,142 @@
 use clap::{Parser, Subcommand};
+use std::process;
 
 mod client;
 mod commands;
 mod models;
 mod output;
 
-#[cfg(test)]
-mod tests;
+use client::ApiClient;
 
 #[derive(Parser)]
-#[command(name = "bangumi")]
-#[command(about = "動畫 RSS 聚合、下載與媒體庫管理系統", long_about = None)]
+#[command(
+    name = "bangumi",
+    about = "動畫 RSS 聚合、下載與媒體庫管理系統",
+    version
+)]
 struct Cli {
+    /// Core Service URL（或設定環境變數 BANGUMI_API_URL）
+    #[arg(
+        global = true,
+        long,
+        env = "BANGUMI_API_URL",
+        default_value = "http://localhost:8000"
+    )]
+    api_url: String,
+
+    /// 以 JSON 格式輸出（適合腳本）
+    #[arg(global = true, long)]
+    json: bool,
+
     #[command(subcommand)]
     command: Commands,
-
-    #[arg(global = true, long, default_value = "http://localhost:8000")]
-    api_url: String,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// 訂閱管理
-    Subscribe {
-        /// RSS 地址
-        rss_url: String,
-        /// 擷取區塊名稱
-        #[arg(long)]
-        fetcher: String,
-    },
-
-    /// 列出動畫
-    List {
-        /// 動畫 ID（可選）
-        #[arg(long)]
-        anime_id: Option<i64>,
-        /// 季度，格式: 2025/冬（可選）
-        #[arg(long)]
-        season: Option<String>,
-    },
-
-    /// 列出連結
-    Links {
-        /// 動畫 ID
-        anime_id: i64,
-        /// 季數（可選）
-        #[arg(long)]
-        series: Option<i32>,
-        /// 字幕組（可選）
-        #[arg(long)]
-        group: Option<String>,
-    },
-
-    /// 過濾規則
-    Filter {
-        #[command(subcommand)]
-        action: FilterAction,
-    },
-
-    /// 手動下載
-    Download {
-        /// 連結 ID
-        link_id: i64,
-        /// 下載器名稱（可選）
-        #[arg(long)]
-        downloader: Option<String>,
-    },
-
-    /// 查看狀態
+    /// 查看系統狀態與統計資訊
+    #[command(name = "status", alias = "st")]
     Status,
 
-    /// 列出服務
-    Services,
-
-    /// 查看日誌
-    Logs {
-        /// 日誌類型: cron | download
-        #[arg(long)]
-        r#type: String,
+    /// RSS 訂閱管理
+    #[command(name = "subscription", aliases = &["sub"])]
+    Subscription {
+        #[command(subcommand)]
+        action: commands::subscription::SubscriptionAction,
     },
 
-    /// 設定 qBittorrent 下載器帳密
-    QbLogin {
-        /// Downloader 服務 URL
-        #[arg(long, default_value = "http://localhost:8002")]
-        downloader_url: String,
-        /// qBittorrent WebUI 帳號
-        #[arg(long)]
-        user: String,
-        /// qBittorrent WebUI 密碼
-        #[arg(long)]
-        password: String,
+    /// 動畫條目管理
+    #[command(name = "anime")]
+    Anime {
+        #[command(subcommand)]
+        action: commands::anime::AnimeAction,
     },
-}
 
-#[derive(Subcommand)]
-enum FilterAction {
-    /// 添加過濾規則
-    Add {
-        series_id: i64,
-        group_name: String,
-        rule_type: String, // positive | negative
-        regex: String,
+    /// 動畫系列查詢與管理
+    #[command(name = "series")]
+    Series {
+        #[command(subcommand)]
+        action: commands::series::SeriesAction,
     },
-    /// 列出過濾規則
-    List { series_id: i64, group_name: String },
-    /// 刪除過濾規則
-    Remove { rule_id: i64 },
+
+    /// Raw RSS 項目瀏覽與操作
+    #[command(name = "raw-item", aliases = &["raw"])]
+    RawItem {
+        #[command(subcommand)]
+        action: commands::raw_item::RawItemAction,
+    },
+
+    /// 衝突列表與解決
+    #[command(name = "conflict")]
+    Conflict {
+        #[command(subcommand)]
+        action: commands::conflict::ConflictAction,
+    },
+
+    /// 下載記錄查詢
+    #[command(name = "download", aliases = &["dl"])]
+    Download {
+        #[command(subcommand)]
+        action: commands::download::DownloadAction,
+    },
+
+    /// 過濾規則管理
+    #[command(name = "filter")]
+    Filter {
+        #[command(subcommand)]
+        action: commands::filter::FilterAction,
+    },
+
+    /// 標題解析器管理
+    #[command(name = "parser")]
+    Parser {
+        #[command(subcommand)]
+        action: commands::parser::ParserAction,
+    },
+
+    /// 字幕組管理
+    #[command(name = "subtitle-group", aliases = &["sg"])]
+    SubtitleGroup {
+        #[command(subcommand)]
+        action: commands::subtitle_group::SubtitleGroupAction,
+    },
+
+    /// qBittorrent 連線設定
+    #[command(name = "qb-config")]
+    QbConfig {
+        #[command(subcommand)]
+        action: commands::qb_config::QbConfigAction,
+    },
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Load .env file
+async fn main() {
     dotenv::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("bangumi_cli=debug".parse()?),
-        )
-        .init();
-
     let cli = Cli::parse();
+    let client = ApiClient::new(cli.api_url.clone());
+    let json = cli.json;
 
-    match cli.command {
-        Commands::Subscribe { rss_url, fetcher } => {
-            commands::subscribe(&cli.api_url, &rss_url, &fetcher).await?
+    let result = match cli.command {
+        Commands::Status => commands::status::run(&client, json).await,
+        Commands::Subscription { action } => {
+            commands::subscription::run(&client, action, json).await
         }
-        Commands::List { anime_id, season } => {
-            commands::list(&cli.api_url, anime_id, season).await?
+        Commands::Anime { action } => commands::anime::run(&client, action, json).await,
+        Commands::Series { action } => commands::series::run(&client, action, json).await,
+        Commands::RawItem { action } => commands::raw_item::run(&client, action, json).await,
+        Commands::Conflict { action } => commands::conflict::run(&client, action, json).await,
+        Commands::Download { action } => commands::download::run(&client, action, json).await,
+        Commands::Filter { action } => commands::filter::run(&client, action, json).await,
+        Commands::Parser { action } => commands::parser::run(&client, action, json).await,
+        Commands::SubtitleGroup { action } => {
+            commands::subtitle_group::run(&client, action, json).await
         }
-        Commands::Links {
-            anime_id,
-            series,
-            group,
-        } => commands::links(&cli.api_url, anime_id, series, group).await?,
-        Commands::Filter { action } => match action {
-            FilterAction::Add {
-                series_id,
-                group_name,
-                rule_type,
-                regex,
-            } => {
-                commands::filter_add(&cli.api_url, series_id, &group_name, &rule_type, &regex)
-                    .await?
-            }
-            FilterAction::List {
-                series_id,
-                group_name,
-            } => commands::filter_list(&cli.api_url, series_id, &group_name).await?,
-            FilterAction::Remove { rule_id } => {
-                commands::filter_remove(&cli.api_url, rule_id).await?
-            }
-        },
-        Commands::Download {
-            link_id,
-            downloader,
-        } => commands::download(&cli.api_url, link_id, downloader).await?,
-        Commands::Status => commands::status(&cli.api_url).await?,
-        Commands::Services => commands::services(&cli.api_url).await?,
-        Commands::Logs { r#type } => commands::logs(&cli.api_url, &r#type).await?,
-        Commands::QbLogin { downloader_url, user, password } => {
-            commands::qb_login(&downloader_url, &user, &password).await?;
-        }
+        Commands::QbConfig { action } => commands::qb_config::run(&client, action, json).await,
+    };
+
+    if let Err(e) = result {
+        output::print_error(&e.to_string());
+        process::exit(2);
     }
-
-    Ok(())
 }
