@@ -72,6 +72,7 @@ export const AnimeSeriesRich = Schema.Struct({
   end_date: Schema.NullOr(Schema.String),
   created_at: Schema.String,
   updated_at: Schema.String,
+  cover_image_url: Schema.NullOr(Schema.String),
 })
 export type AnimeSeriesRich = typeof AnimeSeriesRich.Type
 
@@ -98,3 +99,14 @@ export const AnimeLinkRich = Schema.Struct({
   created_at: Schema.String,
 })
 export type AnimeLinkRich = typeof AnimeLinkRich.Type
+
+export const AnimeCoverImage = Schema.Struct({
+  cover_id: Schema.Number,
+  anime_id: Schema.Number,
+  image_url: Schema.String,
+  service_module_id: Schema.NullOr(Schema.Number),
+  source_name: Schema.String,
+  is_default: Schema.Boolean,
+  created_at: Schema.String,
+})
+export type AnimeCoverImage = typeof AnimeCoverImage.Type

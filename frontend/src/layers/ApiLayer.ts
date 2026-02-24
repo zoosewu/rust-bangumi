@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
-import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
+import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
@@ -268,6 +268,21 @@ const makeCoreApi = Effect.gen(function* () {
         ),
         Schema.Struct({ count: Schema.Number }),
       ).pipe(Effect.map((r) => r.count)),
+
+    getAnimeCoverImages: (animeId) =>
+      fetchJson(
+        HttpClientRequest.get(`/api/core/anime/${animeId}/covers`),
+        Schema.Array(AnimeCoverImage),
+      ),
+
+    setDefaultCoverImage: (animeId, coverId) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/anime/${animeId}/covers/${coverId}/set-default`).pipe(
+            HttpClientRequest.bodyUnsafeJson({}),
+          ),
+        )
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
   })
 })

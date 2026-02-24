@@ -1,5 +1,5 @@
 import { Effect, Context } from "effect"
-import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
+import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
@@ -81,5 +81,12 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly updateSubscription: (id: number, req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean }) => Effect.Effect<Subscription>
     readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
+    readonly getAnimeCoverImages: (
+      animeId: number,
+    ) => Effect.Effect<readonly AnimeCoverImage[]>
+    readonly setDefaultCoverImage: (
+      animeId: number,
+      coverId: number,
+    ) => Effect.Effect<void>
   }
 >() {}
