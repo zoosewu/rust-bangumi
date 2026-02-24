@@ -125,6 +125,7 @@ pub struct AnimeSeriesRichResponse {
     pub end_date: Option<NaiveDate>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub cover_image_url: Option<String>,
 }
 
 // ============ AnimeLinkRich DTO (for get_anime_links) ============

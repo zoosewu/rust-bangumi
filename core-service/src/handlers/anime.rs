@@ -15,7 +15,7 @@ use crate::dto::{
     SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeSeriesRequest,
 };
 use crate::models::{Anime, AnimeSeries, Download, Season};
-use crate::schema::{anime_links, anime_series, animes, downloads, raw_anime_items, seasons, subscriptions};
+use crate::schema::{anime_cover_images, anime_links, anime_series, animes, downloads, raw_anime_items, seasons, subscriptions};
 use crate::state::AppState;
 
 // ============ Anime Handlers ============
@@ -270,6 +270,18 @@ pub async fn list_all_anime_series(
 
     let mut results = Vec::new();
 
+    // Batch-fetch default cover images to avoid N+1 queries
+    let cover_map: std::collections::HashMap<i32, String> = {
+        match anime_cover_images::table
+            .filter(anime_cover_images::is_default.eq(true))
+            .select((anime_cover_images::anime_id, anime_cover_images::image_url))
+            .load::<(i32, String)>(&mut conn)
+        {
+            Ok(rows) => rows.into_iter().collect(),
+            Err(_) => std::collections::HashMap::new(),
+        }
+    };
+
     for (series, anime, season) in &series_with_joins {
         // episode_found: distinct episode_no where filtered_flag = false
         let episode_found: i64 = anime_links::table
@@ -329,6 +341,7 @@ pub async fn list_all_anime_series(
             end_date: series.end_date,
             created_at: series.created_at,
             updated_at: series.updated_at,
+            cover_image_url: cover_map.get(&series.anime_id).cloned(),
         });
     }
 
