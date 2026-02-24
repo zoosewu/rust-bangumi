@@ -149,6 +149,7 @@ impl From<&shared::ServiceType> for ModuleTypeEnum {
             shared::ServiceType::Fetcher => ModuleTypeEnum::Fetcher,
             shared::ServiceType::Downloader => ModuleTypeEnum::Downloader,
             shared::ServiceType::Viewer => ModuleTypeEnum::Viewer,
+            shared::ServiceType::Metadata => panic!("Metadata service type has no ModuleTypeEnum mapping"),
         }
     }
 }

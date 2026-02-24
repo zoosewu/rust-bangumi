@@ -159,6 +159,8 @@ impl SyncService {
             subtitle_group,
             file_path,
             callback_url,
+            bangumi_id: None,
+            cover_image_url: None,
         })
     }
 
