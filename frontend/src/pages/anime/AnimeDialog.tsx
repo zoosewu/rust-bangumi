@@ -1,8 +1,10 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
+import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
@@ -22,6 +24,7 @@ interface AnimeDialogProps {
 export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
   const { t } = useTranslation()
   const [selectedSeries, setSelectedSeries] = useState<AnimeSeriesRich | null>(null)
+  const [coverIndex, setCoverIndex] = useState(0)
 
   const { data: allSeries, refetch: refetchSeries } = useEffectQuery(
     () =>
@@ -32,8 +35,40 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
     [],
   )
 
+  const { data: coversData, refetch: refetchCovers } = useEffectQuery(
+    () =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getAnimeCoverImages(anime.anime_id)
+      }),
+    [anime.anime_id],
+  )
+
+  // Reset cover index when covers data changes (e.g. anime switches)
+  useEffect(() => {
+    if (coversData && coversData.length > 0) {
+      const defaultIdx = coversData.findIndex((c) => c.is_default)
+      setCoverIndex(defaultIdx >= 0 ? defaultIdx : 0)
+    }
+  }, [coversData])
+
+  const { mutate: doSetDefault } = useEffectMutation(
+    (animeId: number, coverId: number) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.setDefaultCoverImage(animeId, coverId)
+      }),
+  )
+
+  const covers = coversData ?? []
+
   // Filter series belonging to this anime
   const animeSeries = (allSeries ?? []).filter((s) => s.anime_id === anime.anime_id)
+
+  const handleSetDefault = async (coverId: number) => {
+    await doSetDefault(anime.anime_id, coverId)
+    refetchCovers()
+  }
 
   return (
     <>
@@ -43,6 +78,48 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
         title={anime.title}
       >
         <div className="space-y-6">
+          {/* Cover image switcher */}
+          {covers.length > 0 && (
+            <div className="group relative w-40 mx-auto aspect-[2/3] flex-shrink-0 mb-4">
+              <img
+                src={covers[coverIndex]?.image_url}
+                alt="Cover"
+                className="w-full h-full object-cover rounded-lg"
+              />
+              {covers.length > 1 && (
+                <>
+                  <button
+                    className="absolute left-1 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const newIdx = (coverIndex - 1 + covers.length) % covers.length
+                      setCoverIndex(newIdx)
+                      await handleSetDefault(covers[newIdx].cover_id)
+                    }}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    className="absolute right-1 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const newIdx = (coverIndex + 1) % covers.length
+                      setCoverIndex(newIdx)
+                      await handleSetDefault(covers[newIdx].cover_id)
+                    }}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </>
+              )}
+              <div className="absolute bottom-1 left-0 right-0 text-center pointer-events-none">
+                <span className="text-white/70 text-xs bg-black/30 px-1 rounded">
+                  {coverIndex + 1}/{covers.length}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Anime info */}
           <InfoSection>
             <InfoItem label={t("common.id")} value={String(anime.anime_id)} />
