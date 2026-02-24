@@ -27,7 +27,7 @@ export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAllAnimeSeries({ excludeEmpty: true })
+        return yield* api.getAllAnimeSeries()
       }),
     [],
   )
