@@ -1858,88 +1858,425 @@ git commit -m "feat(frontend): add cover image switcher in AnimeDialog"
 
 ---
 
-### Task 16: Infrastructure — Dockerfile + docker-compose
+### Task 16: Infrastructure — Dockerfile + Compose Files
+
+**Port note:** Metadata service uses port **8005** (`${METADATA_PORT:-8005}`).
+`FRONTEND_PORT` defaults to 8004 (already taken). Do not use 8004.
 
 **Files:**
 - Create: `Dockerfile.metadata`
-- Modify: `docker-compose.yaml`
+- Modify: `docker-compose.yaml` (prod base — add metadata service + viewer env var)
+- Modify: `docker-compose.dev.yaml` (add comment block for metadata dev instructions)
+- Modify: `viewers/jellyfin` entry in `docker-compose.yaml` (add `METADATA_SERVICE_URL`)
 
-**Step 1: Read `Dockerfile.viewer-jellyfin`**
+**Step 1: Create `Dockerfile.metadata`**
 
-Read the existing Dockerfile to match the multi-stage build pattern used for workspace crates.
-
-**Step 2: Create `Dockerfile.metadata`**
-
-Follow the same pattern. The metadata service has no DB dependency:
+Follow the same `awk`-based workspace trimming pattern as `Dockerfile.viewer-jellyfin`
+(no diesel/libpq needed — metadata is stateless):
 
 ```dockerfile
-# Build stage
-FROM rust:1.82-slim AS builder
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+# 構建階段
+FROM rust:slim-bookworm AS builder
+
 WORKDIR /app
 
-# Copy workspace files
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev pkg-config ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY Cargo.toml Cargo.lock ./
-COPY shared/ ./shared/
-COPY metadata/ ./metadata/
+COPY shared/Cargo.toml ./shared/
+COPY metadata/Cargo.toml ./metadata/
 
-# Stub other workspace members to cache dependencies
-RUN mkdir -p core-service/src downloaders/qbittorrent/src fetchers/mikanani/src viewers/jellyfin/src cli/src \
-    && echo 'fn main(){}' > core-service/src/main.rs \
-    && echo 'fn main(){}' > downloaders/qbittorrent/src/main.rs \
-    && echo 'fn main(){}' > fetchers/mikanani/src/main.rs \
-    && echo 'fn main(){}' > viewers/jellyfin/src/main.rs \
-    && echo 'fn main(){}' > cli/src/main.rs
-COPY core-service/Cargo.toml ./core-service/
-COPY downloaders/qbittorrent/Cargo.toml ./downloaders/qbittorrent/
-COPY fetchers/mikanani/Cargo.toml ./fetchers/mikanani/
-COPY viewers/jellyfin/Cargo.toml ./viewers/jellyfin/
-COPY cli/Cargo.toml ./cli/
+# Trim workspace to only shared + metadata to speed up dependency caching
+RUN awk '/^members/{p=1; print "members = ["; print "    \"shared\","; print "    \"metadata\","; next} p&&/^\]/{p=0; print; next} p{next} {print}' Cargo.toml > /tmp/c && mv /tmp/c Cargo.toml
 
-RUN cargo build --release -p metadata-service
+COPY shared/src ./shared/src
 
-# Runtime stage
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    mkdir -p metadata/src && \
+    echo "fn main() {}" > metadata/src/main.rs && \
+    cargo build --release --package metadata-service || true && \
+    rm -rf metadata/src
+
+COPY metadata/src ./metadata/src
+
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    cargo build --release --package metadata-service && \
+    cp /app/target/release/metadata-service /usr/local/bin/metadata-service
+
+# 執行階段
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/metadata-service /usr/local/bin/
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/metadata-service /usr/local/bin/
+
 CMD ["metadata-service"]
 ```
 
-NOTE: Read the existing Dockerfile carefully and adapt — exact stub paths and apt packages may differ.
+**Step 2: Add `metadata` service to `docker-compose.yaml`**
 
-**Step 3: Add service to `docker-compose.yaml`**
-
-Read the existing `docker-compose.yaml` to match formatting and `depends_on` patterns. Add:
+Insert after the `viewer-jellyfin` block (before the `frontend` block),
+following the same structure as other services:
 
 ```yaml
-metadata:
-  build:
-    context: .
-    dockerfile: Dockerfile.metadata
-  environment:
-    - CORE_SERVICE_URL=http://core-service:8000/api/core
-    - SERVICE_HOST=metadata
-    - PORT=8004
-  ports:
-    - "8004:8004"
-  depends_on:
-    - core-service
-  restart: unless-stopped
+  # ============================================================================
+  # Metadata Service - Bangumi.tv 元資料查詢
+  # ============================================================================
+  metadata:
+    build:
+      context: .
+      dockerfile: Dockerfile.metadata
+    container_name: bangumi-metadata
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
+      SERVICE_HOST: metadata
+      SERVICE_PORT: ${METADATA_PORT:-8005}
+      RUST_LOG: ${RUST_LOG:-metadata_service=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${METADATA_PORT:-8005}:${METADATA_PORT:-8005}"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.14
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${METADATA_PORT:-8005}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 ```
 
-**Step 4: Validate**
+**Step 3: Add `METADATA_SERVICE_URL` to `viewer-jellyfin` in `docker-compose.yaml`**
+
+Find the `viewer-jellyfin` service's `environment:` block and add:
+
+```yaml
+      METADATA_SERVICE_URL: http://metadata:${METADATA_PORT:-8005}
+```
+
+Also add `metadata` to its `depends_on`:
+
+```yaml
+    depends_on:
+      core-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      metadata:           # ADD
+        condition: service_started
+```
+
+**Step 4: Add dev instructions comment to `docker-compose.dev.yaml`**
+
+At the top of `docker-compose.dev.yaml`, after the existing header comment block, add:
+
+```yaml
+# ============================================================================
+# Metadata Service（開發）
+# ============================================================================
+# Metadata Service 在開發環境下以 cargo run 執行，不在此 compose 中啟動。
+#
+# 啟動方式：
+#   CORE_SERVICE_URL=http://localhost:8000 \
+#   SERVICE_HOST=localhost \
+#   SERVICE_PORT=8005 \
+#   cargo run -p metadata-service
+# ============================================================================
+```
+
+**Step 5: Validate**
 
 ```bash
 docker compose config --quiet
+docker compose -f docker-compose.dev.yaml config --quiet
 ```
 
 Expected: no syntax errors.
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
-git add Dockerfile.metadata docker-compose.yaml
-git commit -m "feat(infra): add metadata service to docker-compose"
+git add Dockerfile.metadata docker-compose.yaml docker-compose.dev.yaml
+git commit -m "feat(infra): add metadata service Dockerfile and compose entries"
+```
+
+---
+
+### Task 17: Environment Files
+
+**Files:**
+- Modify: `.env.dev`
+- Modify: `.env.prod`
+
+**Step 1: Update `.env.dev`**
+
+Add after the `CORE_SERVICE_URL` line:
+
+```env
+# Metadata Service（開發時以 cargo run 執行）
+METADATA_PORT=8005
+METADATA_SERVICE_URL=http://localhost:8005
+```
+
+Update `RUST_LOG` to include the new crate:
+
+```env
+RUST_LOG=core_service=debug,fetcher_mikanani=debug,downloader_qbittorrent=debug,viewer_jellyfin=debug,metadata_service=debug
+```
+
+**Step 2: Update `.env.prod`**
+
+In the `# 服務端口` section, add:
+
+```env
+METADATA_PORT=8005
+```
+
+Update `RUST_LOG`:
+
+```env
+RUST_LOG=core_service=info,fetcher_mikanani=info,downloader_qbittorrent=info,viewer_jellyfin=info,metadata_service=info
+```
+
+**Step 3: Commit**
+
+```bash
+git add .env.dev .env.prod
+git commit -m "feat(infra): add METADATA_PORT and METADATA_SERVICE_URL to env files"
+```
+
+---
+
+### Task 18: Documentation Updates
+
+**Files:**
+- Modify: `DEVELOPMENT.md`
+- Modify: `docs/API-SPECIFICATIONS.md`
+- Create: `docs/api/metadata-openapi.yaml`
+
+**Step 1: Update project structure in `DEVELOPMENT.md`**
+
+Find the `專案結構` code block and add `metadata/`:
+
+```
+├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
+├── metadata/                           # Metadata Service（Bangumi.tv 元資料查詢）← ADD
+├── frontend/                           # React SPA 前端管理介面
+```
+
+**Step 2: Add metadata to the running services table in `DEVELOPMENT.md`**
+
+Find the `### 3. 執行服務` or equivalent section that lists how to run each Rust service
+(e.g., `cargo run -p core-service`). Add:
+
+```markdown
+### Metadata Service
+
+```bash
+cargo run -p metadata-service
+```
+
+服務端點：`http://localhost:8005`
+```
+
+**Step 3: Add metadata to the dev endpoints table**
+
+Find the table:
+
+```
+| 服務 | URL | 說明 |
+```
+
+Add a row for metadata (after viewer):
+
+```markdown
+| Metadata Service | `http://localhost:8005` | Bangumi.tv 元資料查詢（`cargo run -p metadata-service`） |
+```
+
+**Step 4: Add Metadata Service section to `docs/API-SPECIFICATIONS.md`**
+
+Find the end of the service list (after section 5 Viewer) and add:
+
+```markdown
+### 6. Metadata Service API (`/docs/api/metadata-openapi.yaml`)
+
+**目的：** 統一管理所有外部動畫元資料查詢，目前實作 Bangumi.tv
+
+**涵蓋範圍：**
+- 動畫封面圖查詢 (`POST /enrich/anime`)
+- 集數元資料查詢 (`POST /enrich/episodes`)
+- 健康檢查 (`GET /health`)
+
+**服務器：**
+- Docker 生產環境：`http://metadata:8005`
+- 本地開發環境：`http://localhost:8005`
+
+**特點：**
+- 無狀態服務：不持有自己的資料庫，查詢結果由呼叫方快取
+- Bangumi.tv API：使用 `https://api.bgm.tv` v0 API
+- 啟動時自動向 Core 以 `module_type=metadata` 註冊
+- Core 建立新動畫時呼叫 `/enrich/anime` 取得封面圖
+- Viewer 生成 NFO 時呼叫 `/enrich/episodes` 取得集數資訊
+```
+
+**Step 5: Create `docs/api/metadata-openapi.yaml`**
+
+```yaml
+openapi: "3.0.3"
+info:
+  title: Metadata Service API
+  description: |
+    Bangumi.tv metadata provider. Stateless service — callers are responsible
+    for caching results. Registered with Core as module_type=metadata.
+  version: "0.1.0"
+
+servers:
+  - url: "http://metadata:8005"
+    description: Docker (production)
+  - url: "http://localhost:8005"
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+
+  /enrich/anime:
+    post:
+      summary: Fetch cover images and metadata for an anime by title
+      description: |
+        Searches Bangumi.tv by title and returns cover image URLs, summary,
+        and air date. Returns empty results (not an error) when no match found.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  description: Anime title (Japanese or Chinese)
+                  example: "進撃の巨人"
+      responses:
+        "200":
+          description: Metadata result (may have empty cover_images if not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichAnimeResponse"
+
+  /enrich/episodes:
+    post:
+      summary: Fetch episode metadata by bangumi_id and episode number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bangumi_id, episode_no]
+              properties:
+                bangumi_id:
+                  type: integer
+                  example: 101
+                episode_no:
+                  type: integer
+                  example: 5
+      responses:
+        "200":
+          description: Episode metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichEpisodesResponse"
+        "404":
+          description: Episode not found for given bangumi_id
+
+components:
+  schemas:
+    CoverImageInfo:
+      type: object
+      properties:
+        url:
+          type: string
+          example: "https://lain.bgm.tv/pic/cover/l/xx.jpg"
+        source:
+          type: string
+          example: "bangumi"
+
+    EnrichAnimeResponse:
+      type: object
+      properties:
+        bangumi_id:
+          type: integer
+          nullable: true
+          example: 101
+        cover_images:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoverImageInfo"
+        summary:
+          type: string
+          nullable: true
+        air_date:
+          type: string
+          nullable: true
+          example: "2013-04-06"
+
+    EnrichEpisodesResponse:
+      type: object
+      properties:
+        episode_no:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        title_cn:
+          type: string
+          nullable: true
+        air_date:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+```
+
+**Step 6: Commit**
+
+```bash
+git add DEVELOPMENT.md docs/API-SPECIFICATIONS.md docs/api/metadata-openapi.yaml
+git commit -m "docs: add metadata service to DEVELOPMENT.md, API specs, and OpenAPI schema"
 ```
 
 ---
@@ -1960,6 +2297,8 @@ git commit -m "feat(infra): add metadata service to docker-compose"
 | 13 | Frontend | `AnimeSeriesCard` thumbnail component |
 | 14 | Frontend | Grid/list toggle in `AnimeSeriesPage` |
 | 15 | Frontend | Cover image switcher in `AnimeDialog` |
-| 16 | Infra | `Dockerfile.metadata` + `docker-compose.yaml` |
+| 16 | Infra | `Dockerfile.metadata` + prod/dev compose files |
+| 17 | Infra | `.env.dev` + `.env.prod` env variable additions |
+| 18 | Docs | `DEVELOPMENT.md`, `API-SPECIFICATIONS.md`, `metadata-openapi.yaml` |
 
-**Dependency order**: Tasks 1–3 must complete before 4–10; Task 11 requires Tasks 2 + 7; Tasks 12–15 require Task 10.
+**Dependency order**: Tasks 1–3 must complete before 4–10; Task 11 requires Tasks 2 + 7; Tasks 12–15 require Task 10; Tasks 16–18 are independent and can run in parallel with Tasks 4–15.
