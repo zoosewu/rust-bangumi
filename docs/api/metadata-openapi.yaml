@@ -1,0 +1,118 @@
+openapi: "3.0.3"
+info:
+  title: Metadata Service API
+  description: |
+    Bangumi.tv metadata provider. Stateless service — callers are responsible
+    for caching results. Registered with Core as module_type=metadata.
+  version: "0.1.0"
+
+servers:
+  - url: "http://metadata:8005"
+    description: Docker (production)
+  - url: "http://localhost:8005"
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+
+  /enrich/anime:
+    post:
+      summary: Fetch cover images and metadata for an anime by title
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: "進撃の巨人"
+      responses:
+        "200":
+          description: Metadata result (empty cover_images if not found)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichAnimeResponse"
+
+  /enrich/episodes:
+    post:
+      summary: Fetch episode metadata by bangumi_id and episode number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bangumi_id, episode_no]
+              properties:
+                bangumi_id:
+                  type: integer
+                  example: 101
+                episode_no:
+                  type: integer
+                  example: 5
+      responses:
+        "200":
+          description: Episode metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichEpisodesResponse"
+        "404":
+          description: Episode not found
+
+components:
+  schemas:
+    CoverImageInfo:
+      type: object
+      properties:
+        url:
+          type: string
+          example: "https://lain.bgm.tv/pic/cover/l/xx.jpg"
+        source:
+          type: string
+          example: "bangumi"
+
+    EnrichAnimeResponse:
+      type: object
+      properties:
+        bangumi_id:
+          type: integer
+          nullable: true
+        cover_images:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoverImageInfo"
+        summary:
+          type: string
+          nullable: true
+        air_date:
+          type: string
+          nullable: true
+          example: "2013-04-06"
+
+    EnrichEpisodesResponse:
+      type: object
+      properties:
+        episode_no:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        title_cn:
+          type: string
+          nullable: true
+        air_date:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true

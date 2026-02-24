@@ -104,6 +104,23 @@
 - 背景處理：檔案搬移 → bangumi.tv metadata → NFO 產生
 - 完成後回呼 Core 的 `/sync-callback`
 
+### 6. Metadata Service API (`/docs/api/metadata-openapi.yaml`)
+
+**目的：** 統一管理所有外部動畫元資料查詢，目前實作 Bangumi.tv
+
+**端點：**
+- `GET /health` — 健康檢查
+- `POST /enrich/anime` — 依標題查詢封面圖和元資料
+- `POST /enrich/episodes` — 依 bangumi_id 和集數查詢集數資訊
+
+**服務器：**
+- Docker 生產環境：`http://metadata:8005`
+- 本地開發環境：`http://localhost:8005`
+
+**特點：**
+- Stateless 服務—呼叫方自行負責快取結果
+- 啟動時向 Core 註冊，宣告 module_type=metadata
+
 ## API 規格之間的關係
 
 ```
@@ -245,6 +262,10 @@ docker run -p 9090:8080 -e SWAGGER_JSON=/docs/api/downloader-openapi.yaml \
 # Viewer API
 docker run -p 9090:8080 -e SWAGGER_JSON=/docs/api/viewer-openapi.yaml \
   -v $(pwd)/docs/api:/docs/api swaggerapi/swagger-ui
+
+# Metadata API
+docker run -p 9090:8080 -e SWAGGER_JSON=/docs/api/metadata-openapi.yaml \
+  -v $(pwd)/docs/api:/docs/api swaggerapi/swagger-ui
 ```
 
 ### 本地驗證（使用 swagger-cli）
@@ -256,6 +277,7 @@ swagger-cli validate docs/api/fetcher-openapi.yaml
 swagger-cli validate docs/api/mikanani-fetcher-openapi.yaml
 swagger-cli validate docs/api/downloader-openapi.yaml
 swagger-cli validate docs/api/viewer-openapi.yaml
+swagger-cli validate docs/api/metadata-openapi.yaml
 ```
 
 ## 端點統計
@@ -267,6 +289,7 @@ swagger-cli validate docs/api/viewer-openapi.yaml
 | Mikanani Fetcher | 3 | `/health`, `/fetch`, `/can-handle-subscription` |
 | Downloader (qBittorrent) | 7 | `/health`, `/downloads`, `/downloads/cancel`, `pause/resume/delete` |
 | Viewer (Jellyfin) | 2 | `/health`, `/sync` |
+| Metadata Service | 3 | `/health`, `/enrich/anime`, `/enrich/episodes` |
 
 ## 版本管理
 
@@ -275,6 +298,7 @@ swagger-cli validate docs/api/viewer-openapi.yaml
 - **Mikanani Fetcher 版本：** 0.2.0
 - **Downloader API 版本：** 0.1.0
 - **Viewer API 版本：** 0.1.0
+- **Metadata Service 版本：** 0.1.0
 
 ---
 

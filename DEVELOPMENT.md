@@ -59,6 +59,7 @@ rust-bangumi/
 ├── fetchers/mikanani/                  # Mikanani RSS Fetcher
 ├── downloaders/qbittorrent/            # qBittorrent Downloader
 ├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
+├── metadata/                           # Metadata Service（Bangumi.tv 元資料查詢）
 ├── frontend/                           # React SPA 前端管理介面
 │   ├── src/
 │   │   ├── pages/                      # 頁面元件
@@ -111,6 +112,7 @@ docker compose -f docker-compose.dev.yaml up -d
 | Adminer | `http://localhost:8081` | 資料庫管理介面 |
 | qBittorrent | `http://localhost:8080` | BT 下載客戶端（admin/adminadmin） |
 | Jellyfin | `http://localhost:8096` | 媒體伺服器（首次需設定嚮導） |
+| Metadata Service | `http://localhost:8005` | Bangumi.tv 元資料查詢 |
 
 ### 2. 設置環境變數
 
@@ -174,6 +176,12 @@ cargo run -p downloader-qbittorrent
 # Viewer (port 8003) - 需指定 Viewer 專用資料庫
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
   cargo run -p viewer-jellyfin
+
+# Metadata Service (port 8005) - stateless，不需資料庫
+CORE_SERVICE_URL=http://localhost:8000 \
+SERVICE_HOST=localhost \
+SERVICE_PORT=8005 \
+  cargo run -p metadata-service
 
 # CLI
 cargo run -p bangumi-cli -- --help
