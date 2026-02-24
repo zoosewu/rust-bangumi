@@ -1,0 +1,53 @@
+# 構建階段
+FROM rust:slim-bookworm AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev pkg-config ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY shared/Cargo.toml ./shared/
+COPY metadata/Cargo.toml ./metadata/
+
+RUN awk '/^members/{p=1; print "members = ["; print "    \"shared\","; print "    \"metadata\","; next} p&&/^\]/{p=0; print; next} p{next} {print}' Cargo.toml > /tmp/c && mv /tmp/c Cargo.toml
+
+COPY shared/src ./shared/src
+
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    mkdir -p metadata/src && \
+    echo "fn main() {}" > metadata/src/main.rs && \
+    cargo build --release --package metadata-service || true && \
+    rm -rf metadata/src
+
+COPY metadata/src ./metadata/src
+
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    cargo build --release --package metadata-service && \
+    cp /app/target/release/metadata-service /usr/local/bin/metadata-service && \
+    strip /usr/local/bin/metadata-service
+
+# 運行階段
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
+
+COPY --from=builder /usr/local/bin/metadata-service /usr/local/bin/
+
+USER bangumi
+
+EXPOSE 8005
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8005/health || exit 1
+
+CMD ["metadata-service"]

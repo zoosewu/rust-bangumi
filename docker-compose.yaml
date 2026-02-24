@@ -190,6 +190,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      metadata:
+        condition: service_started
     environment:
       VIEWER_DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/viewer_jellyfin
       DOWNLOADS_DIR: /downloads
@@ -197,6 +199,7 @@ services:
       CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
       SERVICE_HOST: viewer-jellyfin
       SERVICE_PORT: ${VIEWER_PORT:-8003}
+      METADATA_SERVICE_URL: http://metadata:${METADATA_PORT:-8005}
       RUST_LOG: ${RUST_LOG:-viewer_jellyfin=info}
       RUST_BACKTRACE: "0"
     ports:
@@ -227,6 +230,49 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  # ============================================================================
+  # Metadata Service - Bangumi.tv 元資料查詢
+  # ============================================================================
+  metadata:
+    build:
+      context: .
+      dockerfile: Dockerfile.metadata
+    container_name: bangumi-metadata
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      CORE_SERVICE_URL: http://core-service:${CORE_PORT:-8000}
+      SERVICE_HOST: metadata
+      SERVICE_PORT: ${METADATA_PORT:-8005}
+      RUST_LOG: ${RUST_LOG:-metadata_service=info}
+      RUST_BACKTRACE: "0"
+    ports:
+      - "${METADATA_PORT:-8005}:${METADATA_PORT:-8005}"
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.14
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${METADATA_PORT:-8005}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ============================================================================
   # Frontend (Caddy + SPA)
