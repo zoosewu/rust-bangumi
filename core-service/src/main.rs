@@ -312,6 +312,15 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     supported_download_types: vec![],
                                 },
                             ),
+                            ModuleTypeEnum::Metadata => (
+                                shared::ServiceType::Metadata,
+                                shared::Capabilities {
+                                    fetch_endpoint: None,
+                                    download_endpoint: None,
+                                    sync_endpoint: None,
+                                    supported_download_types: vec![],
+                                },
+                            ),
                         };
 
                         let service = shared::RegisteredService {

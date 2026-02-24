@@ -102,6 +102,7 @@ pub enum ModuleTypeEnum {
     Fetcher,
     Downloader,
     Viewer,
+    Metadata,
 }
 
 impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::pg::Pg>
@@ -112,6 +113,7 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::ModuleType, diesel::
             b"fetcher" => Ok(ModuleTypeEnum::Fetcher),
             b"downloader" => Ok(ModuleTypeEnum::Downloader),
             b"viewer" => Ok(ModuleTypeEnum::Viewer),
+            b"metadata" => Ok(ModuleTypeEnum::Metadata),
             _ => Err("Unrecognized enum variant".into()),
         }
     }
@@ -128,6 +130,7 @@ impl diesel::serialize::ToSql<crate::schema::sql_types::ModuleType, diesel::pg::
             ModuleTypeEnum::Fetcher => out.write_all(b"fetcher")?,
             ModuleTypeEnum::Downloader => out.write_all(b"downloader")?,
             ModuleTypeEnum::Viewer => out.write_all(b"viewer")?,
+            ModuleTypeEnum::Metadata => out.write_all(b"metadata")?,
         }
         Ok(diesel::serialize::IsNull::No)
     }
@@ -139,6 +142,7 @@ impl std::fmt::Display for ModuleTypeEnum {
             ModuleTypeEnum::Fetcher => write!(f, "fetcher"),
             ModuleTypeEnum::Downloader => write!(f, "downloader"),
             ModuleTypeEnum::Viewer => write!(f, "viewer"),
+            ModuleTypeEnum::Metadata => write!(f, "metadata"),
         }
     }
 }
@@ -149,7 +153,7 @@ impl From<&shared::ServiceType> for ModuleTypeEnum {
             shared::ServiceType::Fetcher => ModuleTypeEnum::Fetcher,
             shared::ServiceType::Downloader => ModuleTypeEnum::Downloader,
             shared::ServiceType::Viewer => ModuleTypeEnum::Viewer,
-            shared::ServiceType::Metadata => panic!("Metadata service type has no ModuleTypeEnum mapping"),
+            shared::ServiceType::Metadata => ModuleTypeEnum::Metadata,
         }
     }
 }
@@ -632,4 +636,28 @@ pub struct NewRawAnimeItem {
     pub error_message: Option<String>,
     pub parsed_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+}
+
+// ============ AnimeCoverImages ============
+#[derive(Debug, Queryable, Selectable, serde::Serialize, Clone)]
+#[diesel(table_name = crate::schema::anime_cover_images)]
+pub struct AnimeCoverImage {
+    pub cover_id: i32,
+    pub anime_id: i32,
+    pub image_url: String,
+    pub service_module_id: Option<i32>,
+    pub source_name: String,
+    pub is_default: bool,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::schema::anime_cover_images)]
+pub struct NewAnimeCoverImage {
+    pub anime_id: i32,
+    pub image_url: String,
+    pub service_module_id: Option<i32>,
+    pub source_name: String,
+    pub is_default: bool,
+    pub created_at: chrono::NaiveDateTime,
 }
