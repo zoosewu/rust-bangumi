@@ -44,6 +44,7 @@ async fn register_with_core(core_url: &str, host: &str, port: u16) {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    dotenv::dotenv().ok();
     tracing_subscriber::fmt::init();
 
     let port: u16 = std::env::var("PORT")
