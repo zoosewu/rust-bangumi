@@ -829,8 +829,8 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, anime_id: i32, anime_
     use crate::schema::{anime_cover_images, service_modules};
     use crate::models::db::{ModuleTypeEnum, NewAnimeCoverImage};
 
-    // 1. 從 DB 找 metadata service 的 base_url
-    let (metadata_url, module_id) = {
+    // 1. 從 DB 找所有啟用的 metadata service
+    let metadata_services: Vec<(String, i32)> = {
         let mut conn = match db.get() {
             Ok(c) => c,
             Err(e) => {
@@ -842,14 +842,13 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, anime_id: i32, anime_
             .filter(service_modules::module_type.eq(ModuleTypeEnum::Metadata))
             .filter(service_modules::is_enabled.eq(true))
             .select((service_modules::base_url, service_modules::module_id))
-            .first::<(String, i32)>(&mut conn)
-            .optional()
+            .load::<(String, i32)>(&mut conn)
         {
-            Ok(Some((url, id))) => (url, id),
-            Ok(None) => {
+            Ok(list) if list.is_empty() => {
                 tracing::debug!("No metadata service registered — skipping cover fetch");
                 return;
             }
+            Ok(list) => list,
             Err(e) => {
                 tracing::error!("DB query error for metadata service lookup: {}", e);
                 return;
@@ -857,65 +856,74 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, anime_id: i32, anime_
         }
     };
 
-    // 2. 呼叫 metadata service
     let client = reqwest::Client::new();
-    let resp = client
-        .post(format!("{}/enrich/anime", metadata_url))
-        .json(&serde_json::json!({ "title": anime_title }))
-        .send()
-        .await;
+    let mut is_first_image = true;
 
-    let data: serde_json::Value = match resp {
-        Ok(r) if r.status().is_success() => match r.json().await {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::error!("Failed to parse metadata response: {}", e);
-                return;
+    // 2. 呼叫每個 metadata service
+    for (metadata_url, module_id) in &metadata_services {
+        let resp = client
+            .post(format!("{}/enrich/anime", metadata_url))
+            .json(&serde_json::json!({ "title": anime_title }))
+            .send()
+            .await;
+
+        let data: serde_json::Value = match resp {
+            Ok(r) if r.status().is_success() => match r.json().await {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("Failed to parse metadata response from {}: {}", metadata_url, e);
+                    continue;
+                }
+            },
+            Ok(r) => {
+                tracing::warn!("Metadata service {} returned HTTP {}", metadata_url, r.status());
+                continue;
             }
-        },
-        Ok(r) => {
-            tracing::warn!("Metadata service returned HTTP {}", r.status());
-            return;
-        }
-        Err(e) => {
-            tracing::error!("Metadata service unreachable: {}", e);
-            return;
-        }
-    };
-
-    // 3. 儲存封面圖
-    let cover_images = data["cover_images"].as_array().cloned().unwrap_or_default();
-    if cover_images.is_empty() {
-        return;
-    }
-
-    let mut conn = match db.get() {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-
-    for (idx, img) in cover_images.iter().enumerate() {
-        let url = match img["url"].as_str() {
-            Some(u) => u.to_string(),
-            None => continue,
+            Err(e) => {
+                tracing::error!("Metadata service {} unreachable: {}", metadata_url, e);
+                continue;
+            }
         };
-        let source = img["source"].as_str().unwrap_or("bangumi").to_string();
-        let new_cover = NewAnimeCoverImage {
-            anime_id,
-            image_url: url,
-            service_module_id: Some(module_id),
-            source_name: source,
-            is_default: idx == 0,
-            created_at: chrono::Utc::now().naive_utc(),
+
+        // 3. 儲存封面圖
+        let cover_images = data["cover_images"].as_array().cloned().unwrap_or_default();
+        if cover_images.is_empty() {
+            continue;
+        }
+
+        let mut conn = match db.get() {
+            Ok(c) => c,
+            Err(_) => return,
         };
-        let _ = diesel::insert_into(anime_cover_images::table)
-            .values(&new_cover)
-            .on_conflict_do_nothing()
-            .execute(&mut conn);
+
+        for img in &cover_images {
+            let url = match img["url"].as_str() {
+                Some(u) => u.to_string(),
+                None => continue,
+            };
+            let source = img["source"].as_str().unwrap_or("bangumi").to_string();
+            let new_cover = NewAnimeCoverImage {
+                anime_id,
+                image_url: url,
+                service_module_id: Some(*module_id),
+                source_name: source,
+                is_default: is_first_image,
+                created_at: chrono::Utc::now().naive_utc(),
+            };
+            if diesel::insert_into(anime_cover_images::table)
+                .values(&new_cover)
+                .on_conflict_do_nothing()
+                .execute(&mut conn)
+                .is_ok()
+            {
+                is_first_image = false;
+            }
+        }
+        tracing::info!(
+            "Stored {} cover image(s) from {} for anime_id={}",
+            cover_images.len(),
+            metadata_url,
+            anime_id
+        );
     }
-    tracing::info!(
-        "Stored {} cover image(s) for anime_id={}",
-        cover_images.len(),
-        anime_id
-    );
 }
