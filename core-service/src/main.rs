@@ -94,6 +94,15 @@ async fn main() -> anyhow::Result<()> {
             "/anime/:anime_id",
             axum::routing::delete(handlers::anime::delete_anime),
         )
+        // Cover 圖片管理
+        .route(
+            "/anime/:anime_id/covers",
+            axum::routing::get(handlers::covers::list_anime_covers),
+        )
+        .route(
+            "/anime/:anime_id/covers/:cover_id/set-default",
+            axum::routing::post(handlers::covers::set_default_cover),
+        )
         // 季度管理
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))

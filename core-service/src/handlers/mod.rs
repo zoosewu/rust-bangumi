@@ -11,3 +11,4 @@ pub mod raw_items;
 pub mod services;
 pub mod subscriptions;
 pub mod sync;
+pub mod covers;
