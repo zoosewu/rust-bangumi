@@ -5,6 +5,7 @@ members = [
     "fetchers/mikanani",
     "downloaders/qbittorrent",
     "viewers/jellyfin",
+    "metadata",
     "cli",
 ]
 resolver = "2"
