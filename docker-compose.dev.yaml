@@ -164,8 +164,11 @@ networks:
 # ============================================================================
 volumes:
   postgres_dev_data:
+    name: bangumi-postgres-dev-data
     driver: local
   jellyfin_dev_config:
+    name: bangumi-jellyfin-dev-config
     driver: local
   jellyfin_dev_cache:
+    name: bangumi-jellyfin-dev-cache
     driver: local
