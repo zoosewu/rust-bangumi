@@ -15,6 +15,19 @@ pub mod sql_types {
 }
 
 diesel::table! {
+    anime_cover_images (cover_id) {
+        cover_id -> Int4,
+        anime_id -> Int4,
+        image_url -> Text,
+        service_module_id -> Nullable<Int4>,
+        #[max_length = 100]
+        source_name -> Varchar,
+        is_default -> Bool,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     anime_link_conflicts (conflict_id) {
         conflict_id -> Int4,
         series_id -> Int4,
@@ -276,6 +289,8 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(anime_cover_images -> animes (anime_id));
+diesel::joinable!(anime_cover_images -> service_modules (service_module_id));
 diesel::joinable!(anime_link_conflicts -> anime_links (chosen_link_id));
 diesel::joinable!(anime_link_conflicts -> anime_series (series_id));
 diesel::joinable!(anime_link_conflicts -> subtitle_groups (group_id));
@@ -292,6 +307,7 @@ diesel::joinable!(raw_anime_items -> title_parsers (parser_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    anime_cover_images,
     anime_link_conflicts,
     anime_links,
     anime_series,
