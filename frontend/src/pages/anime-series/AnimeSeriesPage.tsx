@@ -17,7 +17,7 @@ export default function AnimeSeriesPage() {
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAllAnimeSeries
+        return yield* api.getAllAnimeSeries({ excludeEmpty: true })
       }),
     [],
   )

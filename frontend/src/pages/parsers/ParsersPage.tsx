@@ -174,7 +174,7 @@ export default function ParsersPage() {
       else if (animes) toast.error(t("common.notFound", "Not found"))
     } else if (type === "anime_series") {
       const allSeries = await AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) => api.getAllAnimeSeries),
+        Effect.flatMap(CoreApi, (api) => api.getAllAnimeSeries({ excludeEmpty: true })),
       ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const series = allSeries?.find((s: AnimeSeriesRich) => s.series_id === id)
       if (series) setEntityDialog({ type: "anime_series", data: series })
