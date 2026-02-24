@@ -1,17 +1,28 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
+import { LayoutGrid, List } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { AnimeSeriesDialog } from "./AnimeSeriesDialog"
+import { AnimeSeriesCard } from "@/components/AnimeSeriesCard"
 import type { AnimeSeriesRich } from "@/schemas/anime"
 
 export default function AnimeSeriesPage() {
   const { t } = useTranslation()
   const [selected, setSelected] = useState<AnimeSeriesRich | null>(null)
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    return (localStorage.getItem("anime-series-view") as "grid" | "list") ?? "grid"
+  })
+
+  const handleViewMode = (mode: "grid" | "list") => {
+    setViewMode(mode)
+    localStorage.setItem("anime-series-view", mode)
+  }
 
   const { data: seriesList, isLoading, refetch } = useEffectQuery(
     () =>
@@ -79,9 +90,37 @@ export default function AnimeSeriesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t("animeSeries.title", "Anime Seasons")}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">{t("animeSeries.title", "Anime Seasons")}</h1>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={viewMode === "list" ? "secondary" : "ghost"}
+            size="icon"
+            onClick={() => handleViewMode("list")}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "grid" ? "secondary" : "ghost"}
+            size="icon"
+            onClick={() => handleViewMode("grid")}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {(seriesList ?? []).map((series) => (
+            <AnimeSeriesCard
+              key={series.series_id}
+              series={series}
+              onClick={() => setSelected(series)}
+            />
+          ))}
+        </div>
       ) : (
         <DataTable
           columns={columns}
