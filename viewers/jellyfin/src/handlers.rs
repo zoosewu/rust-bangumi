@@ -1,12 +1,11 @@
-use crate::bangumi_client::BangumiClient;
 use crate::db::DbPool;
 use crate::file_organizer::FileOrganizer;
+use crate::metadata_client::MetadataClient;
 use crate::models::*;
 use crate::nfo_generator;
-use crate::schema::{bangumi_episodes, bangumi_mapping, bangumi_subjects, sync_tasks};
+use crate::schema::sync_tasks;
 use crate::AppState;
 use axum::{extract::State, http::StatusCode, Json};
-use chrono::NaiveDate;
 use diesel::prelude::*;
 use serde::Serialize;
 use shared::ViewerSyncRequest;
@@ -58,9 +57,9 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
     // Spawn async processing
     let organizer = state.organizer.clone();
     let db = state.db.clone();
-    let bangumi = state.bangumi.clone();
+    let metadata = state.metadata.clone();
     tokio::spawn(async move {
-        process_sync(organizer, db, bangumi, req, task_id).await;
+        process_sync(organizer, db, metadata, req, task_id).await;
     });
 
     StatusCode::ACCEPTED
@@ -69,11 +68,11 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
 async fn process_sync(
     organizer: Arc<FileOrganizer>,
     db: DbPool,
-    bangumi: Arc<BangumiClient>,
+    metadata: Arc<MetadataClient>,
     req: ViewerSyncRequest,
     task_id: Option<i32>,
 ) {
-    let result = do_sync(&organizer, &db, &bangumi, &req).await;
+    let result = do_sync(&organizer, &db, &metadata, &req).await;
 
     // Update sync_task record by task_id
     if let (Some(tid), Ok(mut conn)) = (task_id, db.get()) {
@@ -131,7 +130,7 @@ async fn process_sync(
 async fn do_sync(
     organizer: &FileOrganizer,
     db: &DbPool,
-    bangumi: &BangumiClient,
+    metadata: &MetadataClient,
     req: &ViewerSyncRequest,
 ) -> anyhow::Result<String> {
     // 1. Move the file (resolve container path → local path)
@@ -145,12 +144,13 @@ async fn do_sync(
         )
         .await?;
 
-    // 2. Fetch bangumi metadata (best-effort)
+    // 2. Fetch metadata and generate NFO files (best-effort)
     if let Err(e) = fetch_and_generate_metadata(
         db,
-        bangumi,
+        metadata,
         organizer,
-        req.series_id,
+        req.bangumi_id,
+        req.cover_image_url.as_deref(),
         &req.anime_title,
         req.series_no,
         req.episode_no,
@@ -171,104 +171,75 @@ async fn do_sync(
 }
 
 async fn fetch_and_generate_metadata(
-    db: &DbPool,
-    bangumi: &BangumiClient,
+    _db: &DbPool,
+    metadata: &MetadataClient,
     organizer: &FileOrganizer,
-    series_id: i32,
+    bangumi_id: Option<i32>,
+    cover_image_url: Option<&str>,
     anime_title: &str,
     series_no: i32,
     episode_no: i32,
     target_path: &std::path::Path,
-    force_nfo: bool,
+    _force_nfo: bool,
 ) -> anyhow::Result<()> {
-    let mut conn = db.get().map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    // Check if we already have a mapping
-    let mapping = bangumi_mapping::table
-        .filter(bangumi_mapping::core_series_id.eq(series_id))
-        .first::<BangumiMapping>(&mut conn)
-        .optional()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    let bangumi_id = if let Some(m) = mapping {
-        m.bangumi_id
-    } else {
-        // Search bangumi.tv
-        let found_id = bangumi.search_anime(anime_title).await?;
-        match found_id {
-            Some(id) => {
-                // Fetch and cache subject
-                let subject = bangumi.get_subject(id).await?;
-                cache_subject(&mut conn, &subject)?;
-
-                // Fetch and cache episodes
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                let episodes = bangumi.get_episodes(id).await?;
-                cache_episodes(&mut conn, id, &episodes)?;
-
-                // Create mapping
-                let new_mapping = NewBangumiMapping {
-                    core_series_id: series_id,
-                    bangumi_id: id,
-                };
-                diesel::insert_into(bangumi_mapping::table)
-                    .values(&new_mapping)
-                    .execute(&mut conn)
-                    .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-                id
-            }
-            None => {
-                tracing::warn!("No bangumi.tv match found for '{}'", anime_title);
-                return Ok(()); // Non-fatal
-            }
+    let bangumi_id = match bangumi_id {
+        Some(id) => id,
+        None => {
+            tracing::warn!(
+                "No bangumi_id provided for '{}', skipping metadata generation",
+                anime_title
+            );
+            return Ok(());
         }
     };
 
-    // Load cached subject
-    let subject = bangumi_subjects::table
-        .filter(bangumi_subjects::bangumi_id.eq(bangumi_id))
-        .first::<BangumiSubject>(&mut conn)
-        .optional()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+    let anime_dir = organizer
+        .get_library_dir()
+        .join(FileOrganizer::sanitize_filename(anime_title));
 
-    if let Some(subject) = subject {
-        // Generate tvshow.nfo + poster.jpg in anime root directory
-        let anime_dir = organizer
-            .get_library_dir()
-            .join(FileOrganizer::sanitize_filename(anime_title));
-
-        let subject_detail = to_subject_detail(&subject);
-        nfo_generator::generate_tvshow_nfo(&anime_dir, &subject_detail, force_nfo).await?;
-
-        // Download poster if not exists
-        if let Some(cover_url) = &subject.cover_url {
-            let poster_path = anime_dir.join("poster.jpg");
-            if !poster_path.exists() {
-                if let Err(e) = bangumi.download_image(cover_url, &poster_path).await {
-                    tracing::warn!("Failed to download poster: {}", e);
-                }
+    // Download poster from cover_image_url if provided and not already present
+    if let Some(url) = cover_image_url {
+        let poster_path = anime_dir.join("poster.jpg");
+        if !poster_path.exists() {
+            if let Err(e) = metadata.download_image(url, &poster_path).await {
+                tracing::warn!("Failed to download poster: {}", e);
             }
         }
     }
 
-    // Generate episode NFO
-    let episode = bangumi_episodes::table
-        .filter(bangumi_episodes::bangumi_id.eq(bangumi_id))
-        .filter(bangumi_episodes::episode_no.eq(episode_no))
-        .first::<BangumiEpisode>(&mut conn)
-        .optional()
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    if let Some(ep) = episode {
-        let ep_item = to_episode_item(&ep);
-        nfo_generator::generate_episode_nfo(target_path, &ep_item, series_no).await?;
+    // Fetch episode info from Metadata Service
+    match metadata.enrich_episodes(bangumi_id, episode_no).await {
+        Ok(Some(ep_info)) => {
+            let episode_item = crate::bangumi_client::EpisodeItem {
+                id: 0, // no bangumi ep id from metadata service
+                ep: Some(episode_no),
+                sort: episode_no,
+                name: ep_info.title,
+                name_cn: ep_info.title_cn,
+                airdate: ep_info.air_date,
+                desc: ep_info.summary,
+            };
+            nfo_generator::generate_episode_nfo(target_path, &episode_item, series_no).await?;
+        }
+        Ok(None) => {
+            tracing::warn!(
+                "No episode info found in Metadata Service for bangumi_id={} episode={}",
+                bangumi_id,
+                episode_no
+            );
+        }
+        Err(e) => {
+            tracing::warn!("Failed to fetch episode info from Metadata Service: {}", e);
+        }
     }
 
     Ok(())
 }
 
-pub async fn resync(State(state): State<AppState>, Json(req): Json<shared::ViewerResyncRequest>) -> StatusCode {
+pub async fn resync(
+    State(state): State<AppState>,
+    Json(req): Json<shared::ViewerResyncRequest>,
+) -> StatusCode {
     tracing::info!(
         "Received resync request: download_id={}, anime={} S{:02}E{:02}",
         req.download_id,
@@ -294,9 +265,9 @@ pub async fn resync(State(state): State<AppState>, Json(req): Json<shared::Viewe
 
     let organizer = state.organizer.clone();
     let db = state.db.clone();
-    let bangumi = state.bangumi.clone();
+    let metadata = state.metadata.clone();
     tokio::spawn(async move {
-        process_resync(organizer, db, bangumi, req, task_id).await;
+        process_resync(organizer, db, metadata, req, task_id).await;
     });
 
     StatusCode::ACCEPTED
@@ -305,11 +276,11 @@ pub async fn resync(State(state): State<AppState>, Json(req): Json<shared::Viewe
 async fn process_resync(
     organizer: Arc<FileOrganizer>,
     db: DbPool,
-    bangumi: Arc<BangumiClient>,
+    metadata: Arc<MetadataClient>,
     req: shared::ViewerResyncRequest,
     task_id: Option<i32>,
 ) {
-    let result = do_resync(&organizer, &db, &bangumi, &req).await;
+    let result = do_resync(&organizer, &db, &metadata, &req).await;
 
     // Update sync_task record
     if let (Some(tid), Ok(mut conn)) = (task_id, db.get()) {
@@ -367,7 +338,7 @@ async fn process_resync(
 async fn do_resync(
     organizer: &FileOrganizer,
     db: &DbPool,
-    bangumi: &BangumiClient,
+    metadata: &MetadataClient,
     req: &shared::ViewerResyncRequest,
 ) -> anyhow::Result<String> {
     // 1. Find the actual current file path from our DB
@@ -414,12 +385,15 @@ async fn do_resync(
         let _ = tokio::fs::remove_file(&old_nfo).await;
     }
 
-    // 4. Fetch/update bangumi metadata and regenerate NFOs
+    // 4. Fetch/update metadata and regenerate NFOs
+    // ViewerResyncRequest does not carry bangumi_id / cover_image_url yet;
+    // we do a best-effort fetch without them.
     if let Err(e) = fetch_and_generate_metadata(
         db,
-        bangumi,
+        metadata,
         organizer,
-        req.series_id,
+        None, // bangumi_id not available in resync request
+        None, // cover_image_url not available in resync request
         &req.anime_title,
         req.series_no,
         req.episode_no,
@@ -467,10 +441,7 @@ pub async fn delete_synced(
     )
 }
 
-async fn delete_single_download(
-    state: &AppState,
-    download_id: i32,
-) -> shared::ViewerDeleteResult {
+async fn delete_single_download(state: &AppState, download_id: i32) -> shared::ViewerDeleteResult {
     // Find the latest completed sync task for this download_id
     let target_path: Option<String> = match state.db.get() {
         Ok(mut conn) => {
@@ -493,7 +464,9 @@ async fn delete_single_download(
                 download_id,
                 success: false,
                 deleted_path: None,
-                error_message: Some("No completed sync task found for this download".to_string()),
+                error_message: Some(
+                    "No completed sync task found for this download".to_string(),
+                ),
             };
         }
     };
@@ -526,103 +499,5 @@ async fn delete_single_download(
         success: true,
         deleted_path: Some(target_path),
         error_message: None,
-    }
-}
-
-fn cache_subject(
-    conn: &mut diesel::PgConnection,
-    subject: &crate::bangumi_client::SubjectDetail,
-) -> anyhow::Result<()> {
-    let air_date = subject
-        .date
-        .as_deref()
-        .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
-
-    let new_subject = NewBangumiSubject {
-        bangumi_id: subject.id,
-        title: subject.name.clone(),
-        title_cn: subject.name_cn.clone(),
-        summary: subject.summary.clone(),
-        rating: subject.rating.as_ref().and_then(|r| r.score),
-        cover_url: subject.images.as_ref().and_then(|i| i.large.clone()),
-        air_date,
-    };
-
-    diesel::insert_into(bangumi_subjects::table)
-        .values(&new_subject)
-        .on_conflict(bangumi_subjects::bangumi_id)
-        .do_nothing()
-        .execute(conn)
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
-
-    Ok(())
-}
-
-fn cache_episodes(
-    conn: &mut diesel::PgConnection,
-    bangumi_id: i32,
-    episodes: &[crate::bangumi_client::EpisodeItem],
-) -> anyhow::Result<()> {
-    for ep in episodes {
-        let air_date = ep
-            .airdate
-            .as_deref()
-            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
-
-        let new_ep = NewBangumiEpisode {
-            bangumi_ep_id: ep.id,
-            bangumi_id,
-            episode_no: ep.ep.unwrap_or(ep.sort),
-            title: ep.name.clone(),
-            title_cn: ep.name_cn.clone(),
-            air_date,
-            summary: ep.desc.clone(),
-        };
-
-        diesel::insert_into(bangumi_episodes::table)
-            .values(&new_ep)
-            .on_conflict(bangumi_episodes::bangumi_ep_id)
-            .do_nothing()
-            .execute(conn)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
-    }
-
-    Ok(())
-}
-
-/// Convert DB model to bangumi_client type for NFO generation
-fn to_subject_detail(s: &BangumiSubject) -> crate::bangumi_client::SubjectDetail {
-    crate::bangumi_client::SubjectDetail {
-        id: s.bangumi_id,
-        name: s.title.clone(),
-        name_cn: s.title_cn.clone(),
-        summary: s.summary.clone(),
-        date: s.air_date.map(|d| d.format("%Y-%m-%d").to_string()),
-        images: s
-            .cover_url
-            .as_ref()
-            .map(|url| crate::bangumi_client::SubjectImages {
-                large: Some(url.clone()),
-                common: None,
-                medium: None,
-                small: None,
-            }),
-        rating: s.rating.map(|score| crate::bangumi_client::SubjectRating {
-            score: Some(score),
-            total: None,
-        }),
-        total_episodes: None,
-    }
-}
-
-fn to_episode_item(ep: &BangumiEpisode) -> crate::bangumi_client::EpisodeItem {
-    crate::bangumi_client::EpisodeItem {
-        id: ep.bangumi_ep_id,
-        ep: Some(ep.episode_no),
-        sort: ep.episode_no,
-        name: ep.title.clone(),
-        name_cn: ep.title_cn.clone(),
-        airdate: ep.air_date.map(|d| d.format("%Y-%m-%d").to_string()),
-        desc: ep.summary.clone(),
     }
 }

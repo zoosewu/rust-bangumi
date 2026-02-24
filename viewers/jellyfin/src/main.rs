@@ -10,6 +10,7 @@ mod bangumi_client;
 mod db;
 mod file_organizer;
 mod handlers;
+mod metadata_client;
 mod models;
 mod nfo_generator;
 mod schema;
@@ -22,7 +23,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 pub struct AppState {
     pub organizer: Arc<FileOrganizer>,
     pub db: db::DbPool,
-    pub bangumi: Arc<bangumi_client::BangumiClient>,
+    pub metadata: Arc<metadata_client::MetadataClient>,
 }
 
 #[tokio::main]
@@ -75,15 +76,18 @@ async fn main() -> anyhow::Result<()> {
         Err(e) => tracing::warn!("Could not get DB connection for migrations: {}", e),
     }
 
-    let bangumi = Arc::new(bangumi_client::BangumiClient::new());
+    // Initialize Metadata Service client
+    let metadata_url = std::env::var("METADATA_SERVICE_URL")
+        .unwrap_or_else(|_| "http://metadata:8005".to_string());
+    let metadata = Arc::new(metadata_client::MetadataClient::new(metadata_url));
 
     let state = AppState {
         organizer,
         db: db_pool,
-        bangumi,
+        metadata,
     };
 
-    tracing::info!("AppState initialized with DB pool and BangumiClient");
+    tracing::info!("AppState initialized with DB pool and MetadataClient");
 
     // Build application routes
     let app = Router::new()
