@@ -198,10 +198,13 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Struct({ links: Schema.Array(AnimeLink) }),
       ).pipe(Effect.map((r) => r.links)),
 
-    getAllAnimeSeries: fetchJson(
-      HttpClientRequest.get("/api/core/series"),
-      Schema.Struct({ series: Schema.Array(AnimeSeriesRich) }),
-    ).pipe(Effect.map((r) => r.series)),
+    getAllAnimeSeries: (params) => {
+      const url = params?.excludeEmpty ? "/api/core/series?exclude_empty=true" : "/api/core/series"
+      return fetchJson(
+        HttpClientRequest.get(url),
+        Schema.Struct({ series: Schema.Array(AnimeSeriesRich) }),
+      ).pipe(Effect.map((r) => r.series))
+    },
 
     getDashboardStats: fetchJson(
       HttpClientRequest.get("/api/core/dashboard/stats"),

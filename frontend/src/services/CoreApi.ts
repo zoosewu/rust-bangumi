@@ -63,7 +63,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getSeasons: Effect.Effect<readonly Season[]>
     readonly createSeason: (req: { year: number; season: string }) => Effect.Effect<Season>
     readonly getAnimeLinks: (seriesId: number) => Effect.Effect<readonly AnimeLink[]>
-    readonly getAllAnimeSeries: Effect.Effect<readonly AnimeSeriesRich[]>
+    readonly getAllAnimeSeries: (params?: { excludeEmpty?: boolean }) => Effect.Effect<readonly AnimeSeriesRich[]>
     readonly getDashboardStats: Effect.Effect<DashboardStats>
     readonly getAnimeLinksRich: (seriesId: number) => Effect.Effect<readonly AnimeLinkRich[]>
     readonly updateAnimeSeries: (seriesId: number, req: {
