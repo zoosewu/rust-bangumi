@@ -7,25 +7,25 @@ use tabled::{Table, Tabled};
 
 #[derive(Subcommand)]
 pub enum SeriesAction {
-    /// 列出所有動畫系列
-    #[command(about = "列出所有動畫系列（含集數統計）")]
+    /// 列出所有動畫
+    #[command(about = "列出所有動畫（含集數統計）")]
     List {
-        /// 篩選特定動畫 ID
+        /// 篩選特定動畫作品 ID
         #[arg(long)]
-        anime: Option<i64>,
+        work: Option<i64>,
     },
 
-    /// 顯示系列詳情
-    #[command(about = "顯示系列詳情")]
+    /// 顯示動畫詳情
+    #[command(about = "顯示動畫詳情")]
     Show {
-        /// 系列 ID
+        /// 動畫 ID
         id: i64,
     },
 
-    /// 更新系列元資料
-    #[command(about = "更新系列元資料")]
+    /// 更新動畫元資料
+    #[command(about = "更新動畫元資料")]
     Update {
-        /// 系列 ID
+        /// 動畫 ID
         id: i64,
         #[arg(long)]
         description: Option<String>,
@@ -37,20 +37,20 @@ pub enum SeriesAction {
         season_id: Option<i64>,
     },
 
-    /// 列出系列的所有集數連結
-    #[command(about = "列出系列集數與下載狀態")]
+    /// 列出動畫的所有集數連結
+    #[command(about = "列出動畫集數與下載狀態")]
     Links {
-        /// 系列 ID
+        /// 動畫 ID
         id: i64,
     },
 }
 
 #[derive(Tabled)]
-struct SeriesRow {
+struct AnimeRow {
     #[tabled(rename = "ID")]
     id: i64,
-    #[tabled(rename = "動畫")]
-    anime: String,
+    #[tabled(rename = "動畫作品")]
+    anime_work: String,
     #[tabled(rename = "季")]
     series_no: i32,
     #[tabled(rename = "播出季")]
@@ -79,25 +79,25 @@ struct LinkRow {
 
 pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result<()> {
     match action {
-        SeriesAction::List { anime } => {
-            let resp: SeriesListResponse = client.get("/series").await?;
-            let mut series = resp.series;
-            if let Some(anime_id) = anime {
-                series.retain(|s| s.anime_id == anime_id);
+        SeriesAction::List { work } => {
+            let resp: AnimesListResponse = client.get("/anime").await?;
+            let mut animes = resp.series;
+            if let Some(work_id) = work {
+                animes.retain(|s| s.anime_id == work_id);
             }
             if json {
-                output::print_json(&series);
+                output::print_json(&animes);
                 return Ok(());
             }
-            if series.is_empty() {
-                println!("尚無系列");
+            if animes.is_empty() {
+                println!("尚無動畫");
                 return Ok(());
             }
-            let rows: Vec<SeriesRow> = series
+            let rows: Vec<AnimeRow> = animes
                 .iter()
-                .map(|s| SeriesRow {
+                .map(|s| AnimeRow {
                     id: s.series_id,
-                    anime: s.anime_title.clone(),
+                    anime_work: s.anime_title.clone(),
                     series_no: s.series_no,
                     season: s
                         .season
@@ -112,8 +112,8 @@ pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result
         }
 
         SeriesAction::Show { id } => {
-            let resp: AnimeSeriesRichResponse =
-                client.get(&format!("/anime/series/{}", id)).await?;
+            let resp: AnimeRichResponse =
+                client.get(&format!("/anime/{}", id)).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -133,10 +133,10 @@ pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result
                 })
                 .collect();
             output::print_kv(
-                &format!("系列 #{}", id),
+                &format!("動畫 #{}", id),
                 &[
                     ("ID", resp.series_id.to_string()),
-                    ("動畫", resp.anime_title.clone()),
+                    ("動畫作品", resp.anime_title.clone()),
                     ("季號", format!("S{}", resp.series_no)),
                     ("播出季", season_str),
                     ("已下載", resp.episode_downloaded.to_string()),
@@ -157,12 +157,12 @@ pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result
                 end_date,
             };
             let resp: serde_json::Value =
-                client.put(&format!("/anime/series/{}", id), &req).await?;
+                client.put(&format!("/anime/{}", id), &req).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
             }
-            output::print_success(&format!("系列 #{} 已更新", id));
+            output::print_success(&format!("動畫 #{} 已更新", id));
         }
 
         SeriesAction::Links { id } => {

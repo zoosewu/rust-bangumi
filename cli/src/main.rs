@@ -45,14 +45,14 @@ enum Commands {
         action: commands::subscription::SubscriptionAction,
     },
 
-    /// 動畫條目管理
+    /// 動畫作品管理
     #[command(name = "anime")]
     Anime {
         #[command(subcommand)]
         action: commands::anime::AnimeAction,
     },
 
-    /// 動畫系列查詢與管理
+    /// 動畫查詢與管理
     #[command(name = "series")]
     Series {
         #[command(subcommand)]
