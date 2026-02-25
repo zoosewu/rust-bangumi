@@ -112,54 +112,33 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Jellyfin Viewer Service listening on {}", addr);
 
-    // 服務就緒後才向 Core 註冊
-    tokio::spawn(async { register_to_core().await });
+    // 服務就緒後才向 Core 註冊（指數退避重試直到成功）
+    tokio::spawn(async {
+        let core_service_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
+        let service_host =
+            std::env::var("SERVICE_HOST").unwrap_or_else(|_| "viewer-jellyfin".to_string());
+
+        let registration = shared::ServiceRegistration {
+            service_type: shared::ServiceType::Viewer,
+            service_name: "jellyfin".to_string(),
+            host: service_host,
+            port: std::env::var("SERVICE_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(8003),
+            capabilities: shared::Capabilities {
+                fetch_endpoint: None,
+                download_endpoint: None,
+                sync_endpoint: Some("/sync".to_string()),
+                supported_download_types: vec![],
+            },
+        };
+
+        shared::register_with_core_backoff(&core_service_url, &registration).await;
+    });
 
     axum::serve(listener, app).await?;
 
     Ok(())
-}
-
-async fn register_to_core() -> anyhow::Result<()> {
-    let core_service_url = std::env::var("CORE_SERVICE_URL")
-        .unwrap_or_else(|_| "http://core-service:8000".to_string());
-
-    let service_host =
-        std::env::var("SERVICE_HOST").unwrap_or_else(|_| "viewer-jellyfin".to_string());
-
-    let registration = shared::ServiceRegistration {
-        service_type: shared::ServiceType::Viewer,
-        service_name: "jellyfin".to_string(),
-        host: service_host,
-        port: std::env::var("SERVICE_PORT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(8003),
-        capabilities: shared::Capabilities {
-            fetch_endpoint: None,
-            download_endpoint: None,
-            sync_endpoint: Some("/sync".to_string()),
-            supported_download_types: vec![],
-        },
-    };
-
-    let client = reqwest::Client::new();
-    match client
-        .post(&format!("{}/services/register", core_service_url))
-        .json(&registration)
-        .send()
-        .await
-    {
-        Ok(_) => {
-            tracing::info!("Successfully registered with core service");
-            Ok(())
-        }
-        Err(e) => {
-            tracing::warn!(
-                "Failed to register with core service: {}. Continuing anyway.",
-                e
-            );
-            Ok(())
-        }
-    }
 }

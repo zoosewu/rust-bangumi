@@ -4,7 +4,7 @@ mod models;
 
 use axum::{routing::{get, post}, Router};
 use handlers::AppState;
-use shared::ServiceRegistration;
+use shared::{register_with_core_backoff, ServiceRegistration};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
@@ -42,47 +42,33 @@ async fn main() -> anyhow::Result<()> {
     };
     tracing::info!("Metadata service listening on {}", addr);
 
-    tokio::spawn(async { register_with_core().await });
+    // 服務就緒後才向 Core 註冊（指數退避重試直到成功）
+    tokio::spawn(async {
+        let core_url = std::env::var("CORE_SERVICE_URL")
+            .unwrap_or_else(|_| "http://core-service:8000".to_string());
+        let service_host =
+            std::env::var("SERVICE_HOST").unwrap_or_else(|_| "metadata".to_string());
+        let service_port: u16 = std::env::var("SERVICE_PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(8005);
+
+        let registration = ServiceRegistration {
+            service_type: shared::ServiceType::Metadata,
+            service_name: "bangumi-metadata".to_string(),
+            host: service_host,
+            port: service_port,
+            capabilities: shared::Capabilities {
+                fetch_endpoint: None,
+                download_endpoint: None,
+                sync_endpoint: None,
+                supported_download_types: vec![],
+            },
+        };
+
+        register_with_core_backoff(&core_url, &registration).await;
+    });
 
     axum::serve(listener, app).await?;
     Ok(())
-}
-
-async fn register_with_core() {
-    let core_url = std::env::var("CORE_SERVICE_URL")
-        .unwrap_or_else(|_| "http://core-service:8000".to_string());
-    let service_host =
-        std::env::var("SERVICE_HOST").unwrap_or_else(|_| "metadata".to_string());
-    let service_port: u16 = std::env::var("SERVICE_PORT")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(8005);
-
-    let registration = ServiceRegistration {
-        service_type: shared::ServiceType::Metadata,
-        service_name: "bangumi-metadata".to_string(),
-        host: service_host,
-        port: service_port,
-        capabilities: shared::Capabilities {
-            fetch_endpoint: None,
-            download_endpoint: None,
-            sync_endpoint: None,
-            supported_download_types: vec![],
-        },
-    };
-
-    let url = format!("{}/services/register", core_url);
-    let http_client = reqwest::Client::new();
-
-    match http_client.post(&url).json(&registration).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            tracing::info!("已向核心服務註冊: bangumi-metadata ({})", url);
-        }
-        Ok(resp) => {
-            tracing::warn!("核心服務註冊回應非成功: {} ({})", resp.status(), url);
-        }
-        Err(e) => {
-            tracing::warn!("無法連接核心服務進行註冊: {} ({})", e, url);
-        }
-    }
 }

@@ -25,7 +25,10 @@ impl DownloadScheduler {
         Self {
             db_pool,
             poll_interval_secs,
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(15))
+                .build()
+                .unwrap(),
             sync_service,
         }
     }
@@ -49,6 +52,9 @@ impl DownloadScheduler {
 
     async fn poll_all_downloaders(&self) -> Result<(), String> {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        // Reset stale "syncing" downloads back to "completed" (stuck > 5 min)
+        self.recover_stale_syncing(&mut conn);
 
         // Get all enabled downloader modules
         let downloaders: Vec<ServiceModule> = service_modules::table
@@ -312,6 +318,36 @@ impl DownloadScheduler {
                     );
                 }
             }
+        }
+    }
+
+    /// Reset downloads stuck in "syncing" for more than 5 minutes back to "completed"
+    /// so that the next poll cycle will re-trigger sync.
+    fn recover_stale_syncing(&self, conn: &mut PgConnection) {
+        let cutoff = chrono::Utc::now().naive_utc() - chrono::Duration::minutes(5);
+        let now = chrono::Utc::now().naive_utc();
+
+        match diesel::update(
+            downloads::table
+                .filter(downloads::status.eq("syncing"))
+                .filter(downloads::updated_at.lt(cutoff)),
+        )
+        .set((
+            downloads::status.eq("completed"),
+            downloads::updated_at.eq(now),
+        ))
+        .execute(conn)
+        {
+            Ok(count) if count > 0 => {
+                tracing::warn!(
+                    "Reset {} stale syncing downloads back to completed",
+                    count
+                );
+            }
+            Err(e) => {
+                tracing::error!("Failed to recover stale syncing downloads: {}", e);
+            }
+            _ => {}
         }
     }
 

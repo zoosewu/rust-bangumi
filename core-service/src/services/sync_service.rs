@@ -18,7 +18,10 @@ impl SyncService {
             .unwrap_or_else(|_| "http://core-service:8000".to_string());
         Self {
             db_pool,
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .unwrap(),
             core_service_url,
         }
     }

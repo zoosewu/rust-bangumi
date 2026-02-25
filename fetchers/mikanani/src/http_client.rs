@@ -10,7 +10,7 @@ pub struct HttpResponse {
 }
 
 /// HTTP 錯誤類型
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum HttpError {
     #[error("Request failed: {0}")]
     RequestFailed(String),
@@ -145,11 +145,11 @@ pub mod mock {
                 .unwrap()
                 .push((url.to_string(), body_json));
 
-            // 回傳預設回應
+            // 回傳預設回應（clone 而非 take，讓 retry 可重複觸發同一結果）
             self.response
                 .lock()
                 .unwrap()
-                .take()
+                .clone()
                 .unwrap_or(Ok(HttpResponse {
                     status: StatusCode::OK,
                     body: "{}".to_string(),

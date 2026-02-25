@@ -69,23 +69,48 @@ impl<C: HttpClient> FetchTask<C> {
         }
     }
 
-    /// 送出結果到 callback URL
+    /// 送出結果到 callback URL（含重試機制）
     pub async fn send_callback(
         &self,
         callback_url: &str,
         payload: &RawFetcherResultsPayload,
     ) -> Result<(), FetchTaskError> {
-        let response = self.http_client.post_json(callback_url, payload).await?;
+        let http_client = self.http_client.clone();
+        let url = callback_url.to_string();
+        let payload_json = serde_json::to_string(payload)
+            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 
-        if response.status.is_success() {
-            tracing::info!("Successfully sent raw results to core service");
-            Ok(())
-        } else {
-            let err_msg = format!("Core service returned error: {}", response.status);
-            tracing::error!("{}", err_msg);
-            Err(FetchTaskError::CallbackError(HttpError::RequestFailed(
-                err_msg,
-            )))
+        let result = shared::retry_with_backoff(
+            3,
+            std::time::Duration::from_secs(2),
+            || {
+                let http_client = http_client.clone();
+                let url = url.clone();
+                let payload_json = payload_json.clone();
+                async move {
+                    let payload: RawFetcherResultsPayload =
+                        serde_json::from_str(&payload_json)
+                            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
+                    let response = http_client.post_json(&url, &payload).await?;
+                    if response.status.is_success() {
+                        Ok(())
+                    } else {
+                        Err(HttpError::RequestFailed(format!(
+                            "Core service returned error: {}",
+                            response.status
+                        )))
+                    }
+                }
+            },
+        )
+        .await;
+
+        match result {
+            Ok(()) => {
+                tracing::info!("Successfully sent raw results to core service");
+                Ok(())
+            }
+            Err(e) => Err(FetchTaskError::CallbackError(e)),
         }
     }
 

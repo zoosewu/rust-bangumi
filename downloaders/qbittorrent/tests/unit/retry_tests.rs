@@ -1,5 +1,5 @@
 // tests/unit/retry_tests.rs
-use downloader_qbittorrent::retry_with_backoff;
+use shared::retry_with_backoff;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

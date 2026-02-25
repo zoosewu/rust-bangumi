@@ -54,9 +54,3 @@ pub mod defaults {
     pub const DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECS: u64 = 30;
 }
 
-// 重試配置
-pub mod retry {
-    pub const MAX_RETRIES: u32 = 20;
-    pub const INITIAL_DELAY_SECS: u64 = 60;
-    pub const BACKOFF_MULTIPLIER: u64 = 2;
-}

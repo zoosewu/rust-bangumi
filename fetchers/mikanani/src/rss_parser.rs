@@ -1,4 +1,4 @@
-use crate::retry::retry_with_backoff;
+use shared::retry_with_backoff;
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use shared::models::RawAnimeItem;

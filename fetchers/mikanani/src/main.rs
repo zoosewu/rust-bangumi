@@ -2,7 +2,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fetcher_mikanani::{FetcherConfig, HttpClient, RealHttpClient};
+use fetcher_mikanani::FetcherConfig;
 use std::net::SocketAddr;
 
 mod cors;
@@ -57,12 +57,22 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Mikanani fetcher service listening on {}", addr);
 
-    // 服務就緒後才向 Core 註冊
+    // 服務就緒後才向 Core 註冊（指數退避重試直到成功）
     tokio::spawn(async move {
-        let http_client = RealHttpClient::new();
-        if let Err(e) = register_to_core(&config, &http_client).await {
-            tracing::warn!("向核心服務註冊失敗: {}", e);
-        }
+        let registration = shared::ServiceRegistration {
+            service_type: shared::ServiceType::Fetcher,
+            service_name: config.service_name.clone(),
+            host: config.service_host.clone(),
+            port: config.service_port,
+            capabilities: shared::Capabilities {
+                fetch_endpoint: Some("/fetch".to_string()),
+                download_endpoint: None,
+                sync_endpoint: None,
+                supported_download_types: vec![],
+            },
+        };
+        let core_url = config.register_url().replace("/services/register", "");
+        shared::register_with_core_backoff(&core_url, &registration).await;
     });
 
     axum::serve(listener, app).await?;
@@ -70,7 +80,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn register_to_core<C: HttpClient>(
+#[cfg(test)]
+async fn register_to_core<C: fetcher_mikanani::HttpClient>(
     config: &FetcherConfig,
     http_client: &C,
 ) -> anyhow::Result<()> {

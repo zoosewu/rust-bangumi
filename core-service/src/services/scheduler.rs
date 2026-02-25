@@ -10,6 +10,7 @@ use crate::schema::{cron_logs, service_modules, subscriptions};
 
 pub struct FetchScheduler {
     db_pool: DbPool,
+    http_client: reqwest::Client,
     check_interval_secs: u64,
     max_retries: u32,
     base_retry_delay_secs: u64,
@@ -28,8 +29,12 @@ impl FetchScheduler {
     pub fn new(db_pool: DbPool) -> Self {
         Self {
             db_pool,
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap(),
             check_interval_secs: 60, // 每 60 秒檢查一次
-            max_retries: 3,
+            max_retries: 10,
             base_retry_delay_secs: 60, // 初始重試延遲 60 秒
         }
     }
@@ -154,12 +159,7 @@ impl FetchScheduler {
         let mut last_error = String::new();
 
         while attempt < self.max_retries {
-            let client = reqwest::Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .map_err(|e| e.to_string())?;
-
-            match client.post(&fetch_url).json(&request).send().await {
+            match self.http_client.post(&fetch_url).json(&request).send().await {
                 Ok(response) => {
                     if response.status().is_success()
                         || response.status() == reqwest::StatusCode::ACCEPTED
@@ -238,12 +238,12 @@ mod tests {
         // We can't instantiate FetchScheduler without a real DbPool,
         // but we can document expected defaults here.
         let expected_check_interval = 60; // seconds
-        let expected_max_retries = 3;
+        let expected_max_retries = 10;
         let expected_base_retry_delay = 60; // seconds
 
         // These values should match the defaults in FetchScheduler::new()
         assert_eq!(expected_check_interval, 60);
-        assert_eq!(expected_max_retries, 3);
+        assert_eq!(expected_max_retries, 10);
         assert_eq!(expected_base_retry_delay, 60);
     }
 

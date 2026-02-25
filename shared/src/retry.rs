@@ -11,13 +11,6 @@ use tokio::time::sleep;
 /// # Returns
 /// * `Ok(T)` if the operation succeeds within max_retries attempts
 /// * `Err(E)` if all attempts fail
-///
-/// # Example
-/// ```ignore
-/// let result = retry_with_backoff(3, Duration::from_secs(1), || async {
-///     reqwest::get("https://example.com").await
-/// }).await;
-/// ```
 pub async fn retry_with_backoff<F, Fut, T, E>(
     max_retries: u32,
     initial_delay: Duration,
@@ -39,14 +32,50 @@ where
                     return Err(e);
                 }
 
-                tracing::warn!("Attempt {} failed: {}. Retrying in {:?}", attempt, e, delay);
+                tracing::warn!(
+                    "Attempt {} failed: {}. Retrying in {:?}",
+                    attempt,
+                    e,
+                    delay
+                );
                 sleep(delay).await;
-                delay = delay.saturating_mul(2); // Exponential backoff
+                delay = delay.saturating_mul(2);
             }
         }
     }
 
     unreachable!()
+}
+
+/// 向 Core 註冊，指數退避重試直到成功
+pub async fn register_with_core_backoff(
+    core_url: &str,
+    registration: &crate::ServiceRegistration,
+) {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let url = format!("{}/services/register", core_url);
+    let mut delay = Duration::from_secs(2);
+    let max_delay = Duration::from_secs(60);
+
+    loop {
+        match client.post(&url).json(registration).send().await {
+            Ok(r) if r.status().is_success() => {
+                tracing::info!("Registered with Core successfully");
+                return;
+            }
+            Ok(r) => tracing::warn!(
+                "Registration failed: HTTP {}, retrying in {:?}",
+                r.status(),
+                delay
+            ),
+            Err(e) => tracing::warn!("Core unreachable: {}, retrying in {:?}", e, delay),
+        }
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(max_delay);
+    }
 }
 
 #[cfg(test)]
@@ -103,8 +132,6 @@ mod tests {
         use std::time::Instant;
 
         let start = Instant::now();
-        // 3 retries: fail -> wait 10ms -> fail -> wait 20ms -> fail -> return
-        // Total delay should be at least 30ms (10 + 20)
         let result =
             retry_with_backoff::<_, _, i32, String>(3, Duration::from_millis(10), || async {
                 Err("Always fails".to_string())
@@ -113,7 +140,6 @@ mod tests {
 
         let elapsed = start.elapsed();
         assert!(result.is_err());
-        // Verify exponential backoff: 10ms + 20ms = 30ms minimum
         assert!(
             elapsed.as_millis() >= 25,
             "Expected at least 25ms delay for exponential backoff, got {}ms",

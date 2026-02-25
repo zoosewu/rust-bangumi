@@ -111,17 +111,31 @@ async fn process_sync(
         error_message,
     };
 
-    let client = reqwest::Client::new();
-    if let Err(e) = client
-        .post(&req.callback_url)
-        .json(&callback)
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-    {
+        .build()
+        .unwrap();
+    let callback_url = req.callback_url.clone();
+    let download_id = req.download_id;
+    let result = shared::retry_with_backoff(
+        10,
+        std::time::Duration::from_secs(2),
+        || {
+            let client = client.clone();
+            let url = callback_url.clone();
+            let cb = callback.clone();
+            async move {
+                let resp = client.post(&url).json(&cb).send().await?;
+                resp.error_for_status().map(|_| ())
+            }
+        },
+    )
+    .await;
+
+    if let Err(e) = result {
         tracing::error!(
-            "Failed to callback Core for download {}: {}",
-            req.download_id,
+            "Failed to callback Core for download {} after retries: {}",
+            download_id,
             e
         );
     }
@@ -319,17 +333,31 @@ async fn process_resync(
         error_message,
     };
 
-    let client = reqwest::Client::new();
-    if let Err(e) = client
-        .post(&req.callback_url)
-        .json(&callback)
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await
-    {
+        .build()
+        .unwrap();
+    let callback_url = req.callback_url.clone();
+    let download_id = req.download_id;
+    let result = shared::retry_with_backoff(
+        10,
+        std::time::Duration::from_secs(2),
+        || {
+            let client = client.clone();
+            let url = callback_url.clone();
+            let cb = callback.clone();
+            async move {
+                let resp = client.post(&url).json(&cb).send().await?;
+                resp.error_for_status().map(|_| ())
+            }
+        },
+    )
+    .await;
+
+    if let Err(e) = result {
         tracing::error!(
-            "Failed to callback Core for resync download {}: {}",
-            req.download_id,
+            "Failed to callback Core for resync download {} after retries: {}",
+            download_id,
             e
         );
     }

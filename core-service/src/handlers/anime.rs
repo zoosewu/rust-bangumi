@@ -349,6 +349,34 @@ pub async fn list_all_anime_series(
         results.retain(|r| r.episode_found > 0);
     }
 
+    // Backfill missing cover images in background (debounced)
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static COVER_FETCH_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+        let anime_ids_with_covers: std::collections::HashSet<i32> =
+            cover_map.keys().cloned().collect();
+        let missing: Vec<(i32, String)> = results
+            .iter()
+            .filter(|r| !anime_ids_with_covers.contains(&r.anime_id))
+            .map(|r| (r.anime_id, r.anime_title.clone()))
+            .collect();
+
+        if !missing.is_empty()
+            && COVER_FETCH_IN_PROGRESS
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        {
+            let db_clone = state.db.clone();
+            tokio::spawn(async move {
+                for (id, title) in missing {
+                    fetch_and_store_covers(db_clone.clone(), id, title).await;
+                }
+                COVER_FETCH_IN_PROGRESS.store(false, Ordering::SeqCst);
+            });
+        }
+    }
+
     (StatusCode::OK, Json(json!({ "series": results })))
 }
 
@@ -856,7 +884,10 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, anime_id: i32, anime_
         }
     };
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap();
     let mut is_first_image = true;
 
     // 2. 呼叫每個 metadata service

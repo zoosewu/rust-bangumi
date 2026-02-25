@@ -15,7 +15,10 @@ pub struct EpisodeInfo {
 impl MetadataClient {
     pub fn new(base_url: String) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .build()
+                .unwrap(),
             base_url,
         }
     }
