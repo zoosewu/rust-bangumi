@@ -170,13 +170,13 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
             </TabsList>
             <TabsContent value="filters" className="mt-4">
               <FilterRuleEditor
-                targetType="anime"
+                targetType="anime_work"
                 targetId={anime.anime_id}
               />
             </TabsContent>
             <TabsContent value="parsers" className="mt-4">
               <ParserEditor
-                createdFromType="anime"
+                createdFromType="anime_work"
                 createdFromId={anime.anime_id}
                 onParsersChange={refetchSeries}
               />

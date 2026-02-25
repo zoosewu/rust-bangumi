@@ -5,10 +5,12 @@ pub mod routes {
     pub const SERVICES_BY_TYPE: &str = "/services/:service_type";
     pub const SERVICES_HEALTH: &str = "/services/:service_id/health";
 
+    pub const ANIME_WORK_LIST: &str = "/anime-works";
+    pub const ANIME_WORK_DETAIL: &str = "/anime-works/:work_id";
     pub const ANIME_LIST: &str = "/anime";
     pub const ANIME_DETAIL: &str = "/anime/:anime_id";
-    pub const ANIME_SERIES: &str = "/anime/:anime_id/series/:series_no";
-    pub const ANIME_LINKS: &str = "/anime/:anime_id/links";
+    pub const ANIME_BY_WORK: &str = "/anime-works/:work_id/anime";
+    pub const ANIME_LINKS: &str = "/links/:anime_id";
 
     pub const FETCH_TRIGGER: &str = "/fetch/:subscription_id";
     pub const DOWNLOAD_TRIGGER: &str = "/download/:link_id";

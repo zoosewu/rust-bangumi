@@ -31,8 +31,8 @@ import type { Subscription } from "@/schemas/subscription"
 
 type EntityDialog =
   | { type: "subtitle_group"; id: number; name: string }
-  | { type: "anime"; data: AnimeWork }
-  | { type: "anime_series"; data: AnimeRich }
+  | { type: "anime_work"; data: AnimeWork }
+  | { type: "anime"; data: AnimeRich }
   | { type: "subscription"; data: Subscription }
 
 export default function ParsersPage() {
@@ -165,19 +165,19 @@ export default function ParsersPage() {
 
     if (type === "subtitle_group") {
       setEntityDialog({ type: "subtitle_group", id, name: name ?? `#${id}` })
-    } else if (type === "anime") {
+    } else if (type === "anime_work") {
       const animes = await AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.getAnimeWorks),
       ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const anime = animes?.find((a: AnimeWork) => a.anime_id === id)
-      if (anime) setEntityDialog({ type: "anime", data: anime })
+      if (anime) setEntityDialog({ type: "anime_work", data: anime })
       else if (animes) toast.error(t("common.notFound", "Not found"))
-    } else if (type === "anime_series") {
+    } else if (type === "anime") {
       const allSeries = await AppRuntime.runPromise(
         Effect.flatMap(CoreApi, (api) => api.getAllAnime({ excludeEmpty: true })),
       ).catch(() => { toast.error(t("common.loadFailed", "Load failed")); return null })
       const series = allSeries?.find((s: AnimeRich) => s.series_id === id)
-      if (series) setEntityDialog({ type: "anime_series", data: series })
+      if (series) setEntityDialog({ type: "anime", data: series })
       else if (allSeries) toast.error(t("common.notFound", "Not found"))
     } else if (type === "subscription" || type === "fetcher") {
       const subs = await AppRuntime.runPromise(
@@ -317,14 +317,14 @@ export default function ParsersPage() {
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
-      {entityDialog?.type === "anime" && (
+      {entityDialog?.type === "anime_work" && (
         <AnimeWorkDialog
           anime={entityDialog.data}
           open={!!entityDialog}
           onOpenChange={(open) => { if (!open) setEntityDialog(null) }}
         />
       )}
-      {entityDialog?.type === "anime_series" && (
+      {entityDialog?.type === "anime" && (
         <AnimeDialog
           series={entityDialog.data}
           open={!!entityDialog}

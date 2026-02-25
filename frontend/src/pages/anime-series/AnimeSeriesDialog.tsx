@@ -260,14 +260,14 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
                 </TabsList>
                 <TabsContent value="filters" className="mt-4">
                   <FilterRuleEditor
-                    targetType="anime_series"
+                    targetType="anime"
                     targetId={series.series_id}
                     onRulesChange={refetchLinks}
                   />
                 </TabsContent>
                 <TabsContent value="parsers" className="mt-4">
                   <ParserEditor
-                    createdFromType="anime_series"
+                    createdFromType="anime"
                     createdFromId={series.series_id}
                     onParsersChange={refetchLinks}
                   />
