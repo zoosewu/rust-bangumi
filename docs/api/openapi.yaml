@@ -19,12 +19,12 @@ tags:
     description: 健康檢查
   - name: Services
     description: 服務管理
-  - name: Anime
-    description: 動畫管理
+  - name: AnimeWorks
+    description: 動畫作品管理
   - name: Seasons
     description: 季度管理
-  - name: AnimeSeries
-    description: 動畫系列管理
+  - name: Anime
+    description: 動畫管理
   - name: SubtitleGroups
     description: 字幕組管理
   - name: Filters
@@ -176,87 +176,87 @@ paths:
                   message:
                     type: string
 
-  # ============ Anime ============
-  /anime:
+  # ============ AnimeWorks ============
+  /anime-works:
     post:
       tags:
-        - Anime
-      summary: 創建動畫
-      description: 建立一部新的動畫記錄
-      operationId: createAnime
+        - AnimeWorks
+      summary: 創建動畫作品
+      description: 建立一部新的動畫作品記錄
+      operationId: createAnimeWork
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAnimeRequest'
+              $ref: '#/components/schemas/CreateAnimeWorkRequest'
       responses:
         '201':
-          description: 動畫創建成功
+          description: 動畫作品創建成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnimeResponse'
+                $ref: '#/components/schemas/AnimeWorkResponse'
         '500':
           description: 資料庫錯誤
 
     get:
       tags:
-        - Anime
-      summary: 列出所有動畫
-      description: 獲取所有動畫列表
-      operationId: listAnime
+        - AnimeWorks
+      summary: 列出所有動畫作品
+      description: 獲取所有動畫作品列表
+      operationId: listAnimeWorks
       responses:
         '200':
-          description: 動畫列表
+          description: 動畫作品列表
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  animes:
+                  anime_works:
                     type: array
                     items:
-                      $ref: '#/components/schemas/AnimeResponse'
+                      $ref: '#/components/schemas/AnimeWorkResponse'
 
-  /anime/{anime_id}:
+  /anime-works/{work_id}:
     get:
       tags:
-        - Anime
-      summary: 獲取動畫詳情
-      description: 依 ID 取得動畫詳細資訊
-      operationId: getAnime
+        - AnimeWorks
+      summary: 獲取動畫作品詳情
+      description: 依 ID 取得動畫作品詳細資訊
+      operationId: getAnimeWork
       parameters:
-        - name: anime_id
+        - name: work_id
           in: path
           required: true
           schema:
             type: integer
       responses:
         '200':
-          description: 動畫詳情
+          description: 動畫作品詳情
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnimeResponse'
+                $ref: '#/components/schemas/AnimeWorkResponse'
         '404':
-          description: 動畫不存在
+          description: 動畫作品不存在
 
     delete:
       tags:
-        - Anime
-      summary: 刪除動畫
-      description: 依 ID 刪除動畫
-      operationId: deleteAnime
+        - AnimeWorks
+      summary: 刪除動畫作品
+      description: 依 ID 刪除動畫作品
+      operationId: deleteAnimeWork
       parameters:
-        - name: anime_id
+        - name: work_id
           in: path
           required: true
           schema:
             type: integer
       responses:
         '200':
-          description: 動畫已刪除
+          description: 動畫作品已刪除
           content:
             application/json:
               schema:
@@ -266,7 +266,93 @@ paths:
                     type: boolean
                     example: true
         '404':
-          description: 動畫不存在
+          description: 動畫作品不存在
+
+  /anime-works/{work_id}/covers:
+    get:
+      tags:
+        - AnimeWorks
+      summary: 獲取動畫作品封面列表
+      description: 依動畫作品 ID 取得所有封面圖列表
+      operationId: listAnimeWorkCovers
+      parameters:
+        - name: work_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 封面列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  covers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeCoverResponse'
+        '404':
+          description: 動畫作品不存在
+
+  /anime-works/{work_id}/covers/{cover_id}/set-default:
+    post:
+      tags:
+        - AnimeWorks
+      summary: 設定預設封面
+      description: 將指定封面設為動畫作品的預設封面
+      operationId: setDefaultAnimeWorkCover
+      parameters:
+        - name: work_id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: cover_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 預設封面已更新
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          description: 動畫作品或封面不存在
+
+  /anime-works/{work_id}/anime:
+    get:
+      tags:
+        - AnimeWorks
+      summary: 列出動畫作品的所有動畫
+      description: 依動畫作品 ID 列出該作品下的所有動畫
+      operationId: listAnimeByAnimeWork
+      parameters:
+        - name: work_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 動畫列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anime:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeResponse'
 
   # ============ Seasons ============
   /seasons:
@@ -311,60 +397,56 @@ paths:
                     items:
                       $ref: '#/components/schemas/SeasonResponse'
 
-  # ============ Anime Series ============
-  /anime/series:
+  # ============ Anime ============
+  /anime:
     post:
       tags:
-        - AnimeSeries
-      summary: 創建動畫系列
-      description: 建立一個新的動畫系列記錄
-      operationId: createAnimeSeries
+        - Anime
+      summary: 創建動畫
+      description: 建立一個新的動畫記錄
+      operationId: createAnime
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAnimeSeriesRequest'
+              $ref: '#/components/schemas/CreateAnimeRequest'
       responses:
         '201':
-          description: 動畫系列創建成功
+          description: 動畫創建成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnimeSeriesResponse'
+                $ref: '#/components/schemas/AnimeResponse'
         '500':
           description: 資料庫錯誤
 
-  /anime/series/{series_id}:
     get:
       tags:
-        - AnimeSeries
-      summary: 依 ID 獲取動畫系列
-      description: 依系列 ID 取得動畫系列詳細資訊
-      operationId: getAnimeSeries
-      parameters:
-        - name: series_id
-          in: path
-          required: true
-          schema:
-            type: integer
+        - Anime
+      summary: 列出所有動畫
+      description: 獲取所有動畫列表
+      operationId: listAnime
       responses:
         '200':
-          description: 動畫系列詳情
+          description: 動畫列表
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnimeSeriesResponse'
-        '404':
-          description: 動畫系列不存在
+                type: object
+                properties:
+                  anime:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeResponse'
 
-  /anime/{anime_id}/series:
+  /anime/{anime_id}:
     get:
       tags:
-        - AnimeSeries
-      summary: 列出動畫的所有系列
-      description: 依動畫 ID 列出該動畫的所有系列
-      operationId: listAnimeSeriesByAnimeId
+        - Anime
+      summary: 依 ID 獲取動畫
+      description: 依動畫 ID 取得動畫詳細資訊
+      operationId: getAnime
       parameters:
         - name: anime_id
           in: path
@@ -373,16 +455,41 @@ paths:
             type: integer
       responses:
         '200':
-          description: 動畫系列列表
+          description: 動畫詳情
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  series:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/AnimeSeriesResponse'
+                $ref: '#/components/schemas/AnimeResponse'
+        '404':
+          description: 動畫不存在
+
+    put:
+      tags:
+        - Anime
+      summary: 更新動畫
+      description: 依動畫 ID 更新動畫資訊
+      operationId: updateAnime
+      parameters:
+        - name: anime_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAnimeRequest'
+      responses:
+        '200':
+          description: 動畫已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeResponse'
+        '404':
+          description: 動畫不存在
 
   # ============ Subtitle Groups ============
   /subtitle-groups:
@@ -488,7 +595,7 @@ paths:
         - name: target_type
           in: query
           required: true
-          description: 目標類型（global/anime/series/group）
+          description: 目標類型（global/anime-work/anime/group）
           schema:
             type: string
         - name: target_id
@@ -555,15 +662,15 @@ paths:
         '500':
           description: 資料庫錯誤
 
-  /links/{series_id}:
+  /links/{anime_id}:
     get:
       tags:
         - Links
-      summary: 獲取系列連結
-      description: 依系列 ID 獲取動畫連結（僅回傳未過濾的連結）
+      summary: 獲取動畫連結
+      description: 依動畫 ID 獲取動畫連結（僅回傳未過濾的連結）
       operationId: getAnimeLinks
       parameters:
-        - name: series_id
+        - name: anime_id
           in: path
           required: true
           schema:
@@ -719,7 +826,7 @@ paths:
 
         核心服務會：
         1. 驗證 Fetcher 來源
-        2. 建立或更新動畫信息
+        2. 建立或更新動畫作品（AnimeWork）信息
         3. 建立或更新季度信息
         4. 建立或更新字幕組信息
         5. 建立動畫連結
@@ -787,7 +894,7 @@ paths:
         核心服務會：
         1. 儲存原始項目到 raw_anime_items 表
         2. 使用標題解析器嘗試解析標題
-        3. 解析成功時建立相關的 anime、series、group、link 記錄
+        3. 解析成功時建立相關的 anime_work、anime、group、link 記錄
         4. 觸發下載派發
       operationId: receiveRawFetcherResults
       requestBody:
@@ -1205,21 +1312,21 @@ components:
           type: string
           format: date-time
 
-    # ============ Anime ============
-    CreateAnimeRequest:
+    # ============ AnimeWork ============
+    CreateAnimeWorkRequest:
       type: object
       required:
         - title
       properties:
         title:
           type: string
-          description: 動畫標題
+          description: 動畫作品標題
           example: "進擊的巨人"
 
-    AnimeResponse:
+    AnimeWorkResponse:
       type: object
       properties:
-        anime_id:
+        work_id:
           type: integer
         title:
           type: string
@@ -1227,6 +1334,24 @@ components:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+
+    AnimeCoverResponse:
+      type: object
+      properties:
+        cover_id:
+          type: integer
+        work_id:
+          type: integer
+        url:
+          type: string
+          format: uri
+          description: 封面圖片 URL
+        is_default:
+          type: boolean
+          description: 是否為預設封面
+        created_at:
           type: string
           format: date-time
 
@@ -1260,17 +1385,17 @@ components:
           type: string
           format: date-time
 
-    # ============ AnimeSeries ============
-    CreateAnimeSeriesRequest:
+    # ============ Anime ============
+    CreateAnimeRequest:
       type: object
       required:
-        - anime_id
+        - work_id
         - series_no
         - season_id
       properties:
-        anime_id:
+        work_id:
           type: integer
-          description: 動畫 ID
+          description: 動畫作品 ID
         series_no:
           type: integer
           description: 系列編號
@@ -1279,7 +1404,7 @@ components:
           description: 季度 ID
         description:
           type: string
-          description: 系列描述
+          description: 動畫描述
         aired_date:
           type: string
           format: date
@@ -1289,12 +1414,42 @@ components:
           format: date
           description: 完結日期
 
-    AnimeSeriesResponse:
+    UpdateAnimeRequest:
       type: object
       properties:
-        series_id:
+        work_id:
           type: integer
+          description: 動畫作品 ID
+          nullable: true
+        series_no:
+          type: integer
+          description: 系列編號
+          nullable: true
+        season_id:
+          type: integer
+          description: 季度 ID
+          nullable: true
+        description:
+          type: string
+          description: 動畫描述
+          nullable: true
+        aired_date:
+          type: string
+          format: date
+          description: 開播日期
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          description: 完結日期
+          nullable: true
+
+    AnimeResponse:
+      type: object
+      properties:
         anime_id:
+          type: integer
+        work_id:
           type: integer
         series_no:
           type: integer
@@ -1351,7 +1506,7 @@ components:
       properties:
         target_type:
           type: string
-          description: 目標類型（global/anime/series/group）
+          description: 目標類型（global/anime-work/anime/group）
         target_id:
           type: integer
           description: 目標 ID（全域規則為 null，其他類型必須指定）
@@ -1393,15 +1548,15 @@ components:
     CreateAnimeLinkRequest:
       type: object
       required:
-        - series_id
+        - anime_id
         - group_id
         - episode_no
         - url
         - source_hash
       properties:
-        series_id:
+        anime_id:
           type: integer
-          description: 系列 ID
+          description: 動畫 ID
         group_id:
           type: integer
           description: 字幕組 ID
@@ -1425,7 +1580,7 @@ components:
       properties:
         link_id:
           type: integer
-        series_id:
+        anime_id:
           type: integer
         group_id:
           type: integer

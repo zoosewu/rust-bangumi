@@ -10,7 +10,7 @@
 
 **涵蓋範圍：**
 - 服務註冊和管理
-- 動畫、季度、系列管理
+- 動畫作品（AnimeWork）、季度、動畫（Anime）管理
 - 字幕組管理
 - 過濾規則管理
 - 動畫連結管理
@@ -31,6 +31,23 @@
 - Fetcher 向核心服務提交爬取結果
 - Viewer 向核心服務回呼同步結果
 - 前端應用調用核心服務 API
+
+**主要端點（命名規則）：**
+- `AnimeWork`（動畫作品）：代表一部動畫的頂層實體（原 `Anime`）
+- `Anime`（動畫）：代表動畫的具體播出系列（原 `AnimeSeries`）
+
+**端點路由：**
+- `GET /anime-works` — 列出所有動畫作品
+- `POST /anime-works` — 建立動畫作品
+- `GET /anime-works/{work_id}` — 取得動畫作品詳情
+- `DELETE /anime-works/{work_id}` — 刪除動畫作品
+- `GET /anime-works/{work_id}/covers` — 取得動畫作品封面列表
+- `POST /anime-works/{work_id}/covers/{cover_id}/set-default` — 設定預設封面
+- `GET /anime-works/{work_id}/anime` — 列出動畫作品下的所有動畫
+- `GET /anime` — 列出所有動畫
+- `POST /anime` — 建立動畫
+- `GET /anime/{anime_id}` — 取得動畫詳情
+- `PUT /anime/{anime_id}` — 更新動畫
 
 ### 2. 通用 Fetcher API (`/docs/api/fetcher-openapi.yaml`)
 
@@ -202,7 +219,7 @@
 
 **Core 端：**
 - 接收原始結果 → 使用 TitleParser 解析標題
-- 轉換為數據庫模型：`Anime`, `AnimeSeries`, `AnimeLink`, `SubtitleGroup`
+- 轉換為數據庫模型：`AnimeWork`, `Anime`, `AnimeLink`, `SubtitleGroup`
 
 **Downloader 端（BatchDownloadRequest）：**
 - `items[]` - 批次下載項目（url, save_path）
@@ -284,7 +301,7 @@ swagger-cli validate docs/api/metadata-openapi.yaml
 
 | 服務 | 端點數量 | 主要端點 |
 |------|---------|---------|
-| 核心服務 | 45 | `/services`, `/anime`, `/subscriptions`, `/parsers`, `/raw-items`, `/sync-callback` |
+| 核心服務 | 47 | `/services`, `/anime-works`, `/anime`, `/subscriptions`, `/parsers`, `/raw-items`, `/sync-callback` |
 | Fetcher (通用) | 3 | `/health`, `/fetch`, `/can-handle-subscription` |
 | Mikanani Fetcher | 3 | `/health`, `/fetch`, `/can-handle-subscription` |
 | Downloader (qBittorrent) | 7 | `/health`, `/downloads`, `/downloads/cancel`, `pause/resume/delete` |
