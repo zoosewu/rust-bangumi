@@ -17,7 +17,7 @@ pub mod sql_types {
 diesel::table! {
     anime_cover_images (cover_id) {
         cover_id -> Int4,
-        anime_id -> Int4,
+        work_id -> Int4,
         image_url -> Text,
         service_module_id -> Nullable<Int4>,
         #[max_length = 100]
@@ -30,7 +30,7 @@ diesel::table! {
 diesel::table! {
     anime_link_conflicts (conflict_id) {
         conflict_id -> Int4,
-        series_id -> Int4,
+        anime_id -> Int4,
         group_id -> Int4,
         episode_no -> Int4,
         #[max_length = 20]
@@ -44,7 +44,7 @@ diesel::table! {
 diesel::table! {
     anime_links (link_id) {
         link_id -> Int4,
-        series_id -> Int4,
+        anime_id -> Int4,
         group_id -> Int4,
         episode_no -> Int4,
         #[max_length = 255]
@@ -64,9 +64,9 @@ diesel::table! {
 }
 
 diesel::table! {
-    anime_series (series_id) {
-        series_id -> Int4,
+    animes (anime_id) {
         anime_id -> Int4,
+        work_id -> Int4,
         series_no -> Int4,
         season_id -> Int4,
         description -> Nullable<Text>,
@@ -78,8 +78,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    animes (anime_id) {
-        anime_id -> Int4,
+    anime_works (work_id) {
+        work_id -> Int4,
         #[max_length = 255]
         title -> Varchar,
         created_at -> Timestamp,
@@ -289,16 +289,16 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(anime_cover_images -> animes (anime_id));
+diesel::joinable!(anime_cover_images -> anime_works (work_id));
 diesel::joinable!(anime_cover_images -> service_modules (service_module_id));
 diesel::joinable!(anime_link_conflicts -> anime_links (chosen_link_id));
-diesel::joinable!(anime_link_conflicts -> anime_series (series_id));
+diesel::joinable!(anime_link_conflicts -> animes (anime_id));
 diesel::joinable!(anime_link_conflicts -> subtitle_groups (group_id));
-diesel::joinable!(anime_links -> anime_series (series_id));
+diesel::joinable!(anime_links -> animes (anime_id));
 diesel::joinable!(anime_links -> raw_anime_items (raw_item_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));
-diesel::joinable!(anime_series -> animes (anime_id));
-diesel::joinable!(anime_series -> seasons (season_id));
+diesel::joinable!(animes -> anime_works (work_id));
+diesel::joinable!(animes -> seasons (season_id));
 diesel::joinable!(downloader_capabilities -> service_modules (module_id));
 diesel::joinable!(downloads -> anime_links (link_id));
 diesel::joinable!(downloads -> service_modules (module_id));
@@ -310,7 +310,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     anime_cover_images,
     anime_link_conflicts,
     anime_links,
-    anime_series,
+    anime_works,
     animes,
     cron_logs,
     downloader_capabilities,
