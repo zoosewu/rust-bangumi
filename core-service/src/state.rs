@@ -1,7 +1,7 @@
 use crate::db::{
-    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository,
+    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeWorkRepository,
     ConflictRepository, DbPool, DieselAnimeLinkConflictRepository, DieselAnimeLinkRepository,
-    DieselAnimeRepository, DieselAnimeSeriesRepository, DieselConflictRepository,
+    DieselAnimeRepository, DieselAnimeWorkRepository, DieselConflictRepository,
     DieselFilterRuleRepository, DieselRawItemRepository, DieselSeasonRepository,
     DieselServiceModuleRepository, DieselSubscriptionRepository, DieselSubtitleGroupRepository,
     DieselTitleParserRepository, FilterRuleRepository, RawItemRepository, SeasonRepository,
@@ -15,11 +15,11 @@ use crate::services::{
 use std::sync::Arc;
 
 pub struct Repositories {
-    pub anime: Arc<dyn AnimeRepository>,
+    pub anime_work: Arc<dyn AnimeWorkRepository>,
     pub subscription: Arc<dyn SubscriptionRepository>,
     pub service_module: Arc<dyn ServiceModuleRepository>,
     pub season: Arc<dyn SeasonRepository>,
-    pub anime_series: Arc<dyn AnimeSeriesRepository>,
+    pub anime: Arc<dyn AnimeRepository>,
     pub subtitle_group: Arc<dyn SubtitleGroupRepository>,
     pub filter_rule: Arc<dyn FilterRuleRepository>,
     pub anime_link: Arc<dyn AnimeLinkRepository>,
@@ -32,11 +32,11 @@ pub struct Repositories {
 impl Repositories {
     pub fn new(pool: DbPool) -> Self {
         Self {
-            anime: Arc::new(DieselAnimeRepository::new(pool.clone())),
+            anime_work: Arc::new(DieselAnimeWorkRepository::new(pool.clone())),
             subscription: Arc::new(DieselSubscriptionRepository::new(pool.clone())),
             service_module: Arc::new(DieselServiceModuleRepository::new(pool.clone())),
             season: Arc::new(DieselSeasonRepository::new(pool.clone())),
-            anime_series: Arc::new(DieselAnimeSeriesRepository::new(pool.clone())),
+            anime: Arc::new(DieselAnimeRepository::new(pool.clone())),
             subtitle_group: Arc::new(DieselSubtitleGroupRepository::new(pool.clone())),
             filter_rule: Arc::new(DieselFilterRuleRepository::new(pool.clone())),
             anime_link: Arc::new(DieselAnimeLinkRepository::new(pool.clone())),
@@ -84,11 +84,11 @@ impl AppState {
 #[cfg(test)]
 impl Repositories {
     pub fn with_mocks(
-        anime: Arc<dyn AnimeRepository>,
+        anime_work: Arc<dyn AnimeWorkRepository>,
         subscription: Arc<dyn SubscriptionRepository>,
         service_module: Arc<dyn ServiceModuleRepository>,
         season: Arc<dyn SeasonRepository>,
-        anime_series: Arc<dyn AnimeSeriesRepository>,
+        anime: Arc<dyn AnimeRepository>,
         subtitle_group: Arc<dyn SubtitleGroupRepository>,
         filter_rule: Arc<dyn FilterRuleRepository>,
         anime_link: Arc<dyn AnimeLinkRepository>,
@@ -98,11 +98,11 @@ impl Repositories {
         anime_link_conflict: Arc<dyn AnimeLinkConflictRepository>,
     ) -> Self {
         Self {
-            anime,
+            anime_work,
             subscription,
             service_module,
             season,
-            anime_series,
+            anime,
             subtitle_group,
             filter_rule,
             anime_link,
