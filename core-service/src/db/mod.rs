@@ -8,9 +8,9 @@ pub mod models;
 pub mod repository;
 
 pub use repository::{
-    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeSeriesRepository,
-    ConflictRepository, CreateAnimeSeriesParams, DieselAnimeLinkConflictRepository,
-    DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeSeriesRepository,
+    AnimeLinkConflictRepository, AnimeLinkRepository, AnimeRepository, AnimeWorkRepository,
+    ConflictRepository, CreateAnimeParams, DieselAnimeLinkConflictRepository,
+    DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeWorkRepository,
     DieselConflictRepository, DieselFilterRuleRepository, DieselRawItemRepository,
     DieselSeasonRepository, DieselServiceModuleRepository, DieselSubscriptionRepository,
     DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,

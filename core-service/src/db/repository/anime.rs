@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
 
 use super::RepositoryError;
@@ -7,15 +7,30 @@ use crate::db::DbPool;
 use crate::models::{Anime, NewAnime};
 use crate::schema::animes;
 
+#[derive(Debug, Clone)]
+pub struct CreateAnimeParams {
+    pub work_id: i32,
+    pub series_no: i32,
+    pub season_id: i32,
+    pub description: Option<String>,
+    pub aired_date: Option<NaiveDate>,
+    pub end_date: Option<NaiveDate>,
+}
+
 #[async_trait]
 pub trait AnimeRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<Anime>, RepositoryError>;
-    async fn find_by_title(&self, title: &str) -> Result<Option<Anime>, RepositoryError>;
+    async fn find_by_work_id(&self, work_id: i32) -> Result<Vec<Anime>, RepositoryError>;
     async fn find_all(&self) -> Result<Vec<Anime>, RepositoryError>;
-    async fn create(&self, title: String) -> Result<Anime, RepositoryError>;
-    async fn update(&self, id: i32, title: String) -> Result<Anime, RepositoryError>;
+    async fn create(&self, params: CreateAnimeParams) -> Result<Anime, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
-    async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError>;
+    async fn find_or_create(
+        &self,
+        work_id: i32,
+        series_no: i32,
+        season_id: i32,
+        description: Option<String>,
+    ) -> Result<Anime, RepositoryError>;
 }
 
 pub struct DieselAnimeRepository {
@@ -35,23 +50,21 @@ impl AnimeRepository for DieselAnimeRepository {
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             animes::table
-                .find(id)
-                .first::<Anime>(&mut conn)
+                .filter(animes::anime_id.eq(id))
+                .first(&mut conn)
                 .optional()
                 .map_err(RepositoryError::from)
         })
         .await?
     }
 
-    async fn find_by_title(&self, title: &str) -> Result<Option<Anime>, RepositoryError> {
+    async fn find_by_work_id(&self, work_id: i32) -> Result<Vec<Anime>, RepositoryError> {
         let pool = self.pool.clone();
-        let title = title.to_string();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             animes::table
-                .filter(animes::title.eq(&title))
-                .first::<Anime>(&mut conn)
-                .optional()
+                .filter(animes::work_id.eq(work_id))
+                .load::<Anime>(&mut conn)
                 .map_err(RepositoryError::from)
         })
         .await?
@@ -68,34 +81,24 @@ impl AnimeRepository for DieselAnimeRepository {
         .await?
     }
 
-    async fn create(&self, title: String) -> Result<Anime, RepositoryError> {
+    async fn create(&self, params: CreateAnimeParams) -> Result<Anime, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             let now = Utc::now().naive_utc();
             let new_anime = NewAnime {
-                title,
+                work_id: params.work_id,
+                series_no: params.series_no,
+                season_id: params.season_id,
+                description: params.description,
+                aired_date: params.aired_date,
+                end_date: params.end_date,
                 created_at: now,
                 updated_at: now,
             };
             diesel::insert_into(animes::table)
                 .values(&new_anime)
-                .get_result::<Anime>(&mut conn)
-                .map_err(RepositoryError::from)
-        })
-        .await?
-    }
-
-    async fn update(&self, id: i32, title: String) -> Result<Anime, RepositoryError> {
-        let pool = self.pool.clone();
-        tokio::task::spawn_blocking(move || {
-            let mut conn = pool.get()?;
-            diesel::update(animes::table.find(id))
-                .set((
-                    animes::title.eq(&title),
-                    animes::updated_at.eq(Utc::now().naive_utc()),
-                ))
-                .get_result::<Anime>(&mut conn)
+                .get_result(&mut conn)
                 .map_err(RepositoryError::from)
         })
         .await?
@@ -105,33 +108,48 @@ impl AnimeRepository for DieselAnimeRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let rows_deleted = diesel::delete(animes::table.find(id)).execute(&mut conn)?;
-            Ok(rows_deleted > 0)
+            let deleted =
+                diesel::delete(animes::table.filter(animes::anime_id.eq(id)))
+                    .execute(&mut conn)?;
+            Ok(deleted > 0)
         })
         .await?
     }
 
-    async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError> {
+    async fn find_or_create(
+        &self,
+        work_id: i32,
+        series_no: i32,
+        season_id: i32,
+        description: Option<String>,
+    ) -> Result<Anime, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             // Try to find existing
             match animes::table
-                .filter(animes::title.eq(&title))
+                .filter(animes::work_id.eq(work_id))
+                .filter(animes::series_no.eq(series_no))
+                .filter(animes::season_id.eq(season_id))
                 .first::<Anime>(&mut conn)
             {
-                Ok(anime) => Ok(anime),
+                Ok(s) => Ok(s),
                 Err(diesel::NotFound) => {
                     // Create new
                     let now = Utc::now().naive_utc();
                     let new_anime = NewAnime {
-                        title,
+                        work_id,
+                        series_no,
+                        season_id,
+                        description,
+                        aired_date: None,
+                        end_date: None,
                         created_at: now,
                         updated_at: now,
                     };
                     diesel::insert_into(animes::table)
                         .values(&new_anime)
-                        .get_result::<Anime>(&mut conn)
+                        .get_result(&mut conn)
                         .map_err(RepositoryError::from)
                 }
                 Err(e) => Err(RepositoryError::from(e)),
@@ -147,21 +165,25 @@ pub mod mock {
     use std::sync::Mutex;
 
     pub struct MockAnimeRepository {
-        pub animes: Mutex<Vec<Anime>>,
-        pub operations: Mutex<Vec<String>>,
+        series: Mutex<Vec<Anime>>,
+        next_id: Mutex<i32>,
+        operations: Mutex<Vec<String>>,
     }
 
     impl MockAnimeRepository {
         pub fn new() -> Self {
             Self {
-                animes: Mutex::new(Vec::new()),
+                series: Mutex::new(Vec::new()),
+                next_id: Mutex::new(1),
                 operations: Mutex::new(Vec::new()),
             }
         }
 
-        pub fn with_data(animes: Vec<Anime>) -> Self {
+        pub fn with_data(series: Vec<Anime>) -> Self {
+            let max_id = series.iter().map(|s| s.anime_id).max().unwrap_or(0);
             Self {
-                animes: Mutex::new(animes),
+                series: Mutex::new(series),
+                next_id: Mutex::new(max_id + 1),
                 operations: Mutex::new(Vec::new()),
             }
         }
@@ -185,64 +207,62 @@ pub mod mock {
                 .unwrap()
                 .push(format!("find_by_id:{}", id));
             Ok(self
-                .animes
+                .series
                 .lock()
                 .unwrap()
                 .iter()
-                .find(|a| a.anime_id == id)
+                .find(|s| s.anime_id == id)
                 .cloned())
         }
 
-        async fn find_by_title(&self, title: &str) -> Result<Option<Anime>, RepositoryError> {
+        async fn find_by_work_id(
+            &self,
+            work_id: i32,
+        ) -> Result<Vec<Anime>, RepositoryError> {
             self.operations
                 .lock()
                 .unwrap()
-                .push(format!("find_by_title:{}", title));
+                .push(format!("find_by_work_id:{}", work_id));
             Ok(self
-                .animes
+                .series
                 .lock()
                 .unwrap()
                 .iter()
-                .find(|a| a.title == title)
-                .cloned())
+                .filter(|s| s.work_id == work_id)
+                .cloned()
+                .collect())
         }
 
         async fn find_all(&self) -> Result<Vec<Anime>, RepositoryError> {
             self.operations.lock().unwrap().push("find_all".to_string());
-            Ok(self.animes.lock().unwrap().clone())
+            Ok(self.series.lock().unwrap().clone())
         }
 
-        async fn create(&self, title: String) -> Result<Anime, RepositoryError> {
+        async fn create(
+            &self,
+            params: CreateAnimeParams,
+        ) -> Result<Anime, RepositoryError> {
             self.operations
                 .lock()
                 .unwrap()
-                .push(format!("create:{}", title));
-            let mut animes = self.animes.lock().unwrap();
-            let id = animes.len() as i32 + 1;
+                .push(format!("create:work_id:{}", params.work_id));
+            let mut series = self.series.lock().unwrap();
+            let mut next_id = self.next_id.lock().unwrap();
             let now = Utc::now().naive_utc();
-            let anime = Anime {
-                anime_id: id,
-                title,
+            let new_anime = Anime {
+                anime_id: *next_id,
+                work_id: params.work_id,
+                series_no: params.series_no,
+                season_id: params.season_id,
+                description: params.description,
+                aired_date: params.aired_date,
+                end_date: params.end_date,
                 created_at: now,
                 updated_at: now,
             };
-            animes.push(anime.clone());
-            Ok(anime)
-        }
-
-        async fn update(&self, id: i32, title: String) -> Result<Anime, RepositoryError> {
-            self.operations
-                .lock()
-                .unwrap()
-                .push(format!("update:{}:{}", id, title));
-            let mut animes = self.animes.lock().unwrap();
-            if let Some(pos) = animes.iter().position(|a| a.anime_id == id) {
-                animes[pos].title = title;
-                animes[pos].updated_at = Utc::now().naive_utc();
-                Ok(animes[pos].clone())
-            } else {
-                Err(RepositoryError::NotFound)
-            }
+            *next_id += 1;
+            series.push(new_anime.clone());
+            Ok(new_anime)
         }
 
         async fn delete(&self, id: i32) -> Result<bool, RepositoryError> {
@@ -250,105 +270,166 @@ pub mod mock {
                 .lock()
                 .unwrap()
                 .push(format!("delete:{}", id));
-            let mut animes = self.animes.lock().unwrap();
-            let len_before = animes.len();
-            animes.retain(|a| a.anime_id != id);
-            Ok(animes.len() < len_before)
+            let mut series = self.series.lock().unwrap();
+            let original_len = series.len();
+            series.retain(|s| s.anime_id != id);
+            Ok(series.len() < original_len)
         }
 
-        async fn find_or_create(&self, title: String) -> Result<Anime, RepositoryError> {
-            self.operations
-                .lock()
-                .unwrap()
-                .push(format!("find_or_create:{}", title));
+        async fn find_or_create(
+            &self,
+            work_id: i32,
+            series_no: i32,
+            season_id: i32,
+            description: Option<String>,
+        ) -> Result<Anime, RepositoryError> {
+            self.operations.lock().unwrap().push(format!(
+                "find_or_create:{}:{}:{}",
+                work_id, series_no, season_id
+            ));
             // Try to find existing
             {
-                let animes = self.animes.lock().unwrap();
-                if let Some(anime) = animes.iter().find(|a| a.title == title) {
-                    return Ok(anime.clone());
+                let series = self.series.lock().unwrap();
+                if let Some(s) = series.iter().find(|s| {
+                    s.work_id == work_id && s.series_no == series_no && s.season_id == season_id
+                }) {
+                    return Ok(s.clone());
                 }
             }
             // Create new
-            let mut animes = self.animes.lock().unwrap();
-            let id = animes.len() as i32 + 1;
+            let mut series = self.series.lock().unwrap();
+            let mut next_id = self.next_id.lock().unwrap();
             let now = Utc::now().naive_utc();
-            let anime = Anime {
-                anime_id: id,
-                title,
+            let new_anime = Anime {
+                anime_id: *next_id,
+                work_id,
+                series_no,
+                season_id,
+                description,
+                aired_date: None,
+                end_date: None,
                 created_at: now,
                 updated_at: now,
             };
-            animes.push(anime.clone());
-            Ok(anime)
+            *next_id += 1;
+            series.push(new_anime.clone());
+            Ok(new_anime)
         }
     }
+}
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
+#[cfg(test)]
+mod tests {
+    use super::mock::MockAnimeRepository;
+    use super::*;
 
-        #[tokio::test]
-        async fn test_mock_anime_repository_create() {
-            let repo = MockAnimeRepository::new();
+    #[tokio::test]
+    async fn test_mock_anime_repository_create() {
+        let repo = MockAnimeRepository::new();
+        let params = CreateAnimeParams {
+            work_id: 1,
+            series_no: 1,
+            season_id: 1,
+            description: Some("Test description".to_string()),
+            aired_date: None,
+            end_date: None,
+        };
+        let anime = repo.create(params).await.unwrap();
 
-            let anime = repo.create("Test Anime".to_string()).await.unwrap();
-            assert_eq!(anime.anime_id, 1);
-            assert_eq!(anime.title, "Test Anime");
+        assert_eq!(anime.anime_id, 1);
+        assert_eq!(anime.work_id, 1);
+        assert_eq!(anime.series_no, 1);
 
-            let ops = repo.get_operations();
-            assert_eq!(ops, vec!["create:Test Anime"]);
-        }
+        let ops = repo.get_operations();
+        assert!(ops.contains(&"create:work_id:1".to_string()));
+    }
 
-        #[tokio::test]
-        async fn test_mock_anime_repository_find_by_id() {
-            let anime = Anime {
-                anime_id: 1,
-                title: "Existing Anime".to_string(),
-                created_at: Utc::now().naive_utc(),
-                updated_at: Utc::now().naive_utc(),
-            };
-            let repo = MockAnimeRepository::with_data(vec![anime]);
+    #[tokio::test]
+    async fn test_mock_anime_repository_find_by_id() {
+        let anime = Anime {
+            anime_id: 1,
+            work_id: 1,
+            series_no: 1,
+            season_id: 1,
+            description: Some("Test".to_string()),
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let repo = MockAnimeRepository::with_data(vec![anime]);
 
-            let found = repo.find_by_id(1).await.unwrap();
-            assert!(found.is_some());
-            assert_eq!(found.unwrap().title, "Existing Anime");
+        let found = repo.find_by_id(1).await.unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().anime_id, 1);
 
-            let not_found = repo.find_by_id(999).await.unwrap();
-            assert!(not_found.is_none());
-        }
+        let not_found = repo.find_by_id(999).await.unwrap();
+        assert!(not_found.is_none());
+    }
 
-        #[tokio::test]
-        async fn test_mock_anime_repository_update() {
-            let anime = Anime {
-                anime_id: 1,
-                title: "Original Title".to_string(),
-                created_at: Utc::now().naive_utc(),
-                updated_at: Utc::now().naive_utc(),
-            };
-            let repo = MockAnimeRepository::with_data(vec![anime]);
+    #[tokio::test]
+    async fn test_mock_anime_repository_find_by_work_id() {
+        let anime1 = Anime {
+            anime_id: 1,
+            work_id: 1,
+            series_no: 1,
+            season_id: 1,
+            description: None,
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let anime2 = Anime {
+            anime_id: 2,
+            work_id: 1,
+            series_no: 2,
+            season_id: 1,
+            description: None,
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let anime3 = Anime {
+            anime_id: 3,
+            work_id: 2,
+            series_no: 1,
+            season_id: 1,
+            description: None,
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let repo = MockAnimeRepository::with_data(vec![anime1, anime2, anime3]);
 
-            let updated = repo.update(1, "New Title".to_string()).await.unwrap();
-            assert_eq!(updated.title, "New Title");
+        let work1_animes = repo.find_by_work_id(1).await.unwrap();
+        assert_eq!(work1_animes.len(), 2);
 
-            let result = repo.update(999, "Not Found".to_string()).await;
-            assert!(matches!(result, Err(RepositoryError::NotFound)));
-        }
+        let work2_animes = repo.find_by_work_id(2).await.unwrap();
+        assert_eq!(work2_animes.len(), 1);
+    }
 
-        #[tokio::test]
-        async fn test_mock_anime_repository_delete() {
-            let anime = Anime {
-                anime_id: 1,
-                title: "To Delete".to_string(),
-                created_at: Utc::now().naive_utc(),
-                updated_at: Utc::now().naive_utc(),
-            };
-            let repo = MockAnimeRepository::with_data(vec![anime]);
+    #[tokio::test]
+    async fn test_mock_anime_repository_delete() {
+        let anime = Anime {
+            anime_id: 1,
+            work_id: 1,
+            series_no: 1,
+            season_id: 1,
+            description: None,
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let repo = MockAnimeRepository::with_data(vec![anime]);
 
-            let deleted = repo.delete(1).await.unwrap();
-            assert!(deleted);
+        let deleted = repo.delete(1).await.unwrap();
+        assert!(deleted);
 
-            let not_deleted = repo.delete(999).await.unwrap();
-            assert!(!not_deleted);
-        }
+        let not_deleted = repo.delete(999).await.unwrap();
+        assert!(!not_deleted);
     }
 }
