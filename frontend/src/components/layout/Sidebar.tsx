@@ -14,11 +14,11 @@ import {
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard" },
-  { to: "/series", icon: Film, labelKey: "sidebar.animeSeries" },
+  { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries" },
   { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions" },
   { to: "/raw-items", icon: FileText, labelKey: "sidebar.rawItems" },
   { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
-  { to: "/anime", icon: Library, labelKey: "sidebar.anime" },
+  { to: "/anime-works", icon: Library, labelKey: "sidebar.anime" },
   { to: "/subtitle-groups", icon: Users, labelKey: "sidebar.subtitleGroups" },
   { to: "/parsers", icon: ScanText, labelKey: "sidebar.parsers" },
 ]

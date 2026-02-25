@@ -12,25 +12,25 @@ import { InfoSection } from "@/components/shared/InfoSection"
 import { InfoItem } from "@/components/shared/InfoItem"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AnimeSeriesDialog } from "@/pages/anime-series/AnimeSeriesDialog"
-import type { Anime, AnimeSeriesRich } from "@/schemas/anime"
+import { AnimeDialog as AnimeSeriesDialog } from "@/pages/anime-series/AnimeSeriesDialog"
+import type { AnimeWork, AnimeRich } from "@/schemas/anime"
 
-interface AnimeDialogProps {
-  anime: Anime
+interface AnimeWorkDialogProps {
+  anime: AnimeWork
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function AnimeDialog({ anime, open, onOpenChange }: AnimeDialogProps) {
+export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogProps) {
   const { t } = useTranslation()
-  const [selectedSeries, setSelectedSeries] = useState<AnimeSeriesRich | null>(null)
+  const [selectedSeries, setSelectedSeries] = useState<AnimeRich | null>(null)
   const [coverIndex, setCoverIndex] = useState(0)
 
   const { data: allSeries, refetch: refetchSeries } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAllAnimeSeries()
+        return yield* api.getAllAnime()
       }),
     [],
   )

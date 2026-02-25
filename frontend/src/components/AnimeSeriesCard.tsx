@@ -1,11 +1,11 @@
-import type { AnimeSeriesRich } from "@/schemas/anime"
+import type { AnimeRich } from "@/schemas/anime"
 
 interface Props {
-  series: AnimeSeriesRich
+  series: AnimeRich
   onClick?: () => void
 }
 
-export function AnimeSeriesCard({ series, onClick }: Props) {
+export function AnimeCard({ series, onClick }: Props) {
   const hasImage = !!series.cover_image_url
   const initial = series.anime_title.charAt(0).toUpperCase()
 
