@@ -431,19 +431,19 @@ pub async fn preview_filter(
     use diesel::prelude::*;
     use std::collections::HashMap;
 
-    // series_id → (anime_title, series_no)
-    let series_ids: Vec<i32> = links.iter().map(|l| l.series_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
-    let series_anime_map: HashMap<i32, (String, i32)> = if series_ids.is_empty() {
+    // anime_id → (work_title, series_no)
+    let anime_ids: Vec<i32> = links.iter().map(|l| l.anime_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let series_anime_map: HashMap<i32, (String, i32)> = if anime_ids.is_empty() {
         HashMap::new()
     } else {
-        use crate::schema::{anime_series, animes};
-        let rows: Vec<(i32, i32, String)> = anime_series::table
-            .inner_join(animes::table)
-            .filter(anime_series::series_id.eq_any(&series_ids))
-            .select((anime_series::series_id, anime_series::series_no, animes::title))
+        use crate::schema::{animes, anime_works};
+        let rows: Vec<(i32, i32, String)> = animes::table
+            .inner_join(anime_works::table)
+            .filter(animes::anime_id.eq_any(&anime_ids))
+            .select((animes::anime_id, animes::series_no, anime_works::title))
             .load(&mut conn)
             .unwrap_or_default();
-        rows.into_iter().map(|(sid, sno, atitle)| (sid, (atitle, sno))).collect()
+        rows.into_iter().map(|(aid, sno, wtitle)| (aid, (wtitle, sno))).collect()
     };
 
     // group_id → group_name
@@ -504,7 +504,7 @@ pub async fn preview_filter(
         let after_include = after_engine.should_include(title);
 
         let (anime_title, series_no) = series_anime_map
-            .get(&link.series_id)
+            .get(&link.anime_id)
             .map(|(at, sn)| (Some(at.clone()), Some(*sn)))
             .unwrap_or((None, None));
         let group_name = group_map.get(&link.group_id).cloned();

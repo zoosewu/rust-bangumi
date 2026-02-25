@@ -1,7 +1,7 @@
 use crate::db::DbPool;
-use crate::models::{AnimeLink, AnimeSeries, Download, ModuleTypeEnum, ServiceModule};
+use crate::models::{Anime, AnimeLink, Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{
-    anime_links, anime_series, animes, downloads, service_modules, subtitle_groups,
+    anime_links, anime_works, animes, downloads, service_modules, subtitle_groups,
 };
 use diesel::prelude::*;
 use shared::ViewerSyncRequest;
@@ -126,18 +126,18 @@ impl SyncService {
             .first::<AnimeLink>(conn)
             .map_err(|e| format!("Failed to find anime link {}: {}", download.link_id, e))?;
 
-        // Get anime_series
-        let series: AnimeSeries = anime_series::table
-            .filter(anime_series::series_id.eq(link.series_id))
-            .first::<AnimeSeries>(conn)
-            .map_err(|e| format!("Failed to find series {}: {}", link.series_id, e))?;
+        // Get anime (formerly anime_series)
+        let series: Anime = animes::table
+            .filter(animes::anime_id.eq(link.anime_id))
+            .first::<Anime>(conn)
+            .map_err(|e| format!("Failed to find anime {}: {}", link.anime_id, e))?;
 
-        // Get anime title
-        let anime_title: String = animes::table
-            .filter(animes::anime_id.eq(series.anime_id))
-            .select(animes::title)
+        // Get anime title from anime_works
+        let anime_title: String = anime_works::table
+            .filter(anime_works::work_id.eq(series.work_id))
+            .select(anime_works::title)
             .first::<String>(conn)
-            .map_err(|e| format!("Failed to find anime {}: {}", series.anime_id, e))?;
+            .map_err(|e| format!("Failed to find anime work {}: {}", series.work_id, e))?;
 
         // Get subtitle group name
         let subtitle_group: String = subtitle_groups::table
@@ -155,7 +155,7 @@ impl SyncService {
 
         Ok(ViewerSyncRequest {
             download_id: download.download_id,
-            series_id: link.series_id,
+            series_id: link.anime_id,
             anime_title,
             series_no: series.series_no,
             episode_no: link.episode_no,
@@ -286,16 +286,16 @@ impl SyncService {
             .first::<AnimeLink>(conn)
             .map_err(|e| format!("Failed to find anime link {}: {}", download.link_id, e))?;
 
-        let series: AnimeSeries = anime_series::table
-            .filter(anime_series::series_id.eq(link.series_id))
-            .first::<AnimeSeries>(conn)
-            .map_err(|e| format!("Failed to find series {}: {}", link.series_id, e))?;
+        let series: Anime = animes::table
+            .filter(animes::anime_id.eq(link.anime_id))
+            .first::<Anime>(conn)
+            .map_err(|e| format!("Failed to find anime {}: {}", link.anime_id, e))?;
 
-        let anime_title: String = animes::table
-            .filter(animes::anime_id.eq(series.anime_id))
-            .select(animes::title)
+        let anime_title: String = anime_works::table
+            .filter(anime_works::work_id.eq(series.work_id))
+            .select(anime_works::title)
             .first::<String>(conn)
-            .map_err(|e| format!("Failed to find anime {}: {}", series.anime_id, e))?;
+            .map_err(|e| format!("Failed to find anime work {}: {}", series.work_id, e))?;
 
         let subtitle_group: String = subtitle_groups::table
             .filter(subtitle_groups::group_id.eq(link.group_id))
@@ -312,7 +312,7 @@ impl SyncService {
 
         Ok(shared::ViewerResyncRequest {
             download_id: download.download_id,
-            series_id: link.series_id,
+            series_id: link.anime_id,
             anime_title,
             series_no: series.series_no,
             episode_no: link.episode_no,

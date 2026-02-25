@@ -17,14 +17,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Plus } from "lucide-react"
-import { AnimeDialog } from "./AnimeDialog"
-import type { Anime } from "@/schemas/anime"
+import { AnimeWorkDialog } from "./AnimeDialog"
+import type { AnimeWork } from "@/schemas/anime"
 
-export default function AnimePage() {
+export default function AnimeWorksPage() {
   const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
   const [newTitle, setNewTitle] = useState("")
-  const [selectedAnime, setSelectedAnime] = useState<Anime | null>(null)
+  const [selectedAnime, setSelectedAnime] = useState<AnimeWork | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number
     title: string
@@ -34,7 +34,7 @@ export default function AnimePage() {
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAnimes
+        return yield* api.getAnimeWorks
       }),
     [],
   )
@@ -43,7 +43,7 @@ export default function AnimePage() {
     (title: string) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.createAnime(title)
+        return yield* api.createAnimeWork(title)
       }),
   )
 
@@ -51,7 +51,7 @@ export default function AnimePage() {
     (id: number) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.deleteAnime(id)
+        return yield* api.deleteAnimeWork(id)
       }),
   )
 
@@ -110,7 +110,7 @@ export default function AnimePage() {
       )}
 
       {selectedAnime && (
-        <AnimeDialog
+        <AnimeWorkDialog
           anime={selectedAnime}
           open={!!selectedAnime}
           onOpenChange={(open) => {

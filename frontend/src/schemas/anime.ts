@@ -1,14 +1,14 @@
 import { Schema } from "effect"
 
-export const Anime = Schema.Struct({
+export const AnimeWork = Schema.Struct({
   anime_id: Schema.Number,
   title: Schema.String,
   created_at: Schema.String,
   updated_at: Schema.String,
 })
-export type Anime = typeof Anime.Type
+export type AnimeWork = typeof AnimeWork.Type
 
-export const AnimeSeries = Schema.Struct({
+export const Anime = Schema.Struct({
   series_id: Schema.Number,
   anime_id: Schema.Number,
   series_no: Schema.Number,
@@ -19,7 +19,7 @@ export const AnimeSeries = Schema.Struct({
   created_at: Schema.String,
   updated_at: Schema.String,
 })
-export type AnimeSeries = typeof AnimeSeries.Type
+export type Anime = typeof Anime.Type
 
 export const Season = Schema.Struct({
   season_id: Schema.Number,
@@ -58,7 +58,7 @@ export const SubscriptionInfo = Schema.Struct({
   name: Schema.NullOr(Schema.String),
 })
 
-export const AnimeSeriesRich = Schema.Struct({
+export const AnimeRich = Schema.Struct({
   series_id: Schema.Number,
   anime_id: Schema.Number,
   anime_title: Schema.String,
@@ -74,7 +74,7 @@ export const AnimeSeriesRich = Schema.Struct({
   updated_at: Schema.String,
   cover_image_url: Schema.NullOr(Schema.String),
 })
-export type AnimeSeriesRich = typeof AnimeSeriesRich.Type
+export type AnimeRich = typeof AnimeRich.Type
 
 export const DownloadInfo = Schema.Struct({
   download_id: Schema.Number,

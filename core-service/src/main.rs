@@ -86,43 +86,43 @@ async fn main() -> anyhow::Result<()> {
             "/services/:service_id/health",
             get(handlers::services::health_check),
         )
-        // 動畫管理
-        .route("/anime", post(handlers::anime::create_anime))
-        .route("/anime", get(handlers::anime::list_anime))
-        .route("/anime/:anime_id", get(handlers::anime::get_anime))
+        // AnimeWork 管理
+        .route("/anime-works", post(handlers::anime::create_anime_work))
+        .route("/anime-works", get(handlers::anime::list_anime_work))
+        .route("/anime-works/:work_id", get(handlers::anime::get_anime_work))
         .route(
-            "/anime/:anime_id",
-            axum::routing::delete(handlers::anime::delete_anime),
+            "/anime-works/:work_id",
+            axum::routing::delete(handlers::anime::delete_anime_work),
         )
         // Cover 圖片管理
         .route(
-            "/anime/:anime_id/covers",
+            "/anime-works/:work_id/covers",
             axum::routing::get(handlers::covers::list_anime_covers),
         )
         .route(
-            "/anime/:anime_id/covers/:cover_id/set-default",
+            "/anime-works/:work_id/covers/:cover_id/set-default",
             axum::routing::post(handlers::covers::set_default_cover),
         )
         // 季度管理
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))
-        // 動畫系列管理
+        // Anime 管理（原 anime_series）
         .route(
-            "/series",
-            get(handlers::anime::list_all_anime_series),
+            "/anime",
+            get(handlers::anime::list_all_anime),
         )
         .route(
-            "/anime/series",
-            post(handlers::anime::create_anime_series),
+            "/anime",
+            post(handlers::anime::create_anime),
         )
         .route(
-            "/anime/series/:series_id",
-            get(handlers::anime::get_anime_series)
-                .put(handlers::anime::update_anime_series),
+            "/anime/:anime_id",
+            get(handlers::anime::get_anime)
+                .put(handlers::anime::update_anime),
         )
         .route(
-            "/anime/:anime_id/series",
-            get(handlers::anime::list_anime_series),
+            "/anime-works/:work_id/anime",
+            get(handlers::anime::list_anime),
         )
         // 字幕組管理
         .route(

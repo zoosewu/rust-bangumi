@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::dto::{DashboardStats, ServiceInfo};
 use crate::schema::{
-    anime_series, animes, downloads, raw_anime_items, service_modules, subscription_conflicts,
+    anime_works, animes, downloads, raw_anime_items, service_modules, subscription_conflicts,
     subscriptions,
 };
 use crate::state::AppState;
@@ -25,12 +25,12 @@ pub async fn get_dashboard_stats(
         }
     };
 
-    let total_anime: i64 = animes::table
+    let total_anime: i64 = anime_works::table
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);
 
-    let total_series: i64 = anime_series::table
+    let total_series: i64 = animes::table
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);

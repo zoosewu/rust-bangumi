@@ -21,7 +21,7 @@ import {
 } from "./ParserForm"
 
 interface ParserEditorProps {
-  createdFromType: "global" | "anime" | "anime_series" | "subtitle_group" | "subscription"
+  createdFromType: "global" | "anime_work" | "anime" | "subtitle_group" | "subscription"
   createdFromId: number | null
   onParsersChange?: () => void
 }

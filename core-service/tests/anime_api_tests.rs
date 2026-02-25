@@ -35,11 +35,11 @@ fn setup_test_db() -> Result<DbPool, String> {
     Ok(pool)
 }
 
-// ============ Anime CRUD Tests ============
+// ============ AnimeWork CRUD Tests ============
 
-/// Test: Create a new anime
+/// Test: Create a new anime work
 ///
-/// Verifies that an anime record can be created successfully in the database
+/// Verifies that an anime work record can be created successfully in the database
 /// with all required fields populated.
 #[test]
 #[ignore]
@@ -50,27 +50,27 @@ fn test_create_anime() -> Result<(), String> {
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Create".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let result = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let result = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
     assert_eq!(result.title, "Test Anime Create");
-    assert!(result.anime_id > 0);
-    println!("Created anime with ID: {}", result.anime_id);
+    assert!(result.work_id > 0);
+    println!("Created anime work with ID: {}", result.work_id);
 
     Ok(())
 }
 
-/// Test: Retrieve anime by ID
+/// Test: Retrieve anime work by ID
 ///
-/// Verifies that an anime can be retrieved from the database by its primary key
+/// Verifies that an anime work can be retrieved from the database by its primary key
 /// and all fields match the original data.
 #[test]
 #[ignore]
@@ -80,37 +80,37 @@ fn test_get_anime_by_id() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // First create an anime
+    // First create an anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Get".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let created = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let created = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
-    let anime_id = created.anime_id;
+    let work_id = created.work_id;
 
     // Now retrieve it
-    let retrieved = animes::table
-        .find(anime_id)
-        .first::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to retrieve anime: {}", e))?;
+    let retrieved = anime_works::table
+        .find(work_id)
+        .first::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to retrieve anime work: {}", e))?;
 
-    assert_eq!(retrieved.anime_id, anime_id);
+    assert_eq!(retrieved.work_id, work_id);
     assert_eq!(retrieved.title, "Test Anime Get");
-    println!("Retrieved anime: {:?}", retrieved);
+    println!("Retrieved anime work: {:?}", retrieved);
 
     Ok(())
 }
 
-/// Test: List all animes
+/// Test: List all anime works
 ///
-/// Verifies that all anime records can be retrieved from the database
+/// Verifies that all anime work records can be retrieved from the database
 /// and returns a non-empty result after creating test data.
 #[test]
 #[ignore]
@@ -120,33 +120,33 @@ fn test_get_all_animes() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Create a test anime
+    // Create a test anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime List".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    diesel::insert_into(animes::table)
-        .values(&new_anime)
+    diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
-    // Load all animes
-    let all_animes = animes::table
-        .load::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to load animes: {}", e))?;
+    // Load all anime works
+    let all_anime_works = anime_works::table
+        .load::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to load anime works: {}", e))?;
 
-    assert!(!all_animes.is_empty());
-    println!("Found {} animes in database", all_animes.len());
+    assert!(!all_anime_works.is_empty());
+    println!("Found {} anime works in database", all_anime_works.len());
 
     Ok(())
 }
 
-/// Test: Update anime
+/// Test: Update anime work
 ///
-/// Verifies that an anime record can be updated with new values
+/// Verifies that an anime work record can be updated with new values
 /// and the changes persist in the database.
 #[test]
 #[ignore]
@@ -156,40 +156,40 @@ fn test_update_anime() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Create an anime
+    // Create an anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Update Original".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let created = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let created = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
-    let anime_id = created.anime_id;
+    let work_id = created.work_id;
 
-    // Update the anime
-    let updated = diesel::update(animes::table.find(anime_id))
+    // Update the anime work
+    let updated = diesel::update(anime_works::table.find(work_id))
         .set((
-            animes::title.eq("Test Anime Update Modified"),
-            animes::updated_at.eq(Utc::now().naive_utc()),
+            anime_works::title.eq("Test Anime Update Modified"),
+            anime_works::updated_at.eq(Utc::now().naive_utc()),
         ))
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to update anime: {}", e))?;
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to update anime work: {}", e))?;
 
     assert_eq!(updated.title, "Test Anime Update Modified");
-    assert_eq!(updated.anime_id, anime_id);
-    println!("Updated anime title: {}", updated.title);
+    assert_eq!(updated.work_id, work_id);
+    println!("Updated anime work title: {}", updated.title);
 
     Ok(())
 }
 
-/// Test: Delete anime
+/// Test: Delete anime work
 ///
-/// Verifies that an anime record can be deleted from the database
+/// Verifies that an anime work record can be deleted from the database
 /// and subsequent retrieval attempts fail as expected.
 #[test]
 #[ignore]
@@ -199,37 +199,37 @@ fn test_delete_anime() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Create an anime
+    // Create an anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Delete".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let created = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let created = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
-    let anime_id = created.anime_id;
+    let work_id = created.work_id;
 
-    // Delete the anime
-    let deleted_count = diesel::delete(animes::table.find(anime_id))
+    // Delete the anime work
+    let deleted_count = diesel::delete(anime_works::table.find(work_id))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete anime: {}", e))?;
+        .map_err(|e| format!("Failed to delete anime work: {}", e))?;
 
     assert_eq!(deleted_count, 1);
 
     // Verify it's deleted
-    let result = animes::table
-        .find(anime_id)
-        .first::<Anime>(&mut conn)
+    let result = anime_works::table
+        .find(work_id)
+        .first::<AnimeWork>(&mut conn)
         .optional()
-        .map_err(|e| format!("Failed to query anime: {}", e))?;
+        .map_err(|e| format!("Failed to query anime work: {}", e))?;
 
     assert!(result.is_none());
-    println!("Successfully deleted anime with ID: {}", anime_id);
+    println!("Successfully deleted anime work with ID: {}", work_id);
 
     Ok(())
 }
@@ -326,11 +326,11 @@ fn test_get_or_create_season() -> Result<(), String> {
     Ok(())
 }
 
-// ============ AnimeSeries Tests ============
+// ============ Anime Tests (formerly AnimeSeries) ============
 
-/// Test: Create anime series
+/// Test: Create anime (series entry)
 ///
-/// Verifies that an anime series record can be created with proper foreign key relationships
+/// Verifies that an anime record can be created with proper foreign key relationships
 /// and all optional fields are handled correctly.
 #[test]
 #[ignore]
@@ -340,18 +340,18 @@ fn test_create_anime_series() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Create prerequisite anime
+    // Create prerequisite anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Series".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let anime = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let anime_work = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
     // Create prerequisite season
     let new_season = NewSeason {
@@ -365,9 +365,9 @@ fn test_create_anime_series() -> Result<(), String> {
         .get_result::<Season>(&mut conn)
         .map_err(|e| format!("Failed to create season: {}", e))?;
 
-    // Now create anime series
-    let new_series = NewAnimeSeries {
-        anime_id: anime.anime_id,
+    // Now create anime
+    let new_anime = NewAnime {
+        work_id: anime_work.work_id,
         series_no: 1,
         season_id: season.season_id,
         description: Some("Test series description".to_string()),
@@ -377,22 +377,22 @@ fn test_create_anime_series() -> Result<(), String> {
         updated_at: now,
     };
 
-    let result = diesel::insert_into(anime_series::table)
-        .values(&new_series)
-        .get_result::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to create anime series: {}", e))?;
+    let result = diesel::insert_into(animes::table)
+        .values(&new_anime)
+        .get_result::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to create anime: {}", e))?;
 
-    assert_eq!(result.anime_id, anime.anime_id);
+    assert_eq!(result.work_id, anime_work.work_id);
     assert_eq!(result.series_no, 1);
-    assert!(result.series_id > 0);
-    println!("Created anime series with ID: {}", result.series_id);
+    assert!(result.anime_id > 0);
+    println!("Created anime with ID: {}", result.anime_id);
 
     Ok(())
 }
 
-/// Test: Get anime series by anime ID
+/// Test: Get anime by work ID
 ///
-/// Verifies that all series associated with an anime can be retrieved correctly.
+/// Verifies that all anime entries associated with an anime work can be retrieved correctly.
 #[test]
 #[ignore]
 fn test_get_anime_series_by_anime() -> Result<(), String> {
@@ -401,18 +401,18 @@ fn test_get_anime_series_by_anime() -> Result<(), String> {
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    // Create prerequisite anime
+    // Create prerequisite anime work
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title: "Test Anime Multiple Series".to_string(),
         created_at: now,
         updated_at: now,
     };
 
-    let anime = diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))?;
+    let anime_work = diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))?;
 
     // Create prerequisite season
     let new_season = NewSeason {
@@ -426,10 +426,10 @@ fn test_get_anime_series_by_anime() -> Result<(), String> {
         .get_result::<Season>(&mut conn)
         .map_err(|e| format!("Failed to create season: {}", e))?;
 
-    // Create two series for the same anime
+    // Create two anime entries for the same anime work
     for series_no in 1..=2 {
-        let new_series = NewAnimeSeries {
-            anime_id: anime.anime_id,
+        let new_anime = NewAnime {
+            work_id: anime_work.work_id,
             series_no,
             season_id: season.season_id,
             description: None,
@@ -439,23 +439,23 @@ fn test_get_anime_series_by_anime() -> Result<(), String> {
             updated_at: now,
         };
 
-        diesel::insert_into(anime_series::table)
-            .values(&new_series)
+        diesel::insert_into(animes::table)
+            .values(&new_anime)
             .execute(&mut conn)
-            .map_err(|e| format!("Failed to create series: {}", e))?;
+            .map_err(|e| format!("Failed to create anime: {}", e))?;
     }
 
-    // Retrieve all series by anime ID
-    let series_list = anime_series::table
-        .filter(anime_series::anime_id.eq(anime.anime_id))
-        .load::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to load series: {}", e))?;
+    // Retrieve all anime entries by work ID
+    let anime_list = animes::table
+        .filter(animes::work_id.eq(anime_work.work_id))
+        .load::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to load anime list: {}", e))?;
 
-    assert_eq!(series_list.len(), 2);
+    assert_eq!(anime_list.len(), 2);
     println!(
-        "Retrieved {} series for anime ID {}",
-        series_list.len(),
-        anime.anime_id
+        "Retrieved {} anime entries for work ID {}",
+        anime_list.len(),
+        anime_work.work_id
     );
 
     Ok(())

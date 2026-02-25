@@ -1,5 +1,5 @@
 import { Effect, Context } from "effect"
-import type { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
+import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
@@ -9,9 +9,9 @@ import type { DashboardStats } from "@/schemas/dashboard"
 export class CoreApi extends Context.Tag("CoreApi")<
   CoreApi,
   {
-    readonly getAnimes: Effect.Effect<readonly Anime[]>
-    readonly createAnime: (title: string) => Effect.Effect<Anime>
-    readonly deleteAnime: (id: number) => Effect.Effect<void>
+    readonly getAnimeWorks: Effect.Effect<readonly AnimeWork[]>
+    readonly createAnimeWork: (title: string) => Effect.Effect<AnimeWork>
+    readonly deleteAnimeWork: (id: number) => Effect.Effect<void>
     readonly getSubscriptions: Effect.Effect<readonly Subscription[]>
     readonly getFilterRules: (targetType: string, targetId?: number) => Effect.Effect<readonly FilterRule[]>
     readonly createFilterRule: (req: {
@@ -54,24 +54,24 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getSubtitleGroups: Effect.Effect<readonly SubtitleGroup[]>
     readonly createSubtitleGroup: (name: string) => Effect.Effect<SubtitleGroup>
     readonly deleteSubtitleGroup: (groupId: number) => Effect.Effect<void>
-    readonly getAnimeSeries: (animeId: number) => Effect.Effect<readonly AnimeSeries[]>
-    readonly getOneAnimeSeries: (seriesId: number) => Effect.Effect<AnimeSeries>
-    readonly createAnimeSeries: (req: {
+    readonly getAnime: (animeWorkId: number) => Effect.Effect<readonly Anime[]>
+    readonly getOneAnime: (animeId: number) => Effect.Effect<Anime>
+    readonly createAnime: (req: {
       anime_id: number; series_no: number; season_id: number;
       description?: string; aired_date?: string; end_date?: string;
-    }) => Effect.Effect<AnimeSeries>
+    }) => Effect.Effect<Anime>
     readonly getSeasons: Effect.Effect<readonly Season[]>
     readonly createSeason: (req: { year: number; season: string }) => Effect.Effect<Season>
-    readonly getAnimeLinks: (seriesId: number) => Effect.Effect<readonly AnimeLink[]>
-    readonly getAllAnimeSeries: (params?: { excludeEmpty?: boolean }) => Effect.Effect<readonly AnimeSeriesRich[]>
+    readonly getAnimeLinks: (animeId: number) => Effect.Effect<readonly AnimeLink[]>
+    readonly getAllAnime: (params?: { excludeEmpty?: boolean }) => Effect.Effect<readonly AnimeRich[]>
     readonly getDashboardStats: Effect.Effect<DashboardStats>
-    readonly getAnimeLinksRich: (seriesId: number) => Effect.Effect<readonly AnimeLinkRich[]>
-    readonly updateAnimeSeries: (seriesId: number, req: {
+    readonly getAnimeLinksRich: (animeId: number) => Effect.Effect<readonly AnimeLinkRich[]>
+    readonly updateAnime: (animeId: number, req: {
       season_id?: number | null
       description?: string | null
       aired_date?: string | null
       end_date?: string | null
-    }) => Effect.Effect<AnimeSeries>
+    }) => Effect.Effect<Anime>
     readonly getRawItem: (itemId: number) => Effect.Effect<RawAnimeItem>
     readonly createSubscription: (req: {
       source_url: string
@@ -82,10 +82,10 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
     readonly getAnimeCoverImages: (
-      animeId: number,
+      animeWorkId: number,
     ) => Effect.Effect<readonly AnimeCoverImage[]>
     readonly setDefaultCoverImage: (
-      animeId: number,
+      animeWorkId: number,
       coverId: number,
     ) => Effect.Effect<void>
   }

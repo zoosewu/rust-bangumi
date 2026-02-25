@@ -16,7 +16,7 @@ pub async fn list_anime_covers(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     match anime_cover_images::table
-        .filter(anime_cover_images::anime_id.eq(anime_id))
+        .filter(anime_cover_images::work_id.eq(anime_id))
         .order(anime_cover_images::created_at.asc())
         .load::<AnimeCoverImage>(&mut conn)
     {
@@ -38,7 +38,7 @@ pub async fn set_default_cover(
     };
     let result = conn.transaction::<_, diesel::result::Error, _>(|conn| {
         diesel::update(
-            anime_cover_images::table.filter(anime_cover_images::anime_id.eq(anime_id)),
+            anime_cover_images::table.filter(anime_cover_images::work_id.eq(anime_id)),
         )
         .set(anime_cover_images::is_default.eq(false))
         .execute(conn)?;
@@ -46,7 +46,7 @@ pub async fn set_default_cover(
         let updated = diesel::update(
             anime_cover_images::table
                 .filter(anime_cover_images::cover_id.eq(cover_id))
-                .filter(anime_cover_images::anime_id.eq(anime_id)),
+                .filter(anime_cover_images::work_id.eq(anime_id)),
         )
         .set(anime_cover_images::is_default.eq(true))
         .execute(conn)?;

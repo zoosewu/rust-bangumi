@@ -16,7 +16,7 @@ import { AppRuntime } from "@/runtime/AppRuntime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 
 interface FilterRuleEditorProps {
-  targetType: "global" | "anime" | "anime_series" | "subtitle_group" | "fetcher"
+  targetType: "global" | "anime_work" | "anime" | "subtitle_group" | "fetcher"
   targetId: number | null
   onRulesChange?: () => void
 }

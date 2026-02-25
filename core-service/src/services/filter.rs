@@ -28,8 +28,8 @@ impl FilterEngine {
         match target_type {
             FilterTargetType::Global => 0,
             FilterTargetType::Fetcher => 1,
-            FilterTargetType::AnimeSeries => 2,
-            FilterTargetType::Anime => 3,
+            FilterTargetType::Anime => 2,
+            FilterTargetType::AnimeWork => 3,
             FilterTargetType::SubtitleGroup => 4,
             FilterTargetType::Subscription => 1,
         }
@@ -82,7 +82,7 @@ mod tests {
             regex_pattern: pattern.to_string(),
             created_at: now,
             updated_at: now,
-            target_type: FilterTargetType::AnimeSeries,
+            target_type: FilterTargetType::Anime,
             target_id: Some(1),
         }
     }
@@ -166,7 +166,7 @@ mod tests {
     #[test]
     fn test_priority_sorting() {
         let rules = vec![
-            create_rule_with_type(3, true, "anime", FilterTargetType::AnimeSeries, Some(1)),
+            create_rule_with_type(3, true, "anime", FilterTargetType::Anime, Some(1)),
             create_rule_with_type(1, false, "trash", FilterTargetType::Global, None),
             create_rule_with_type(2, true, "1080p", FilterTargetType::Fetcher, Some(1)),
         ];
@@ -174,8 +174,8 @@ mod tests {
         let engine = FilterEngine::with_priority_sorted(rules);
         let target_types = engine.target_types();
 
-        // AnimeSeries (highest priority) should come first, then Fetcher, then Global
-        assert_eq!(target_types[0], FilterTargetType::AnimeSeries);
+        // Anime (highest priority) should come first, then Fetcher, then Global
+        assert_eq!(target_types[0], FilterTargetType::Anime);
         assert_eq!(target_types[1], FilterTargetType::Fetcher);
         assert_eq!(target_types[2], FilterTargetType::Global);
     }

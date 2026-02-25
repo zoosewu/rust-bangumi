@@ -7,80 +7,80 @@ use crate::schema::*;
 use chrono::{NaiveDate, Utc};
 use diesel::prelude::*;
 
-// ============ Anime CRUD ============
+// ============ AnimeWork CRUD ============
 
-pub fn create_anime(pool: &DbPool, title: String) -> Result<Anime, String> {
+pub fn create_anime_work(pool: &DbPool, title: String) -> Result<AnimeWork, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
-    let new_anime = NewAnime {
+    let new_anime_work = NewAnimeWork {
         title,
         created_at: now,
         updated_at: now,
     };
 
-    diesel::insert_into(animes::table)
-        .values(&new_anime)
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to create anime: {}", e))
+    diesel::insert_into(anime_works::table)
+        .values(&new_anime_work)
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to create anime work: {}", e))
 }
 
-pub fn get_anime_by_id(pool: &DbPool, anime_id: i32) -> Result<Anime, String> {
+pub fn get_anime_work_by_id(pool: &DbPool, work_id: i32) -> Result<AnimeWork, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    animes::table
-        .find(anime_id)
-        .first::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to get anime: {}", e))
+    anime_works::table
+        .find(work_id)
+        .first::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to get anime work: {}", e))
 }
 
-pub fn get_anime_by_title(pool: &DbPool, title: &str) -> Result<Anime, String> {
+pub fn get_anime_work_by_title(pool: &DbPool, title: &str) -> Result<AnimeWork, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    animes::table
-        .filter(animes::title.eq(title))
-        .first::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to get anime by title: {}", e))
+    anime_works::table
+        .filter(anime_works::title.eq(title))
+        .first::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to get anime work by title: {}", e))
 }
 
-pub fn get_all_animes(pool: &DbPool) -> Result<Vec<Anime>, String> {
+pub fn get_all_anime_works(pool: &DbPool) -> Result<Vec<AnimeWork>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    animes::table
-        .load::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to load animes: {}", e))
+    anime_works::table
+        .load::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to load anime works: {}", e))
 }
 
-pub fn update_anime(pool: &DbPool, anime_id: i32, title: String) -> Result<Anime, String> {
+pub fn update_anime_work(pool: &DbPool, work_id: i32, title: String) -> Result<AnimeWork, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    diesel::update(animes::table.find(anime_id))
+    diesel::update(anime_works::table.find(work_id))
         .set((
-            animes::title.eq(title),
-            animes::updated_at.eq(Utc::now().naive_utc()),
+            anime_works::title.eq(title),
+            anime_works::updated_at.eq(Utc::now().naive_utc()),
         ))
-        .get_result::<Anime>(&mut conn)
-        .map_err(|e| format!("Failed to update anime: {}", e))
+        .get_result::<AnimeWork>(&mut conn)
+        .map_err(|e| format!("Failed to update anime work: {}", e))
 }
 
-pub fn delete_anime(pool: &DbPool, anime_id: i32) -> Result<usize, String> {
+pub fn delete_anime_work(pool: &DbPool, work_id: i32) -> Result<usize, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    diesel::delete(animes::table.find(anime_id))
+    diesel::delete(anime_works::table.find(work_id))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete anime: {}", e))
+        .map_err(|e| format!("Failed to delete anime work: {}", e))
 }
 
 // ============ Season CRUD ============
@@ -151,24 +151,24 @@ pub fn get_all_seasons(pool: &DbPool) -> Result<Vec<Season>, String> {
         .map_err(|e| format!("Failed to load seasons: {}", e))
 }
 
-// ============ AnimeSeries CRUD ============
+// ============ Anime CRUD (formerly AnimeSeries) ============
 
-pub fn create_anime_series(
+pub fn create_anime(
     pool: &DbPool,
-    anime_id: i32,
+    work_id: i32,
     series_no: i32,
     season_id: i32,
     description: Option<String>,
     aired_date: Option<NaiveDate>,
     end_date: Option<NaiveDate>,
-) -> Result<AnimeSeries, String> {
+) -> Result<Anime, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     let now = Utc::now().naive_utc();
-    let new_series = NewAnimeSeries {
-        anime_id,
+    let new_anime = NewAnime {
+        work_id,
         series_no,
         season_id,
         description,
@@ -178,84 +178,84 @@ pub fn create_anime_series(
         updated_at: now,
     };
 
-    diesel::insert_into(anime_series::table)
-        .values(&new_series)
-        .get_result::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to create anime series: {}", e))
+    diesel::insert_into(animes::table)
+        .values(&new_anime)
+        .get_result::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to create anime: {}", e))
 }
 
-pub fn get_anime_series_by_id(pool: &DbPool, series_id: i32) -> Result<AnimeSeries, String> {
+pub fn get_anime_by_id(pool: &DbPool, anime_id: i32) -> Result<Anime, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    anime_series::table
-        .find(series_id)
-        .first::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to get anime series: {}", e))
+    animes::table
+        .find(anime_id)
+        .first::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to get anime: {}", e))
 }
 
-pub fn get_anime_series_by_anime(pool: &DbPool, anime_id: i32) -> Result<Vec<AnimeSeries>, String> {
+pub fn get_animes_by_work_id(pool: &DbPool, work_id: i32) -> Result<Vec<Anime>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    anime_series::table
-        .filter(anime_series::anime_id.eq(anime_id))
-        .load::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to get anime series by anime: {}", e))
+    animes::table
+        .filter(animes::work_id.eq(work_id))
+        .load::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to get animes by work_id: {}", e))
 }
 
-pub fn get_anime_series_by_season(
+pub fn get_animes_by_season(
     pool: &DbPool,
     season_id: i32,
-) -> Result<Vec<AnimeSeries>, String> {
+) -> Result<Vec<Anime>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    anime_series::table
-        .filter(anime_series::season_id.eq(season_id))
-        .load::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to get anime series by season: {}", e))
+    animes::table
+        .filter(animes::season_id.eq(season_id))
+        .load::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to get animes by season: {}", e))
 }
 
-pub fn update_anime_series(
+pub fn update_anime(
     pool: &DbPool,
-    series_id: i32,
     anime_id: i32,
+    work_id: i32,
     series_no: i32,
     season_id: i32,
     description: Option<String>,
     aired_date: Option<NaiveDate>,
     end_date: Option<NaiveDate>,
-) -> Result<AnimeSeries, String> {
+) -> Result<Anime, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    diesel::update(anime_series::table.find(series_id))
+    diesel::update(animes::table.find(anime_id))
         .set((
-            anime_series::anime_id.eq(anime_id),
-            anime_series::series_no.eq(series_no),
-            anime_series::season_id.eq(season_id),
-            anime_series::description.eq(description),
-            anime_series::aired_date.eq(aired_date),
-            anime_series::end_date.eq(end_date),
-            anime_series::updated_at.eq(Utc::now().naive_utc()),
+            animes::work_id.eq(work_id),
+            animes::series_no.eq(series_no),
+            animes::season_id.eq(season_id),
+            animes::description.eq(description),
+            animes::aired_date.eq(aired_date),
+            animes::end_date.eq(end_date),
+            animes::updated_at.eq(Utc::now().naive_utc()),
         ))
-        .get_result::<AnimeSeries>(&mut conn)
-        .map_err(|e| format!("Failed to update anime series: {}", e))
+        .get_result::<Anime>(&mut conn)
+        .map_err(|e| format!("Failed to update anime: {}", e))
 }
 
-pub fn delete_anime_series(pool: &DbPool, series_id: i32) -> Result<usize, String> {
+pub fn delete_anime(pool: &DbPool, anime_id: i32) -> Result<usize, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
-    diesel::delete(anime_series::table.find(series_id))
+    diesel::delete(animes::table.find(anime_id))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete anime series: {}", e))
+        .map_err(|e| format!("Failed to delete anime: {}", e))
 }
 
 // ============ SubtitleGroups CRUD ============
@@ -340,7 +340,7 @@ pub fn delete_subtitle_group(pool: &DbPool, group_id: i32) -> Result<usize, Stri
 
 pub fn create_anime_link(
     pool: &DbPool,
-    series_id: i32,
+    anime_id: i32,
     group_id: i32,
     episode_no: i32,
     title: Option<String>,
@@ -354,7 +354,7 @@ pub fn create_anime_link(
 
     let now = Utc::now().naive_utc();
     let new_link = NewAnimeLink {
-        series_id,
+        anime_id,
         group_id,
         episode_no,
         title,
@@ -374,13 +374,13 @@ pub fn create_anime_link(
         .map_err(|e| format!("Failed to create anime link: {}", e))
 }
 
-pub fn get_anime_links_by_series(pool: &DbPool, series_id: i32) -> Result<Vec<AnimeLink>, String> {
+pub fn get_anime_links_by_anime(pool: &DbPool, anime_id: i32) -> Result<Vec<AnimeLink>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
     anime_links::table
-        .filter(anime_links::series_id.eq(series_id))
+        .filter(anime_links::anime_id.eq(anime_id))
         .load::<AnimeLink>(&mut conn)
         .map_err(|e| format!("Failed to get anime links: {}", e))
 }
@@ -454,11 +454,11 @@ pub fn delete_filter_rule(pool: &DbPool, rule_id: i32) -> Result<usize, String> 
 
 /// Get all applicable filter rules for a given context.
 /// Rules are collected from all relevant target types and sorted by priority.
-/// Priority order: subtitle_group > anime > anime_series > fetcher > global (higher = higher priority)
+/// Priority order: subtitle_group > anime_work > anime > fetcher > global (higher = higher priority)
 pub fn get_all_applicable_filter_rules(
     pool: &DbPool,
+    work_id: Option<i32>,
     anime_id: Option<i32>,
-    series_id: Option<i32>,
     group_id: Option<i32>,
     fetcher_id: Option<i32>,
 ) -> Result<Vec<FilterRule>, String> {
@@ -488,18 +488,7 @@ pub fn get_all_applicable_filter_rules(
         all_rules.extend(fetcher_rules);
     }
 
-    // 3. Anime series rules
-    if let Some(sid) = series_id {
-        let series_rules = filter_rules::table
-            .filter(filter_rules::target_type.eq(FilterTargetType::AnimeSeries))
-            .filter(filter_rules::target_id.eq(sid))
-            .order(filter_rules::rule_order.asc())
-            .load::<FilterRule>(&mut conn)
-            .map_err(|e| format!("Failed to get anime series filter rules: {}", e))?;
-        all_rules.extend(series_rules);
-    }
-
-    // 4. Anime rules
+    // 3. Anime rules (formerly anime_series)
     if let Some(aid) = anime_id {
         let anime_rules = filter_rules::table
             .filter(filter_rules::target_type.eq(FilterTargetType::Anime))
@@ -508,6 +497,17 @@ pub fn get_all_applicable_filter_rules(
             .load::<FilterRule>(&mut conn)
             .map_err(|e| format!("Failed to get anime filter rules: {}", e))?;
         all_rules.extend(anime_rules);
+    }
+
+    // 4. AnimeWork rules (formerly anime)
+    if let Some(wid) = work_id {
+        let work_rules = filter_rules::table
+            .filter(filter_rules::target_type.eq(FilterTargetType::AnimeWork))
+            .filter(filter_rules::target_id.eq(wid))
+            .order(filter_rules::rule_order.asc())
+            .load::<FilterRule>(&mut conn)
+            .map_err(|e| format!("Failed to get anime work filter rules: {}", e))?;
+        all_rules.extend(work_rules);
     }
 
     // 5. Subtitle group rules

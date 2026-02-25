@@ -71,16 +71,16 @@ pub struct UpdateSubscriptionRequest {
 }
 
 // ==============================
-// Anime
+// AnimeWork (formerly Anime)
 // ==============================
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AnimesResponse {
-    pub animes: Vec<AnimeResponse>,
+pub struct AnimeWorksResponse {
+    pub animes: Vec<AnimeWorkResponse>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AnimeResponse {
+pub struct AnimeWorkResponse {
     pub anime_id: i64,
     pub title: String,
     pub created_at: String,
@@ -88,21 +88,21 @@ pub struct AnimeResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CreateAnimeRequest {
+pub struct CreateAnimeWorkRequest {
     pub title: String,
 }
 
 // ==============================
-// Series
+// Anime (formerly Series)
 // ==============================
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct SeriesListResponse {
-    pub series: Vec<AnimeSeriesRichResponse>,
+pub struct AnimesListResponse {
+    pub series: Vec<AnimeRichResponse>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AnimeSeriesRichResponse {
+pub struct AnimeRichResponse {
     pub series_id: i64,
     pub anime_id: i64,
     pub anime_title: String,

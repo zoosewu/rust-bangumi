@@ -16,9 +16,9 @@ use std::io::Write;
 #[diesel(sql_type = crate::schema::sql_types::FilterTargetType)]
 pub enum FilterTargetType {
     Global,
-    Anime,
+    AnimeWork,
     SubtitleGroup,
-    AnimeSeries,
+    Anime,
     Fetcher,
     Subscription,
 }
@@ -29,9 +29,9 @@ impl diesel::deserialize::FromSql<crate::schema::sql_types::FilterTargetType, di
     fn from_sql(bytes: diesel::pg::PgValue<'_>) -> diesel::deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"global" => Ok(FilterTargetType::Global),
-            b"anime" => Ok(FilterTargetType::Anime),
+            b"anime_work" => Ok(FilterTargetType::AnimeWork),
             b"subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
-            b"anime_series" => Ok(FilterTargetType::AnimeSeries),
+            b"anime" => Ok(FilterTargetType::Anime),
             b"fetcher" => Ok(FilterTargetType::Fetcher),
             b"subscription" => Ok(FilterTargetType::Subscription),
             _ => Err("Unrecognized filter_target_type variant".into()),
@@ -48,9 +48,9 @@ impl diesel::serialize::ToSql<crate::schema::sql_types::FilterTargetType, diesel
     ) -> diesel::serialize::Result {
         match *self {
             FilterTargetType::Global => out.write_all(b"global")?,
-            FilterTargetType::Anime => out.write_all(b"anime")?,
+            FilterTargetType::AnimeWork => out.write_all(b"anime_work")?,
             FilterTargetType::SubtitleGroup => out.write_all(b"subtitle_group")?,
-            FilterTargetType::AnimeSeries => out.write_all(b"anime_series")?,
+            FilterTargetType::Anime => out.write_all(b"anime")?,
             FilterTargetType::Fetcher => out.write_all(b"fetcher")?,
             FilterTargetType::Subscription => out.write_all(b"subscription")?,
         }
@@ -62,9 +62,9 @@ impl std::fmt::Display for FilterTargetType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FilterTargetType::Global => write!(f, "global"),
-            FilterTargetType::Anime => write!(f, "anime"),
+            FilterTargetType::AnimeWork => write!(f, "anime_work"),
             FilterTargetType::SubtitleGroup => write!(f, "subtitle_group"),
-            FilterTargetType::AnimeSeries => write!(f, "anime_series"),
+            FilterTargetType::Anime => write!(f, "anime"),
             FilterTargetType::Fetcher => write!(f, "fetcher"),
             FilterTargetType::Subscription => write!(f, "subscription"),
         }
@@ -77,9 +77,9 @@ impl std::str::FromStr for FilterTargetType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "global" => Ok(FilterTargetType::Global),
-            "anime" => Ok(FilterTargetType::Anime),
+            "anime_work" => Ok(FilterTargetType::AnimeWork),
             "subtitle_group" => Ok(FilterTargetType::SubtitleGroup),
-            "anime_series" => Ok(FilterTargetType::AnimeSeries),
+            "anime" => Ok(FilterTargetType::Anime),
             "fetcher" => Ok(FilterTargetType::Fetcher),
             "subscription" => Ok(FilterTargetType::Subscription),
             _ => Err(format!("Unknown filter target type: {}", s)),
@@ -176,30 +176,30 @@ pub struct NewSeason {
     pub created_at: NaiveDateTime,
 }
 
-// ============ Animes ============
+// ============ AnimeWorks (formerly Animes) ============
 #[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::animes)]
-pub struct Anime {
-    pub anime_id: i32,
+#[diesel(table_name = super::super::schema::anime_works)]
+pub struct AnimeWork {
+    pub work_id: i32,
     pub title: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = super::super::schema::animes)]
-pub struct NewAnime {
+#[diesel(table_name = super::super::schema::anime_works)]
+pub struct NewAnimeWork {
     pub title: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
 
-// ============ AnimeSeries ============
+// ============ Animes (formerly AnimeSeries) ============
 #[derive(Queryable, Selectable, Debug, Clone)]
-#[diesel(table_name = super::super::schema::anime_series)]
-pub struct AnimeSeries {
-    pub series_id: i32,
+#[diesel(table_name = super::super::schema::animes)]
+pub struct Anime {
     pub anime_id: i32,
+    pub work_id: i32,
     pub series_no: i32,
     pub season_id: i32,
     pub description: Option<String>,
@@ -210,9 +210,9 @@ pub struct AnimeSeries {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = super::super::schema::anime_series)]
-pub struct NewAnimeSeries {
-    pub anime_id: i32,
+#[diesel(table_name = super::super::schema::animes)]
+pub struct NewAnime {
+    pub work_id: i32,
     pub series_no: i32,
     pub season_id: i32,
     pub description: Option<String>,
@@ -243,7 +243,7 @@ pub struct NewSubtitleGroup {
 #[diesel(table_name = super::super::schema::anime_links)]
 pub struct AnimeLink {
     pub link_id: i32,
-    pub series_id: i32,
+    pub anime_id: i32,
     pub group_id: i32,
     pub episode_no: i32,
     pub title: Option<String>,
@@ -260,7 +260,7 @@ pub struct AnimeLink {
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::anime_links)]
 pub struct NewAnimeLink {
-    pub series_id: i32,
+    pub anime_id: i32,
     pub group_id: i32,
     pub episode_no: i32,
     pub title: Option<String>,
@@ -279,7 +279,7 @@ pub struct NewAnimeLink {
 #[diesel(table_name = super::super::schema::anime_link_conflicts)]
 pub struct AnimeLinkConflict {
     pub conflict_id: i32,
-    pub series_id: i32,
+    pub anime_id: i32,
     pub group_id: i32,
     pub episode_no: i32,
     pub resolution_status: String,
@@ -291,7 +291,7 @@ pub struct AnimeLinkConflict {
 #[derive(Insertable)]
 #[diesel(table_name = super::super::schema::anime_link_conflicts)]
 pub struct NewAnimeLinkConflict {
-    pub series_id: i32,
+    pub anime_id: i32,
     pub group_id: i32,
     pub episode_no: i32,
     pub resolution_status: String,
@@ -643,7 +643,7 @@ pub struct NewRawAnimeItem {
 #[diesel(table_name = crate::schema::anime_cover_images)]
 pub struct AnimeCoverImage {
     pub cover_id: i32,
-    pub anime_id: i32,
+    pub work_id: i32,
     pub image_url: String,
     pub service_module_id: Option<i32>,
     pub source_name: String,
@@ -654,10 +654,28 @@ pub struct AnimeCoverImage {
 #[derive(Debug, Insertable)]
 #[diesel(table_name = crate::schema::anime_cover_images)]
 pub struct NewAnimeCoverImage {
-    pub anime_id: i32,
+    pub work_id: i32,
     pub image_url: String,
     pub service_module_id: Option<i32>,
     pub source_name: String,
     pub is_default: bool,
     pub created_at: chrono::NaiveDateTime,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filter_target_type_anime_work_wire_value_is_anime_work() {
+        assert_eq!(format!("{}", FilterTargetType::AnimeWork), "anime_work");
+        assert_eq!(format!("{}", FilterTargetType::Anime), "anime");
+    }
+
+    #[test]
+    fn filter_target_type_parse_new_wire_values() {
+        use std::str::FromStr;
+        assert!(matches!(FilterTargetType::from_str("anime_work").unwrap(), FilterTargetType::AnimeWork));
+        assert!(matches!(FilterTargetType::from_str("anime").unwrap(), FilterTargetType::Anime));
+    }
 }

@@ -1,7 +1,7 @@
 pub mod anime;
 pub mod anime_link;
 pub mod anime_link_conflict;
-pub mod anime_series;
+pub mod anime_work;
 pub mod conflict;
 pub mod error;
 pub mod filter_rule;
@@ -12,12 +12,10 @@ pub mod subscription;
 pub mod subtitle_group;
 pub mod title_parser;
 
-pub use anime::{AnimeRepository, DieselAnimeRepository};
+pub use anime::{AnimeRepository, CreateAnimeParams, DieselAnimeRepository};
 pub use anime_link::{AnimeLinkRepository, DieselAnimeLinkRepository};
 pub use anime_link_conflict::{AnimeLinkConflictRepository, DieselAnimeLinkConflictRepository};
-pub use anime_series::{
-    AnimeSeriesRepository, CreateAnimeSeriesParams, DieselAnimeSeriesRepository,
-};
+pub use anime_work::{AnimeWorkRepository, DieselAnimeWorkRepository};
 pub use conflict::{ConflictRepository, DieselConflictRepository};
 pub use error::RepositoryError;
 pub use filter_rule::{DieselFilterRuleRepository, FilterRuleRepository};

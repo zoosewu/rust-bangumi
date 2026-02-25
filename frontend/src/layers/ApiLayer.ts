@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
-import { Anime, AnimeSeries, Season, SubtitleGroup, AnimeLink, AnimeSeriesRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
+import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
@@ -36,16 +36,16 @@ const makeCoreApi = Effect.gen(function* () {
       )
 
   return CoreApi.of({
-    getAnimes: fetchJson(
-      HttpClientRequest.get("/api/core/anime"),
-      Schema.Struct({ animes: Schema.Array(Anime) }),
+    getAnimeWorks: fetchJson(
+      HttpClientRequest.get("/api/core/anime-works"),
+      Schema.Struct({ animes: Schema.Array(AnimeWork) }),
     ).pipe(Effect.map((r) => r.animes)),
 
-    createAnime: (title) => postJson("/api/core/anime", { title }, Anime),
+    createAnimeWork: (title) => postJson("/api/core/anime-works", { title }, AnimeWork),
 
-    deleteAnime: (id) =>
+    deleteAnimeWork: (id) =>
       client
-        .execute(HttpClientRequest.del(`/api/core/anime/${id}`))
+        .execute(HttpClientRequest.del(`/api/core/anime-works/${id}`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
     getSubscriptions: fetchJson(
@@ -169,20 +169,20 @@ const makeCoreApi = Effect.gen(function* () {
         .execute(HttpClientRequest.del(`/api/core/subtitle-groups/${groupId}`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
-    getAnimeSeries: (animeId) =>
+    getAnime: (animeWorkId) =>
       fetchJson(
-        HttpClientRequest.get(`/api/core/anime/${animeId}/series`),
-        Schema.Struct({ series: Schema.Array(AnimeSeries) }),
+        HttpClientRequest.get(`/api/core/anime-works/${animeWorkId}/anime`),
+        Schema.Struct({ series: Schema.Array(Anime) }),
       ).pipe(Effect.map((r) => r.series)),
 
-    getOneAnimeSeries: (seriesId) =>
+    getOneAnime: (animeId) =>
       fetchJson(
-        HttpClientRequest.get(`/api/core/anime/series/${seriesId}`),
-        AnimeSeries,
+        HttpClientRequest.get(`/api/core/anime/${animeId}`),
+        Anime,
       ),
 
-    createAnimeSeries: (req) =>
-      postJson("/api/core/anime/series", req, AnimeSeries),
+    createAnime: (req) =>
+      postJson("/api/core/anime", req, Anime),
 
     getSeasons: fetchJson(
       HttpClientRequest.get("/api/core/seasons"),
@@ -192,19 +192,19 @@ const makeCoreApi = Effect.gen(function* () {
     createSeason: (req) =>
       postJson("/api/core/seasons", req, Season),
 
-    getAnimeLinks: (seriesId) =>
+    getAnimeLinks: (animeId) =>
       fetchJson(
-        HttpClientRequest.get(`/api/core/links/${seriesId}`),
+        HttpClientRequest.get(`/api/core/links/${animeId}`),
         Schema.Struct({ links: Schema.Array(AnimeLink) }),
       ).pipe(Effect.map((r) => r.links)),
 
-    getAllAnimeSeries: (params) => {
+    getAllAnime: (params) => {
       const qs = new URLSearchParams()
       if (params?.excludeEmpty) qs.set("exclude_empty", "true")
       const query = qs.toString()
       return fetchJson(
-        HttpClientRequest.get(`/api/core/series${query ? `?${query}` : ""}`),
-        Schema.Struct({ series: Schema.Array(AnimeSeriesRich) }),
+        HttpClientRequest.get(`/api/core/anime${query ? `?${query}` : ""}`),
+        Schema.Struct({ series: Schema.Array(AnimeRich) }),
       ).pipe(Effect.map((r) => r.series))
     },
 
@@ -213,22 +213,22 @@ const makeCoreApi = Effect.gen(function* () {
       DashboardStats,
     ),
 
-    getAnimeLinksRich: (seriesId) =>
+    getAnimeLinksRich: (animeId) =>
       fetchJson(
-        HttpClientRequest.get(`/api/core/links/${seriesId}`),
+        HttpClientRequest.get(`/api/core/links/${animeId}`),
         Schema.Struct({ links: Schema.Array(AnimeLinkRich) }),
       ).pipe(Effect.map((r) => r.links)),
 
-    updateAnimeSeries: (seriesId, req) =>
+    updateAnime: (animeId, req) =>
       client
         .execute(
-          HttpClientRequest.put(`/api/core/anime/series/${seriesId}`).pipe(
+          HttpClientRequest.put(`/api/core/anime/${animeId}`).pipe(
             HttpClientRequest.bodyUnsafeJson(req),
           ),
         )
         .pipe(
           Effect.flatMap((response) => response.json),
-          Effect.flatMap(Schema.decodeUnknown(AnimeSeries)),
+          Effect.flatMap(Schema.decodeUnknown(Anime)),
           Effect.scoped,
           Effect.orDie,
         ),
@@ -269,16 +269,16 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Struct({ count: Schema.Number }),
       ).pipe(Effect.map((r) => r.count)),
 
-    getAnimeCoverImages: (animeId) =>
+    getAnimeCoverImages: (animeWorkId) =>
       fetchJson(
-        HttpClientRequest.get(`/api/core/anime/${animeId}/covers`),
+        HttpClientRequest.get(`/api/core/anime-works/${animeWorkId}/covers`),
         Schema.Array(AnimeCoverImage),
       ),
 
-    setDefaultCoverImage: (animeId, coverId) =>
+    setDefaultCoverImage: (animeWorkId, coverId) =>
       client
         .execute(
-          HttpClientRequest.post(`/api/core/anime/${animeId}/covers/${coverId}/set-default`).pipe(
+          HttpClientRequest.post(`/api/core/anime-works/${animeWorkId}/covers/${coverId}/set-default`).pipe(
             HttpClientRequest.bodyUnsafeJson({}),
           ),
         )

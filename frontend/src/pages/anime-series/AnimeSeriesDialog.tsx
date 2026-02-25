@@ -27,15 +27,15 @@ import { AnimeLinkDetailDialog } from "@/pages/anime-series/AnimeLinkDetailDialo
 import { cn } from "@/lib/utils"
 import { Save, X, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
-import type { AnimeSeriesRich, AnimeLinkRich } from "@/schemas/anime"
+import type { AnimeRich, AnimeLinkRich } from "@/schemas/anime"
 
-interface AnimeSeriesDialogProps {
-  series: AnimeSeriesRich
+interface AnimeDialogProps {
+  series: AnimeRich
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDialogProps) {
+export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
   const { t } = useTranslation()
   const [groupDialog, setGroupDialog] = useState<{ id: number; name: string } | null>(null)
   const [detailLink, setDetailLink] = useState<AnimeLinkRich | null>(null)
@@ -72,7 +72,7 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
     (req: { season_id?: number | null; description?: string | null; aired_date?: string | null; end_date?: string | null }) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.updateAnimeSeries(series.series_id, req)
+        return yield* api.updateAnime(series.series_id, req)
       }),
   )
 
@@ -260,14 +260,14 @@ export function AnimeSeriesDialog({ series, open, onOpenChange }: AnimeSeriesDia
                 </TabsList>
                 <TabsContent value="filters" className="mt-4">
                   <FilterRuleEditor
-                    targetType="anime_series"
+                    targetType="anime"
                     targetId={series.series_id}
                     onRulesChange={refetchLinks}
                   />
                 </TabsContent>
                 <TabsContent value="parsers" className="mt-4">
                   <ParserEditor
-                    createdFromType="anime_series"
+                    createdFromType="anime"
                     createdFromId={series.series_id}
                     onParsersChange={refetchLinks}
                   />

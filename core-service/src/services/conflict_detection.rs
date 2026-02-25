@@ -49,10 +49,10 @@ impl ConflictDetectionService {
 
         let mut conflicts_found = 0;
 
-        for (series_id, group_id, episode_no) in &conflict_groups {
+        for (anime_id, group_id, episode_no) in &conflict_groups {
             let links = self
                 .link_repo
-                .find_active_links_for_episode(*series_id, *group_id, *episode_no)
+                .find_active_links_for_episode(*anime_id, *group_id, *episode_no)
                 .await
                 .map_err(|e| format!("Failed to find links for episode: {}", e))?;
 
@@ -67,15 +67,15 @@ impl ConflictDetectionService {
 
                 // Upsert conflict record
                 self.conflict_repo
-                    .upsert(*series_id, *group_id, *episode_no)
+                    .upsert(*anime_id, *group_id, *episode_no)
                     .await
                     .map_err(|e| format!("Failed to upsert conflict: {}", e))?;
 
                 conflicts_found += 1;
 
                 tracing::info!(
-                    "Conflict detected: series_id={}, group_id={}, episode_no={}, {} links",
-                    series_id,
+                    "Conflict detected: anime_id={}, group_id={}, episode_no={}, {} links",
+                    anime_id,
                     group_id,
                     episode_no,
                     links.len()
@@ -97,7 +97,7 @@ impl ConflictDetectionService {
             let active_links = self
                 .link_repo
                 .find_active_links_for_episode(
-                    conflict.series_id,
+                    conflict.anime_id,
                     conflict.group_id,
                     conflict.episode_no,
                 )
@@ -109,7 +109,7 @@ impl ConflictDetectionService {
                 let _ = self
                     .conflict_repo
                     .delete_by_episode(
-                        conflict.series_id,
+                        conflict.anime_id,
                         conflict.group_id,
                         conflict.episode_no,
                     )
@@ -119,7 +119,7 @@ impl ConflictDetectionService {
                 let resolved_links = self
                     .link_repo
                     .find_resolved_links_for_episode(
-                        conflict.series_id,
+                        conflict.anime_id,
                         conflict.group_id,
                         conflict.episode_no,
                     )
@@ -138,7 +138,7 @@ impl ConflictDetectionService {
                     tracing::info!(
                         "Restored {} resolved links to active for episode ({}, {}, {})",
                         resolved_ids.len(),
-                        conflict.series_id,
+                        conflict.anime_id,
                         conflict.group_id,
                         conflict.episode_no
                     );
@@ -154,12 +154,12 @@ impl ConflictDetectionService {
                         .await
                         .map_err(|e| format!("Failed to set conflict flags: {}", e))?;
                     self.conflict_repo
-                        .upsert(conflict.series_id, conflict.group_id, conflict.episode_no)
+                        .upsert(conflict.anime_id, conflict.group_id, conflict.episode_no)
                         .await
                         .map_err(|e| format!("Failed to upsert conflict: {}", e))?;
                     tracing::info!(
                         "Restored links form new conflict for episode ({}, {}, {}), {} links",
-                        conflict.series_id,
+                        conflict.anime_id,
                         conflict.group_id,
                         conflict.episode_no,
                         total_after_restore
@@ -222,7 +222,7 @@ impl ConflictDetectionService {
         let links = self
             .link_repo
             .find_active_links_for_episode(
-                conflict.series_id,
+                conflict.anime_id,
                 conflict.group_id,
                 conflict.episode_no,
             )

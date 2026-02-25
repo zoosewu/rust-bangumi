@@ -8,13 +8,13 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AnimeSeriesDialog } from "./AnimeSeriesDialog"
-import { AnimeSeriesCard } from "@/components/AnimeSeriesCard"
-import type { AnimeSeriesRich } from "@/schemas/anime"
+import { AnimeDialog } from "./AnimeSeriesDialog"
+import { AnimeCard } from "@/components/AnimeSeriesCard"
+import type { AnimeRich } from "@/schemas/anime"
 
-export default function AnimeSeriesPage() {
+export default function AnimePage() {
   const { t } = useTranslation()
-  const [selected, setSelected] = useState<AnimeSeriesRich | null>(null)
+  const [selected, setSelected] = useState<AnimeRich | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
     return (localStorage.getItem("anime-series-view") as "grid" | "list") ?? "grid"
   })
@@ -28,7 +28,7 @@ export default function AnimeSeriesPage() {
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAllAnimeSeries({ excludeEmpty: true })
+        return yield* api.getAllAnime({ excludeEmpty: true })
       }),
     [],
   )
@@ -114,7 +114,7 @@ export default function AnimeSeriesPage() {
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {(seriesList ?? []).map((series) => (
-            <AnimeSeriesCard
+            <AnimeCard
               key={series.series_id}
               series={series}
               onClick={() => setSelected(series)}
@@ -134,7 +134,7 @@ export default function AnimeSeriesPage() {
       )}
 
       {selected && (
-        <AnimeSeriesDialog
+        <AnimeDialog
           series={selected}
           open={!!selected}
           onOpenChange={(open) => {

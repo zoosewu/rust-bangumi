@@ -113,7 +113,7 @@ pub struct FetchedLink {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnimeMetadata {
+pub struct AnimeWorkMetadata {
     pub anime_id: i64,
     pub title: String,
     pub created_at: DateTime<Utc>,
@@ -121,7 +121,7 @@ pub struct AnimeMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AnimeSeriesMetadata {
+pub struct AnimeMetadata {
     pub series_id: i64,
     pub anime_id: i64,
     pub series_no: i32,

@@ -19,7 +19,7 @@ pub async fn create_anime_link(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let now = Utc::now().naive_utc();
     let new_link = NewAnimeLink {
-        series_id: payload.series_id,
+        anime_id: payload.series_id,
         group_id: payload.group_id,
         episode_no: payload.episode_no,
         title: payload.title,
@@ -51,7 +51,7 @@ pub async fn create_anime_link(
             tracing::info!("Created anime link: {}", link.link_id);
             let response = AnimeLinkResponse {
                 link_id: link.link_id,
-                series_id: link.series_id,
+                series_id: link.anime_id,
                 group_id: link.group_id,
                 episode_no: link.episode_no,
                 title: link.title,
@@ -93,7 +93,7 @@ pub async fn get_anime_links(
     // Load all links with subtitle group name (LEFT JOIN download)
     let links_with_groups: Vec<(AnimeLink, SubtitleGroup)> = match anime_links::table
         .inner_join(subtitle_groups::table.on(subtitle_groups::group_id.eq(anime_links::group_id)))
-        .filter(anime_links::series_id.eq(series_id))
+        .filter(anime_links::anime_id.eq(series_id))
         .select((AnimeLink::as_select(), SubtitleGroup::as_select()))
         .order((anime_links::filtered_flag.asc(), anime_links::episode_no.asc()))
         .load::<(AnimeLink, SubtitleGroup)>(&mut conn)
@@ -146,7 +146,7 @@ pub async fn get_anime_links(
 
         results.push(AnimeLinkRichResponse {
             link_id: link.link_id,
-            series_id: link.series_id,
+            series_id: link.anime_id,
             group_id: link.group_id,
             group_name: group.group_name.clone(),
             episode_no: link.episode_no,
