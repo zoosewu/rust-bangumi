@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::models::{
-    Anime, AnimeLink, AnimeSeries, NewAnime, NewAnimeLink, NewAnimeSeries, NewSeason,
+    Anime, AnimeLink, AnimeWork, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason,
     NewSubtitleGroup, RawAnimeItem, Season, Subscription, SubtitleGroup,
 };
-use crate::schema::{anime_links, anime_series, animes, seasons, subscriptions, subtitle_groups};
+use crate::schema::{anime_links, animes, anime_works, seasons, subscriptions, subtitle_groups};
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
@@ -85,7 +85,7 @@ pub async fn receive_fetcher_results(
             for fetched_anime in payload.animes {
                 // Create or get anime
                 match create_or_get_anime(&mut conn, &fetched_anime.title) {
-                    Ok(anime) => {
+                    Ok(work) => {
                         animes_created += 1;
 
                         // Create or get season
@@ -95,10 +95,10 @@ pub async fn receive_fetcher_results(
                             &fetched_anime.season,
                         ) {
                             Ok(season) => {
-                                // Create or get anime series
+                                // Create or get anime (formerly series)
                                 match create_or_get_series(
                                     &mut conn,
-                                    anime.anime_id,
+                                    work.work_id,
                                     fetched_anime.series_no,
                                     season.season_id,
                                     &fetched_anime.description,
@@ -115,7 +115,7 @@ pub async fn receive_fetcher_results(
                                                     // Create anime link
                                                     match create_anime_link(
                                                         &mut conn,
-                                                        series.series_id,
+                                                        series.anime_id,
                                                         group.group_id,
                                                         fetched_link,
                                                     ) {
@@ -248,32 +248,32 @@ pub async fn receive_fetcher_results(
 
 // ============ Helper Functions ============
 
-/// Create or get an anime by title
-pub(crate) fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<Anime, String> {
-    // Try to find existing anime
-    match animes::table
-        .filter(animes::title.eq(title))
-        .first::<Anime>(conn)
+/// Create or get an anime work by title
+pub(crate) fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<AnimeWork, String> {
+    // Try to find existing anime work
+    match anime_works::table
+        .filter(anime_works::title.eq(title))
+        .first::<AnimeWork>(conn)
     {
-        Ok(anime) => {
-            tracing::debug!("Found existing anime: {}", title);
-            Ok(anime)
+        Ok(work) => {
+            tracing::debug!("Found existing anime work: {}", title);
+            Ok(work)
         }
         Err(diesel::NotFound) => {
-            // Create new anime
+            // Create new anime work
             let now = Utc::now().naive_utc();
-            let new_anime = NewAnime {
+            let new_work = NewAnimeWork {
                 title: title.to_string(),
                 created_at: now,
                 updated_at: now,
             };
 
-            diesel::insert_into(animes::table)
-                .values(&new_anime)
-                .get_result::<Anime>(conn)
-                .map_err(|e| format!("Failed to create anime: {}", e))
+            diesel::insert_into(anime_works::table)
+                .values(&new_work)
+                .get_result::<AnimeWork>(conn)
+                .map_err(|e| format!("Failed to create anime work: {}", e))
         }
-        Err(e) => Err(format!("Failed to query anime: {}", e)),
+        Err(e) => Err(format!("Failed to query anime work: {}", e)),
     }
 }
 
@@ -311,34 +311,34 @@ pub(crate) fn create_or_get_season(
     }
 }
 
-/// Create or get an anime series
+/// Create or get an anime (formerly anime series)
 pub(crate) fn create_or_get_series(
     conn: &mut PgConnection,
-    anime_id: i32,
+    work_id: i32,
     series_no: i32,
     season_id: i32,
     description: &str,
-) -> Result<AnimeSeries, String> {
-    // Try to find existing series
-    match anime_series::table
-        .filter(anime_series::anime_id.eq(anime_id))
-        .filter(anime_series::series_no.eq(series_no))
-        .filter(anime_series::season_id.eq(season_id))
-        .first::<AnimeSeries>(conn)
+) -> Result<Anime, String> {
+    // Try to find existing anime
+    match animes::table
+        .filter(animes::work_id.eq(work_id))
+        .filter(animes::series_no.eq(series_no))
+        .filter(animes::season_id.eq(season_id))
+        .first::<Anime>(conn)
     {
-        Ok(series) => {
+        Ok(anime) => {
             tracing::debug!(
-                "Found existing anime series: anime_id={}, series_no={}",
-                anime_id,
+                "Found existing anime: work_id={}, series_no={}",
+                work_id,
                 series_no
             );
-            Ok(series)
+            Ok(anime)
         }
         Err(diesel::NotFound) => {
-            // Create new series
+            // Create new anime
             let now = Utc::now().naive_utc();
-            let new_series = NewAnimeSeries {
-                anime_id,
+            let new_anime = NewAnime {
+                work_id,
                 series_no,
                 season_id,
                 description: if description.is_empty() {
@@ -352,12 +352,12 @@ pub(crate) fn create_or_get_series(
                 updated_at: now,
             };
 
-            diesel::insert_into(anime_series::table)
-                .values(&new_series)
-                .get_result::<AnimeSeries>(conn)
-                .map_err(|e| format!("Failed to create anime series: {}", e))
+            diesel::insert_into(animes::table)
+                .values(&new_anime)
+                .get_result::<Anime>(conn)
+                .map_err(|e| format!("Failed to create anime: {}", e))
         }
-        Err(e) => Err(format!("Failed to query anime series: {}", e)),
+        Err(e) => Err(format!("Failed to query anime: {}", e)),
     }
 }
 
@@ -395,13 +395,13 @@ pub(crate) fn create_or_get_subtitle_group(
 /// Create an anime link
 fn create_anime_link(
     conn: &mut PgConnection,
-    series_id: i32,
+    anime_id: i32,
     group_id: i32,
     fetched_link: &FetchedLinkPayload,
 ) -> Result<AnimeLink, String> {
     let now = Utc::now().naive_utc();
     let new_link = NewAnimeLink {
-        series_id,
+        anime_id,
         group_id,
         episode_no: fetched_link.episode_no,
         title: Some(fetched_link.title.clone()),
@@ -655,8 +655,8 @@ pub(crate) fn process_parsed_result(
 ) -> Result<i32, String> {
     use sha2::{Digest, Sha256};
 
-    // 1. 建立或取得 anime
-    let anime = create_or_get_anime(conn, &parsed.anime_title)?;
+    // 1. 建立或取得 anime work
+    let work = create_or_get_anime(conn, &parsed.anime_title)?;
 
     // 2. 建立或取得 season（使用預設值）
     let year = parsed
@@ -667,10 +667,10 @@ pub(crate) fn process_parsed_result(
     let season_name = parsed.season.as_deref().unwrap_or("unknown");
     let season = create_or_get_season(conn, year, season_name)?;
 
-    // 3. 建立或取得 series
-    let series = create_or_get_series(
+    // 3. 建立或取得 anime (formerly series)
+    let anime = create_or_get_series(
         conn,
-        anime.anime_id,
+        work.work_id,
         parsed.series_no,
         season.season_id,
         "", // description
@@ -690,7 +690,7 @@ pub(crate) fn process_parsed_result(
     let detected_type =
         crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
     let new_link = NewAnimeLink {
-        series_id: series.series_id,
+        anime_id: anime.anime_id,
         group_id: group.group_id,
         episode_no: parsed.episode_no,
         title: Some(raw_item.title.clone()),

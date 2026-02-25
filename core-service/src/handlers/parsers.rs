@@ -181,8 +181,8 @@ pub async fn list_parsers(
             let id = p.created_from_id;
             let name = match (type_ref, id) {
                 (Some(FilterTargetType::Global), _) => Some("Global".to_string()),
-                (Some(FilterTargetType::Anime), Some(id)) => anime_names.get(&id).cloned(),
-                (Some(FilterTargetType::AnimeSeries), Some(id)) => series_names.get(&id).cloned(),
+                (Some(FilterTargetType::AnimeWork), Some(id)) => anime_names.get(&id).cloned(),
+                (Some(FilterTargetType::Anime), Some(id)) => series_names.get(&id).cloned(),
                 (Some(FilterTargetType::SubtitleGroup), Some(id)) => group_names.get(&id).cloned(),
                 (Some(FilterTargetType::Subscription), Some(id))
                 | (Some(FilterTargetType::Fetcher), Some(id)) => sub_names.get(&id).cloned(),
@@ -569,7 +569,7 @@ async fn reparse_affected_items(
                 // 無匹配：收集舊 link 資訊，稍後統一取消下載再刪除
                 let old_link: Option<(i32, i32)> = anime_links::table
                     .filter(anime_links::raw_item_id.eq(item.item_id))
-                    .select((anime_links::link_id, anime_links::series_id))
+                    .select((anime_links::link_id, anime_links::anime_id))
                     .first::<(i32, i32)>(&mut conn)
                     .optional()
                     .ok()
@@ -734,7 +734,7 @@ fn upsert_anime_link(
         super::fetcher_results::create_or_get_season(conn, year, season_name)?;
     let series = super::fetcher_results::create_or_get_series(
         conn,
-        anime.anime_id,
+        anime.work_id,
         parsed.series_no,
         season.season_id,
         "",
@@ -751,14 +751,14 @@ fn upsert_anime_link(
         .map_err(|e| format!("Failed to query existing link: {}", e))?;
 
     if let Some(link) = existing_link {
-        let old_series_id = link.series_id;
+        let old_series_id = link.anime_id;
         let old_group_id = link.group_id;
         let old_episode_no = link.episode_no;
 
         // 3a. 更新既有 link（保留 link_id → downloads 不受影響）
         diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))
             .set((
-                anime_links::series_id.eq(series.series_id),
+                anime_links::anime_id.eq(series.anime_id),
                 anime_links::group_id.eq(group.group_id),
                 anime_links::episode_no.eq(parsed.episode_no),
                 anime_links::title.eq(Some(&raw_item.title)),
@@ -766,8 +766,8 @@ fn upsert_anime_link(
             .execute(conn)
             .map_err(|e| format!("Failed to update anime link: {}", e))?;
 
-        // series 變更時，清理已無 link 的舊 series
-        if old_series_id != series.series_id {
+        // anime 變更時，清理已無 link 的舊 anime
+        if old_series_id != series.anime_id {
             cleanup_empty_series(conn, old_series_id);
         }
 
@@ -789,7 +789,7 @@ fn upsert_anime_link(
             }
         }
 
-        let metadata_changed = old_series_id != series.series_id
+        let metadata_changed = old_series_id != series.anime_id
             || old_group_id != group.group_id
             || old_episode_no != parsed.episode_no;
 
@@ -809,7 +809,7 @@ fn upsert_anime_link(
             crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
 
         let new_link = crate::models::NewAnimeLink {
-            series_id: series.series_id,
+            anime_id: series.anime_id,
             group_id: group.group_id,
             episode_no: parsed.episode_no,
             title: Some(raw_item.title.clone()),
@@ -850,25 +850,25 @@ fn upsert_anime_link(
     }
 }
 
-/// 如果指定的 anime_series 底下已經沒有任何 anime_link，就刪除該 series。
-fn cleanup_empty_series(conn: &mut diesel::PgConnection, series_id: i32) {
-    use crate::schema::anime_series;
+/// 如果指定的 anime 底下已經沒有任何 anime_link，就刪除該 anime。
+fn cleanup_empty_series(conn: &mut diesel::PgConnection, anime_id: i32) {
+    use crate::schema::animes;
 
     let link_count: i64 = anime_links::table
-        .filter(anime_links::series_id.eq(series_id))
+        .filter(anime_links::anime_id.eq(anime_id))
         .count()
         .get_result(conn)
         .unwrap_or(1); // 查詢失敗時保守不刪
 
     if link_count == 0 {
         if let Err(e) = diesel::delete(
-            anime_series::table.filter(anime_series::series_id.eq(series_id)),
+            animes::table.filter(animes::anime_id.eq(anime_id)),
         )
         .execute(conn)
         {
-            tracing::warn!("cleanup_empty_series: 刪除 series {} 失敗: {}", series_id, e);
+            tracing::warn!("cleanup_empty_series: 刪除 anime {} 失敗: {}", anime_id, e);
         } else {
-            tracing::info!("cleanup_empty_series: 已移除空的 anime_series {}", series_id);
+            tracing::info!("cleanup_empty_series: 已移除空的 anime {}", anime_id);
         }
     }
 }
@@ -879,23 +879,23 @@ fn resolve_parser_names(
     conn: &mut diesel::PgConnection,
     parsers: &[TitleParser],
 ) -> (
-    std::collections::HashMap<i32, String>, // anime_id -> title
-    std::collections::HashMap<i32, String>, // series_id -> "Title S{n}"
+    std::collections::HashMap<i32, String>, // work_id -> title (AnimeWork)
+    std::collections::HashMap<i32, String>, // anime_id -> "Title S{n}" (Anime)
     std::collections::HashMap<i32, String>, // group_id -> group_name
     std::collections::HashMap<i32, String>, // subscription_id -> name
 ) {
-    use crate::schema::{animes, anime_series, subtitle_groups, subscriptions};
+    use crate::schema::{anime_works, animes, subtitle_groups, subscriptions};
 
+    let mut work_ids: Vec<i32> = vec![];
     let mut anime_ids: Vec<i32> = vec![];
-    let mut series_ids: Vec<i32> = vec![];
     let mut group_ids: Vec<i32> = vec![];
     let mut sub_ids: Vec<i32> = vec![];
 
     for p in parsers {
         if let (Some(t), Some(id)) = (&p.created_from_type, p.created_from_id) {
             match t {
+                FilterTargetType::AnimeWork => work_ids.push(id),
                 FilterTargetType::Anime => anime_ids.push(id),
-                FilterTargetType::AnimeSeries => series_ids.push(id),
                 FilterTargetType::SubtitleGroup => group_ids.push(id),
                 FilterTargetType::Subscription | FilterTargetType::Fetcher => sub_ids.push(id),
                 FilterTargetType::Global => {}
@@ -908,10 +908,10 @@ fn resolve_parser_names(
     let mut group_names: std::collections::HashMap<i32, String> = Default::default();
     let mut sub_names: std::collections::HashMap<i32, String> = Default::default();
 
-    if !anime_ids.is_empty() {
-        match animes::table
-            .filter(animes::anime_id.eq_any(&anime_ids))
-            .select((animes::anime_id, animes::title))
+    if !work_ids.is_empty() {
+        match anime_works::table
+            .filter(anime_works::work_id.eq_any(&work_ids))
+            .select((anime_works::work_id, anime_works::title))
             .load::<(i32, String)>(conn)
         {
             Ok(rows) => {
@@ -919,15 +919,15 @@ fn resolve_parser_names(
                     anime_names.insert(id, title);
                 }
             }
-            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime 名稱失敗: {}", e),
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime_work 名稱失敗: {}", e),
         }
     }
 
-    if !series_ids.is_empty() {
-        match anime_series::table
-            .inner_join(animes::table)
-            .filter(anime_series::series_id.eq_any(&series_ids))
-            .select((anime_series::series_id, animes::title, anime_series::series_no))
+    if !anime_ids.is_empty() {
+        match animes::table
+            .inner_join(anime_works::table)
+            .filter(animes::anime_id.eq_any(&anime_ids))
+            .select((animes::anime_id, anime_works::title, animes::series_no))
             .load::<(i32, String, i32)>(conn)
         {
             Ok(rows) => {
@@ -935,7 +935,7 @@ fn resolve_parser_names(
                     series_names.insert(id, format!("{} S{}", title, series_no));
                 }
             }
-            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime_series 名稱失敗: {}", e),
+            Err(e) => tracing::warn!("resolve_parser_names: 查詢 anime 名稱失敗: {}", e),
         }
     }
 
@@ -1225,7 +1225,7 @@ fn find_scoped_raw_items(
     target_id: Option<i32>,
     limit: i64,
 ) -> Result<Vec<RawAnimeItem>, String> {
-    use crate::schema::{anime_links, anime_series};
+    use crate::schema::{anime_links, animes as anime_table};
 
     let target_type = match target_type {
         Some(t) => t,
@@ -1246,14 +1246,14 @@ fn find_scoped_raw_items(
                 .load::<RawAnimeItem>(conn)
                 .map_err(|e| e.to_string())
         }
-        "anime_series" => {
-            let sid = target_id.ok_or("anime_series requires target_id")?;
+        "anime_series" | "anime" => {
+            let sid = target_id.ok_or("anime requires target_id")?;
             let sub_ids: Vec<i32> = anime_links::table
                 .inner_join(
                     raw_anime_items::table
                         .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
                 )
-                .filter(anime_links::series_id.eq(sid))
+                .filter(anime_links::anime_id.eq(sid))
                 .select(raw_anime_items::subscription_id)
                 .distinct()
                 .load(conn)
@@ -1270,11 +1270,11 @@ fn find_scoped_raw_items(
                 .load::<RawAnimeItem>(conn)
                 .map_err(|e| e.to_string())
         }
-        "anime" => {
-            let aid = target_id.ok_or("anime requires target_id")?;
-            let series_ids: Vec<i32> = anime_series::table
-                .filter(anime_series::anime_id.eq(aid))
-                .select(anime_series::series_id)
+        "anime_work" => {
+            let wid = target_id.ok_or("anime_work requires target_id")?;
+            let anime_ids: Vec<i32> = anime_table::table
+                .filter(anime_table::work_id.eq(wid))
+                .select(anime_table::anime_id)
                 .load(conn)
                 .map_err(|e| e.to_string())?;
 
@@ -1283,7 +1283,7 @@ fn find_scoped_raw_items(
                     raw_anime_items::table
                         .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
                 )
-                .filter(anime_links::series_id.eq_any(&series_ids))
+                .filter(anime_links::anime_id.eq_any(&anime_ids))
                 .select(raw_anime_items::subscription_id)
                 .distinct()
                 .load(conn)

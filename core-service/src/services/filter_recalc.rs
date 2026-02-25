@@ -5,7 +5,7 @@
 
 use crate::db::DbPool;
 use crate::models::{AnimeLink, FilterRule, FilterTargetType};
-use crate::schema::{anime_links, anime_series, filter_rules, raw_anime_items};
+use crate::schema::{anime_links, animes, filter_rules, raw_anime_items};
 use crate::services::filter::FilterEngine;
 use diesel::prelude::*;
 
@@ -107,27 +107,27 @@ pub fn find_affected_links(
                 .load::<AnimeLink>(conn)
                 .map_err(|e| format!("Failed to load all links: {}", e))
         }
-        FilterTargetType::AnimeSeries => {
-            // Links in this series
-            let sid = target_id.ok_or("anime_series target requires target_id")?;
-            anime_links::table
-                .filter(anime_links::series_id.eq(sid))
-                .load::<AnimeLink>(conn)
-                .map_err(|e| format!("Failed to load links for series {}: {}", sid, e))
-        }
         FilterTargetType::Anime => {
-            // Links in all series of this anime
-            let aid = target_id.ok_or("anime target requires target_id")?;
-            let series_ids: Vec<i32> = anime_series::table
-                .filter(anime_series::anime_id.eq(aid))
-                .select(anime_series::series_id)
+            // Links for this anime (formerly series)
+            let sid = target_id.ok_or("anime target requires target_id")?;
+            anime_links::table
+                .filter(anime_links::anime_id.eq(sid))
+                .load::<AnimeLink>(conn)
+                .map_err(|e| format!("Failed to load links for anime {}: {}", sid, e))
+        }
+        FilterTargetType::AnimeWork => {
+            // Links in all animes of this work
+            let wid = target_id.ok_or("anime_work target requires target_id")?;
+            let anime_ids: Vec<i32> = animes::table
+                .filter(animes::work_id.eq(wid))
+                .select(animes::anime_id)
                 .load(conn)
-                .map_err(|e| format!("Failed to load series for anime {}: {}", aid, e))?;
+                .map_err(|e| format!("Failed to load animes for work {}: {}", wid, e))?;
 
             anime_links::table
-                .filter(anime_links::series_id.eq_any(&series_ids))
+                .filter(anime_links::anime_id.eq_any(&anime_ids))
                 .load::<AnimeLink>(conn)
-                .map_err(|e| format!("Failed to load links for anime {}: {}", aid, e))
+                .map_err(|e| format!("Failed to load links for work {}: {}", wid, e))
         }
         FilterTargetType::SubtitleGroup => {
             // Links for this subtitle group
@@ -156,18 +156,18 @@ pub fn find_affected_links(
 
 /// Collect all applicable filter rules for a single AnimeLink.
 ///
-/// Rules come from: global, anime (via series→anime), anime_series, subtitle_group,
+/// Rules come from: global, anime_work (via anime→work), anime, subtitle_group,
 /// and fetcher (via raw_item_id→raw_anime_items→subscription_id).
 pub fn collect_all_rules_for_link(
     conn: &mut PgConnection,
     link: &AnimeLink,
 ) -> Result<Vec<FilterRule>, String> {
-    // Get anime_id from the link's series
-    let anime_id: i32 = anime_series::table
-        .filter(anime_series::series_id.eq(link.series_id))
-        .select(anime_series::anime_id)
+    // Get work_id from the link's anime
+    let work_id: i32 = animes::table
+        .filter(animes::anime_id.eq(link.anime_id))
+        .select(animes::work_id)
         .first(conn)
-        .map_err(|e| format!("Failed to get anime_id for series {}: {}", link.series_id, e))?;
+        .map_err(|e| format!("Failed to get work_id for anime {}: {}", link.anime_id, e))?;
 
     // Get fetcher/subscription_id from raw_item if available
     let subscription_id: Option<i32> = if let Some(raw_id) = link.raw_item_id {
@@ -192,20 +192,20 @@ pub fn collect_all_rules_for_link(
         .map_err(|e| format!("Failed to load global rules: {}", e))?;
     all_rules.extend(global_rules);
 
-    // Anime rules
-    let anime_rules: Vec<FilterRule> = filter_rules::table
+    // AnimeWork rules (formerly Anime rules)
+    let anime_work_rules: Vec<FilterRule> = filter_rules::table
+        .filter(filter_rules::target_type.eq(FilterTargetType::AnimeWork))
+        .filter(filter_rules::target_id.eq(work_id))
+        .load(conn)
+        .map_err(|e| format!("Failed to load anime_work rules: {}", e))?;
+    all_rules.extend(anime_work_rules);
+
+    // Anime rules (formerly AnimeSeries rules)
+    let series_rules: Vec<FilterRule> = filter_rules::table
         .filter(filter_rules::target_type.eq(FilterTargetType::Anime))
-        .filter(filter_rules::target_id.eq(anime_id))
+        .filter(filter_rules::target_id.eq(link.anime_id))
         .load(conn)
         .map_err(|e| format!("Failed to load anime rules: {}", e))?;
-    all_rules.extend(anime_rules);
-
-    // AnimeSeries rules
-    let series_rules: Vec<FilterRule> = filter_rules::table
-        .filter(filter_rules::target_type.eq(FilterTargetType::AnimeSeries))
-        .filter(filter_rules::target_id.eq(link.series_id))
-        .load(conn)
-        .map_err(|e| format!("Failed to load series rules: {}", e))?;
     all_rules.extend(series_rules);
 
     // SubtitleGroup rules

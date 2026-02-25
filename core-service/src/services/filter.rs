@@ -28,8 +28,8 @@ impl FilterEngine {
         match target_type {
             FilterTargetType::Global => 0,
             FilterTargetType::Fetcher => 1,
-            FilterTargetType::AnimeSeries => 2,
-            FilterTargetType::Anime => 3,
+            FilterTargetType::Anime => 2,
+            FilterTargetType::AnimeWork => 3,
             FilterTargetType::SubtitleGroup => 4,
             FilterTargetType::Subscription => 1,
         }
@@ -82,7 +82,7 @@ mod tests {
             regex_pattern: pattern.to_string(),
             created_at: now,
             updated_at: now,
-            target_type: FilterTargetType::AnimeSeries,
+            target_type: FilterTargetType::Anime,
             target_id: Some(1),
         }
     }

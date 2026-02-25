@@ -86,13 +86,13 @@ async fn main() -> anyhow::Result<()> {
             "/services/:service_id/health",
             get(handlers::services::health_check),
         )
-        // 動畫管理
-        .route("/anime", post(handlers::anime::create_anime))
-        .route("/anime", get(handlers::anime::list_anime))
-        .route("/anime/:anime_id", get(handlers::anime::get_anime))
+        // AnimeWork 管理
+        .route("/anime", post(handlers::anime::create_anime_work))
+        .route("/anime", get(handlers::anime::list_anime_work))
+        .route("/anime/:work_id", get(handlers::anime::get_anime_work))
         .route(
-            "/anime/:anime_id",
-            axum::routing::delete(handlers::anime::delete_anime),
+            "/anime/:work_id",
+            axum::routing::delete(handlers::anime::delete_anime_work),
         )
         // Cover 圖片管理
         .route(
@@ -106,23 +106,23 @@ async fn main() -> anyhow::Result<()> {
         // 季度管理
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))
-        // 動畫系列管理
+        // Anime 管理（原 anime_series）
         .route(
             "/series",
-            get(handlers::anime::list_all_anime_series),
+            get(handlers::anime::list_all_anime),
         )
         .route(
             "/anime/series",
-            post(handlers::anime::create_anime_series),
+            post(handlers::anime::create_anime),
         )
         .route(
-            "/anime/series/:series_id",
-            get(handlers::anime::get_anime_series)
-                .put(handlers::anime::update_anime_series),
+            "/anime/series/:anime_id",
+            get(handlers::anime::get_anime)
+                .put(handlers::anime::update_anime),
         )
         .route(
-            "/anime/:anime_id/series",
-            get(handlers::anime::list_anime_series),
+            "/anime/:work_id/series",
+            get(handlers::anime::list_anime),
         )
         // 字幕組管理
         .route(

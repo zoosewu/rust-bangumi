@@ -11,7 +11,7 @@ use crate::dto::{
     ResolveAnimeLinkConflictRequest,
 };
 use crate::models::{AnimeLink, Download};
-use crate::schema::{anime_links, anime_series, animes, downloads, subtitle_groups};
+use crate::schema::{anime_links, animes, anime_works, downloads, subtitle_groups};
 use crate::state::AppState;
 
 /// GET /link-conflicts - List all unresolved anime link conflicts
@@ -42,11 +42,11 @@ pub async fn list_link_conflicts(
     let mut result = Vec::new();
 
     for conflict in &conflicts {
-        // Get anime title via series -> anime
-        let anime_title = anime_series::table
-            .inner_join(animes::table)
-            .filter(anime_series::series_id.eq(conflict.series_id))
-            .select(animes::title)
+        // Get anime title via anime -> anime_work
+        let anime_title = animes::table
+            .inner_join(anime_works::table)
+            .filter(animes::anime_id.eq(conflict.anime_id))
+            .select(anime_works::title)
             .first::<String>(&mut conn)
             .unwrap_or_else(|_| "Unknown".to_string());
 
@@ -59,7 +59,7 @@ pub async fn list_link_conflicts(
 
         // Get all active links for this episode
         let links: Vec<AnimeLink> = anime_links::table
-            .filter(anime_links::series_id.eq(conflict.series_id))
+            .filter(anime_links::anime_id.eq(conflict.anime_id))
             .filter(anime_links::group_id.eq(conflict.group_id))
             .filter(anime_links::episode_no.eq(conflict.episode_no))
             .filter(anime_links::link_status.eq("active"))
@@ -98,7 +98,7 @@ pub async fn list_link_conflicts(
 
         result.push(AnimeLinkConflictInfo {
             conflict_id: conflict.conflict_id,
-            series_id: conflict.series_id,
+            series_id: conflict.anime_id,
             group_id: conflict.group_id,
             episode_no: conflict.episode_no,
             anime_title,
@@ -149,7 +149,7 @@ pub async fn resolve_link_conflict(
 
     // Step 2: Get all active links in the conflict group to find unchosen link_ids
     let all_links: Vec<AnimeLink> = match anime_links::table
-        .filter(anime_links::series_id.eq(conflict.series_id))
+        .filter(anime_links::anime_id.eq(conflict.anime_id))
         .filter(anime_links::group_id.eq(conflict.group_id))
         .filter(anime_links::episode_no.eq(conflict.episode_no))
         .filter(anime_links::link_status.eq("active"))
