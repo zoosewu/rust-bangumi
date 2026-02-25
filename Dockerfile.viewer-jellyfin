@@ -25,6 +25,7 @@ RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registr
 
 COPY viewers/jellyfin/src ./viewers/jellyfin/src
 COPY viewers/jellyfin/migrations ./viewers/jellyfin/migrations
+RUN find viewers/jellyfin/src -name "*.rs" -exec touch {} +
 
 RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \

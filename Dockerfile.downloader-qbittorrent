@@ -24,6 +24,7 @@ RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registr
     rm -rf downloaders/qbittorrent/src
 
 COPY downloaders/qbittorrent/src ./downloaders/qbittorrent/src
+RUN find downloaders/qbittorrent/src -name "*.rs" -exec touch {} +
 
 RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \

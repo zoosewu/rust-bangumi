@@ -26,6 +26,7 @@ RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registr
 
 COPY core-service/src ./core-service/src
 COPY core-service/migrations ./core-service/migrations
+RUN find core-service/src -name "*.rs" -exec touch {} +
 
 # 最終編譯，binary 複製至 image layer（cache mount 不保留在 image 中）
 RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
