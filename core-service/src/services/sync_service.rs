@@ -155,8 +155,13 @@ impl SyncService {
             series_no: series.series_no,
             episode_no: link.episode_no,
             subtitle_group,
-            video_path: download.file_path.clone().unwrap_or_default(),
-            subtitle_paths: vec![],
+            video_path: download.video_file
+                .clone()
+                .unwrap_or_else(|| download.file_path.clone().unwrap_or_default()),
+            subtitle_paths: download.subtitle_files
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_default(),
             callback_url,
             bangumi_id: None,
             cover_image_url: None,
