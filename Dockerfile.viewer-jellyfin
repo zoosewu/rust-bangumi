@@ -52,4 +52,7 @@ EXPOSE 8003
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8003/health || exit 1
 
+# 語言代碼對照表
+COPY shared/assets/language_codes.json /etc/bangumi/language_codes.json
+
 CMD ["viewer-jellyfin"]
