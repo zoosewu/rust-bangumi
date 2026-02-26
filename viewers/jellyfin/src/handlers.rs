@@ -148,7 +148,7 @@ async fn do_sync(
     req: &ViewerSyncRequest,
 ) -> anyhow::Result<String> {
     // 1. Move the file (resolve container path → local path)
-    let source = organizer.resolve_download_path(&req.file_path);
+    let source = organizer.resolve_download_path(&req.video_path);
     let target_path = organizer
         .organize_episode(
             &req.anime_title,

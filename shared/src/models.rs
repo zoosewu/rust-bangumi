@@ -219,7 +219,8 @@ pub struct ViewerSyncRequest {
     pub series_no: i32,
     pub episode_no: i32,
     pub subtitle_group: String,
-    pub file_path: String,
+    pub video_path: String,
+    pub subtitle_paths: Vec<String>,
     pub callback_url: String,
     pub bangumi_id: Option<i32>,          // bangumi subject id for episode metadata
     pub cover_image_url: Option<String>,  // default cover image URL for poster download

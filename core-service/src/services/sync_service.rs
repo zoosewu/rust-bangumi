@@ -146,11 +146,6 @@ impl SyncService {
             .first::<String>(conn)
             .map_err(|e| format!("Failed to find subtitle group {}: {}", link.group_id, e))?;
 
-        let file_path = download
-            .file_path
-            .clone()
-            .ok_or_else(|| "Download has no file_path".to_string())?;
-
         let callback_url = format!("{}/sync-callback", self.core_service_url);
 
         Ok(ViewerSyncRequest {
@@ -160,7 +155,8 @@ impl SyncService {
             series_no: series.series_no,
             episode_no: link.episode_no,
             subtitle_group,
-            file_path,
+            video_path: download.file_path.clone().unwrap_or_default(),
+            subtitle_paths: vec![],
             callback_url,
             bangumi_id: None,
             cover_image_url: None,
