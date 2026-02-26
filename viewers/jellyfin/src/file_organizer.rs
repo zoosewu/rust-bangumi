@@ -11,13 +11,19 @@ static EPISODE_REGEX: Lazy<Regex> =
 pub struct FileOrganizer {
     source_dir: PathBuf,
     library_dir: PathBuf,
+    language_codes: shared::LanguageCodeMap,
 }
 
 impl FileOrganizer {
-    pub fn new(source_dir: PathBuf, library_dir: PathBuf) -> Self {
+    pub fn new(
+        source_dir: PathBuf,
+        library_dir: PathBuf,
+        language_codes: shared::LanguageCodeMap,
+    ) -> Self {
         Self {
             source_dir,
             library_dir,
+            language_codes,
         }
     }
 
@@ -214,6 +220,122 @@ impl FileOrganizer {
     pub fn get_library_dir(&self) -> &Path {
         &self.library_dir
     }
+
+    /// 建構字幕檔的目標檔名。
+    /// 例：source="/downloads/sub.TC.ass", title="Title", season=1, episode=1
+    ///     map 含 TC→zh-TW → "Title - S01E01.zh-TW.ass"
+    /// 若無語言 tag → "Title - S01E01.ass"
+    pub(crate) fn build_subtitle_dest_name(
+        title: &str,
+        season: u32,
+        episode: u32,
+        source_path: &str,
+        language_codes: &shared::LanguageCodeMap,
+    ) -> String {
+        let path = std::path::Path::new(source_path);
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("ass");
+
+        let base = format!(
+            "{} - S{:02}E{:02}",
+            Self::sanitize_filename(title),
+            season,
+            episode
+        );
+
+        match shared::extract_language_tag(source_path) {
+            Some(raw_tag) => {
+                let normalized = language_codes.normalize(&raw_tag);
+                format!("{}.{}.{}", base, normalized, ext)
+            }
+            None => format!("{}.{}", base, ext),
+        }
+    }
+
+    /// 搬移所有字幕檔到 Jellyfin library 的對應位置。
+    /// 字幕命名規則：{title} - SxxExx.{lang}.{ext}
+    /// 若有重複的語言 tag，加上序號（.1, .2 ...）。
+    pub async fn organize_subtitles(
+        &self,
+        subtitle_paths: &[String],
+        anime_title: &str,
+        season: u32,
+        episode: u32,
+    ) -> Vec<PathBuf> {
+        use std::collections::HashSet;
+
+        let mut results = Vec::new();
+        let season_dir = self
+            .library_dir
+            .join(Self::sanitize_filename(anime_title))
+            .join(format!("Season {:02}", season));
+
+        let mut used_names: HashSet<String> = HashSet::new();
+
+        for source_path in subtitle_paths {
+            let source = self.resolve_download_path(source_path);
+            if !source.exists() {
+                tracing::warn!("Subtitle file not found: {}", source_path);
+                continue;
+            }
+
+            let mut dest_name = Self::build_subtitle_dest_name(
+                anime_title,
+                season,
+                episode,
+                source_path,
+                &self.language_codes,
+            );
+
+            // 處理重複檔名
+            if used_names.contains(&dest_name) {
+                let ext = std::path::Path::new(&dest_name)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("ass")
+                    .to_string();
+                let stem = dest_name.trim_end_matches(&format!(".{}", ext));
+                let mut i = 2;
+                loop {
+                    let candidate = format!("{}.{}.{}", stem, i, ext);
+                    if !used_names.contains(&candidate) {
+                        dest_name = candidate;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            used_names.insert(dest_name.clone());
+
+            let dest = season_dir.join(&dest_name);
+
+            // 嘗試 rename，失敗時 copy+delete（cross-device fallback）
+            match tokio::fs::rename(&source, &dest).await {
+                Ok(()) => {
+                    tracing::info!(
+                        "Moved subtitle: {} → {}",
+                        source.display(),
+                        dest.display()
+                    );
+                    results.push(dest);
+                }
+                Err(_) => {
+                    match tokio::fs::copy(&source, &dest).await {
+                        Ok(_) => {
+                            let _ = tokio::fs::remove_file(&source).await;
+                            results.push(dest);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to move subtitle {}: {}", source_path, e);
+                        }
+                    }
+                }
+            }
+        }
+        results
+    }
 }
 
 #[cfg(test)]
@@ -241,6 +363,7 @@ mod tests {
         let organizer = FileOrganizer::new(
             PathBuf::from("/downloads"),
             PathBuf::from("/media/jellyfin"),
+            shared::LanguageCodeMap::default(),
         );
 
         assert_eq!(
@@ -262,6 +385,7 @@ mod tests {
         let organizer = FileOrganizer::new(
             PathBuf::from("/downloads"),
             PathBuf::from("/media/jellyfin"),
+            shared::LanguageCodeMap::default(),
         );
 
         assert_eq!(
@@ -279,6 +403,7 @@ mod tests {
         let organizer = FileOrganizer::new(
             PathBuf::from("/downloads"),
             PathBuf::from("/media/jellyfin"),
+            shared::LanguageCodeMap::default(),
         );
 
         assert_eq!(organizer.extract_episode_info("random_file.mkv"), None);
@@ -290,9 +415,51 @@ mod tests {
         let organizer = FileOrganizer::new(
             PathBuf::from("/downloads"),
             PathBuf::from("/media/jellyfin"),
+            shared::LanguageCodeMap::default(),
         );
 
         assert_eq!(organizer.get_source_dir(), Path::new("/downloads"));
         assert_eq!(organizer.get_library_dir(), Path::new("/media/jellyfin"));
+    }
+
+    #[test]
+    fn test_build_subtitle_dest_name_with_lang() {
+        let map = shared::LanguageCodeMap::from_entries(vec![
+            ("TC".to_string(), "zh-TW".to_string()),
+        ]);
+        let name = FileOrganizer::build_subtitle_dest_name(
+            "Title",
+            1,
+            1,
+            "/downloads/sub.TC.ass",
+            &map,
+        );
+        assert_eq!(name, "Title - S01E01.zh-TW.ass");
+    }
+
+    #[test]
+    fn test_build_subtitle_dest_name_no_lang() {
+        let map = shared::LanguageCodeMap::from_entries(vec![]);
+        let name = FileOrganizer::build_subtitle_dest_name(
+            "Title",
+            1,
+            1,
+            "/downloads/subtitle.ass",
+            &map,
+        );
+        assert_eq!(name, "Title - S01E01.ass");
+    }
+
+    #[test]
+    fn test_build_subtitle_dest_name_unknown_lang() {
+        let map = shared::LanguageCodeMap::from_entries(vec![]);
+        let name = FileOrganizer::build_subtitle_dest_name(
+            "Title",
+            1,
+            1,
+            "/downloads/sub.XX.srt",
+            &map,
+        );
+        assert_eq!(name, "Title - S01E01.XX.srt");
     }
 }

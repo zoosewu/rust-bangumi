@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let organizer = Arc::new(FileOrganizer::new(
         std::path::PathBuf::from(source_dir),
         std::path::PathBuf::from(library_dir),
+        shared::LanguageCodeMap::default(),
     ));
 
     // Initialize database
