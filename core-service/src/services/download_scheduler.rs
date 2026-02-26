@@ -6,7 +6,7 @@ use tokio::time::interval;
 use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{downloads, service_modules};
-use shared::StatusQueryResponse;
+use shared::{classify_files, FileType, StatusQueryResponse};
 
 pub struct DownloadScheduler {
     db_pool: DbPool,
@@ -124,7 +124,27 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
-                        // Store content_path when completed
+                        // Classify files into video and subtitles
+                        let (video_file, subtitle_files_json) = if !status_item.files.is_empty() {
+                            let classified = classify_files(status_item.files.clone());
+                            let video = classified.iter()
+                                .find(|f| f.file_type == FileType::Video)
+                                .map(|f| f.path.clone());
+                            let subtitles: Vec<String> = classified.iter()
+                                .filter(|f| f.file_type == FileType::Subtitle)
+                                .map(|f| f.path.clone())
+                                .collect();
+                            let subtitle_json = if subtitles.is_empty() {
+                                None
+                            } else {
+                                serde_json::to_string(&subtitles).ok()
+                            };
+                            (video, subtitle_json)
+                        } else {
+                            (None, None)
+                        };
+
+                        // Store content_path and classified file info when completed
                         diesel::update(
                             downloads::table
                                 .filter(downloads::torrent_hash.eq(&status_item.hash))
@@ -135,6 +155,8 @@ impl DownloadScheduler {
                             downloads::progress.eq(status_item.progress as f32),
                             downloads::total_bytes.eq(status_item.size as i64),
                             downloads::file_path.eq(&status_item.content_path),
+                            downloads::video_file.eq(video_file.as_deref()),
+                            downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
                             downloads::updated_at.eq(now),
                         ))
                         .execute(conn)
@@ -235,6 +257,26 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
+                        // Classify files into video and subtitles
+                        let (video_file, subtitle_files_json) = if !status_item.files.is_empty() {
+                            let classified = classify_files(status_item.files.clone());
+                            let video = classified.iter()
+                                .find(|f| f.file_type == FileType::Video)
+                                .map(|f| f.path.clone());
+                            let subtitles: Vec<String> = classified.iter()
+                                .filter(|f| f.file_type == FileType::Subtitle)
+                                .map(|f| f.path.clone())
+                                .collect();
+                            let subtitle_json = if subtitles.is_empty() {
+                                None
+                            } else {
+                                serde_json::to_string(&subtitles).ok()
+                            };
+                            (video, subtitle_json)
+                        } else {
+                            (None, None)
+                        };
+
                         diesel::update(
                             downloads::table
                                 .filter(downloads::torrent_hash.eq(&status_item.hash))
@@ -245,6 +287,8 @@ impl DownloadScheduler {
                             downloads::progress.eq(status_item.progress as f32),
                             downloads::total_bytes.eq(status_item.size as i64),
                             downloads::file_path.eq(&status_item.content_path),
+                            downloads::video_file.eq(video_file.as_deref()),
+                            downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
                             downloads::error_message.eq::<Option<String>>(None),
                             downloads::updated_at.eq(now),
                         ))
