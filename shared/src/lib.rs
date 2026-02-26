@@ -1,9 +1,14 @@
 pub mod api;
 pub mod errors;
+pub mod file_classifier;
 pub mod models;
 pub mod retry;
 
 pub use api::*;
 pub use errors::*;
+pub use file_classifier::{
+    classify_files, collect_files_recursive, extract_language_tag, FileType, LanguageCodeMap,
+    MediaFile,
+};
 pub use models::*;
 pub use retry::{register_with_core_backoff, retry_with_backoff};
