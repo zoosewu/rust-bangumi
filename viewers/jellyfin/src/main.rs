@@ -46,10 +46,25 @@ async fn main() -> anyhow::Result<()> {
     let library_dir =
         std::env::var("JELLYFIN_LIBRARY_DIR").unwrap_or_else(|_| "/media/jellyfin".to_string());
 
+    let language_codes_path = std::env::var("LANGUAGE_CODES_PATH")
+        .unwrap_or_else(|_| "/etc/bangumi/language_codes.json".to_string());
+
+    let language_codes = shared::LanguageCodeMap::load_from_file(
+        std::path::Path::new(&language_codes_path),
+    )
+    .unwrap_or_else(|e| {
+        tracing::warn!(
+            "Failed to load language codes from {}: {}. Using empty map.",
+            language_codes_path,
+            e
+        );
+        shared::LanguageCodeMap::default()
+    });
+
     let organizer = Arc::new(FileOrganizer::new(
         std::path::PathBuf::from(source_dir),
         std::path::PathBuf::from(library_dir),
-        shared::LanguageCodeMap::default(),
+        language_codes,
     ));
 
     // Initialize database

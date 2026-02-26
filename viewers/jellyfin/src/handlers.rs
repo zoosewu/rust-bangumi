@@ -158,6 +158,18 @@ async fn do_sync(
         )
         .await?;
 
+    // 1b. Move subtitle files (non-fatal)
+    if !req.subtitle_paths.is_empty() {
+        organizer
+            .organize_subtitles(
+                &req.subtitle_paths,
+                &req.anime_title,
+                req.series_no as u32,
+                req.episode_no as u32,
+            )
+            .await;
+    }
+
     // 2. Fetch metadata and generate NFO files (best-effort)
     if let Err(e) = fetch_and_generate_metadata(
         db,
