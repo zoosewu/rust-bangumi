@@ -342,6 +342,8 @@ pub struct Download {
     pub torrent_hash: Option<String>,
     pub file_path: Option<String>,
     pub sync_retry_count: i32,
+    pub video_file: Option<String>,
+    pub subtitle_files: Option<String>,
 }
 
 #[derive(Insertable)]

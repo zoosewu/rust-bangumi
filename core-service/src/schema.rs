@@ -64,6 +64,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    anime_works (work_id) {
+        work_id -> Int4,
+        #[max_length = 255]
+        title -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     animes (anime_id) {
         anime_id -> Int4,
         work_id -> Int4,
@@ -72,16 +82,6 @@ diesel::table! {
         description -> Nullable<Text>,
         aired_date -> Nullable<Date>,
         end_date -> Nullable<Date>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    anime_works (work_id) {
-        work_id -> Int4,
-        #[max_length = 255]
-        title -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -127,6 +127,8 @@ diesel::table! {
         torrent_hash -> Nullable<Varchar>,
         file_path -> Nullable<Text>,
         sync_retry_count -> Int4,
+        video_file -> Nullable<Text>,
+        subtitle_files -> Nullable<Text>,
     }
 }
 
