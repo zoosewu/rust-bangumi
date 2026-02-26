@@ -215,6 +215,33 @@ impl SyncService {
         Ok(synced)
     }
 
+    /// Reset `sync_failed` downloads back to `completed` so they can be retried.
+    /// Called when a viewer registers/recovers, before `retry_completed_downloads()`.
+    pub fn retry_sync_failed_downloads(&self) -> Result<usize, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        let now = chrono::Utc::now().naive_utc();
+        let updated = diesel::update(
+            downloads::table.filter(downloads::status.eq("sync_failed")),
+        )
+        .set((
+            downloads::status.eq("completed"),
+            downloads::sync_retry_count.eq(0),
+            downloads::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to reset sync_failed downloads: {}", e))?;
+
+        if updated > 0 {
+            tracing::info!(
+                "Service Viewer recovered: retrying {} sync_failed tasks",
+                updated
+            );
+        }
+
+        Ok(updated)
+    }
+
     /// Notify viewer to resync a download whose metadata has changed.
     pub async fn notify_viewer_resync(&self, download: &Download) -> Result<bool, String> {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;

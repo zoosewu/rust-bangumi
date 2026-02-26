@@ -85,7 +85,7 @@ pub async fn register(
                             &payload.capabilities.supported_download_types,
                         );
 
-                        // Trigger retry of no_downloader links
+                        // Trigger retry of no_downloader and failed links
                         let download_types: Vec<String> = payload
                             .capabilities
                             .supported_download_types
@@ -99,13 +99,23 @@ pub async fn register(
                             {
                                 tracing::error!("Failed to retry no_downloader links: {}", e);
                             }
+                            if let Err(e) = dispatch.retry_failed_downloads().await {
+                                tracing::error!("Failed to retry failed downloads: {}", e);
+                            }
                         });
                     }
 
-                    // Trigger sync of completed downloads when a viewer registers
+                    // Trigger sync of completed and sync_failed downloads when a viewer registers
                     if payload.service_type == ServiceType::Viewer {
                         let sync_service = state.sync_service.clone();
                         tokio::spawn(async move {
+                            // First reset sync_failed → completed, then retry all completed
+                            if let Err(e) = sync_service.retry_sync_failed_downloads() {
+                                tracing::error!(
+                                    "Failed to retry sync_failed downloads on viewer registration: {}",
+                                    e
+                                );
+                            }
                             if let Err(e) = sync_service.retry_completed_downloads().await {
                                 tracing::error!(
                                     "Failed to retry completed downloads on viewer registration: {}",

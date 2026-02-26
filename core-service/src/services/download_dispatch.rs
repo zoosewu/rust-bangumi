@@ -248,6 +248,48 @@ impl DownloadDispatchService {
         Ok(result.dispatched)
     }
 
+    /// Retry dispatching links whose downloads ended in `failed` or `downloader_error`.
+    /// Called when a downloader registers/recovers.
+    pub async fn retry_failed_downloads(&self) -> Result<usize, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        let retryable_statuses = vec!["failed", "downloader_error"];
+        let failed_records: Vec<Download> = downloads::table
+            .filter(downloads::status.eq_any(&retryable_statuses))
+            .load::<Download>(&mut conn)
+            .map_err(|e| format!("Failed to query failed downloads: {}", e))?;
+
+        if failed_records.is_empty() {
+            return Ok(0);
+        }
+
+        let link_ids: Vec<i32> = failed_records.iter().map(|d| d.link_id).collect();
+        let download_ids: Vec<i32> = failed_records.iter().map(|d| d.download_id).collect();
+        let count = failed_records.len();
+
+        tracing::info!(
+            "Service Downloader recovered: retrying {} failed/downloader_error tasks",
+            count
+        );
+
+        // Delete old failed records
+        diesel::delete(downloads::table.filter(downloads::download_id.eq_any(&download_ids)))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to delete failed download records: {}", e))?;
+
+        // Re-dispatch
+        let result = self.dispatch_new_links(link_ids).await?;
+
+        tracing::info!(
+            "Retried failed downloads: {} dispatched, {} no_downloader, {} failed again",
+            result.dispatched,
+            result.no_downloader,
+            result.failed
+        );
+
+        Ok(result.dispatched)
+    }
+
     fn find_capable_downloaders(
         &self,
         conn: &mut PgConnection,
