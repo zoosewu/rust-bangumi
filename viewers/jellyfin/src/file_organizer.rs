@@ -274,6 +274,12 @@ impl FileOrganizer {
 
         let mut used_names: HashSet<String> = HashSet::new();
 
+        // 確保目標目錄存在（organize_episode 通常已建立，但防禦性建立）
+        if let Err(e) = tokio::fs::create_dir_all(&season_dir).await {
+            tracing::warn!("Failed to create season dir for subtitles: {}", e);
+            return results;
+        }
+
         for source_path in subtitle_paths {
             let source = self.resolve_download_path(source_path);
             if !source.exists() {

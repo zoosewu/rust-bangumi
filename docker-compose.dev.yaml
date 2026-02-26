@@ -140,6 +140,42 @@ services:
         max-size: "10m"
         max-file: "2"
 
+  # ============================================================================
+  # viewer-jellyfin - 媒體整理服務（開發環境）
+  # ============================================================================
+  # WebUI: http://localhost:8003
+  # ============================================================================
+  viewer-jellyfin:
+    build:
+      context: .
+      dockerfile: Dockerfile.viewer-jellyfin
+    container_name: bangumi-viewer-jellyfin-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      VIEWER_DATABASE_URL: postgresql://bangumi:bangumi_dev_password@postgres:5432/viewer_jellyfin
+      DOWNLOADS_DIR: /downloads
+      JELLYFIN_LIBRARY_DIR: /media/jellyfin
+      CORE_SERVICE_URL: http://host.docker.internal:8000
+      SERVICE_HOST: "0.0.0.0"
+      SERVICE_PORT: "8003"
+      LANGUAGE_CODES_PATH: /etc/bangumi/language_codes.json
+      RUST_LOG: viewer_jellyfin=debug
+    ports:
+      - "8003:8003"
+    volumes:
+      - ${HOST_PROJECT_PATH:-.}/${DOWNLOADS_DIR:-tmp/bangumi-downloads}:/downloads
+      - ${HOST_PROJECT_PATH:-.}/${JELLYFIN_LIBRARY_DIR:-tmp/bangumi-media}:/media/jellyfin
+    networks:
+      - bangumi-dev-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
 # ============================================================================
 # Metadata Service（開發）
 # ============================================================================

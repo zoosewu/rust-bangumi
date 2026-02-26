@@ -124,25 +124,7 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
-                        // Classify files into video and subtitles
-                        let (video_file, subtitle_files_json) = if !status_item.files.is_empty() {
-                            let classified = classify_files(status_item.files.clone());
-                            let video = classified.iter()
-                                .find(|f| f.file_type == FileType::Video)
-                                .map(|f| f.path.clone());
-                            let subtitles: Vec<String> = classified.iter()
-                                .filter(|f| f.file_type == FileType::Subtitle)
-                                .map(|f| f.path.clone())
-                                .collect();
-                            let subtitle_json = if subtitles.is_empty() {
-                                None
-                            } else {
-                                serde_json::to_string(&subtitles).ok()
-                            };
-                            (video, subtitle_json)
-                        } else {
-                            (None, None)
-                        };
+                        let (video_file, subtitle_files_json) = Self::extract_media_files(&status_item.files);
 
                         // Store content_path and classified file info when completed
                         diesel::update(
@@ -257,25 +239,7 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
-                        // Classify files into video and subtitles
-                        let (video_file, subtitle_files_json) = if !status_item.files.is_empty() {
-                            let classified = classify_files(status_item.files.clone());
-                            let video = classified.iter()
-                                .find(|f| f.file_type == FileType::Video)
-                                .map(|f| f.path.clone());
-                            let subtitles: Vec<String> = classified.iter()
-                                .filter(|f| f.file_type == FileType::Subtitle)
-                                .map(|f| f.path.clone())
-                                .collect();
-                            let subtitle_json = if subtitles.is_empty() {
-                                None
-                            } else {
-                                serde_json::to_string(&subtitles).ok()
-                            };
-                            (video, subtitle_json)
-                        } else {
-                            (None, None)
-                        };
+                        let (video_file, subtitle_files_json) = Self::extract_media_files(&status_item.files);
 
                         diesel::update(
                             downloads::table
@@ -393,6 +357,27 @@ impl DownloadScheduler {
             }
             _ => {}
         }
+    }
+
+    /// 從 downloader 回報的檔案列表中提取影片路徑和字幕路徑（JSON 字串）。
+    fn extract_media_files(files: &[String]) -> (Option<String>, Option<String>) {
+        if files.is_empty() {
+            return (None, None);
+        }
+        let classified = classify_files(files.to_vec());
+        let video = classified.iter()
+            .find(|f| f.file_type == FileType::Video)
+            .map(|f| f.path.clone());
+        let subtitles: Vec<String> = classified.iter()
+            .filter(|f| f.file_type == FileType::Subtitle)
+            .map(|f| f.path.clone())
+            .collect();
+        let subtitle_json = if subtitles.is_empty() {
+            None
+        } else {
+            serde_json::to_string(&subtitles).ok()
+        };
+        (video, subtitle_json)
     }
 
     async fn query_downloader_status(&self, url: &str) -> Result<StatusQueryResponse, String> {
