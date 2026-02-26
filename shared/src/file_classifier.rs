@@ -63,8 +63,9 @@ pub fn collect_files_recursive(path: &Path) -> Vec<String> {
 
 fn collect_files_inner(path: &Path, result: &mut Vec<String>) {
     if path.is_file() {
-        if let Some(s) = path.to_str() {
-            result.push(s.to_string());
+        match path.to_str() {
+            Some(s) => result.push(s.to_string()),
+            None => tracing::warn!("Skipping non-UTF-8 path: {:?}", path),
         }
         return;
     }
@@ -77,14 +78,8 @@ fn collect_files_inner(path: &Path, result: &mut Vec<String>) {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LanguageCodeMap(HashMap<String, String>);
-
-impl Default for LanguageCodeMap {
-    fn default() -> Self {
-        LanguageCodeMap(HashMap::new())
-    }
-}
 
 impl LanguageCodeMap {
     pub fn from_entries(entries: Vec<(String, String)>) -> Self {
