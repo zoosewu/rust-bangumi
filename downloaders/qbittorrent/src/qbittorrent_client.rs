@@ -304,13 +304,22 @@ impl DownloaderClient for QBittorrentClient {
 
         let mut results: Vec<DownloadStatusItem> = torrents
             .iter()
-            .map(|t| DownloadStatusItem {
-                hash: t.hash.clone(),
-                status: Self::map_torrent_state(&t.state),
-                progress: t.progress,
-                size: t.size as u64,
-                content_path: t.content_path.clone(),
-                files: vec![],
+            .map(|t| {
+                let files = match &t.content_path {
+                    Some(path) => {
+                        let p = std::path::Path::new(path);
+                        shared::collect_files_recursive(p)
+                    }
+                    None => vec![],
+                };
+                DownloadStatusItem {
+                    hash: t.hash.clone(),
+                    status: Self::map_torrent_state(&t.state),
+                    progress: t.progress,
+                    size: t.size as u64,
+                    content_path: t.content_path.clone(),
+                    files,
+                }
             })
             .collect();
 
