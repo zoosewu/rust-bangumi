@@ -414,4 +414,6 @@ pub struct DownloadStatusItem {
     pub progress: f64,
     pub size: u64,
     pub content_path: Option<String>,
+    #[serde(default)]
+    pub files: Vec<String>,
 }

@@ -310,6 +310,7 @@ impl DownloaderClient for QBittorrentClient {
                 progress: t.progress,
                 size: t.size as u64,
                 content_path: t.content_path.clone(),
+                files: vec![],
             })
             .collect();
 
@@ -322,6 +323,7 @@ impl DownloaderClient for QBittorrentClient {
                     progress: 0.0,
                     size: 0,
                     content_path: None,
+                    files: vec![],
                 });
             }
         }
