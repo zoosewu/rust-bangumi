@@ -348,6 +348,7 @@ async fn test_query_status_returns_200() {
         progress: 0.5,
         size: 1000000,
         content_path: None,
+        files: vec![],
     }]));
 
     let app = create_test_app(mock);
