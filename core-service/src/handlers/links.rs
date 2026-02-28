@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -108,7 +110,6 @@ pub async fn get_anime_links(
     };
 
     // Build conflict group map: (group_id, episode_no) -> Vec<link_id> for conflicted links
-    use std::collections::HashMap;
     let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
     for (link, _) in &links_with_groups {
         if link.conflict_flag {
@@ -207,7 +208,6 @@ pub async fn list_conflicting_links(
     };
 
     // 2. Batch fetch subscription info for links that have raw_item_id
-    use std::collections::HashMap;
     let raw_item_ids: Vec<i32> = rows
         .iter()
         .filter_map(|(link, _, _, _)| link.raw_item_id)
@@ -232,17 +232,20 @@ pub async fn list_conflicting_links(
                 .into_iter()
                 .map(|(item_id, sub_id, name)| (item_id, (sub_id, name)))
                 .collect(),
-            Err(_) => HashMap::new(),
+            Err(e) => {
+                tracing::warn!("Failed to fetch subscription info for conflicting links: {}", e);
+                HashMap::new()
+            }
         }
     } else {
         HashMap::new()
     };
 
-    // 3. Build conflict group map: (group_id, episode_no) -> Vec<link_id>
-    let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
+    // 3. Build conflict group map: (anime_id, group_id, episode_no) -> Vec<link_id>
+    let mut conflict_groups: HashMap<(i32, i32, i32), Vec<i32>> = HashMap::new();
     for (link, _, _, _) in &rows {
         conflict_groups
-            .entry((link.group_id, link.episode_no))
+            .entry((link.anime_id, link.group_id, link.episode_no))
             .or_default()
             .push(link.link_id);
     }
@@ -252,7 +255,7 @@ pub async fn list_conflicting_links(
         .iter()
         .map(|(link, group, series, work)| {
             let conflicting_link_ids = conflict_groups
-                .get(&(link.group_id, link.episode_no))
+                .get(&(link.anime_id, link.group_id, link.episode_no))
                 .map(|ids| ids.iter().filter(|&&id| id != link.link_id).cloned().collect())
                 .unwrap_or_default();
 
