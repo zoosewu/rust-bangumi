@@ -48,8 +48,6 @@ export class CoreApi extends Context.Tag("CoreApi")<
       limit?: number
       offset?: number
     }) => Effect.Effect<readonly DownloadRow[]>
-    readonly getConflicts: Effect.Effect<readonly Record<string, unknown>[]>
-    readonly resolveConflict: (conflictId: number, fetcherId: number) => Effect.Effect<unknown>
     readonly getHealth: Effect.Effect<{ status: string; service: string }>
     readonly getSubtitleGroups: Effect.Effect<readonly SubtitleGroup[]>
     readonly createSubtitleGroup: (name: string) => Effect.Effect<SubtitleGroup>

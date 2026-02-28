@@ -139,18 +139,6 @@ const makeCoreApi = Effect.gen(function* () {
       )
     },
 
-    getConflicts: fetchJson(
-      HttpClientRequest.get("/api/core/conflicts"),
-      Schema.Struct({ conflicts: Schema.Array(Schema.Any) }),
-    ).pipe(Effect.map((r) => r.conflicts as readonly Record<string, unknown>[])),
-
-    resolveConflict: (conflictId, fetcherId) =>
-      postJson(
-        `/api/core/conflicts/${conflictId}/resolve`,
-        { fetcher_id: fetcherId },
-        Schema.Any,
-      ),
-
     getHealth: fetchJson(
       HttpClientRequest.get("/api/core/health"),
       Schema.Struct({ status: Schema.String, service: Schema.String }),

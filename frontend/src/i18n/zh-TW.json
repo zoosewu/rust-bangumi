@@ -140,7 +140,7 @@
     "purgeDesc": "將刪除此訂閱的所有資料，包含已下載的動畫檔案，此操作無法復原。"
   },
   "rawItems": {
-    "title": "原始項目",
+    "title": "最新更新",
     "itemTitle": "標題",
     "subscriptionSource": "訂閱來源",
     "parser": "解析器",

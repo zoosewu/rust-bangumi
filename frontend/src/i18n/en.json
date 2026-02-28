@@ -140,7 +140,7 @@
     "purgeDesc": "All data for this subscription will be permanently deleted, including downloaded anime files. This cannot be undone."
   },
   "rawItems": {
-    "title": "Raw Items",
+    "title": "Latest Updates",
     "itemTitle": "Title",
     "subscriptionSource": "Source",
     "parser": "Parser",

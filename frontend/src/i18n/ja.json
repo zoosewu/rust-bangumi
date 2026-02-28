@@ -140,7 +140,7 @@
     "purgeDesc": "このサブスクリプションのすべてのデータが完全に削除されます。ダウンロード済みのアニメファイルも含まれ、元に戻せません。"
   },
   "rawItems": {
-    "title": "生データ",
+    "title": "最新情報",
     "itemTitle": "タイトル",
     "subscriptionSource": "ソース",
     "parser": "パーサー",
