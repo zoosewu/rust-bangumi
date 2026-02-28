@@ -3,9 +3,6 @@ import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
-import { ParserEditor } from "@/components/shared/ParserEditor"
 import {
   Film,
   Rss,
@@ -78,20 +75,6 @@ export default function Dashboard() {
           </div>
         </>
       ) : null}
-
-      {/* Global filters and parsers */}
-      <Tabs defaultValue="filters">
-        <TabsList variant="line">
-          <TabsTrigger value="filters">{t("dashboard.globalFilterRules", "Global Filter Rules")}</TabsTrigger>
-          <TabsTrigger value="parsers">{t("dashboard.globalParsers", "Global Parsers")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="filters" className="mt-4">
-          <FilterRuleEditor targetType="global" targetId={null} />
-        </TabsContent>
-        <TabsContent value="parsers" className="mt-4">
-          <ParserEditor createdFromType="global" createdFromId={null} />
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
