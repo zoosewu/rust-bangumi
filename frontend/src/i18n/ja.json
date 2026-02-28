@@ -6,9 +6,11 @@
     "anime": "アニメ作品",
     "subtitleGroups": "字幕グループ",
     "subscriptions": "サブスクリプション",
-    "rawItems": "生データ",
+    "rawItems": "最新更新",
     "conflicts": "コンフリクト",
-    "parsers": "パーサー"
+    "parsers": "パーサー",
+    "filters": "フィルター",
+    "others": "その他"
   },
   "header": {
     "title": "番組管理システム",
@@ -188,7 +190,8 @@
     "before": "変更前（このフィルターなし）",
     "after": "変更後（このフィルターあり）",
     "passed": "通過",
-    "filtered": "フィルター済み"
+    "filtered": "フィルター済み",
+    "addFilter": "フィルターを追加"
   },
   "parsers": {
     "title": "パーサー",
@@ -231,14 +234,13 @@
     "entity": "所属元"
   },
   "conflicts": {
-    "title": "サブスクリプションコンフリクト",
-    "noConflicts": "保留中のコンフリクトはありません。",
-    "conflict": "コンフリクト",
-    "subscription": "サブスクリプション",
-    "rssUrl": "RSS URL",
-    "conflictType": "タイプ",
-    "selectFetcher": "解決するフェッチャーを選択：",
-    "resolved": "コンフリクトが正常に解決されました",
-    "resolveFailed": "コンフリクトの解決に失敗しました"
+    "title": "アニメリンク競合",
+    "noConflicts": "競合はありません。",
+    "animeTitle": "アニメ作品",
+    "seriesTitle": "シーズン",
+    "subscription": "ソース購読",
+    "episode": "話数",
+    "subtitleGroup": "字幕グループ",
+    "conflictCount": "競合リンク数"
   }
 }

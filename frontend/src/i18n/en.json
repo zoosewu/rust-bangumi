@@ -6,9 +6,11 @@
     "anime": "Anime Titles",
     "subtitleGroups": "Subtitle Groups",
     "subscriptions": "Subscriptions",
-    "rawItems": "Raw Items",
+    "rawItems": "Latest Updates",
     "conflicts": "Conflicts",
-    "parsers": "Parsers"
+    "parsers": "Parsers",
+    "filters": "Filters",
+    "others": "Others"
   },
   "header": {
     "title": "Bangumi Management",
@@ -188,7 +190,8 @@
     "before": "Before (without this filter)",
     "after": "After (with this filter)",
     "passed": "Passed",
-    "filtered": "Filtered"
+    "filtered": "Filtered",
+    "addFilter": "Add Filter"
   },
   "parsers": {
     "title": "Parsers",
@@ -231,14 +234,13 @@
     "entity": "Belongs To"
   },
   "conflicts": {
-    "title": "Subscription Conflicts",
-    "noConflicts": "No pending conflicts.",
-    "conflict": "Conflict",
-    "subscription": "Subscription",
-    "rssUrl": "RSS URL",
-    "conflictType": "Type",
-    "selectFetcher": "Select a fetcher to resolve:",
-    "resolved": "Conflict resolved successfully",
-    "resolveFailed": "Failed to resolve conflict"
+    "title": "Anime Link Conflicts",
+    "noConflicts": "No conflicts found.",
+    "animeTitle": "Anime Title",
+    "seriesTitle": "Season",
+    "subscription": "Source Subscription",
+    "episode": "Episode",
+    "subtitleGroup": "Subtitle Group",
+    "conflictCount": "Conflicting Links"
   }
 }

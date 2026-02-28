@@ -6,9 +6,11 @@
     "anime": "動畫作品",
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
-    "rawItems": "原始項目",
+    "rawItems": "最新更新",
     "conflicts": "衝突",
-    "parsers": "解析器"
+    "parsers": "解析器",
+    "filters": "篩選器",
+    "others": "其他"
   },
   "header": {
     "title": "番組管理系統",
@@ -188,7 +190,8 @@
     "before": "變更前（不含此篩選）",
     "after": "變更後（含此篩選）",
     "passed": "通過",
-    "filtered": "已篩選"
+    "filtered": "已篩選",
+    "addFilter": "新增篩選器"
   },
   "parsers": {
     "title": "解析器",
@@ -231,14 +234,13 @@
     "entity": "所屬來源"
   },
   "conflicts": {
-    "title": "訂閱衝突",
-    "noConflicts": "沒有待處理的衝突。",
-    "conflict": "衝突",
-    "subscription": "訂閱",
-    "rssUrl": "RSS 網址",
-    "conflictType": "類型",
-    "selectFetcher": "選擇一個擷取器來解決：",
-    "resolved": "衝突已成功解決",
-    "resolveFailed": "解決衝突失敗"
+    "title": "動畫連結衝突",
+    "noConflicts": "目前沒有任何衝突。",
+    "animeTitle": "動畫作品",
+    "seriesTitle": "季度",
+    "subscription": "來源訂閱",
+    "episode": "集數",
+    "subtitleGroup": "字幕組",
+    "conflictCount": "衝突連結數"
   }
 }
