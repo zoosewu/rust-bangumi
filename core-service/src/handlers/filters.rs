@@ -16,6 +16,7 @@ use crate::state::AppState;
 
 /// Query parameters for filter rules
 #[derive(Debug, Default, Deserialize, Serialize)]
+#[serde(default)]
 pub struct FilterRulesQuery {
     pub target_type: Option<String>,
     pub target_id: Option<i32>,
