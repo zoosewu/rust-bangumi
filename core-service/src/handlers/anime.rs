@@ -57,7 +57,65 @@ pub async fn create_anime_work(
 }
 
 /// List all anime works
-pub async fn list_anime_work(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
+#[derive(serde::Deserialize, Default)]
+pub struct AnimeWorksQuery {
+    pub has_links: Option<bool>,
+}
+
+pub async fn list_anime_work(
+    State(state): State<AppState>,
+    Query(query): Query<AnimeWorksQuery>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    // When has_links=true, filter to anime works that have at least one anime_link
+    if query.has_links.unwrap_or(false) {
+        let mut conn = match state.db.get() {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "database_error",
+                        "message": format!("DB pool error: {:?}", e),
+                        "animes": []
+                    })),
+                );
+            }
+        };
+        let work_list = anime_works::table
+            .filter(diesel::dsl::exists(
+                animes::table
+                    .inner_join(anime_links::table.on(anime_links::anime_id.eq(animes::anime_id)))
+                    .filter(animes::work_id.eq(anime_works::work_id))
+                    .select(anime_links::link_id),
+            ))
+            .order(anime_works::work_id.asc())
+            .load::<crate::models::AnimeWork>(&mut conn);
+
+        return match work_list {
+            Ok(works) => {
+                let responses: Vec<AnimeWorkResponse> = works
+                    .into_iter()
+                    .map(|a| AnimeWorkResponse {
+                        anime_id: a.work_id,
+                        title: a.title,
+                        created_at: a.created_at,
+                        updated_at: a.updated_at,
+                    })
+                    .collect();
+                tracing::info!("Listed {} anime works (has_links=true)", responses.len());
+                (StatusCode::OK, Json(json!({ "animes": responses })))
+            }
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "error": "database_error",
+                    "message": format!("Failed to list anime works: {:?}", e),
+                    "animes": []
+                })),
+            ),
+        };
+    }
+
     match state.repos.anime_work.find_all().await {
         Ok(work_list) => {
             let responses: Vec<AnimeWorkResponse> = work_list
