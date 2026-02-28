@@ -9,6 +9,7 @@ import RawItemsPage from "@/pages/raw-items/RawItemsPage"
 import ConflictsPage from "@/pages/conflicts/ConflictsPage"
 import SubtitleGroupsPage from "@/pages/subtitle-groups/SubtitleGroupsPage"
 import ParsersPage from "@/pages/parsers/ParsersPage"
+import FiltersPage from "@/pages/filters/FiltersPage"
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="anime-works" element={<AnimeWorksPage />} />
           <Route path="subtitle-groups" element={<SubtitleGroupsPage />} />
           <Route path="parsers" element={<ParsersPage />} />
+          <Route path="filters" element={<FiltersPage />} />
         </Route>
       </Routes>
       <Toaster />
