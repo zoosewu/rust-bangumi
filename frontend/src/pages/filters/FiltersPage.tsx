@@ -30,10 +30,14 @@ export default function FiltersPage() {
   const [deleteTarget, setDeleteTarget] = useState<FilterRule | null>(null)
   const [deletePreview, setDeletePreview] = useState<FilterPreviewResponse | null>(null)
 
-  const { data: rules, refetch } = useEffectQuery(
+  const { data: rules, isLoading, error, refetch } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getFilterRules()),
     [],
   )
+
+  if (error) {
+    console.error("[FiltersPage] getFilterRules failed:", error)
+  }
 
   // global 排最前，其次按 target_type、再按 rule_order
   const sortedRules = useMemo(() => {
@@ -153,11 +157,21 @@ export default function FiltersPage() {
         </Button>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={sortedRules as unknown as Record<string, unknown>[]}
-        keyField="rule_id"
-      />
+      {isLoading ? (
+        <p className="text-muted-foreground">{t("common.loading")}</p>
+      ) : error ? (
+        <p className="text-destructive text-sm">
+          {t("common.error")}: {String(error)}
+        </p>
+      ) : sortedRules.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("filters.noRules", "No filter rules found.")}</p>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={sortedRules as unknown as Record<string, unknown>[]}
+          keyField="rule_id"
+        />
+      )}
 
       {/* Add — FullScreenDialog with preview */}
       <FullScreenDialog

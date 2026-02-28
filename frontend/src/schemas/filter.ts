@@ -5,7 +5,7 @@ export const FilterRule = Schema.Struct({
   rule_id: Schema.Number,
   target_type: Schema.String,
   target_id: Schema.NullOr(Schema.Number),
-  target_name: Schema.NullOr(Schema.String),
+  target_name: Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null }),
   rule_order: Schema.Number,
   is_positive: Schema.Boolean,
   regex_pattern: Schema.String,
