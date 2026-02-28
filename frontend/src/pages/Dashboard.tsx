@@ -1,3 +1,4 @@
+import type { ElementType } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -85,7 +86,7 @@ function StatCard({
   value,
   color,
 }: {
-  icon: React.ElementType
+  icon: ElementType
   label: string
   value: number
   color?: "blue" | "green" | "red" | "yellow"
