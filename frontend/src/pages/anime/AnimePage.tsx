@@ -34,7 +34,7 @@ export default function AnimeWorksPage() {
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
-        return yield* api.getAnimeWorks
+        return yield* api.getAnimeWorksFiltered({ hasLinks: true })
       }),
     [],
   )
