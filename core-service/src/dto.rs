@@ -154,6 +154,22 @@ pub struct AnimeLinkRichResponse {
     pub created_at: NaiveDateTime,
 }
 
+// ============ ConflictingLink DTO (for list_conflicting_links) ============
+#[derive(Debug, Serialize, Clone)]
+pub struct ConflictingLinkResponse {
+    pub link_id: i32,
+    pub episode_no: i32,
+    pub group_name: String,
+    pub url: String,
+    pub conflicting_link_ids: Vec<i32>,
+    pub series_id: i32,
+    pub series_no: i32,
+    pub anime_work_id: i32,
+    pub anime_work_title: String,
+    pub subscription_id: Option<i32>,
+    pub subscription_name: Option<String>,
+}
+
 // ============ DashboardStats DTO ============
 #[derive(Debug, Serialize, Clone)]
 pub struct ServiceInfo {

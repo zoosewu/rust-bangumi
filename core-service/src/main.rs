@@ -152,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/downloads", get(handlers::downloads::list_downloads))
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
+        .route("/links/conflicts", get(handlers::links::list_conflicting_links))
         .route("/links/:series_id", get(handlers::links::get_anime_links))
         // 訂閱管理
         .route(

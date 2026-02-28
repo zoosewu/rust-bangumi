@@ -7,9 +7,9 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json::json;
 
-use crate::dto::{AnimeLinkRequest, AnimeLinkResponse, AnimeLinkRichResponse, DownloadInfo};
-use crate::models::{AnimeLink, Download, NewAnimeLink, SubtitleGroup};
-use crate::schema::{anime_links, downloads, subtitle_groups};
+use crate::dto::{AnimeLinkRequest, AnimeLinkResponse, AnimeLinkRichResponse, ConflictingLinkResponse, DownloadInfo};
+use crate::models::{AnimeLink, Anime, AnimeWork, Download, NewAnimeLink, SubtitleGroup};
+use crate::schema::{anime_links, anime_works, animes, downloads, raw_anime_items, subscriptions, subtitle_groups};
 use crate::state::AppState;
 
 /// Create a new anime link
@@ -167,4 +167,117 @@ pub async fn get_anime_links(
         series_id
     );
     (StatusCode::OK, Json(json!({ "links": results })))
+}
+
+/// List all anime links with conflict_flag = true, enriched with series/anime/subscription info
+pub async fn list_conflicting_links(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string(), "conflicts": [] })),
+            );
+        }
+    };
+
+    // 1. Fetch all conflicting links with subtitle group, series, and anime work
+    let rows: Vec<(AnimeLink, SubtitleGroup, Anime, AnimeWork)> = match anime_links::table
+        .inner_join(subtitle_groups::table.on(subtitle_groups::group_id.eq(anime_links::group_id)))
+        .inner_join(animes::table.on(animes::anime_id.eq(anime_links::anime_id)))
+        .inner_join(anime_works::table.on(anime_works::work_id.eq(animes::work_id)))
+        .filter(anime_links::conflict_flag.eq(true))
+        .select((
+            AnimeLink::as_select(),
+            SubtitleGroup::as_select(),
+            Anime::as_select(),
+            AnimeWork::as_select(),
+        ))
+        .load::<(AnimeLink, SubtitleGroup, Anime, AnimeWork)>(&mut conn)
+    {
+        Ok(data) => data,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": e.to_string(), "conflicts": [] })),
+            );
+        }
+    };
+
+    // 2. Batch fetch subscription info for links that have raw_item_id
+    use std::collections::HashMap;
+    let raw_item_ids: Vec<i32> = rows
+        .iter()
+        .filter_map(|(link, _, _, _)| link.raw_item_id)
+        .collect();
+
+    // Map: raw_item_id -> (subscription_id, subscription_name)
+    let sub_map: HashMap<i32, (i32, Option<String>)> = if !raw_item_ids.is_empty() {
+        match raw_anime_items::table
+            .inner_join(
+                subscriptions::table
+                    .on(subscriptions::subscription_id.eq(raw_anime_items::subscription_id)),
+            )
+            .filter(raw_anime_items::item_id.eq_any(&raw_item_ids))
+            .select((
+                raw_anime_items::item_id,
+                subscriptions::subscription_id,
+                subscriptions::name,
+            ))
+            .load::<(i32, i32, Option<String>)>(&mut conn)
+        {
+            Ok(data) => data
+                .into_iter()
+                .map(|(item_id, sub_id, name)| (item_id, (sub_id, name)))
+                .collect(),
+            Err(_) => HashMap::new(),
+        }
+    } else {
+        HashMap::new()
+    };
+
+    // 3. Build conflict group map: (group_id, episode_no) -> Vec<link_id>
+    let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
+    for (link, _, _, _) in &rows {
+        conflict_groups
+            .entry((link.group_id, link.episode_no))
+            .or_default()
+            .push(link.link_id);
+    }
+
+    // 4. Build response
+    let results: Vec<ConflictingLinkResponse> = rows
+        .iter()
+        .map(|(link, group, series, work)| {
+            let conflicting_link_ids = conflict_groups
+                .get(&(link.group_id, link.episode_no))
+                .map(|ids| ids.iter().filter(|&&id| id != link.link_id).cloned().collect())
+                .unwrap_or_default();
+
+            let (subscription_id, subscription_name) = link
+                .raw_item_id
+                .and_then(|id| sub_map.get(&id))
+                .map(|(sub_id, name)| (Some(*sub_id), name.clone()))
+                .unwrap_or((None, None));
+
+            ConflictingLinkResponse {
+                link_id: link.link_id,
+                episode_no: link.episode_no,
+                group_name: group.group_name.clone(),
+                url: link.url.clone(),
+                conflicting_link_ids,
+                series_id: link.anime_id,
+                series_no: series.series_no,
+                anime_work_id: work.work_id,
+                anime_work_title: work.title.clone(),
+                subscription_id,
+                subscription_name,
+            }
+        })
+        .collect();
+
+    tracing::info!("Retrieved {} conflicting anime links", results.len());
+    (StatusCode::OK, Json(json!({ "conflicts": results })))
 }
