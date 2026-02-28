@@ -2,7 +2,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
-import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
+import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
@@ -283,6 +283,21 @@ const makeCoreApi = Effect.gen(function* () {
           ),
         )
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    getConflictingLinks: fetchJson(
+      HttpClientRequest.get("/api/core/links/conflicts"),
+      Schema.Struct({ conflicts: Schema.Array(ConflictingLink) }),
+    ).pipe(Effect.map((r) => r.conflicts)),
+
+    getAnimeWorksFiltered: (params) => {
+      const url = params?.hasLinks
+        ? "/api/core/anime-works?has_links=true"
+        : "/api/core/anime-works"
+      return fetchJson(
+        HttpClientRequest.get(url),
+        Schema.Struct({ animes: Schema.Array(AnimeWork) }),
+      ).pipe(Effect.map((r) => r.animes))
+    },
 
   })
 })

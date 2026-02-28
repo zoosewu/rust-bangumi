@@ -110,3 +110,18 @@ export const AnimeCoverImage = Schema.Struct({
   created_at: Schema.String,
 })
 export type AnimeCoverImage = typeof AnimeCoverImage.Type
+
+export const ConflictingLink = Schema.Struct({
+  link_id: Schema.Number,
+  episode_no: Schema.Number,
+  group_name: Schema.String,
+  url: Schema.String,
+  conflicting_link_ids: Schema.Array(Schema.Number),
+  series_id: Schema.Number,
+  series_no: Schema.Number,
+  anime_work_id: Schema.Number,
+  anime_work_title: Schema.String,
+  subscription_id: Schema.NullOr(Schema.Number),
+  subscription_name: Schema.NullOr(Schema.String),
+})
+export type ConflictingLink = typeof ConflictingLink.Type

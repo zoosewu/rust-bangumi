@@ -1,5 +1,5 @@
 import { Effect, Context } from "effect"
-import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage } from "@/schemas/anime"
+import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
@@ -88,5 +88,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
       animeWorkId: number,
       coverId: number,
     ) => Effect.Effect<void>
+    readonly getConflictingLinks: Effect.Effect<readonly ConflictingLink[]>
+    readonly getAnimeWorksFiltered: (params?: { hasLinks?: boolean }) => Effect.Effect<readonly AnimeWork[]>
   }
 >() {}
