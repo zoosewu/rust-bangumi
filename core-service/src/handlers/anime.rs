@@ -6,7 +6,7 @@ use axum::{
 use serde_json::json;
 
 use diesel::prelude::*;
-use diesel::dsl::count_distinct;
+use diesel::dsl::{count_distinct, exists};
 
 use crate::db::CreateAnimeParams;
 use crate::dto::{
@@ -57,7 +57,7 @@ pub async fn create_anime_work(
 }
 
 /// List all anime works
-#[derive(serde::Deserialize, Default)]
+#[derive(Debug, serde::Deserialize, Default)]
 pub struct AnimeWorksQuery {
     pub has_links: Option<bool>,
 }
@@ -71,6 +71,7 @@ pub async fn list_anime_work(
         let mut conn = match state.db.get() {
             Ok(c) => c,
             Err(e) => {
+                tracing::error!("Failed to get DB connection for anime works (has_links): {:?}", e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({
@@ -82,7 +83,7 @@ pub async fn list_anime_work(
             }
         };
         let work_list = anime_works::table
-            .filter(diesel::dsl::exists(
+            .filter(exists(
                 animes::table
                     .inner_join(anime_links::table.on(anime_links::anime_id.eq(animes::anime_id)))
                     .filter(animes::work_id.eq(anime_works::work_id))
@@ -105,14 +106,17 @@ pub async fn list_anime_work(
                 tracing::info!("Listed {} anime works (has_links=true)", responses.len());
                 (StatusCode::OK, Json(json!({ "animes": responses })))
             }
-            Err(e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "database_error",
-                    "message": format!("Failed to list anime works: {:?}", e),
-                    "animes": []
-                })),
-            ),
+            Err(e) => {
+                tracing::error!("Failed to list anime works (has_links=true): {:?}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "database_error",
+                        "message": format!("Failed to list anime works: {:?}", e),
+                        "animes": []
+                    })),
+                )
+            }
         };
     }
 
