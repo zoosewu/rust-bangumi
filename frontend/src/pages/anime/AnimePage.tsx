@@ -56,7 +56,6 @@ export default function AnimeWorksPage() {
   )
 
   const columns: Column<Record<string, unknown>>[] = [
-    { key: "anime_id", header: t("common.id"), render: (item) => String(item.anime_id) },
     { key: "title", header: t("common.name"), render: (item) => String(item.title) },
     {
       key: "created_at",

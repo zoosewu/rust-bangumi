@@ -90,6 +90,7 @@ pub struct FilterRuleResponse {
     pub rule_id: i32,
     pub target_type: String,
     pub target_id: Option<i32>,
+    pub target_name: Option<String>,
     pub rule_order: i32,
     pub is_positive: bool,
     pub regex_pattern: String,

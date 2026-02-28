@@ -137,6 +137,7 @@ pub async fn create_filter_rule(
                 rule_id: rule.rule_id,
                 target_type: rule.target_type.to_string(),
                 target_id: rule.target_id,
+                target_name: None,
                 rule_order: rule.rule_order,
                 is_positive: rule.is_positive,
                 regex_pattern: rule.regex_pattern,
@@ -163,33 +164,89 @@ pub async fn get_filter_rules(
     State(state): State<AppState>,
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let to_response = |r: FilterRule| FilterRuleResponse {
+    use std::collections::HashMap;
+    use diesel::prelude::*;
+    use crate::schema::{anime_works, animes, subtitle_groups, subscriptions};
+
+    let to_response = |r: &FilterRule, name: Option<String>| FilterRuleResponse {
         rule_id: r.rule_id,
         target_type: r.target_type.to_string(),
         target_id: r.target_id,
+        target_name: name,
         rule_order: r.rule_order,
         is_positive: r.is_positive,
-        regex_pattern: r.regex_pattern,
+        regex_pattern: r.regex_pattern.clone(),
         created_at: r.created_at,
         updated_at: r.updated_at,
     };
 
-    // No target_type → return all rules
+    // No target_type → return all rules enriched with entity names
     let Some(target_type_str) = params.get("target_type") else {
-        return match state.repos.filter_rule.find_all().await {
-            Ok(rules) => {
-                let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
-                tracing::info!("Retrieved {} filter rules (all)", responses.len());
-                (StatusCode::OK, Json(json!({ "rules": responses })))
-            }
+        let rules = match state.repos.filter_rule.find_all().await {
+            Ok(r) => r,
             Err(e) => {
                 tracing::error!("Failed to list all filter rules: {}", e);
-                (
+                return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({ "error": "database_error", "message": e.to_string(), "rules": [] })),
-                )
+                );
             }
         };
+
+        // Batch-fetch entity names per target_type
+        let mut conn = match state.db.get() {
+            Ok(c) => c,
+            Err(_) => {
+                // Return rules without names if DB connection fails
+                let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| to_response(r, None)).collect();
+                return (StatusCode::OK, Json(json!({ "rules": responses })));
+            }
+        };
+
+        let work_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::AnimeWork).filter_map(|r| r.target_id).collect();
+        let anime_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::Anime).filter_map(|r| r.target_id).collect();
+        let group_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::SubtitleGroup).filter_map(|r| r.target_id).collect();
+        let fetcher_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::Fetcher).filter_map(|r| r.target_id).collect();
+
+        let work_names: HashMap<i32, String> = if work_ids.is_empty() { HashMap::new() } else {
+            anime_works::table.filter(anime_works::work_id.eq_any(&work_ids))
+                .select((anime_works::work_id, anime_works::title))
+                .load::<(i32, String)>(&mut conn).unwrap_or_default()
+                .into_iter().collect()
+        };
+        let anime_names: HashMap<i32, String> = if anime_ids.is_empty() { HashMap::new() } else {
+            animes::table.inner_join(anime_works::table.on(anime_works::work_id.eq(animes::work_id)))
+                .filter(animes::anime_id.eq_any(&anime_ids))
+                .select((animes::anime_id, anime_works::title, animes::series_no))
+                .load::<(i32, String, i32)>(&mut conn).unwrap_or_default()
+                .into_iter().map(|(id, title, sno)| (id, format!("{} S{}", title, sno))).collect()
+        };
+        let group_names: HashMap<i32, String> = if group_ids.is_empty() { HashMap::new() } else {
+            subtitle_groups::table.filter(subtitle_groups::group_id.eq_any(&group_ids))
+                .select((subtitle_groups::group_id, subtitle_groups::group_name))
+                .load::<(i32, String)>(&mut conn).unwrap_or_default()
+                .into_iter().collect()
+        };
+        let sub_names: HashMap<i32, String> = if fetcher_ids.is_empty() { HashMap::new() } else {
+            subscriptions::table.filter(subscriptions::subscription_id.eq_any(&fetcher_ids))
+                .select((subscriptions::subscription_id, subscriptions::name))
+                .load::<(i32, Option<String>)>(&mut conn).unwrap_or_default()
+                .into_iter().filter_map(|(id, name)| name.map(|n| (id, n))).collect()
+        };
+
+        let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| {
+            let name = r.target_id.and_then(|id| match r.target_type {
+                FilterTargetType::AnimeWork => work_names.get(&id).cloned(),
+                FilterTargetType::Anime => anime_names.get(&id).cloned(),
+                FilterTargetType::SubtitleGroup => group_names.get(&id).cloned(),
+                FilterTargetType::Fetcher => sub_names.get(&id).cloned(),
+                _ => None,
+            });
+            to_response(r, name)
+        }).collect();
+
+        tracing::info!("Retrieved {} filter rules (all)", responses.len());
+        return (StatusCode::OK, Json(json!({ "rules": responses })));
     };
 
     // Parse and validate target_type
@@ -207,12 +264,10 @@ pub async fn get_filter_rules(
 
     match state.repos.filter_rule.find_by_target(target_type, target_id).await {
         Ok(rules) => {
-            let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
+            let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| to_response(r, None)).collect();
             tracing::info!(
                 "Retrieved {} filter rules for target_type={}, target_id={:?}",
-                responses.len(),
-                target_type_str,
-                target_id
+                responses.len(), target_type_str, target_id
             );
             (StatusCode::OK, Json(json!({ "rules": responses })))
         }

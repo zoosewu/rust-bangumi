@@ -54,11 +54,6 @@ export default function SubtitleGroupsPage() {
 
   const columns: Column<Record<string, unknown>>[] = [
     {
-      key: "group_id",
-      header: t("common.id"),
-      render: (item) => String(item.group_id),
-    },
-    {
       key: "group_name",
       header: t("subtitleGroups.groupName"),
       render: (item) => String(item.group_name),

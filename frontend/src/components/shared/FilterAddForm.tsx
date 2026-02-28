@@ -17,6 +17,7 @@ interface FilterAddFormProps {
   targetId: number | null
   currentRuleCount: number
   onSuccess: () => void
+  /** 若不傳則由元件自動載入 baseline */
   baseline?: FilterPreviewResponse | null
 }
 
@@ -25,13 +26,31 @@ export function FilterAddForm({
   targetId,
   currentRuleCount,
   onSuccess,
-  baseline,
+  baseline: baselineProp,
 }: FilterAddFormProps) {
   const { t } = useTranslation()
   const [newPattern, setNewPattern] = useState("")
   const [isPositive, setIsPositive] = useState(true)
   const [preview, setPreview] = useState<FilterPreviewResponse | null>(null)
+  const [selfBaseline, setSelfBaseline] = useState<FilterPreviewResponse | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 若父層未傳 baseline，自行載入
+  useEffect(() => {
+    if (baselineProp !== undefined) return
+    AppRuntime.runPromise(
+      Effect.flatMap(CoreApi, (api) =>
+        api.previewFilter({
+          target_type: targetType,
+          target_id: targetId,
+          regex_pattern: "^$",
+          is_positive: false,
+        }),
+      ),
+    ).then(setSelfBaseline).catch(() => setSelfBaseline(null))
+  }, [targetType, targetId, baselineProp])
+
+  const baseline = baselineProp !== undefined ? baselineProp : selfBaseline
 
   const { mutate: createRule, isLoading: creating } = useEffectMutation(
     (pattern: string, positive: boolean) =>
@@ -56,14 +75,15 @@ export function FilterAddForm({
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
     debounceRef.current = setTimeout(() => {
-      const req = {
-        target_type: targetType,
-        target_id: targetId,
-        regex_pattern: newPattern,
-        is_positive: isPositive,
-      }
       AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) => api.previewFilter(req))
+        Effect.flatMap(CoreApi, (api) =>
+          api.previewFilter({
+            target_type: targetType,
+            target_id: targetId,
+            regex_pattern: newPattern,
+            is_positive: isPositive,
+          }),
+        ),
       ).then(setPreview).catch(() => setPreview(null))
     }, 300)
 

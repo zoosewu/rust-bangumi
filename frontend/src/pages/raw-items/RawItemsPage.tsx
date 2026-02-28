@@ -76,11 +76,6 @@ export default function RawItemsPage() {
 
   const columns: Column<Record<string, unknown>>[] = [
     {
-      key: "item_id",
-      header: t("common.id"),
-      render: (item) => String(item.item_id),
-    },
-    {
       key: "title",
       header: t("rawItems.itemTitle"),
       render: (item) => (

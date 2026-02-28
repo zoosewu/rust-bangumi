@@ -202,7 +202,6 @@ export default function ParsersPage() {
   }, [t])
 
   const columns: Column<Record<string, unknown>>[] = [
-    { key: "parser_id", header: t("common.id"), render: (item) => String(item.parser_id) },
     { key: "name", header: t("common.name"), render: (item) => String(item.name) },
     { key: "priority", header: t("parsers.priority"), render: (item) => String(item.priority) },
     {
