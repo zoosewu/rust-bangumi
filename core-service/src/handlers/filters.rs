@@ -14,14 +14,6 @@ use crate::services::filter::FilterEngine;
 use crate::services::filter_recalc;
 use crate::state::AppState;
 
-/// Query parameters for filter rules
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct FilterRulesQuery {
-    pub target_type: Option<String>,
-    pub target_id: Option<i32>,
-}
-
 /// Create a new filter rule
 pub async fn create_filter_rule(
     State(state): State<AppState>,
@@ -169,7 +161,7 @@ pub async fn create_filter_rule(
 /// Get filter rules. When target_type is omitted, returns all rules sorted global-first.
 pub async fn get_filter_rules(
     State(state): State<AppState>,
-    Query(query): Query<FilterRulesQuery>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let to_response = |r: FilterRule| FilterRuleResponse {
         rule_id: r.rule_id,
@@ -183,7 +175,7 @@ pub async fn get_filter_rules(
     };
 
     // No target_type → return all rules
-    let Some(ref target_type_str) = query.target_type else {
+    let Some(target_type_str) = params.get("target_type") else {
         return match state.repos.filter_rule.find_all().await {
             Ok(rules) => {
                 let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
@@ -211,14 +203,16 @@ pub async fn get_filter_rules(
         }
     };
 
-    match state.repos.filter_rule.find_by_target(target_type, query.target_id).await {
+    let target_id: Option<i32> = params.get("target_id").and_then(|s| s.parse().ok());
+
+    match state.repos.filter_rule.find_by_target(target_type, target_id).await {
         Ok(rules) => {
             let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
             tracing::info!(
                 "Retrieved {} filter rules for target_type={}, target_id={:?}",
                 responses.len(),
                 target_type_str,
-                query.target_id
+                target_id
             );
             (StatusCode::OK, Json(json!({ "rules": responses })))
         }
