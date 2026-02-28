@@ -6,8 +6,8 @@ use serde_json::json;
 
 use crate::dto::{DashboardStats, ServiceInfo};
 use crate::schema::{
-    anime_works, animes, downloads, raw_anime_items, service_modules, subscription_conflicts,
-    subscriptions,
+    anime_links, anime_works, animes, downloads, raw_anime_items, service_modules,
+    subscription_conflicts, subscriptions,
 };
 use crate::state::AppState;
 
@@ -25,12 +25,26 @@ pub async fn get_dashboard_stats(
         }
     };
 
+    // Only count anime_works that have at least one link (matches AnimePage has_links=true filter)
     let total_anime: i64 = anime_works::table
+        .filter(diesel::dsl::exists(
+            animes::table
+                .inner_join(anime_links::table.on(anime_links::anime_id.eq(animes::anime_id)))
+                .filter(animes::work_id.eq(anime_works::work_id))
+                .select(anime_links::link_id),
+        ))
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);
 
+    // Only count anime series that have at least one unfiltered link (matches AnimeSeriesPage excludeEmpty=true filter)
     let total_series: i64 = animes::table
+        .filter(diesel::dsl::exists(
+            anime_links::table
+                .filter(anime_links::anime_id.eq(animes::anime_id))
+                .filter(anime_links::filtered_flag.eq(false))
+                .select(anime_links::link_id),
+        ))
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);
