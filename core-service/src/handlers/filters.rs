@@ -15,9 +15,9 @@ use crate::services::filter_recalc;
 use crate::state::AppState;
 
 /// Query parameters for filter rules
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct FilterRulesQuery {
-    pub target_type: String,
+    pub target_type: Option<String>,
     pub target_id: Option<i32>,
 }
 
@@ -165,50 +165,58 @@ pub async fn create_filter_rule(
     }
 }
 
-/// Get filter rules by target_type and target_id, sorted by rule_order
+/// Get filter rules. When target_type is omitted, returns all rules sorted global-first.
 pub async fn get_filter_rules(
     State(state): State<AppState>,
     Query(query): Query<FilterRulesQuery>,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    let to_response = |r: FilterRule| FilterRuleResponse {
+        rule_id: r.rule_id,
+        target_type: r.target_type.to_string(),
+        target_id: r.target_id,
+        rule_order: r.rule_order,
+        is_positive: r.is_positive,
+        regex_pattern: r.regex_pattern,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+    };
+
+    // No target_type → return all rules
+    let Some(ref target_type_str) = query.target_type else {
+        return match state.repos.filter_rule.find_all().await {
+            Ok(rules) => {
+                let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
+                tracing::info!("Retrieved {} filter rules (all)", responses.len());
+                (StatusCode::OK, Json(json!({ "rules": responses })))
+            }
+            Err(e) => {
+                tracing::error!("Failed to list all filter rules: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "database_error", "message": e.to_string(), "rules": [] })),
+                )
+            }
+        };
+    };
+
     // Parse and validate target_type
-    let target_type: FilterTargetType = match query.target_type.parse() {
+    let target_type: FilterTargetType = match target_type_str.parse() {
         Ok(t) => t,
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "error": "invalid_target_type",
-                    "message": e,
-                    "rules": []
-                })),
+                Json(json!({ "error": "invalid_target_type", "message": e, "rules": [] })),
             );
         }
     };
 
-    match state
-        .repos
-        .filter_rule
-        .find_by_target(target_type, query.target_id)
-        .await
-    {
+    match state.repos.filter_rule.find_by_target(target_type, query.target_id).await {
         Ok(rules) => {
-            let responses: Vec<FilterRuleResponse> = rules
-                .into_iter()
-                .map(|r| FilterRuleResponse {
-                    rule_id: r.rule_id,
-                    target_type: r.target_type.to_string(),
-                    target_id: r.target_id,
-                    rule_order: r.rule_order,
-                    is_positive: r.is_positive,
-                    regex_pattern: r.regex_pattern,
-                    created_at: r.created_at,
-                    updated_at: r.updated_at,
-                })
-                .collect();
+            let responses: Vec<FilterRuleResponse> = rules.into_iter().map(to_response).collect();
             tracing::info!(
                 "Retrieved {} filter rules for target_type={}, target_id={:?}",
                 responses.len(),
-                query.target_type,
+                target_type_str,
                 query.target_id
             );
             (StatusCode::OK, Json(json!({ "rules": responses })))
@@ -217,11 +225,7 @@ pub async fn get_filter_rules(
             tracing::error!("Failed to list filter rules: {}", e);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "database_error",
-                    "message": format!("Failed to list filter rules: {}", e),
-                    "rules": []
-                })),
+                Json(json!({ "error": "database_error", "message": e.to_string(), "rules": [] })),
             )
         }
     }

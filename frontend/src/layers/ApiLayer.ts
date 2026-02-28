@@ -53,13 +53,16 @@ const makeCoreApi = Effect.gen(function* () {
       Schema.Struct({ subscriptions: Schema.Array(Subscription) }),
     ).pipe(Effect.map((r) => r.subscriptions)),
 
-    getFilterRules: (targetType, targetId) =>
-      fetchJson(
-        HttpClientRequest.get(
-          `/api/core/filters?target_type=${targetType}${targetId != null ? `&target_id=${targetId}` : ""}`,
-        ),
+    getFilterRules: (targetType, targetId) => {
+      const qs = new URLSearchParams()
+      if (targetType) qs.set("target_type", targetType)
+      if (targetId != null) qs.set("target_id", String(targetId))
+      const q = qs.toString()
+      return fetchJson(
+        HttpClientRequest.get(`/api/core/filters${q ? `?${q}` : ""}`),
         Schema.Struct({ rules: Schema.Array(FilterRule) }),
-      ).pipe(Effect.map((r) => r.rules)),
+      ).pipe(Effect.map((r) => r.rules))
+    },
 
     createFilterRule: (req) =>
       postJson("/api/core/filters", req, Schema.Any).pipe(

@@ -13,7 +13,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly createAnimeWork: (title: string) => Effect.Effect<AnimeWork>
     readonly deleteAnimeWork: (id: number) => Effect.Effect<void>
     readonly getSubscriptions: Effect.Effect<readonly Subscription[]>
-    readonly getFilterRules: (targetType: string, targetId?: number) => Effect.Effect<readonly FilterRule[]>
+    readonly getFilterRules: (targetType?: string, targetId?: number) => Effect.Effect<readonly FilterRule[]>
     readonly createFilterRule: (req: {
       target_type: string
       target_id?: number

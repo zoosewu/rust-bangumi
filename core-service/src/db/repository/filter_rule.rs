@@ -9,6 +9,7 @@ use crate::schema::filter_rules;
 #[async_trait]
 pub trait FilterRuleRepository: Send + Sync {
     async fn find_by_id(&self, id: i32) -> Result<Option<FilterRule>, RepositoryError>;
+    async fn find_all(&self) -> Result<Vec<FilterRule>, RepositoryError>;
     async fn find_by_target(
         &self,
         target_type: FilterTargetType,
@@ -38,6 +39,18 @@ impl FilterRuleRepository for DieselFilterRuleRepository {
                 .filter(filter_rules::rule_id.eq(id))
                 .first(&mut conn)
                 .optional()
+                .map_err(RepositoryError::from)
+        })
+        .await?
+    }
+
+    async fn find_all(&self) -> Result<Vec<FilterRule>, RepositoryError> {
+        let pool = self.pool.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get()?;
+            filter_rules::table
+                .order((filter_rules::target_type.asc(), filter_rules::rule_order.asc()))
+                .load::<FilterRule>(&mut conn)
                 .map_err(RepositoryError::from)
         })
         .await?
@@ -148,6 +161,11 @@ pub mod mock {
                 .iter()
                 .find(|r| r.rule_id == id)
                 .cloned())
+        }
+
+        async fn find_all(&self) -> Result<Vec<FilterRule>, RepositoryError> {
+            self.operations.lock().unwrap().push("find_all".to_string());
+            Ok(self.rules.lock().unwrap().clone())
         }
 
         async fn find_by_target(

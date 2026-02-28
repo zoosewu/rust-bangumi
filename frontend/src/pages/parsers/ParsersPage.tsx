@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -46,7 +46,7 @@ export default function ParsersPage() {
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
   const [previewDebounce, setPreviewDebounce] = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  const { data: parsers, isLoading, refetch } = useEffectQuery(
+  const { data: rawParsers, isLoading, refetch } = useEffectQuery(
     () =>
       Effect.gen(function* () {
         const api = yield* CoreApi
@@ -54,6 +54,18 @@ export default function ParsersPage() {
       }),
     [],
   )
+
+  // Sort: global (no created_from_type) first, then by created_from_type
+  const parsers = useMemo(() => {
+    if (!rawParsers) return rawParsers
+    return [...rawParsers].sort((a, b) => {
+      const aIsGlobal = !a.created_from_type || a.created_from_type === "global"
+      const bIsGlobal = !b.created_from_type || b.created_from_type === "global"
+      if (aIsGlobal && !bIsGlobal) return -1
+      if (!aIsGlobal && bIsGlobal) return 1
+      return 0
+    })
+  }, [rawParsers])
 
   const { mutate: createParser, isLoading: creating } = useEffectMutation(
     (req: Record<string, unknown>) =>
