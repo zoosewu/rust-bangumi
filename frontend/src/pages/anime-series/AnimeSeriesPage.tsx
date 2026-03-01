@@ -11,10 +11,13 @@ import { Button } from "@/components/ui/button"
 import { AnimeDialog } from "./AnimeSeriesDialog"
 import { AnimeCard } from "@/components/AnimeSeriesCard"
 import type { AnimeRich } from "@/schemas/anime"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 
 export default function AnimePage() {
   const { t } = useTranslation()
   const [selected, setSelected] = useState<AnimeRich | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
     return (localStorage.getItem("anime-series-view") as "grid" | "list") ?? "grid"
   })
@@ -32,6 +35,8 @@ export default function AnimePage() {
       }),
     [],
   )
+
+  const filteredList = useTableSearch(seriesList ?? [], searchQuery)
 
   const columns: Column<Record<string, unknown>>[] = [
     {
@@ -109,11 +114,14 @@ export default function AnimePage() {
           </Button>
         </div>
       </div>
+
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {(seriesList ?? []).map((series) => (
+          {filteredList.map((series) => (
             <AnimeCard
               key={series.series_id}
               series={series}
@@ -124,7 +132,7 @@ export default function AnimePage() {
       ) : (
         <DataTable
           columns={columns}
-          data={(seriesList ?? []) as unknown as Record<string, unknown>[]}
+          data={filteredList as unknown as Record<string, unknown>[]}
           keyField="series_id"
           onRowClick={(row) => {
             const rich = (seriesList ?? []).find((s) => s.series_id === row.series_id)
