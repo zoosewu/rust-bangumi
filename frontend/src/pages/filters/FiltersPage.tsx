@@ -16,6 +16,8 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 
 const TARGET_ROUTES: Record<string, string> = {
   anime_work: "/anime-works",
@@ -27,6 +29,7 @@ const TARGET_ROUTES: Record<string, string> = {
 export default function FiltersPage() {
   const { t } = useTranslation()
   const [addOpen, setAddOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<FilterRule | null>(null)
   const [deletePreview, setDeletePreview] = useState<FilterPreviewResponse | null>(null)
 
@@ -49,6 +52,8 @@ export default function FiltersPage() {
       return a.rule_order - b.rule_order
     })
   }, [rules])
+
+  const filteredRules = useTableSearch(sortedRules, searchQuery)
 
   const { mutate: deleteRule, isLoading: deleting } = useEffectMutation(
     (ruleId: number) => Effect.flatMap(CoreApi, (api) => api.deleteFilterRule(ruleId)),
@@ -157,18 +162,20 @@ export default function FiltersPage() {
         </Button>
       </div>
 
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : error ? (
         <p className="text-destructive text-sm">
           {t("common.error")}: {String(error)}
         </p>
-      ) : sortedRules.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("filters.noRules", "No filter rules found.")}</p>
+      ) : filteredRules.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{searchQuery ? t("common.noResults") : t("filters.noRules", "No filter rules found.")}</p>
       ) : (
         <DataTable
           columns={columns}
-          data={sortedRules as unknown as Record<string, unknown>[]}
+          data={filteredRules as unknown as Record<string, unknown>[]}
           keyField="rule_id"
         />
       )}
