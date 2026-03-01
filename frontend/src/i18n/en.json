@@ -194,7 +194,8 @@
     "after": "After (with this filter)",
     "passed": "Passed",
     "filtered": "Filtered",
-    "addFilter": "Add Filter"
+    "addFilter": "Add Filter",
+    "noRules": "No filter rules found."
   },
   "parsers": {
     "title": "Parsers",

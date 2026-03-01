@@ -194,7 +194,8 @@
     "after": "変更後（このフィルターあり）",
     "passed": "通過",
     "filtered": "フィルター済み",
-    "addFilter": "フィルターを追加"
+    "addFilter": "フィルターを追加",
+    "noRules": "フィルタールールがありません。"
   },
   "parsers": {
     "title": "パーサー",

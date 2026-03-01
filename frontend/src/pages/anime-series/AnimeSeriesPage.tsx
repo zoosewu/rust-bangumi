@@ -120,15 +120,19 @@ export default function AnimePage() {
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {filteredList.map((series) => (
-            <AnimeCard
-              key={series.series_id}
-              series={series}
-              onClick={() => setSelected(series)}
-            />
-          ))}
-        </div>
+        filteredList.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("common.noResults")}</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {filteredList.map((series) => (
+              <AnimeCard
+                key={series.series_id}
+                series={series}
+                onClick={() => setSelected(series)}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <DataTable
           columns={columns}

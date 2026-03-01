@@ -182,6 +182,8 @@ export default function RawItemsPage() {
 
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
+      ) : debouncedSearch && (items ?? []).length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("common.noResults")}</p>
       ) : (
         <>
           <DataTable

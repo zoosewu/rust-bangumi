@@ -194,7 +194,8 @@
     "after": "變更後（含此篩選）",
     "passed": "通過",
     "filtered": "已篩選",
-    "addFilter": "新增篩選器"
+    "addFilter": "新增篩選器",
+    "noRules": "目前沒有篩選規則。"
   },
   "parsers": {
     "title": "解析器",
