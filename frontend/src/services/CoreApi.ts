@@ -42,6 +42,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
       subscription_id?: number
       limit?: number
       offset?: number
+      search?: string
     }) => Effect.Effect<readonly RawAnimeItem[]>
     readonly getDownloads: (params: {
       status?: string

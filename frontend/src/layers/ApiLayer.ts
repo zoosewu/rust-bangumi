@@ -125,6 +125,7 @@ const makeCoreApi = Effect.gen(function* () {
         qs.set("subscription_id", String(params.subscription_id))
       if (params.limit != null) qs.set("limit", String(params.limit))
       if (params.offset != null) qs.set("offset", String(params.offset))
+      if (params.search) qs.set("search", params.search)
       return fetchJson(
         HttpClientRequest.get(`/api/core/raw-items?${qs.toString()}`),
         Schema.Array(RawAnimeItem),
