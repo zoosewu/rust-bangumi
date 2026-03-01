@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "react-router-dom"
 import { Effect } from "effect"
@@ -6,9 +7,12 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle } from "lucide-react"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 
 export default function ConflictsPage() {
   const { t } = useTranslation()
+  const [searchQuery, setSearchQuery] = useState("")
 
   const { data: conflicts, isLoading } = useEffectQuery(
     () =>
@@ -19,6 +23,8 @@ export default function ConflictsPage() {
     [],
   )
 
+  const filteredConflicts = useTableSearch(conflicts ?? [], searchQuery)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -27,6 +33,10 @@ export default function ConflictsPage() {
           <Badge variant="destructive">{conflicts.length}</Badge>
         )}
       </div>
+
+      {conflicts && conflicts.length > 0 && (
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+      )}
 
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
@@ -37,6 +47,8 @@ export default function ConflictsPage() {
             {t("conflicts.noConflicts")}
           </CardContent>
         </Card>
+      ) : filteredConflicts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t("common.noResults")}</p>
       ) : (
         <div className="rounded-md border">
           <table className="w-full text-sm">
@@ -63,7 +75,7 @@ export default function ConflictsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {conflicts.map((c) => (
+              {filteredConflicts.map((c) => (
                 <tr key={c.link_id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">
                     <Link
