@@ -11,6 +11,7 @@ import type { Column } from "@/components/shared/DataTable"
 import { FilterAddForm } from "@/components/shared/FilterAddForm"
 import { FilterPreviewPanel } from "@/components/shared/FilterPreviewPanel"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
@@ -154,13 +155,15 @@ export default function FiltersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("filters.title")}</h1>
-        <Button onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          {t("filters.addFilter")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("filters.title")}
+        actions={
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t("filters.addFilter")}
+          </Button>
+        }
+      />
 
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 

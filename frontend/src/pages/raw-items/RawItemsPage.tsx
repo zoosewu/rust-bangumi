@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { RawItemDialog } from "./RawItemDialog"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
@@ -154,9 +155,9 @@ export default function RawItemsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("rawItems.title")}</h1>
-        <div className="flex items-center gap-4">
+      <PageHeader
+        title={t("rawItems.title")}
+        actions={
           <Select
             value={status}
             onValueChange={(v) => {
@@ -175,8 +176,8 @@ export default function RawItemsPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
+        }
+      />
 
       <SearchBar value={rawSearch} onChange={setRawSearch} />
 

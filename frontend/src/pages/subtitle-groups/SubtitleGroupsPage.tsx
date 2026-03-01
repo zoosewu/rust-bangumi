@@ -7,6 +7,7 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -88,13 +89,15 @@ export default function SubtitleGroupsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("subtitleGroups.title")}</h1>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          {t("subtitleGroups.addGroup")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("subtitleGroups.title")}
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t("subtitleGroups.addGroup")}
+          </Button>
+        }
+      />
 
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 

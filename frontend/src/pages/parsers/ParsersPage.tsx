@@ -8,6 +8,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -265,18 +266,20 @@ export default function ParsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("parsers.title")}</h1>
-        <Button onClick={() => {
-          setEditTarget(null)
-          setForm({ ...EMPTY_PARSER_FORM })
-          setPreview(null)
-          setDialogOpen(true)
-        }}>
-          <Plus className="h-4 w-4 mr-2" />
-          {t("parsers.addParser")}
-        </Button>
-      </div>
+      <PageHeader
+        title={t("parsers.title")}
+        actions={
+          <Button onClick={() => {
+            setEditTarget(null)
+            setForm({ ...EMPTY_PARSER_FORM })
+            setPreview(null)
+            setDialogOpen(true)
+          }}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t("parsers.addParser")}
+          </Button>
+        }
+      />
 
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 

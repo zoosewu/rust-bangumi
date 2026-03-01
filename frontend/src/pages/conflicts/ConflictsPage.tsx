@@ -7,6 +7,7 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle } from "lucide-react"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { useTableSearch } from "@/hooks/useTableSearch"
 
@@ -27,12 +28,12 @@ export default function ConflictsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold">{t("conflicts.title")}</h1>
-        {conflicts && conflicts.length > 0 && (
+      <PageHeader
+        title={t("conflicts.title")}
+        badge={conflicts && conflicts.length > 0 ? (
           <Badge variant="destructive">{conflicts.length}</Badge>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {conflicts && conflicts.length > 0 && (
         <SearchBar value={searchQuery} onChange={setSearchQuery} />

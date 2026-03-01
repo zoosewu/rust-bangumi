@@ -8,6 +8,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { PageHeader } from "@/components/shared/PageHeader"
 import { AnimeDialog } from "./AnimeSeriesDialog"
 import { AnimeCard } from "@/components/AnimeSeriesCard"
 import type { AnimeRich } from "@/schemas/anime"
@@ -95,25 +96,27 @@ export default function AnimePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{t("animeSeries.title", "Anime Seasons")}</h1>
-        <div className="flex items-center gap-1">
-          <Button
-            variant={viewMode === "list" ? "secondary" : "ghost"}
-            size="icon"
-            onClick={() => handleViewMode("list")}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "grid" ? "secondary" : "ghost"}
-            size="icon"
-            onClick={() => handleViewMode("grid")}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t("animeSeries.title", "Anime Seasons")}
+        actions={
+          <div className="flex items-center gap-1">
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => handleViewMode("list")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => handleViewMode("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
+        }
+      />
 
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 

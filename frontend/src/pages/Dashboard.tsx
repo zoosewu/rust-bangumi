@@ -4,6 +4,7 @@ import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Badge } from "@/components/ui/badge"
+import { PageHeader } from "@/components/shared/PageHeader"
 import {
   Film,
   Rss,
@@ -28,7 +29,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t("dashboard.title")}</h1>
+      <PageHeader title={t("dashboard.title")} />
 
       {/* Service health */}
       {isLoading ? (
