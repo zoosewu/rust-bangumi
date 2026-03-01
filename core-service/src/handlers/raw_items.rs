@@ -145,7 +145,10 @@ pub async fn list_raw_items(
     }
 
     if let Some(ref search) = query.search {
-        q = q.filter(raw_anime_items::title.ilike(format!("%{}%", search)));
+        let search = search.trim();
+        if !search.is_empty() && search.len() <= 200 {
+            q = q.filter(raw_anime_items::title.ilike(format!("%{}%", search)));
+        }
     }
 
     let limit = query.limit.unwrap_or(100).min(1000);
