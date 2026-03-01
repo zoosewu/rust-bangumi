@@ -24,6 +24,7 @@ pub struct ListRawItemsQuery {
     pub subscription_id: Option<i32>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub search: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -141,6 +142,10 @@ pub async fn list_raw_items(
 
     if let Some(sub_id) = query.subscription_id {
         q = q.filter(raw_anime_items::subscription_id.eq(sub_id));
+    }
+
+    if let Some(ref search) = query.search {
+        q = q.filter(raw_anime_items::title.ilike(format!("%{}%", search)));
     }
 
     let limit = query.limit.unwrap_or(100).min(1000);
