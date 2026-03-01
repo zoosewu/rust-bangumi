@@ -22,6 +22,8 @@ import {
   ParserFormFields,
 } from "@/components/shared/ParserForm"
 import { AppRuntime } from "@/runtime/AppRuntime"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 import { AnimeWorkDialog } from "@/pages/anime/AnimeDialog"
 import { AnimeDialog } from "@/pages/anime-series/AnimeSeriesDialog"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
@@ -38,6 +40,7 @@ type EntityDialog =
 export default function ParsersPage() {
   const { t } = useTranslation()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [editTarget, setEditTarget] = useState<Record<string, unknown> | null>(null) // null = create mode
   const [form, setForm] = useState<ParserFormState>({ ...EMPTY_PARSER_FORM })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
@@ -66,6 +69,8 @@ export default function ParsersPage() {
       return 0
     })
   }, [rawParsers])
+
+  const filteredParsers = useTableSearch(parsers ?? [], searchQuery)
 
   const { mutate: createParser, isLoading: creating } = useEffectMutation(
     (req: Record<string, unknown>) =>
@@ -273,12 +278,14 @@ export default function ParsersPage() {
         </Button>
       </div>
 
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <DataTable
           columns={columns}
-          data={(parsers ?? []) as unknown as Record<string, unknown>[]}
+          data={(filteredParsers ?? []) as unknown as Record<string, unknown>[]}
           keyField="parser_id"
           onRowClick={(item) => {
             setEditTarget(item)
