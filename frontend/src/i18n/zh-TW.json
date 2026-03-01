@@ -44,7 +44,10 @@
     "pattern": "模式",
     "actions": "操作",
     "allStatuses": "所有狀態",
-    "none": "無"
+    "none": "無",
+    "search": "搜尋",
+    "searchPlaceholder": "搜尋...",
+    "noResults": "無結果"
   },
   "dashboard": {
     "title": "儀表板",

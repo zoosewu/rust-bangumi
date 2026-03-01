@@ -44,7 +44,10 @@
     "pattern": "Pattern",
     "actions": "Actions",
     "allStatuses": "All Statuses",
-    "none": "None"
+    "none": "None",
+    "search": "Search",
+    "searchPlaceholder": "Search...",
+    "noResults": "No results"
   },
   "dashboard": {
     "title": "Dashboard",
