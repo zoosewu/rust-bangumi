@@ -18,7 +18,7 @@ function stringifyValue(val: unknown): string {
  * Returns items matching the query (any field, case-insensitive), capped at 50.
  * If query is empty/whitespace, returns first 50 items unchanged.
  */
-export function useTableSearch<T>(data: T[], query: string): T[] {
+export function useTableSearch<T>(data: ReadonlyArray<T>, query: string): T[] {
   return useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return data.slice(0, 50)
