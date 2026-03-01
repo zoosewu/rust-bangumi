@@ -19,10 +19,13 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Trash2 } from "lucide-react"
 import { SubtitleGroupDialog } from "./SubtitleGroupDialog"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 
 export default function SubtitleGroupsPage() {
   const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [newName, setNewName] = useState("")
   const [selectedGroup, setSelectedGroup] = useState<{ id: number; name: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
@@ -35,6 +38,8 @@ export default function SubtitleGroupsPage() {
       }),
     [],
   )
+
+  const filteredGroups = useTableSearch(groups ?? [], searchQuery)
 
   const { mutate: createGroup, isLoading: creating } = useEffectMutation(
     (name: string) =>
@@ -91,17 +96,19 @@ export default function SubtitleGroupsPage() {
         </Button>
       </div>
 
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
-      ) : groups && groups.length > 0 ? (
+      ) : filteredGroups.length > 0 ? (
         <DataTable
           columns={columns}
-          data={groups as unknown as Record<string, unknown>[]}
+          data={filteredGroups as unknown as Record<string, unknown>[]}
           keyField="group_id"
           onRowClick={(row) => setSelectedGroup({ id: row.group_id as number, name: row.group_name as string })}
         />
       ) : (
-        <p className="text-sm text-muted-foreground">{t("subtitleGroups.noGroups")}</p>
+        <p className="text-sm text-muted-foreground">{searchQuery ? t("common.noResults") : t("subtitleGroups.noGroups")}</p>
       )}
 
       {selectedGroup && (
