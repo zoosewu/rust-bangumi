@@ -19,10 +19,13 @@ import {
 import { Plus } from "lucide-react"
 import { AnimeWorkDialog } from "./AnimeDialog"
 import type { AnimeWork } from "@/schemas/anime"
+import { SearchBar } from "@/components/shared/SearchBar"
+import { useTableSearch } from "@/hooks/useTableSearch"
 
 export default function AnimeWorksPage() {
   const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [newTitle, setNewTitle] = useState("")
   const [selectedAnime, setSelectedAnime] = useState<AnimeWork | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -38,6 +41,8 @@ export default function AnimeWorksPage() {
       }),
     [],
   )
+
+  const filteredAnimes = useTableSearch(animes ?? [], searchQuery)
 
   const { mutate: createAnime, isLoading: creating } = useEffectMutation(
     (title: string) =>
@@ -94,12 +99,14 @@ export default function AnimeWorksPage() {
         </Button>
       </div>
 
+      <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <DataTable
           columns={columns}
-          data={(animes ?? []) as unknown as Record<string, unknown>[]}
+          data={filteredAnimes as unknown as Record<string, unknown>[]}
           keyField="anime_id"
           onRowClick={(item) => {
             const found = (animes ?? []).find((a) => a.anime_id === item.anime_id)
