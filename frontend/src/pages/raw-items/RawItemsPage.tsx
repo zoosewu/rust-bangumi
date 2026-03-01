@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { RawItemDialog } from "./RawItemDialog"
+import { SearchBar } from "@/components/shared/SearchBar"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
@@ -26,6 +27,16 @@ export default function RawItemsPage() {
   const [status, setStatus] = useState("all")
   const [offset, setOffset] = useState(0)
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
+  const [rawSearch, setRawSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(rawSearch)
+      setOffset(0)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [rawSearch])
 
   const { data: items, isLoading } = useEffectQuery(
     () =>
@@ -35,9 +46,10 @@ export default function RawItemsPage() {
           status: status === "all" ? undefined : status,
           limit: PAGE_SIZE,
           offset,
+          search: debouncedSearch || undefined,
         })
       }),
-    [status, offset],
+    [status, offset, debouncedSearch],
   )
 
   const { data: subscriptions } = useEffectQuery(
@@ -165,6 +177,8 @@ export default function RawItemsPage() {
           </Select>
         </div>
       </div>
+
+      <SearchBar value={rawSearch} onChange={setRawSearch} />
 
       {isLoading ? (
         <p className="text-muted-foreground">{t("common.loading")}</p>
