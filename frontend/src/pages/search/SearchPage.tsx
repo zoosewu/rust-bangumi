@@ -117,7 +117,7 @@ export default function SearchPage() {
         <p className="text-muted-foreground">{t("common.loading")}</p>
       )}
 
-      {error && (
+      {!!error && (
         <p className="text-destructive text-sm">
           {t("common.error")}: {String(error)}
         </p>
