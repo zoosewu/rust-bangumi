@@ -121,6 +121,7 @@ impl PikPakApi {
             }))
             .send()
             .await?
+            .error_for_status()?
             .json()
             .await?;
 

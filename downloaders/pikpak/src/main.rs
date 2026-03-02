@@ -1,12 +1,33 @@
 // downloaders/pikpak/src/main.rs
 use axum::{
+    extract::State,
     routing::{delete, get, post},
-    Router,
+    Json, Router,
 };
 use downloader_pikpak::{handlers, PikPakClient};
 use shared::{DownloadType, DownloaderClient, ServiceRegistration, ServiceType};
 use std::sync::Arc;
 use tokio::net::TcpListener;
+
+/// Concrete handler for POST /config/credentials.
+/// Uses Arc<PikPakClient> directly so it can call start_polling() after login.
+async fn set_credentials_and_start_polling(
+    State(client): State<Arc<PikPakClient>>,
+    Json(req): Json<handlers::SetCredentialsRequest>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    match client.login(&req.username, &req.password).await {
+        Ok(()) => {
+            client.start_polling();
+            Ok(Json(
+                serde_json::json!({"message": "Credentials updated successfully"}),
+            ))
+        }
+        Err(e) => {
+            tracing::error!("PikPak login failed: {e}");
+            Err(axum::http::StatusCode::BAD_GATEWAY)
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -71,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(handlers::health_check))
         .route(
             "/config/credentials",
-            post(handlers::set_credentials::<PikPakClient>),
+            post(set_credentials_and_start_polling),
         )
         .with_state(client);
 
@@ -89,17 +110,13 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| "http://localhost:8000".to_string());
         let service_host =
             std::env::var("SERVICE_HOST").unwrap_or_else(|_| "localhost".to_string());
-        let port: u16 = std::env::var("SERVICE_PORT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(8006);
 
         let registration = ServiceRegistration {
             service_type: ServiceType::Downloader,
             service_name: std::env::var("SERVICE_NAME")
                 .unwrap_or_else(|_| "pikpak-downloader".to_string()),
             host: service_host,
-            port,
+            port: service_port,
             capabilities: shared::Capabilities {
                 fetch_endpoint: None,
                 download_endpoint: Some("/downloads".to_string()),

@@ -7,7 +7,13 @@ use anyhow::Result;
 use shared::{
     CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem, DownloaderClient,
 };
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 // ── Hash extraction ────────────────────────────────────────────────────────
 
@@ -43,6 +49,7 @@ pub fn extract_hash(url: &str) -> String {
 pub struct PikPakClient {
     api: Arc<PikPakApi>,
     db: Db,
+    polling_started: Arc<AtomicBool>,
 }
 
 impl PikPakClient {
@@ -50,11 +57,21 @@ impl PikPakClient {
         Ok(Self {
             api: Arc::new(PikPakApi::new()),
             db: Db::open(db_path)?,
+            polling_started: Arc::new(AtomicBool::new(false)),
         })
     }
 
-    /// Start the background polling loop. Call once after successful login.
+    /// Start the background polling loop. Idempotent — safe to call multiple times.
     pub fn start_polling(&self) {
+        // Use compare_exchange to ensure only one polling loop is started.
+        if self
+            .polling_started
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            tracing::debug!("Polling already started, skipping.");
+            return;
+        }
         let api = self.api.clone();
         let db = self.db.clone();
         tokio::spawn(async move {
@@ -65,6 +82,7 @@ impl PikPakClient {
                 }
             }
         });
+        tracing::info!("PikPak polling loop started.");
     }
 }
 
@@ -135,14 +153,24 @@ async fn download_to_local(
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    // Stream download
+    use futures_util::StreamExt;
+    use tokio::io::AsyncWriteExt;
+
     let resp = reqwest::get(&download_url).await?.error_for_status()?;
-    let bytes = resp.bytes().await?;
-    tokio::fs::write(&dest_path, &bytes).await?;
+    let mut stream = resp.bytes_stream();
+
+    let mut file = tokio::fs::File::create(&dest_path).await?;
+    let mut downloaded: u64 = 0;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk).await?;
+        downloaded += chunk.len() as u64;
+    }
+    file.flush().await?;
 
     let dest_str = dest_path.to_string_lossy().to_string();
     let files_json = serde_json::json!([dest_str]).to_string();
-    let actual_size = if size > 0 { size } else { bytes.len() as u64 };
+    let actual_size = if size > 0 { size } else { downloaded };
 
     db.update_completed(&rec.hash, file_id, &dest_str, &files_json, actual_size)?;
     Ok(())
@@ -223,7 +251,9 @@ impl DownloaderClient for PikPakClient {
                     if let Some(task_id) = &rec.task_id {
                         let _ = self.api.delete_tasks(&[task_id.as_str()], false).await;
                     }
-                    let _ = self.db.update_status(&hash, "cancelled", rec.progress);
+                    if let Err(e) = self.db.update_status(&hash, "cancelled", rec.progress) {
+                        tracing::error!("Failed to update cancel status for hash={hash}: {e}");
+                    }
                     results.push(CancelResultItem {
                         hash,
                         status: "cancelled".to_string(),
