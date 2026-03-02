@@ -62,7 +62,9 @@
     "pendingConflicts": "コンフリクト",
     "globalFilterRules": "グローバルフィルタールール",
     "globalParsers": "グローバルパーサー",
-    "coreUnavailable": "Coreサービスが応答していません。"
+    "coreUnavailable": "Coreサービスが応答していません。",
+    "downloaderPriority": "ダウンローダー優先度",
+    "downloaderPriorityDesc": "数値が大きいほど優先度が高い（デフォルト：50）"
   },
   "dialog": {
     "details": "詳細",
@@ -140,7 +142,9 @@
     "deactivate": "無効化",
     "purgeDelete": "完全削除（ダウンロード済みアニメ含む）",
     "deactivateDesc": "サブスクリプションを無効化します。すべてのデータは保持され、いつでも再有効化できます。",
-    "purgeDesc": "このサブスクリプションのすべてのデータが完全に削除されます。ダウンロード済みのアニメファイルも含まれ、元に戻せません。"
+    "purgeDesc": "このサブスクリプションのすべてのデータが完全に削除されます。ダウンロード済みのアニメファイルも含まれ、元に戻せません。",
+    "preferredDownloader": "優先ダウンローダー",
+    "useGlobalPriority": "なし（グローバル優先度を使用）"
   },
   "rawItems": {
     "title": "最新情報",

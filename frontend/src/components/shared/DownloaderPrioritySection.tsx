@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -9,6 +10,7 @@ import { toast } from "sonner"
 import type { ServiceModule } from "@/schemas/service-module"
 
 export function DownloaderPrioritySection() {
+  const { t } = useTranslation()
   const { data: modules, refetch } = useEffectQuery(
     () =>
       Effect.gen(function* () {
@@ -31,7 +33,7 @@ export function DownloaderPrioritySection() {
   const handleSave = (module: ServiceModule) => {
     const priority = drafts[module.module_id] ?? module.priority
     doUpdate({ id: module.module_id, priority }).then(() => {
-      toast.success(`${module.name} 優先級已更新為 ${priority}`)
+      toast.success(t("common.saved", "Saved"))
       refetch()
     })
   }
@@ -40,21 +42,21 @@ export function DownloaderPrioritySection() {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-medium">Downloader 優先級</h3>
-      <p className="text-xs text-muted-foreground">數字越大優先級越高（預設 50）</p>
+      <h2 className="text-sm font-semibold text-muted-foreground">{t("dashboard.downloaderPriority")}</h2>
+      <p className="text-xs text-muted-foreground">{t("dashboard.downloaderPriorityDesc")}</p>
       {modules.map((m) => (
         <div key={m.module_id} className="flex items-center gap-3">
           <span className="text-sm flex-1">{m.name}</span>
           <Input
             type="number"
-            className="w-20 h-7 text-sm"
+            className="w-20 h-8 text-sm"
             defaultValue={m.priority}
             onChange={(e) =>
               setDrafts((d) => ({ ...d, [m.module_id]: Number(e.target.value) }))
             }
           />
-          <Button size="sm" variant="outline" className="h-7" onClick={() => handleSave(m)}>
-            儲存
+          <Button size="sm" variant="outline" onClick={() => handleSave(m)}>
+            {t("common.save")}
           </Button>
         </div>
       ))}

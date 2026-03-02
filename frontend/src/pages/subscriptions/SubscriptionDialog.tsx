@@ -12,6 +12,13 @@ import { InfoSection } from "@/components/shared/InfoSection"
 import { InfoItem } from "@/components/shared/InfoItem"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import type { Subscription } from "@/schemas/subscription"
@@ -65,6 +72,12 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
       toast.error(t("common.saveFailed", "Save failed"))
     })
   }
+
+  const preferredDownloaderName = subscription.preferred_downloader_id && downloaderModules
+    ? ((downloaderModules as ServiceModule[]).find(
+        (m) => m.module_id === subscription.preferred_downloader_id,
+      )?.name ?? `ID: ${subscription.preferred_downloader_id}`)
+    : "-"
 
   return (
     <FullScreenDialog
@@ -132,24 +145,28 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
               </div>
               {downloaderModules && downloaderModules.length > 0 && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">優先 Downloader</p>
-                  <select
-                    className="w-full text-sm border rounded px-2 py-1 bg-background h-8"
-                    value={editForm.preferred_downloader_id ?? ""}
-                    onChange={(e) =>
+                  <p className="text-xs text-muted-foreground mb-1">{t("subscriptions.preferredDownloader")}</p>
+                  <Select
+                    value={editForm.preferred_downloader_id ? String(editForm.preferred_downloader_id) : "none"}
+                    onValueChange={(v) =>
                       setEditForm((f) => ({
                         ...f,
-                        preferred_downloader_id: e.target.value ? Number(e.target.value) : null,
+                        preferred_downloader_id: v === "none" ? null : Number(v),
                       }))
                     }
                   >
-                    <option value="">無（使用全域優先級）</option>
-                    {(downloaderModules as ServiceModule[]).map((m) => (
-                      <option key={m.module_id} value={m.module_id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger size="sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t("subscriptions.useGlobalPriority")}</SelectItem>
+                      {(downloaderModules as ServiceModule[]).map((m) => (
+                        <SelectItem key={m.module_id} value={String(m.module_id)}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </>
@@ -162,14 +179,8 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
                 value={subscription.is_active ? "Active" : "Inactive"}
               />
               <InfoItem
-                label="優先 Downloader"
-                value={
-                  subscription.preferred_downloader_id && downloaderModules
-                    ? ((downloaderModules as ServiceModule[]).find(
-                        (m) => m.module_id === subscription.preferred_downloader_id,
-                      )?.name ?? `ID: ${subscription.preferred_downloader_id}`)
-                    : "無"
-                }
+                label={t("subscriptions.preferredDownloader")}
+                value={preferredDownloaderName}
               />
             </>
           )}

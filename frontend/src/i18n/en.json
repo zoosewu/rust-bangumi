@@ -62,7 +62,9 @@
     "pendingConflicts": "Conflicts",
     "globalFilterRules": "Global Filter Rules",
     "globalParsers": "Global Parsers",
-    "coreUnavailable": "Core service is not responding."
+    "coreUnavailable": "Core service is not responding.",
+    "downloaderPriority": "Downloader Priority",
+    "downloaderPriorityDesc": "Higher number = higher priority (default: 50)"
   },
   "dialog": {
     "details": "Details",
@@ -140,7 +142,9 @@
     "deactivate": "Deactivate",
     "purgeDelete": "Delete Everything (incl. downloaded anime)",
     "deactivateDesc": "The subscription will be deactivated. All data is preserved and can be reactivated anytime.",
-    "purgeDesc": "All data for this subscription will be permanently deleted, including downloaded anime files. This cannot be undone."
+    "purgeDesc": "All data for this subscription will be permanently deleted, including downloaded anime files. This cannot be undone.",
+    "preferredDownloader": "Preferred Downloader",
+    "useGlobalPriority": "None (use global priority)"
   },
   "rawItems": {
     "title": "Latest Updates",

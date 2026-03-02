@@ -13,6 +13,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -213,21 +220,23 @@ export default function SubscriptionsPage() {
             </div>
             {downloaderModules && downloaderModules.length > 0 && (
               <div className="space-y-2">
-                <Label>優先 Downloader（可選）</Label>
-                <select
-                  className="w-full text-sm border rounded px-2 py-1 bg-background"
-                  value={newPreferredDl ?? ""}
-                  onChange={(e) =>
-                    setNewPreferredDl(e.target.value ? Number(e.target.value) : null)
-                  }
+                <Label>{t("subscriptions.preferredDownloader")}</Label>
+                <Select
+                  value={newPreferredDl ? String(newPreferredDl) : "none"}
+                  onValueChange={(v) => setNewPreferredDl(v === "none" ? null : Number(v))}
                 >
-                  <option value="">無（使用全域優先級）</option>
-                  {(downloaderModules as ServiceModule[]).map((m) => (
-                    <option key={m.module_id} value={m.module_id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("subscriptions.useGlobalPriority")}</SelectItem>
+                    {(downloaderModules as ServiceModule[]).map((m) => (
+                      <SelectItem key={m.module_id} value={String(m.module_id)}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
