@@ -23,7 +23,7 @@ mod handlers {
         http::StatusCode,
         Json,
     };
-    use downloader_qbittorrent::DownloaderClient;
+    use shared::DownloaderClient;
     use serde::Deserialize;
     use shared::{
         BatchCancelRequest, BatchCancelResponse, BatchDownloadRequest, BatchDownloadResponse,

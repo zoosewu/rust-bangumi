@@ -122,7 +122,7 @@ impl QBittorrentClient {
     }
 }
 
-use crate::traits::DownloaderClient;
+use shared::DownloaderClient;
 
 impl DownloaderClient for QBittorrentClient {
     async fn login(&self, username: &str, password: &str) -> Result<()> {

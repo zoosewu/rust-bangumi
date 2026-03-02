@@ -1,3 +1,6 @@
+pub mod downloader_trait;
+pub use downloader_trait::DownloaderClient;
+
 pub mod api;
 pub mod errors;
 pub mod file_classifier;

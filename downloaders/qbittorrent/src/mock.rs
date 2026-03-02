@@ -1,7 +1,7 @@
 // src/mock.rs
 //! Mock implementation of DownloaderClient for testing purposes.
 
-use crate::traits::DownloaderClient;
+use shared::DownloaderClient;
 use anyhow::{anyhow, Result};
 use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 use std::cell::RefCell;
