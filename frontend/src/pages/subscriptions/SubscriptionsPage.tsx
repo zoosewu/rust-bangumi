@@ -22,6 +22,7 @@ import {
 import { Plus } from "lucide-react"
 import { SubscriptionDialog } from "./SubscriptionDialog"
 import type { Subscription } from "@/schemas/subscription"
+import type { ServiceModule } from "@/schemas/service-module"
 
 export default function SubscriptionsPage() {
   const { t } = useTranslation()
@@ -30,6 +31,7 @@ export default function SubscriptionsPage() {
   const [newUrl, setNewUrl] = useState("")
   const [newName, setNewName] = useState("")
   const [newInterval, setNewInterval] = useState("30")
+  const [newPreferredDl, setNewPreferredDl] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number
     name: string
@@ -44,8 +46,17 @@ export default function SubscriptionsPage() {
     [],
   )
 
+  const { data: downloaderModules } = useEffectQuery(
+    () =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getDownloaderModules
+      }),
+    [],
+  )
+
   const { mutate: createSubscription, isLoading: creating } = useEffectMutation(
-    (req: { source_url: string; name?: string; fetch_interval_minutes?: number }) =>
+    (req: { source_url: string; name?: string; fetch_interval_minutes?: number; preferred_downloader_id?: number | null }) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
         return yield* api.createSubscription(req)
@@ -200,6 +211,25 @@ export default function SubscriptionsPage() {
                 onChange={(e) => setNewInterval(e.target.value)}
               />
             </div>
+            {downloaderModules && downloaderModules.length > 0 && (
+              <div className="space-y-2">
+                <Label>優先 Downloader（可選）</Label>
+                <select
+                  className="w-full text-sm border rounded px-2 py-1 bg-background"
+                  value={newPreferredDl ?? ""}
+                  onChange={(e) =>
+                    setNewPreferredDl(e.target.value ? Number(e.target.value) : null)
+                  }
+                >
+                  <option value="">無（使用全域優先級）</option>
+                  {(downloaderModules as ServiceModule[]).map((m) => (
+                    <option key={m.module_id} value={m.module_id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -212,10 +242,12 @@ export default function SubscriptionsPage() {
                   source_url: newUrl.trim(),
                   name: newName.trim() || undefined,
                   fetch_interval_minutes: parseInt(newInterval) || 30,
+                  preferred_downloader_id: newPreferredDl,
                 }).then(() => {
                   setNewUrl("")
                   setNewName("")
                   setNewInterval("30")
+                  setNewPreferredDl(null)
                   setCreateOpen(false)
                   refetch()
                 })
