@@ -58,6 +58,7 @@ rust-bangumi/
 │       └── db/                         # 數據庫操作
 ├── fetchers/mikanani/                  # Mikanani RSS Fetcher
 ├── downloaders/qbittorrent/            # qBittorrent Downloader
+├── downloaders/pikpak/                 # PikPak Downloader（雲端離線抓取 + streaming）
 ├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
 ├── metadata/                           # Metadata Service（Bangumi.tv 元資料查詢）
 ├── frontend/                           # React SPA 前端管理介面
@@ -177,6 +178,9 @@ cargo run -p downloader-qbittorrent
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
   cargo run -p viewer-jellyfin
 
+# PikPak Downloader (port 8006) - SQLite 持久化至 PIKPAK_DB_PATH
+cargo run -p downloader-pikpak
+
 # Metadata Service (port 8005) - stateless，不需資料庫
 CORE_SERVICE_URL=http://localhost:8000 \
 SERVICE_HOST=localhost \
@@ -211,7 +215,10 @@ cargo run -p fetcher-mikanani
 # 終端 3 - Downloader
 cargo run -p downloader-qbittorrent
 
-# 終端 4 - Viewer
+# 終端 4 - PikPak Downloader
+cargo run -p downloader-pikpak
+
+# 終端 5 - Viewer
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
   cargo run -p viewer-jellyfin
 ```
@@ -229,6 +236,7 @@ cargo test
 # 特定套件
 cargo test -p core-service
 cargo test -p downloader-qbittorrent
+cargo test -p downloader-pikpak
 cargo test -p viewer-jellyfin
 
 # 帶輸出
@@ -261,8 +269,11 @@ curl -X POST http://localhost:8080/api/v2/auth/login \
 # 測試 Core Service
 curl http://localhost:8000/health
 
-# 測試 Downloader
+# 測試 Downloader (qBittorrent)
 curl http://localhost:8002/health
+
+# 測試 Downloader (PikPak)
+curl http://localhost:8006/health
 
 # 測試 Viewer
 curl http://localhost:8003/health

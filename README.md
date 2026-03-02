@@ -15,14 +15,14 @@
 │  Fetcher │◄────│ Core Service │────►│    Downloader     │────►│    Viewer      │
 │ Mikanani │     │  (協調器)    │     │  (qBittorrent)    │     │  (Jellyfin)    │
 │  :8001   │     │    :8000     │     │      :8002        │     │    :8003       │
-└──────────┘     └──────┬───────┘     └───────────────────┘     └────────────────┘
-                        │
-                   ┌────┴────┐
-                   │PostgreSQL│
-                   └─────────┘
+└──────────┘     └──────┬───────┘     ├───────────────────┤     └────────────────┘
+                        │             │    Downloader     │
+                   ┌────┴────┐        │    (PikPak)       │
+                   │PostgreSQL│        │      :8006        │
+                   └─────────┘        └───────────────────┘
 ```
 
-系統由 4 個微服務 + Frontend + CLI 工具組成：
+系統由 5 個微服務 + Frontend + CLI 工具組成：
 
 | 服務 | 說明 | Port |
 |------|------|------|
@@ -30,6 +30,7 @@
 | Core Service | 主協調器，管理資料庫、調度抓取與下載、接收回呼 | 8000 |
 | Fetcher (Mikanani) | 從 Mikanani RSS 抓取動畫資訊，解析標題 | 8001 |
 | Downloader (qBittorrent) | 批次管理 BT 下載任務（magnet/torrent） | 8002 |
+| Downloader (PikPak) | 透過 PikPak 雲端離線抓取後 streaming 下載至本機 | 8006 |
 | Viewer (Jellyfin) | 將下載完成的檔案整理至 Jellyfin 媒體庫，產生 NFO metadata | 8003 |
 | CLI | 命令列工具，管理訂閱、動畫、下載等 | - |
 
@@ -98,6 +99,7 @@ curl http://localhost:8000/health
 curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health
+curl http://localhost:8006/health
 
 # 開啟 Frontend 管理介面
 open http://localhost:8004
@@ -139,7 +141,8 @@ Frontend 透過 Caddy 反向代理存取後端 API：
 | URL 前綴 | 代理目標 | 說明 |
 |----------|----------|------|
 | `/api/core/*` | core-service:8000 | Core Service API |
-| `/api/downloader/*` | downloader-qbittorrent:8002 | Downloader API |
+| `/api/downloader/*` | downloader-qbittorrent:8002 | Downloader (qBittorrent) API |
+| `/api/downloader-pikpak/*` | pikpak-downloader:8006 | Downloader (PikPak) API |
 | `/api/viewer/*` | viewer-jellyfin:8003 | Viewer API |
 | `/*` | 靜態檔案 | React SPA（fallback 至 index.html） |
 
@@ -151,7 +154,7 @@ Frontend 透過 Caddy 反向代理存取後端 API：
 | POST | `/fetch` | 觸發 RSS 抓取（非同步，回傳 202） |
 | POST | `/can-handle-subscription` | 檢查 URL 歸屬 |
 
-### Downloader (8002)
+### Downloader - qBittorrent (8002)
 
 | Method | Endpoint | 說明 |
 |--------|----------|------|
@@ -162,6 +165,19 @@ Frontend 透過 Caddy 反向代理存取後端 API：
 | POST | `/downloads/:hash/pause` | 暫停下載 |
 | POST | `/downloads/:hash/resume` | 恢復下載 |
 | DELETE | `/downloads/:hash` | 刪除下載（`?delete_files=true`） |
+
+### Downloader - PikPak (8006)
+
+| Method | Endpoint | 說明 |
+|--------|----------|------|
+| GET | `/health` | 健康檢查 |
+| POST | `/downloads` | 批次新增下載任務（magnet/HTTP URL） |
+| GET | `/downloads` | 查詢下載狀態（`?hashes=h1,h2`） |
+| POST | `/downloads/cancel` | 批次取消下載 |
+| POST | `/downloads/:hash/pause` | 暫停（no-op，回傳 200） |
+| POST | `/downloads/:hash/resume` | 恢復（no-op，回傳 200） |
+| DELETE | `/downloads/:hash` | 刪除下載 |
+| POST | `/config/credentials` | 設定 PikPak 帳號密碼（`{username, password}`） |
 
 ### Viewer (8003)
 
@@ -185,6 +201,10 @@ Frontend 透過 Caddy 反向代理存取後端 API：
 | `VIEWER_PORT` | 8003 | Viewer port |
 | `FRONTEND_PORT` | 8004 | Frontend port |
 | `QBITTORRENT_URL` | http://qbittorrent:8080 | qBittorrent WebUI |
+| `PIKPAK_PORT` | 8006 | PikPak Downloader port |
+| `PIKPAK_EMAIL` | - | PikPak 帳號（留空則需啟動後手動設定） |
+| `PIKPAK_PASSWORD` | - | PikPak 密碼 |
+| `PIKPAK_DATA_DIR` | - | PikPak 資料目錄（SQLite DB bind mount 至 /data，必填） |
 | `DOWNLOADS_DIR` | /downloads | 下載檔案目錄 |
 | `JELLYFIN_LIBRARY_DIR` | /media/jellyfin | Jellyfin 媒體庫目錄 |
 | `RUST_LOG` | info | 日誌等級 |
@@ -226,6 +246,7 @@ docker compose logs -f
 # 特定服務
 docker compose logs -f core-service
 docker compose logs -f downloader-qbittorrent
+docker compose logs -f pikpak-downloader
 docker compose logs -f viewer-jellyfin
 ```
 
@@ -294,6 +315,24 @@ curl http://localhost:8080
 
 # 檢查認證設定
 docker compose logs qbittorrent
+```
+
+### PikPak Downloader 無法連接
+
+```bash
+# 確認服務健康
+curl http://localhost:8006/health
+
+# 手動設定 PikPak 帳號密碼
+curl -X POST http://localhost:8006/config/credentials \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your@email.com","password":"yourpassword"}'
+
+# 查看日誌
+docker compose logs pikpak-downloader
+
+# 確認 SQLite 資料目錄已建立
+ls -lh ${PIKPAK_DATA_DIR:-./data/pikpak}/pikpak.db
 ```
 
 ### Viewer 同步失敗

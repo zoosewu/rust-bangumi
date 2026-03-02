@@ -1,7 +1,7 @@
 # Rust Bangumi 實現進度
 
-**最後更新：** 2026-02-09
-**當前狀態：** Phase 1-9 完成，端到端管線已實現
+**最後更新：** 2026-03-02
+**當前狀態：** Phase 1-9 完成 + PikPak Downloader，端到端管線已實現
 **完成百分比：** 9/11 階段 (82%)
 
 ---
@@ -12,7 +12,7 @@
 RSS 訂閱 → Fetcher 抓取 → Core 解析標題 → 自動下載派送 → Viewer 同步至 Jellyfin
 ```
 
-4 個微服務 + CLI，總 API 端點 60 個，5 個 OpenAPI 規格文件。
+5 個微服務 + CLI，總 API 端點 68 個，5 個 OpenAPI 規格文件。
 
 ---
 
@@ -58,6 +58,10 @@ RSS 訂閱 → Fetcher 抓取 → Core 解析標題 → 自動下載派送 → V
 
 - qBittorrent WebAPI client
 - 批次下載/取消/暫停/恢復/刪除
+- PikPak Downloader（兩階段：雲端離線抓取 → reqwest streaming）
+  - SQLite 持久化 hash → task_id/file_id 映射
+  - 背景輪詢（30 秒間隔）追蹤 PikPak 雲端任務狀態
+  - DownloaderClient trait 移至 shared crate（多實現共用介面）
 - 支援 magnet link 和 .torrent URL
 - trait-based 抽象 (`DownloaderClient` + `MockDownloaderClient`)
 
