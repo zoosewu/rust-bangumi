@@ -248,6 +248,8 @@ async fn main() -> anyhow::Result<()> {
             "/dashboard/stats",
             get(handlers::dashboard::get_dashboard_stats),
         )
+        // 搜尋
+        .route("/search", get(handlers::search::search))
         // 健康檢查
         .route("/health", get(health_check))
         // 應用狀態
@@ -307,7 +309,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::ServiceType::Fetcher,
                                 shared::Capabilities {
                                     fetch_endpoint: Some("/fetch".to_string()),
-                                    search_endpoint: None,
+                                    search_endpoint: Some("/search".to_string()),
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],

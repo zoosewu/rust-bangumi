@@ -12,3 +12,4 @@ pub mod services;
 pub mod subscriptions;
 pub mod sync;
 pub mod covers;
+pub mod search;
