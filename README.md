@@ -2,6 +2,11 @@
 
 使用 Rust + PostgreSQL 構建的微服務架構動畫 RSS 聚合、下載與媒體庫管理系統。
 
+![](assets/subscription-preview.png)
+
+![](assets/anime-preview.png)
+
+
 ## 系統架構
 
 ```
