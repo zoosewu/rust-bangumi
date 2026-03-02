@@ -112,6 +112,7 @@ fn insert_test_subscription(
         assignment_status: "assigned".to_string(),
         assigned_at: Some(now),
         auto_selected: false,
+        preferred_downloader_id: None,
     };
 
     diesel::insert_into(subscriptions::table)

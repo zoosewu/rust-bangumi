@@ -388,6 +388,7 @@ pub mod mock {
                 assignment_status: new_subscription.assignment_status,
                 assigned_at: new_subscription.assigned_at,
                 auto_selected: new_subscription.auto_selected,
+                preferred_downloader_id: new_subscription.preferred_downloader_id,
             };
             subs.push(subscription.clone());
             Ok(subscription)
@@ -501,6 +502,7 @@ pub mod mock {
                 assignment_status: status.to_string(),
                 assigned_at: None,
                 auto_selected: false,
+                preferred_downloader_id: None,
             }
         }
 
@@ -565,6 +567,7 @@ pub mod mock {
                 assignment_status: "pending".to_string(),
                 assigned_at: None,
                 auto_selected: false,
+                preferred_downloader_id: None,
             };
 
             let created = repo.create(new_sub).await.unwrap();
