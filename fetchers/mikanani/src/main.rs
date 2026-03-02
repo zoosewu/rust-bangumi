@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
     // Build router with state
     let mut app = Router::new()
         .route("/fetch", post(handlers::fetch))
+        .route("/search", post(handlers::search))
         .route("/health", get(handlers::health_check))
         .route(
             "/can-handle-subscription",
@@ -66,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
             port: config.service_port,
             capabilities: shared::Capabilities {
                 fetch_endpoint: Some("/fetch".to_string()),
-                search_endpoint: None,
+                search_endpoint: Some("/search".to_string()),
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],

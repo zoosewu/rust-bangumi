@@ -1,7 +1,7 @@
 use axum::{extract::State, http::StatusCode, Json};
-use fetcher_mikanani::{FetchTask, RealHttpClient, RssParser};
+use fetcher_mikanani::{search_scraper::scrape_mikanani_search, FetchTask, RealHttpClient, RssParser};
 use serde::{Deserialize, Serialize};
-use shared::{FetchTriggerRequest, FetchTriggerResponse};
+use shared::{FetchTriggerRequest, FetchTriggerResponse, SearchRequest, SearchResponse};
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +105,23 @@ pub async fn can_handle_subscription(
     tracing::info!("can_handle_subscription result: can_handle={}", can_handle);
 
     (status, Json(response))
+}
+
+pub async fn search(
+    Json(payload): Json<SearchRequest>,
+) -> (StatusCode, Json<SearchResponse>) {
+    tracing::info!("Received search request: query={:?}", payload.query);
+
+    match scrape_mikanani_search(&payload.query).await {
+        Ok(results) => {
+            tracing::info!("Search returned {} results", results.len());
+            (StatusCode::OK, Json(SearchResponse { results }))
+        }
+        Err(e) => {
+            tracing::error!("Search scraping failed: {}", e);
+            (StatusCode::OK, Json(SearchResponse { results: vec![] }))
+        }
+    }
 }
 
 #[cfg(test)]
