@@ -1,0 +1,14 @@
+session_name: 'run services'
+windows:
+- focus: 'true'
+  layout: 481b,121x23,0,0[121x7,0,0{39x7,0,0,0,39x7,40,0,2,41x7,80,0,3},121x7,0,8{39x7,0,8,1,39x7,40,8,4,41x7,80,8,5},121x7,0,16,7]
+  options: {}
+  panes:
+  - cd frontend && bun run dev -- --host
+  - cargo run -p core-service
+  - cargo run -p fetcher-mikanani
+  - cargo run -p downloader-qbittorrent
+  - cargo run -p viewer-jellyfin
+  - cargo run -p metadata-service
+  - cargo run -p downloader-pikpak
+  window_name: services
