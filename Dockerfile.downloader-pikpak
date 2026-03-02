@@ -1,0 +1,56 @@
+# 構建階段
+FROM rust:slim-bookworm AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl-dev pkg-config gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY shared/Cargo.toml ./shared/
+COPY downloaders/pikpak/Cargo.toml ./downloaders/pikpak/
+
+RUN awk '/^members/{p=1; print "members = ["; print "    \"shared\","; print "    \"downloaders/pikpak\","; next} p&&/^\]/{p=0; print; next} p{next} {print}' Cargo.toml > /tmp/c && mv /tmp/c Cargo.toml
+
+COPY shared/src ./shared/src
+
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    mkdir -p downloaders/pikpak/src && \
+    echo "fn main() {}" > downloaders/pikpak/src/main.rs && \
+    cargo build --release --package downloader-pikpak || true && \
+    rm -rf downloaders/pikpak/src
+
+COPY downloaders/pikpak/src ./downloaders/pikpak/src
+RUN find downloaders/pikpak/src -name "*.rs" -exec touch {} +
+
+RUN --mount=type=cache,id=bangumi-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=bangumi-cargo-git,target=/usr/local/cargo/git \
+    --mount=type=cache,id=bangumi-cargo-target,target=/app/target \
+    cargo build --release --package downloader-pikpak && \
+    cp /app/target/release/downloader-pikpak /usr/local/bin/downloader-pikpak && \
+    strip /usr/local/bin/downloader-pikpak
+
+# 運行階段
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r bangumi && useradd -r -g bangumi bangumi
+
+RUN mkdir -p /data && chown bangumi:bangumi /data
+
+COPY --from=builder /usr/local/bin/downloader-pikpak /usr/local/bin/
+
+USER bangumi
+
+EXPOSE 8006
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8006/health || exit 1
+
+CMD ["downloader-pikpak"]
