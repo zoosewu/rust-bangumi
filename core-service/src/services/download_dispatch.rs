@@ -1,6 +1,6 @@
 use crate::db::DbPool;
 use crate::models::{AnimeLink, Download, DownloaderCapability, NewDownload, ServiceModule};
-use crate::schema::{anime_links, downloader_capabilities, downloads, service_modules};
+use crate::schema::{anime_links, downloader_capabilities, downloads, raw_anime_items, service_modules, subscriptions};
 use chrono::Utc;
 use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
@@ -98,6 +98,31 @@ impl DownloadDispatchService {
             groups.entry(dt).or_default().push(link);
         }
 
+        // Build map: link_id → preferred_downloader_id (from subscription via raw_anime_items)
+        let surviving_link_ids: Vec<i32> = links.iter().map(|l| l.link_id).collect();
+        let link_preferred_map: HashMap<i32, i32> = {
+            let result: Vec<(i32, i32)> = anime_links::table
+                .inner_join(
+                    raw_anime_items::table.on(
+                        anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())
+                    )
+                )
+                .inner_join(
+                    subscriptions::table.on(
+                        subscriptions::subscription_id.eq(raw_anime_items::subscription_id)
+                    )
+                )
+                .filter(anime_links::link_id.eq_any(&surviving_link_ids))
+                .filter(subscriptions::preferred_downloader_id.is_not_null())
+                .select((
+                    anime_links::link_id,
+                    subscriptions::preferred_downloader_id.assume_not_null(),
+                ))
+                .load::<(i32, i32)>(&mut conn)
+                .unwrap_or_default();
+            result.into_iter().collect()
+        };
+
         let mut total_dispatched = 0;
         let mut total_no_downloader = 0;
         let mut total_failed = 0;
@@ -127,8 +152,72 @@ impl DownloadDispatchService {
                 continue;
             }
 
-            // Cascade through downloaders
-            let mut pending_links: Vec<&AnimeLink> = type_links;
+            // Build capable downloader ID set for fast lookup
+            let capable_ids: std::collections::HashSet<i32> =
+                downloaders.iter().map(|d| d.module_id).collect();
+
+            // Phase 1: Split into preferred groups and cascade_pending
+            let mut cascade_pending: Vec<&AnimeLink> = Vec::new();
+            let mut by_preferred: HashMap<i32, Vec<&AnimeLink>> = HashMap::new();
+
+            for link in &type_links {
+                match link_preferred_map.get(&link.link_id) {
+                    Some(&pref_id) if capable_ids.contains(&pref_id) => {
+                        by_preferred.entry(pref_id).or_default().push(link);
+                    }
+                    _ => cascade_pending.push(link),
+                }
+            }
+
+            // Dispatch each preferred downloader group
+            for (pref_id, pref_links) in &by_preferred {
+                let pref_dl = downloaders.iter().find(|d| d.module_id == *pref_id).unwrap();
+                let items: Vec<DownloadRequestItem> = pref_links
+                    .iter()
+                    .map(|link| DownloadRequestItem {
+                        url: link.url.clone(),
+                        save_path: "/downloads".to_string(),
+                    })
+                    .collect();
+
+                let download_url = format!("{}/downloads", pref_dl.base_url);
+                match self.send_batch_to_downloader(&download_url, items).await {
+                    Ok(response) => {
+                        for (i, result) in response.results.iter().enumerate() {
+                            if i >= pref_links.len() {
+                                break;
+                            }
+                            let link = pref_links[i];
+                            if result.status == "accepted" {
+                                self.create_download_record(
+                                    &mut conn,
+                                    link.link_id,
+                                    &download_type,
+                                    "downloading",
+                                    Some(pref_dl.module_id),
+                                    result.hash.as_deref(),
+                                )?;
+                                total_dispatched += 1;
+                            } else {
+                                // rejected by preferred — fallback to cascade
+                                cascade_pending.push(link);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "Preferred downloader {} failed for {} links: {}",
+                            pref_dl.name,
+                            pref_links.len(),
+                            e
+                        );
+                        cascade_pending.extend(pref_links.iter().copied());
+                    }
+                }
+            }
+
+            // Phase 2: Regular cascade for remaining links
+            let mut pending_links: Vec<&AnimeLink> = cascade_pending;
 
             for downloader in &downloaders {
                 if pending_links.is_empty() {
