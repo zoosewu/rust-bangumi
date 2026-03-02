@@ -3,6 +3,7 @@ import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, Ani
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
+import type { ServiceModule } from "@/schemas/service-module"
 import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
 
@@ -72,12 +73,15 @@ export class CoreApi extends Context.Tag("CoreApi")<
       end_date?: string | null
     }) => Effect.Effect<Anime>
     readonly getRawItem: (itemId: number) => Effect.Effect<RawAnimeItem>
+    readonly getDownloaderModules: Effect.Effect<readonly ServiceModule[]>
+    readonly updateServiceModule: (id: number, req: { priority?: number; is_enabled?: boolean }) => Effect.Effect<ServiceModule>
     readonly createSubscription: (req: {
       source_url: string
       name?: string
       fetch_interval_minutes?: number
+      preferred_downloader_id?: number | null
     }) => Effect.Effect<Subscription>
-    readonly updateSubscription: (id: number, req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean }) => Effect.Effect<Subscription>
+    readonly updateSubscription: (id: number, req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean; preferred_downloader_id?: number | null }) => Effect.Effect<Subscription>
     readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
     readonly getAnimeCoverImages: (

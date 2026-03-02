@@ -6,6 +6,7 @@ import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLin
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
+import { ServiceModule } from "@/schemas/service-module"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
 
@@ -230,6 +231,25 @@ const makeCoreApi = Effect.gen(function* () {
         HttpClientRequest.get(`/api/core/raw-items/${itemId}`),
         RawAnimeItem,
       ),
+
+    getDownloaderModules: fetchJson(
+      HttpClientRequest.get("/api/core/services/downloader-modules"),
+      Schema.Struct({ modules: Schema.Array(ServiceModule) }),
+    ).pipe(Effect.map((r) => r.modules)),
+
+    updateServiceModule: (id, req) =>
+      client
+        .execute(
+          HttpClientRequest.patch(`/api/core/services/${id}/update`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.flatMap(Schema.decodeUnknown(ServiceModule)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
 
     createSubscription: (req) =>
       postJson("/api/core/subscriptions", req, Subscription),

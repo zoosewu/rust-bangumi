@@ -5,6 +5,7 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { DownloaderPrioritySection } from "@/components/shared/DownloaderPrioritySection"
 import {
   Film,
   Rss,
@@ -63,6 +64,9 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+
+          {/* Downloader priority management */}
+          <DownloaderPrioritySection />
 
           {/* Stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">

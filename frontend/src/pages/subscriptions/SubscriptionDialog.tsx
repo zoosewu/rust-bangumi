@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
+import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
@@ -14,6 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import type { Subscription } from "@/schemas/subscription"
+import type { ServiceModule } from "@/schemas/service-module"
 
 interface SubscriptionDialogProps {
   subscription: Subscription
@@ -29,10 +31,20 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
     name: subscription.name ?? "",
     fetch_interval_minutes: subscription.fetch_interval_minutes,
     is_active: subscription.is_active,
+    preferred_downloader_id: subscription.preferred_downloader_id ?? null,
   })
 
+  const { data: downloaderModules } = useEffectQuery(
+    () =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.getDownloaderModules
+      }),
+    [],
+  )
+
   const { mutate: doUpdate, isLoading: saving } = useEffectMutation(
-    (req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean }) =>
+    (req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean; preferred_downloader_id?: number | null }) =>
       Effect.gen(function* () {
         const api = yield* CoreApi
         return yield* api.updateSubscription(subscription.subscription_id, req)
@@ -44,6 +56,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
       name: editForm.name || undefined,
       fetch_interval_minutes: editForm.fetch_interval_minutes,
       is_active: editForm.is_active,
+      preferred_downloader_id: editForm.preferred_downloader_id,
     }).then(() => {
       toast.success(t("common.saved", "Saved"))
       setEditing(false)
@@ -75,6 +88,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
               name: subscription.name ?? "",
               fetch_interval_minutes: subscription.fetch_interval_minutes,
               is_active: subscription.is_active,
+              preferred_downloader_id: subscription.preferred_downloader_id ?? null,
             })
             setEditing(true)
           }}
@@ -116,6 +130,28 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
                   <span className="text-sm">{editForm.is_active ? "Active" : "Inactive"}</span>
                 </div>
               </div>
+              {downloaderModules && downloaderModules.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">優先 Downloader</p>
+                  <select
+                    className="w-full text-sm border rounded px-2 py-1 bg-background h-8"
+                    value={editForm.preferred_downloader_id ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        preferred_downloader_id: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  >
+                    <option value="">無（使用全域優先級）</option>
+                    {(downloaderModules as ServiceModule[]).map((m) => (
+                      <option key={m.module_id} value={m.module_id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -124,6 +160,16 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
               <InfoItem
                 label={t("common.status")}
                 value={subscription.is_active ? "Active" : "Inactive"}
+              />
+              <InfoItem
+                label="優先 Downloader"
+                value={
+                  subscription.preferred_downloader_id && downloaderModules
+                    ? ((downloaderModules as ServiceModule[]).find(
+                        (m) => m.module_id === subscription.preferred_downloader_id,
+                      )?.name ?? `ID: ${subscription.preferred_downloader_id}`)
+                    : "無"
+                }
               />
             </>
           )}
