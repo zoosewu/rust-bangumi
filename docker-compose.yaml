@@ -308,6 +308,59 @@ services:
         max-file: "3"
 
 # ============================================================================
+# Downloader - PikPak
+# ============================================================================
+  pikpak-downloader:
+    build:
+      context: .
+      dockerfile: downloaders/pikpak/Dockerfile
+    container_name: bangumi-downloader-pikpak
+    depends_on:
+      core-service:
+        condition: service_healthy
+    environment:
+      - SERVICE_PORT=8006
+      - SERVICE_HOST=pikpak-downloader
+      - CORE_SERVICE_URL=http://core-service:8000
+      - SERVICE_NAME=pikpak-downloader
+      - PIKPAK_DB_PATH=/data/pikpak.db
+      # - PIKPAK_EMAIL=your@email.com
+      # - PIKPAK_PASSWORD=yourpassword
+    ports:
+      - "8006:8006"
+    volumes:
+      - pikpak-data:/data
+    networks:
+      bangumi-network:
+        ipv4_address: 172.25.0.16
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  pikpak-data:
+
+# ============================================================================
 # 網絡
 # ============================================================================
 networks:
