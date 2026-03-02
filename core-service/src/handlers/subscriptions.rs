@@ -28,6 +28,7 @@ pub struct CreateSubscriptionRequest {
     pub fetch_interval_minutes: Option<i32>,
     pub config: Option<serde_json::Value>,
     pub source_type: Option<String>,
+    pub preferred_downloader_id: Option<i32>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
@@ -46,6 +47,7 @@ pub struct SubscriptionResponse {
     pub assignment_status: String,
     pub assigned_at: Option<chrono::NaiveDateTime>,
     pub auto_selected: bool,
+    pub preferred_downloader_id: Option<i32>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
@@ -85,6 +87,8 @@ pub struct UpdateSubscriptionRequest {
     pub name: Option<String>,
     pub fetch_interval_minutes: Option<i32>,
     pub is_active: Option<bool>,
+    // Option<Option<i32>>: 外層 None 表示不更新，內層 None 表示清除
+    pub preferred_downloader_id: Option<Option<i32>>,
 }
 
 // ============ Handlers ============
@@ -186,6 +190,7 @@ pub async fn create_subscription(
                         assignment_status: assignment_status.to_string(),
                         assigned_at: if auto_selected { None } else { Some(now) },
                         auto_selected,
+                        preferred_downloader_id: payload.preferred_downloader_id,
                     };
 
                     let insert_result = diesel::insert_into(subscriptions::table)
@@ -440,6 +445,7 @@ pub async fn list_subscriptions(
                             assignment_status: s.assignment_status,
                             assigned_at: s.assigned_at,
                             auto_selected: s.auto_selected,
+                            preferred_downloader_id: s.preferred_downloader_id,
                             created_at: s.created_at,
                             updated_at: s.updated_at,
                         })
@@ -627,7 +633,7 @@ pub async fn update_subscription(
 
     let now = Utc::now().naive_utc();
 
-    if payload.name.is_none() && payload.fetch_interval_minutes.is_none() && payload.is_active.is_none() {
+    if payload.name.is_none() && payload.fetch_interval_minutes.is_none() && payload.is_active.is_none() && payload.preferred_downloader_id.is_none() {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -636,8 +642,6 @@ pub async fn update_subscription(
             })),
         );
     }
-
-    let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
 
     let result = (|| -> Result<usize, diesel::result::Error> {
         let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
@@ -664,6 +668,13 @@ pub async fn update_subscription(
             let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
             diesel::update(target)
                 .set(subscriptions::is_active.eq(active))
+                .execute(&mut conn)?;
+        }
+        if let Some(pref_dl) = payload.preferred_downloader_id {
+            // Some(Some(id)) → 設定；Some(None) → 清除
+            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            diesel::update(target)
+                .set(subscriptions::preferred_downloader_id.eq(pref_dl))
                 .execute(&mut conn)?;
         }
         Ok(1)

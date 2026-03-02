@@ -440,6 +440,7 @@ pub struct Subscription {
     pub assignment_status: String,
     pub assigned_at: Option<NaiveDateTime>,
     pub auto_selected: bool,
+    pub preferred_downloader_id: Option<i32>,
 }
 
 // For manual inserts, use sql_query with bind parameters instead
@@ -461,6 +462,7 @@ pub struct NewSubscription {
     pub assignment_status: String,
     pub assigned_at: Option<NaiveDateTime>,
     pub auto_selected: bool,
+    pub preferred_downloader_id: Option<i32>,
 }
 
 // Compatibility alias for existing code
