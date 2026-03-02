@@ -231,6 +231,104 @@ fn save_downloader_capabilities(
     );
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct UpdateServiceRequest {
+    pub priority: Option<i32>,
+    pub is_enabled: Option<bool>,
+}
+
+/// Update service module (priority, is_enabled)
+pub async fn update_service(
+    State(state): State<AppState>,
+    Path(service_id): Path<i32>,
+    Json(payload): Json<UpdateServiceRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::schema::service_modules;
+
+    let Ok(mut conn) = state.db.get() else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db_error"})));
+    };
+
+    let now = chrono::Utc::now().naive_utc();
+    let mut updated = false;
+
+    if let Some(priority) = payload.priority {
+        if diesel::update(service_modules::table.find(service_id))
+            .set((service_modules::priority.eq(priority), service_modules::updated_at.eq(now)))
+            .execute(&mut conn)
+            .is_ok()
+        {
+            updated = true;
+        }
+    }
+
+    if let Some(is_enabled) = payload.is_enabled {
+        if diesel::update(service_modules::table.find(service_id))
+            .set((service_modules::is_enabled.eq(is_enabled), service_modules::updated_at.eq(now)))
+            .execute(&mut conn)
+            .is_ok()
+        {
+            updated = true;
+        }
+    }
+
+    if updated {
+        match service_modules::table
+            .find(service_id)
+            .first::<crate::models::ServiceModule>(&mut conn)
+        {
+            Ok(module) => (StatusCode::OK, Json(json!({
+                "module_id": module.module_id,
+                "name": module.name,
+                "module_type": module.module_type.to_string(),
+                "priority": module.priority,
+                "is_enabled": module.is_enabled,
+                "base_url": module.base_url,
+                "updated_at": module.updated_at,
+            }))),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": e.to_string()}))),
+        }
+    } else {
+        (StatusCode::BAD_REQUEST, Json(json!({"error": "no fields to update"})))
+    }
+}
+
+/// List downloader service modules from DB (with priority info)
+pub async fn list_downloader_modules(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    use crate::schema::service_modules;
+    use crate::models::ModuleTypeEnum;
+
+    let Ok(mut conn) = state.db.get() else {
+        return Json(json!({"modules": []}));
+    };
+
+    match service_modules::table
+        .filter(service_modules::module_type.eq(ModuleTypeEnum::Downloader))
+        .order(service_modules::priority.desc())
+        .load::<crate::models::ServiceModule>(&mut conn)
+    {
+        Ok(modules) => {
+            let result: Vec<serde_json::Value> = modules.iter().map(|m| json!({
+                "module_id": m.module_id,
+                "name": m.name,
+                "module_type": m.module_type.to_string(),
+                "priority": m.priority,
+                "is_enabled": m.is_enabled,
+                "base_url": m.base_url,
+                "description": m.description,
+                "updated_at": m.updated_at,
+            })).collect();
+            Json(json!({"modules": result}))
+        }
+        Err(e) => {
+            tracing::error!("Failed to list downloader modules: {}", e);
+            Json(json!({"modules": []}))
+        }
+    }
+}
+
 /// Update service health status
 pub async fn health_check(
     State(state): State<AppState>,

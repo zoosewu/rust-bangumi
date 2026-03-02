@@ -83,6 +83,14 @@ async fn main() -> anyhow::Result<()> {
             get(handlers::services::list_by_type),
         )
         .route(
+            "/services/downloader-modules",
+            get(handlers::services::list_downloader_modules),
+        )
+        .route(
+            "/services/:service_id/update",
+            patch(handlers::services::update_service),
+        )
+        .route(
             "/services/:service_id/health",
             get(handlers::services::health_check),
         )
