@@ -4,6 +4,7 @@ members = [
     "core-service",
     "fetchers/mikanani",
     "downloaders/qbittorrent",
+    "downloaders/pikpak",
     "viewers/jellyfin",
     "metadata",
     "cli",
