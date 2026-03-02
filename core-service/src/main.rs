@@ -307,6 +307,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::ServiceType::Fetcher,
                                 shared::Capabilities {
                                     fetch_endpoint: Some("/fetch".to_string()),
+                                    search_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
@@ -316,6 +317,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::ServiceType::Downloader,
                                 shared::Capabilities {
                                     fetch_endpoint: None,
+                                    search_endpoint: None,
                                     download_endpoint: Some("/downloads".to_string()),
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
@@ -325,6 +327,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::ServiceType::Viewer,
                                 shared::Capabilities {
                                     fetch_endpoint: None,
+                                    search_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: Some("/sync".to_string()),
                                     supported_download_types: vec![],
@@ -334,6 +337,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::ServiceType::Metadata,
                                 shared::Capabilities {
                                     fetch_endpoint: None,
+                                    search_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],

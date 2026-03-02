@@ -66,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
             port: config.service_port,
             capabilities: shared::Capabilities {
                 fetch_endpoint: Some("/fetch".to_string()),
+                search_endpoint: None,
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],
@@ -92,6 +93,7 @@ async fn register_to_core<C: fetcher_mikanani::HttpClient>(
         port: config.service_port,
         capabilities: shared::Capabilities {
             fetch_endpoint: Some("/fetch".to_string()),
+            search_endpoint: None,
             download_endpoint: None,
             sync_endpoint: None,
             supported_download_types: vec![],

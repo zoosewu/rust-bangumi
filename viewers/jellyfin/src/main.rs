@@ -145,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or(8003),
             capabilities: shared::Capabilities {
                 fetch_endpoint: None,
+                search_endpoint: None,
                 download_endpoint: None,
                 sync_endpoint: Some("/sync".to_string()),
                 supported_download_types: vec![],
