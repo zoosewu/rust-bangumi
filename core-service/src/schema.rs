@@ -237,6 +237,7 @@ diesel::table! {
         assignment_status -> Varchar,
         assigned_at -> Nullable<Timestamp>,
         auto_selected -> Bool,
+        preferred_downloader_id -> Nullable<Int4>,
     }
 }
 
@@ -307,6 +308,7 @@ diesel::joinable!(downloads -> service_modules (module_id));
 diesel::joinable!(raw_anime_items -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> title_parsers (parser_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
+diesel::joinable!(subscriptions -> service_modules (preferred_downloader_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     anime_cover_images,
