@@ -10,6 +10,7 @@ import ConflictsPage from "@/pages/conflicts/ConflictsPage"
 import SubtitleGroupsPage from "@/pages/subtitle-groups/SubtitleGroupsPage"
 import ParsersPage from "@/pages/parsers/ParsersPage"
 import FiltersPage from "@/pages/filters/FiltersPage"
+import SearchPage from "@/pages/search/SearchPage"
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="subtitle-groups" element={<SubtitleGroupsPage />} />
           <Route path="parsers" element={<ParsersPage />} />
           <Route path="filters" element={<FiltersPage />} />
+          <Route path="search" element={<SearchPage />} />
         </Route>
       </Routes>
       <Toaster />

@@ -14,11 +14,13 @@ import {
   Filter,
   ChevronDown,
   ChevronRight,
+  Search,
 } from "lucide-react"
 
 const mainNavItems = [
   { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard" },
   { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions" },
+  { to: "/search", icon: Search, labelKey: "sidebar.search" },
   { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries" },
   { to: "/raw-items", icon: RefreshCw, labelKey: "sidebar.rawItems" },
   { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
