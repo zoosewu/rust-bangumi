@@ -10,6 +10,7 @@ export const Subscription = Schema.Struct({
   next_fetch_at: Schema.NullOr(Schema.String),
   fetch_interval_minutes: Schema.Number,
   is_active: Schema.Boolean,
+  preferred_downloader_id: Schema.NullOr(Schema.Number),
   created_at: Schema.String,
   updated_at: Schema.String,
 })
