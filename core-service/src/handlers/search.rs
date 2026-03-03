@@ -70,7 +70,7 @@ pub async fn search(
 
         async move {
             let result = tokio::time::timeout(
-                Duration::from_secs(10),
+                Duration::from_secs(20),
                 client.post(&url).json(&req).send(),
             )
             .await;
@@ -102,7 +102,7 @@ pub async fn search(
                     vec![]
                 }
                 Err(_) => {
-                    tracing::warn!("Search request to {} timed out after 10s", source);
+                    tracing::warn!("Search request to {} timed out after 20s", source);
                     vec![]
                 }
             }
