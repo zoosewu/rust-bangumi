@@ -12,6 +12,8 @@ export const TitleParser = Schema.Struct({
   anime_title_value: Schema.String,
   episode_no_source: Schema.String,
   episode_no_value: Schema.String,
+  episode_end_source: Schema.NullOr(Schema.String),
+  episode_end_value: Schema.NullOr(Schema.String),
   series_no_source: Schema.NullOr(Schema.String),
   series_no_value: Schema.NullOr(Schema.String),
   subtitle_group_source: Schema.NullOr(Schema.String),
@@ -52,6 +54,7 @@ export type DeleteWithReparseResponse = typeof DeleteWithReparseResponse.Type
 export const ParsedFields = Schema.Struct({
   anime_title: Schema.String,
   episode_no: Schema.Number,
+  episode_end: Schema.NullOr(Schema.Number),
   series_no: Schema.Number,
   subtitle_group: Schema.NullOr(Schema.String),
   resolution: Schema.NullOr(Schema.String),
