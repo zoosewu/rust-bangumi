@@ -5,8 +5,9 @@ use tokio::time::interval;
 
 use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
-use crate::schema::{downloads, service_modules};
-use shared::{classify_files, FileType, StatusQueryResponse};
+use crate::schema::{anime_links, downloads, service_modules};
+use shared::{build_default_chain, classify_files, collect_files_recursive, match_batch_files,
+             FileType, StatusQueryResponse};
 
 pub struct DownloadScheduler {
     db_pool: DbPool,
@@ -124,25 +125,15 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
-                        let (video_file, subtitle_files_json) = Self::extract_media_files(&status_item.files);
-
-                        // Store content_path and classified file info when completed
-                        diesel::update(
-                            downloads::table
-                                .filter(downloads::torrent_hash.eq(&status_item.hash))
-                                .filter(downloads::module_id.eq(downloader.module_id)),
-                        )
-                        .set((
-                            downloads::status.eq(new_status),
-                            downloads::progress.eq(status_item.progress as f32),
-                            downloads::total_bytes.eq(status_item.size as i64),
-                            downloads::file_path.eq(&status_item.content_path),
-                            downloads::video_file.eq(video_file.as_deref()),
-                            downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
-                            downloads::updated_at.eq(now),
-                        ))
-                        .execute(conn)
-                        .ok();
+                        Self::apply_completed_files(
+                            conn,
+                            &status_item.hash,
+                            downloader.module_id,
+                            status_item.content_path.as_deref(),
+                            &status_item.files,
+                            status_item.progress,
+                            status_item.size,
+                        );
                     } else {
                         diesel::update(
                             downloads::table
@@ -239,25 +230,15 @@ impl DownloadScheduler {
                     let now = chrono::Utc::now().naive_utc();
 
                     if new_status == "completed" {
-                        let (video_file, subtitle_files_json) = Self::extract_media_files(&status_item.files);
-
-                        diesel::update(
-                            downloads::table
-                                .filter(downloads::torrent_hash.eq(&status_item.hash))
-                                .filter(downloads::module_id.eq(downloader.module_id)),
-                        )
-                        .set((
-                            downloads::status.eq(new_status),
-                            downloads::progress.eq(status_item.progress as f32),
-                            downloads::total_bytes.eq(status_item.size as i64),
-                            downloads::file_path.eq(&status_item.content_path),
-                            downloads::video_file.eq(video_file.as_deref()),
-                            downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
-                            downloads::error_message.eq::<Option<String>>(None),
-                            downloads::updated_at.eq(now),
-                        ))
-                        .execute(conn)
-                        .ok();
+                        Self::apply_completed_files(
+                            conn,
+                            &status_item.hash,
+                            downloader.module_id,
+                            status_item.content_path.as_deref(),
+                            &status_item.files,
+                            status_item.progress,
+                            status_item.size,
+                        );
                     } else {
                         diesel::update(
                             downloads::table
@@ -356,6 +337,107 @@ impl DownloadScheduler {
                 tracing::error!("Failed to recover stale syncing downloads: {}", e);
             }
             _ => {}
+        }
+    }
+
+    /// Update download records for a completed torrent.
+    ///
+    /// - Single record: bulk-set video_file to first video found (existing behaviour).
+    /// - Multiple records (batch torrent): use match_batch_files to assign
+    ///   each record its specific video_file and subtitle_files.
+    ///   Records that cannot be matched are set to status "batch_unmatched".
+    fn apply_completed_files(
+        conn: &mut PgConnection,
+        torrent_hash: &str,
+        module_id: i32,
+        content_path: Option<&str>,
+        files: &[String],
+        progress: f64,
+        size: u64,
+    ) {
+        let now = chrono::Utc::now().naive_utc();
+
+        // Load all Download records + their episode_no for this torrent
+        let records: Vec<(i32, i32)> = downloads::table
+            .inner_join(anime_links::table.on(anime_links::link_id.eq(downloads::link_id)))
+            .filter(downloads::torrent_hash.eq(torrent_hash))
+            .filter(downloads::module_id.eq(module_id))
+            .filter(downloads::status.eq("downloading"))
+            .select((downloads::download_id, anime_links::episode_no))
+            .load::<(i32, i32)>(conn)
+            .unwrap_or_default();
+
+        if records.is_empty() {
+            return;
+        }
+
+        if records.len() == 1 {
+            // Single episode: original behaviour — pick first video
+            let (video_file, subtitle_files_json) = Self::extract_media_files(files);
+            diesel::update(
+                downloads::table.filter(downloads::download_id.eq(records[0].0)),
+            )
+            .set((
+                downloads::status.eq("completed"),
+                downloads::progress.eq(progress as f32),
+                downloads::total_bytes.eq(size as i64),
+                downloads::file_path.eq(content_path),
+                downloads::video_file.eq(video_file.as_deref()),
+                downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
+                downloads::updated_at.eq(now),
+            ))
+            .execute(conn)
+            .ok();
+            return;
+        }
+
+        // Batch mode: match each episode to its specific file
+        let episode_nos: Vec<i32> = records.iter().map(|(_, ep)| *ep).collect();
+        let chain = build_default_chain();
+        let matches = match_batch_files(files, &episode_nos, &chain);
+
+        for (download_id, episode_no) in &records {
+            if let Some((video, subs)) = matches.get(episode_no) {
+                let subtitle_json = if subs.is_empty() {
+                    None
+                } else {
+                    serde_json::to_string(subs).ok()
+                };
+                diesel::update(downloads::table.filter(downloads::download_id.eq(download_id)))
+                    .set((
+                        downloads::status.eq("completed"),
+                        downloads::progress.eq(progress as f32),
+                        downloads::total_bytes.eq(size as i64),
+                        downloads::file_path.eq(content_path),
+                        downloads::video_file.eq(video.as_deref()),
+                        downloads::subtitle_files.eq(subtitle_json.as_deref()),
+                        downloads::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .ok();
+            } else {
+                tracing::warn!(
+                    "batch_unmatched: download_id={} episode_no={} torrent_hash={}",
+                    download_id,
+                    episode_no,
+                    torrent_hash
+                );
+                diesel::update(downloads::table.filter(downloads::download_id.eq(download_id)))
+                    .set((
+                        downloads::status.eq("batch_unmatched"),
+                        downloads::progress.eq(progress as f32),
+                        downloads::total_bytes.eq(size as i64),
+                        downloads::file_path.eq(content_path),
+                        downloads::error_message.eq(Some(format!(
+                            "Unable to match episode {} in {}",
+                            episode_no,
+                            content_path.unwrap_or("(unknown)")
+                        ))),
+                        downloads::updated_at.eq(now),
+                    ))
+                    .execute(conn)
+                    .ok();
+            }
         }
     }
 
