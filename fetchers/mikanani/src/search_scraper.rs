@@ -195,18 +195,26 @@ pub mod mock {
 mod tests {
     use super::*;
 
-    // Real HTML structure from https://mikanani.me/Home/Search?searchstr=金牌
-    // Bangumi section: ul.list-inline.an-ul > li > a
-    // Episode section: div.episode-table > table > tr.js-search-results-row
+    // ==========================================================================
+    // MOCK_DATA: search_scraper — 搜尋頁面 HTML 結構
+    // Source  : https://mikanani.me/Home/Search?searchstr=金牌
+    // Captured: 2026-03-03
+    // Contains: bangumi cards (ul.an-ul) + episode table (tr.js-search-results-row)
+    // Update  : Search "MOCK_DATA: search_scraper" to find this block.
+    //           Refresh when mikanani changes its HTML structure.
+    // ==========================================================================
     static REAL_SEARCH_HTML: &str = r#"
         <html><body>
+          <!-- Bangumi cards section: ul.list-inline.an-ul > li > a -->
+          <!-- thumbnail: span.b-lazy[data-src] (lazy-loaded, NOT img[src]) -->
+          <!-- title: div.an-text[title] (use title attr to avoid truncation) -->
           <ul class="list-inline an-ul" style="margin-top:20px;">
             <li>
               <a href="/Home/Bangumi/3519" target="_blank">
                 <span data-src="/images/Bangumi/202501/27eeaf1a.jpg?width=400&amp;height=400&amp;format=webp" class="b-lazy"></span>
                 <div class="an-info">
                   <div class="an-info-group">
-                    <div class="an-text" title="金牌得主" style="white-space:nowrap; width:170px; overflow:hidden; text-overflow:ellipsis;line-height: 40px;">金牌得主</div>
+                    <div class="an-text" title="&#x91D1;&#x724C;&#x5F97;&#x4E3B;" style="white-space:nowrap; width:170px; overflow:hidden; text-overflow:ellipsis;line-height: 40px;">&#x91D1;&#x724C;&#x5F97;&#x4E3B;</div>
                   </div>
                 </div>
               </a>
@@ -216,57 +224,60 @@ mod tests {
                 <span data-src="/images/Bangumi/202601/cbad1678.jpg?width=400&amp;height=400&amp;format=webp" class="b-lazy"></span>
                 <div class="an-info">
                   <div class="an-info-group">
-                    <div class="an-text" title="金牌得主 第二季" style="white-space:nowrap; width:170px; overflow:hidden; text-overflow:ellipsis;line-height: 40px;">金牌得主 第二季</div>
+                    <div class="an-text" title="&#x91D1;&#x724C;&#x5F97;&#x4E3B; &#x7B2C;&#x4E8C;&#x5B63;" style="white-space:nowrap; width:170px; overflow:hidden; text-overflow:ellipsis;line-height: 40px;">&#x91D1;&#x724C;&#x5F97;&#x4E3B; &#x7B2C;&#x4E8C;&#x5B63;</div>
                   </div>
                 </div>
               </a>
             </li>
           </ul>
-          <div class="episode-table">
-            <table class="table table-striped tbl-border fadeIn">
-              <tbody>
-                <tr class="js-search-results-row" data-itemindex="0">
-                  <td>
-                    <input type="checkbox" class="js-episode-select"
-                      data-magnet="magnet:?xt=urn:btih:a699e0962e20c6561bd6728386a0d3f2cd6edc5a&amp;tr=http%3a%2f%2ft.nyaatracker.com%2fannounce"
-                      aria-label="选择此行" />
-                  </td>
-                  <td>
-                    <a href="/Home/Episode/a699e0962e20c6561bd6728386a0d3f2cd6edc5a" target="_blank"
-                        class="magnet-link-wrap">[KITA]（双语人工翻译）&#x200B;金牌得主19，无法下载b站搜索KITA_Ciallo</a>
-                  </td>
-                  <td>232.26 MB</td>
-                  <td>2026/03/01 12:40</td>
-                </tr>
-                <tr class="js-search-results-row" data-itemindex="1">
-                  <td>
-                    <input type="checkbox" class="js-episode-select"
-                      data-magnet="magnet:?xt=urn:btih:2f2be30566da45ac7fb9849c2386fa787d6ff2d4&amp;tr=http%3a%2f%2ft.nyaatracker.com%2fannounce"
-                      aria-label="选择此行" />
-                  </td>
-                  <td>
-                    <a href="/Home/Episode/2f2be30566da45ac7fb9849c2386fa787d6ff2d4" target="_blank"
-                        class="magnet-link-wrap">六四位元字幕组★金牌得主 第二季 Medalist 2★19★1920x1080★AVC AAC MP4★繁体中文</a>
-                  </td>
-                  <td>1.1 GB</td>
-                  <td>2026/03/01 10:00</td>
-                </tr>
-                <tr class="js-search-results-row" data-itemindex="2">
-                  <td>
-                    <input type="checkbox" class="js-episode-select"
-                      data-magnet="magnet:?xt=urn:btih:14fc051e0ff8d17a27a9ab6077b6fc25c9ff628a"
-                      aria-label="选择此行" />
-                  </td>
-                  <td>
-                    <a href="/Home/Episode/14fc051e0ff8d17a27a9ab6077b6fc25c9ff628a" target="_blank"
-                        class="magnet-link-wrap">[喵萌奶茶屋&amp;LoliHouse] 金牌得主 / Medalist - 18 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</a>
-                  </td>
-                  <td>800 MB</td>
-                  <td>2026/02/28 20:00</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <!-- Episode table: tr.js-search-results-row > td > a.magnet-link-wrap -->
+          <!-- (Data-magnet trackers stripped for brevity; structure unchanged) -->
+          <table class="table table-striped tbl-border fadeIn">
+            <tbody>
+              <tr class="js-search-results-row" data-itemindex="0" style="">
+                <td>
+                  <input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:a699e0962e20c6561bd6728386a0d3f2cd6edc5a"
+                    aria-label="选择此行" />
+                </td>
+                <td>
+                  <a href="/Home/Episode/a699e0962e20c6561bd6728386a0d3f2cd6edc5a" target="_blank"
+                      class="magnet-link-wrap">[KITA]&#xFF08;&#x53CC;&#x8BED;&#x4EBA;&#x5DE5;&#x7FFB;&#x8BD1;&#xFF09;&#x200B;&#x91D1;&#x724C;&#x5F97;&#x4E3B;19&#xFF0C;&#x65E0;&#x6CD5;&#x4E0B;&#x8F7D;b&#x7AD9;&#x641C;&#x7D22;KITA_Ciallo</a>
+                  <a class="js-magnet magnet-link">[复制磁连]</a>
+                </td>
+                <td>232.26 MB</td>
+                <td>2026/03/01 12:40</td>
+              </tr>
+              <tr class="js-search-results-row" data-itemindex="1" style="">
+                <td>
+                  <input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:2f2be30566da45ac7fb9849c2386fa787d6ff2d4"
+                    aria-label="选择此行" />
+                </td>
+                <td>
+                  <a href="/Home/Episode/2f2be30566da45ac7fb9849c2386fa787d6ff2d4" target="_blank"
+                      class="magnet-link-wrap">&#x516D;&#x56DB;&#x4F4D;&#x5143;&#x5B57;&#x5E55;&#x7EC4;&#x2605;&#x91D1;&#x724C;&#x5F97;&#x4E3B; &#x7B2C;&#x4E8C;&#x5B63; Medalist 2&#x2605;19&#x2605;1920x1080&#x2605;AVC AAC MP4&#x2605;&#x7E41;&#x4F53;&#x4E2D;&#x6587;</a>
+                  <a class="js-magnet magnet-link">[复制磁连]</a>
+                </td>
+                <td>1.1 GB</td>
+                <td>2026/03/01 10:00</td>
+              </tr>
+              <tr class="js-search-results-row" data-itemindex="2" style="">
+                <td>
+                  <input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:ff4752600006e6ea0b33962683254e7de5626830"
+                    aria-label="选择此行" />
+                </td>
+                <td>
+                  <a href="/Home/Episode/ff4752600006e6ea0b33962683254e7de5626830" target="_blank"
+                      class="magnet-link-wrap">&#x91D1;&#x724C;&#x5F97;&#x4E3B; &#x7B2C;2&#x671F;&#x300C;&#x30E1;&#x30C0;&#x30EA;&#x30B9;&#x30C8;&#x300D;Medalist S02E06 1080p &#x591A;&#x56FD;&#x5B57;&#x5E55;</a>
+                  <a class="js-magnet magnet-link">[复制磁连]</a>
+                </td>
+                <td>800 MB</td>
+                <td>2026/02/28 20:00</td>
+              </tr>
+            </tbody>
+          </table>
         </body></html>
     "#;
 

@@ -232,50 +232,67 @@ pub mod mock {
 mod tests {
     use super::*;
 
-    // Real HTML structure from https://mikanani.me/Home/Bangumi/3822
-    //
-    // Variant A (id=202): subgroup name is a DIRECT TEXT NODE inside div.subgroup-text.
-    // Variant B (id=1243, 370, 382): name is inside <a href="/Home/PublishGroup/..."> link.
+    // ==========================================================================
+    // MOCK_DATA: detail_scraper — 番劇詳細頁面 HTML 結構
+    // Source  : https://mikanani.me/Home/Bangumi/3822 (金牌得主 第二季)
+    // Captured: 2026-03-03
+    // Contains: div.subgroup-text blocks (9 subgroups in real page; 4 shown here)
+    //   Variant A (id=202): subgroup name is a DIRECT TEXT NODE (生肉/不明字幕)
+    //   Variant B (id=1243,370,382): name is inside <a href="/Home/PublishGroup/...">
+    // Update  : Search "MOCK_DATA: detail_scraper" to find this block.
+    //           Refresh when mikanani changes its bangumi detail HTML structure.
+    // ==========================================================================
     static REAL_BANGUMI_DETAIL_HTML: &str = r#"
         <html><body>
+          <!-- Variant A: name is a direct text node (raw HTML entity in real page) -->
           <div class="subgroup-scroll-top-202"></div>
           <div class="subgroup-text" id="202">
-            生肉/不明字幕
-            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=202" class="mikan-rss"
-               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
-               <i class="fa fa-rss-square"></i>
-            </a>
+&#x751F;&#x8089;/&#x4E0D;&#x660E;&#x5B57;&#x5E55;            <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=202" class="mikan-rss" data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank"><i class="fa fa-rss-square"></i></a>
             <span class="subscribed" style="display:none;">已订阅</span>
             <a class="pull-right subgroup-subscribe js-subscribe_bangumi_page" data-bangumiid="3822" data-subtitlegroupid="202">订阅</a>
           </div>
+          <div class="subgroup-scroll-end-202"></div>
+          <!-- Variant B: name inside <a href="/Home/PublishGroup/..."> (most subgroups) -->
           <div class="subgroup-scroll-top-1243"></div>
           <div class="subgroup-text" id="1243">
-            <a href="/Home/PublishGroup/1015" target="_blank" style="color: #3bc0c3;">六四位元字幕组</a>
-            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=1243" class="mikan-rss"
-               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
-               <i class="fa fa-rss-square"></i>
-            </a>
+            <a href="/Home/PublishGroup/1015" target="_blank" style="color: #3bc0c3;">&#x516D;&#x56DB;&#x4F4D;&#x5143;&#x5B57;&#x5E55;&#x7EC4;</a>
+            <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=1243" class="mikan-rss" data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank"><i class="fa fa-rss-square"></i></a>
             <span class="subscribed" style="display:none;">已订阅</span>
             <a class="pull-right subgroup-subscribe js-subscribe_bangumi_page" data-bangumiid="3822" data-subtitlegroupid="1243">订阅</a>
           </div>
+          <div class="subgroup-scroll-end-1243"></div>
           <div class="subgroup-scroll-top-370"></div>
           <div class="subgroup-text" id="370">
             <a href="/Home/PublishGroup/223" target="_blank" style="color: #3bc0c3;">LoliHouse</a>
-            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=370" class="mikan-rss"
-               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
-               <i class="fa fa-rss-square"></i>
-            </a>
+            <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=370" class="mikan-rss" data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank"><i class="fa fa-rss-square"></i></a>
             <span class="subscribed" style="display:none;">已订阅</span>
             <a class="pull-right subgroup-subscribe js-subscribe_bangumi_page" data-bangumiid="3822" data-subtitlegroupid="370">订阅</a>
           </div>
+          <div class="subgroup-scroll-end-370"></div>
+          <div class="subgroup-scroll-top-382"></div>
+          <div class="subgroup-text" id="382">
+            <a href="/Home/PublishGroup/233" target="_blank" style="color: #3bc0c3;">&#x55B5;&#x840C;&#x5976;&#x8336;&#x5C4B;</a>
+            <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=382" class="mikan-rss" data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank"><i class="fa fa-rss-square"></i></a>
+            <span class="subscribed" style="display:none;">已订阅</span>
+            <a class="pull-right subgroup-subscribe js-subscribe_bangumi_page" data-bangumiid="3822" data-subtitlegroupid="382">订阅</a>
+          </div>
+          <div class="subgroup-scroll-end-382"></div>
         </body></html>
     "#;
 
-    // Real HTML for source detail: uses the leftbar a.subgroup-longname[data-subgroupid]
-    // to identify subgroups (the same page as a search result).
+    // ==========================================================================
+    // MOCK_DATA: detail_scraper — 搜尋結果 leftbar HTML 結構 (source detail 用)
+    // Source  : https://mikanani.me/Home/Search?searchstr=金牌 (leftbar 部分)
+    // Captured: 2026-03-03
+    // Contains: a.subgroup-longname[data-subgroupid] — 所有字幕組清單
+    //   "显示全部" (data-subgroupid="") 會被跳過
+    //   每個字幕組用 data-subgroupid 建立 /RSS/Search?searchstr={q}&subgroupid={id}
+    // Update  : Search "MOCK_DATA: detail_scraper" to find this block.
+    //           Refresh when mikanani changes its leftbar HTML structure.
+    // ==========================================================================
     static REAL_SOURCE_DETAIL_HTML: &str = r#"
         <html><body>
-          <div id="sk-container" class="container">
+          <div id="sk-container" class="container hidden-sm hidden-xs">
             <div class="pull-left leftbar-container">
               <div class="leftbar-nav">
                 <div class="header">相关字幕组</div>
@@ -284,10 +301,16 @@ mod tests {
                     <a class="subgroup-longname active" onclick="AddFilter(this)" data-subgroupid="">显示全部</a>
                   </span></li>
                   <li class="leftbar-item"><span>
-                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="382">喵萌奶茶屋</a>
+                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="382">&#x55B5;&#x840C;&#x5976;&#x8336;&#x5C4B;</a>
                   </span></li>
                   <li class="leftbar-item"><span>
-                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="370">KITA</a>
+                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="370">LoliHouse</a>
+                  </span></li>
+                  <li class="leftbar-item"><span>
+                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="202">&#x751F;&#x8089;/&#x4E0D;&#x660E;&#x5B57;&#x5E55;</a>
+                  </span></li>
+                  <li class="leftbar-item"><span>
+                    <a class="subgroup-longname" onclick="AddFilter(this)" data-subgroupid="1243">&#x516D;&#x56DB;&#x4F4D;&#x5143;&#x5B57;&#x5E55;&#x7EC4;</a>
                   </span></li>
                 </ul>
               </div>
@@ -300,10 +323,10 @@ mod tests {
     fn test_parse_bangumi_detail_real_html_subgroup_names() {
         let result = parse_bangumi_detail(REAL_BANGUMI_DETAIL_HTML, "3822").unwrap();
 
-        // 3 subgroups + 1 root "全部"
-        assert_eq!(result.items.len(), 4);
+        // 4 subgroups (202, 1243, 370, 382) + 1 root "全部" = 5
+        assert_eq!(result.items.len(), 5);
 
-        // Variant A: name is a direct text node
+        // Variant A: name is a direct text node (&#x751F;&#x8089;/&#x4E0D;&#x660E;&#x5B57;&#x5E55;)
         assert_eq!(result.items[0].subgroup_name, "生肉/不明字幕");
         assert_eq!(
             result.items[0].rss_url,
@@ -311,6 +334,7 @@ mod tests {
         );
 
         // Variant B: name is inside <a href="/Home/PublishGroup/...">
+        // (&#x516D;&#x56DB;&#x4F4D;&#x5143;&#x5B57;&#x5E55;&#x7EC4;)
         assert_eq!(result.items[1].subgroup_name, "六四位元字幕组");
         assert_eq!(
             result.items[1].rss_url,
@@ -323,10 +347,17 @@ mod tests {
             "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=370"
         );
 
-        // Last item is always 全部
-        assert_eq!(result.items[3].subgroup_name, "全部");
+        // (&#x55B5;&#x840C;&#x5976;&#x8336;&#x5C4B;)
+        assert_eq!(result.items[3].subgroup_name, "喵萌奶茶屋");
         assert_eq!(
             result.items[3].rss_url,
+            "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=382"
+        );
+
+        // Last item is always 全部
+        assert_eq!(result.items[4].subgroup_name, "全部");
+        assert_eq!(
+            result.items[4].rss_url,
             "https://mikanani.me/RSS/Bangumi?bangumiId=3822"
         );
     }
@@ -347,25 +378,40 @@ mod tests {
     fn test_parse_source_detail_real_html_uses_leftbar_subgroups() {
         let result = parse_source_detail(REAL_SOURCE_DETAIL_HTML, "金牌").unwrap();
 
-        // leftbar has 2 subgroups (382=喵萌奶茶屋, 370=KITA) + 1 "全部" appended = 3 total
-        assert_eq!(result.items.len(), 3, "Expected 2 subgroups + 全部");
+        // leftbar has 4 real subgroups (382, 370, 202, 1243) + 1 "全部" = 5 total
+        assert_eq!(result.items.len(), 5, "Expected 4 subgroups + 全部");
 
+        // (&#x55B5;&#x840C;&#x5976;&#x8336;&#x5C4B;)
         assert_eq!(result.items[0].subgroup_name, "喵萌奶茶屋");
         assert_eq!(
             result.items[0].rss_url,
             "https://mikanani.me/RSS/Search?searchstr=%E9%87%91%E7%89%8C&subgroupid=382"
         );
 
-        assert_eq!(result.items[1].subgroup_name, "KITA");
+        assert_eq!(result.items[1].subgroup_name, "LoliHouse");
         assert_eq!(
             result.items[1].rss_url,
             "https://mikanani.me/RSS/Search?searchstr=%E9%87%91%E7%89%8C&subgroupid=370"
         );
 
-        // Last item is always 全部
-        assert_eq!(result.items[2].subgroup_name, "全部");
+        // (&#x751F;&#x8089;/&#x4E0D;&#x660E;&#x5B57;&#x5E55;)
+        assert_eq!(result.items[2].subgroup_name, "生肉/不明字幕");
         assert_eq!(
             result.items[2].rss_url,
+            "https://mikanani.me/RSS/Search?searchstr=%E9%87%91%E7%89%8C&subgroupid=202"
+        );
+
+        // (&#x516D;&#x56DB;&#x4F4D;&#x5143;&#x5B57;&#x5E55;&#x7EC4;)
+        assert_eq!(result.items[3].subgroup_name, "六四位元字幕组");
+        assert_eq!(
+            result.items[3].rss_url,
+            "https://mikanani.me/RSS/Search?searchstr=%E9%87%91%E7%89%8C&subgroupid=1243"
+        );
+
+        // Last item is always 全部
+        assert_eq!(result.items[4].subgroup_name, "全部");
+        assert_eq!(
+            result.items[4].rss_url,
             "https://mikanani.me/RSS/Search?searchstr=%E9%87%91%E7%89%8C"
         );
     }
