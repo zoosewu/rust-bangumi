@@ -35,6 +35,8 @@ export type ParserFormState = {
   anime_title_value: string
   episode_no_source: string
   episode_no_value: string
+  episode_end_source: string | null
+  episode_end_value: string | null
   series_no_source: string | null
   series_no_value: string | null
   subtitle_group_source: string | null
@@ -56,6 +58,8 @@ export const EMPTY_PARSER_FORM: ParserFormState = {
   anime_title_value: "",
   episode_no_source: "regex",
   episode_no_value: "",
+  episode_end_source: null,
+  episode_end_value: null,
   series_no_source: null,
   series_no_value: null,
   subtitle_group_source: null,
@@ -82,6 +86,7 @@ export function buildParserRequest(form: ParserFormState): Record<string, unknow
     episode_no_value: form.episode_no_value,
   }
   const optionalFields = [
+    ["episode_end", form.episode_end_source, form.episode_end_value],
     ["series_no", form.series_no_source, form.series_no_value],
     ["subtitle_group", form.subtitle_group_source, form.subtitle_group_value],
     ["resolution", form.resolution_source, form.resolution_value],
@@ -234,6 +239,13 @@ export function ParserFormFields({
             required
           />
           <FieldSourceInput
+            label={t("parsers.episodeEnd", "Episode End")}
+            source={form.episode_end_source}
+            value={form.episode_end_value ?? ""}
+            onSourceChange={(v) => onChange("episode_end_source", v === "none" ? null : v)}
+            onValueChange={(v) => onChange("episode_end_value", v)}
+          />
+          <FieldSourceInput
             label={t("parsers.seriesNo", "Series No")}
             source={form.series_no_source}
             value={form.series_no_value ?? ""}
@@ -364,6 +376,8 @@ export function ParserAIButtons({
         anime_title_value: parsed.anime_title_value ?? "",
         episode_no_source: parsed.episode_no_source ?? "regex",
         episode_no_value: parsed.episode_no_value ?? "",
+        episode_end_source: parsed.episode_end_source ?? null,
+        episode_end_value: parsed.episode_end_value ?? null,
         series_no_source: parsed.series_no_source ?? null,
         series_no_value: parsed.series_no_value ?? null,
         subtitle_group_source: parsed.subtitle_group_source ?? null,
