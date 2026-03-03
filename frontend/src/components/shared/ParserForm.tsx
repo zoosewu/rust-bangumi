@@ -453,7 +453,9 @@ export function ParserAIButtons({
   "season_source": "'regex', 'static', or null - aired season (optional)",
   "season_value": "string or null",
   "year_source": "'regex', 'static', or null - year (optional)",
-  "year_value": "string or null"
+  "year_value": "string or null",
+  "episode_end_source": "'regex', 'static', or null - end episode for batch torrents covering a range e.g. 01-12 (optional)",
+  "episode_end_value": "string or null - e.g. $3 if parse_regex has a 3rd capture group for the end episode number"
 }
 \`\`\`
 
@@ -477,7 +479,7 @@ Analyze the titles above and generate a parser JSON that can:
 1. Match these titles with \`condition_regex\` — make it as strict as possible
 2. Extract anime_title, episode_no, and other fields using \`parse_regex\` with numbered capture groups
 3. Set appropriate source/value pairs for each extracted field using \`$N\` notation
-4. Use null for optional fields that cannot be reliably extracted
+4. Use null for optional fields that cannot be reliably extracted. If titles show an episode range (e.g. \`01-12\`, \`EP01-EP12\`), set \`episode_end_source\` and \`episode_end_value\` to capture the upper bound.
 5. Determine priority based on the Priority Rules above
 
 Return ONLY the JSON object, no extra text.`
