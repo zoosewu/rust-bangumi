@@ -86,7 +86,7 @@ export function DetailDialog({ result, onClose }: DetailDialogProps) {
           <DialogHeader>
             <div className="flex items-center gap-4">
               {result?.thumbnail_url && (
-                <div className="w-16 h-20 flex-shrink-0 rounded overflow-hidden bg-muted">
+                <div className="w-24 h-32 flex-shrink-0 rounded overflow-hidden bg-muted">
                   <img
                     src={result.thumbnail_url}
                     alt={result.title}
@@ -161,7 +161,7 @@ export function DetailDialog({ result, onClose }: DetailDialogProps) {
         open={!!subscribeTarget}
         onOpenChange={(open) => { if (!open) setSubscribeTarget(null) }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t("subscriptions.addSubscription")}</DialogTitle>
           </DialogHeader>

@@ -52,7 +52,7 @@ impl SearchScraper for RealSearchScraper {
             .await
             .map_err(|e| format!("Failed to read response body: {}", e))?;
 
-        parse_search_results(&html)
+        parse_search_results(&html, query)
     }
 }
 
@@ -64,12 +64,13 @@ impl SearchScraper for RealSearchScraper {
 ///    - href: "/Home/Bangumi/{id}"
 ///    - thumbnail: `span.b-lazy[data-src]`
 ///    - title: `div.an-text` (title attribute preferred, then text content)
+///    - detail_key: "bangumi:{id}"
 ///
 /// 2. Episode table rows: `tr.js-search-results-row td a.magnet-link-wrap`
-///    - href: "/Home/Episode/{hash}"
-///    - title: text content of the anchor
-///    - detail_key: "source:{title_truncated_at_last_underscore}"
-pub fn parse_search_results(html: &str) -> Result<Vec<SearchResult>, String> {
+///    - If any episode rows exist → ONE source entry is emitted with
+///      detail_key: "source:{query}" so the detail scraper can re-fetch and
+///      list per-subgroup RSS links from the leftbar.
+pub fn parse_search_results(html: &str, query: &str) -> Result<Vec<SearchResult>, String> {
     let document = Html::parse_document(html);
     let mut results = Vec::new();
 
@@ -133,34 +134,21 @@ pub fn parse_search_results(html: &str) -> Result<Vec<SearchResult>, String> {
         });
     }
 
-    // --- Part 2: Episode table rows ---
+    // --- Part 2: Episode table rows → ONE aggregated source entry ---
+    // All episode rows are collapsed into a single result. Clicking it opens the
+    // detail dialog which lists per-subgroup RSS links fetched from the leftbar.
     let episode_sel = Selector::parse("tr.js-search-results-row td a.magnet-link-wrap")
         .map_err(|e| format!("Invalid selector: {:?}", e))?;
 
-    for element in document.select(&episode_sel) {
-        let href = match element.value().attr("href") {
-            Some(h) => h,
-            None => continue,
-        };
-        if !href.contains("/Home/Episode/") {
-            continue;
-        }
+    let has_episodes = document
+        .select(&episode_sel)
+        .any(|el| el.value().attr("href").map_or(false, |h| h.contains("/Home/Episode/")));
 
-        let title = element.text().collect::<String>().trim().to_string();
-        if title.is_empty() {
-            continue;
-        }
-
-        // Truncate title at last '_' to produce a stable searchstr for the RSS URL
-        let searchstr = match title.rfind('_') {
-            Some(idx) => title[..idx].to_string(),
-            None => title.clone(),
-        };
-
+    if has_episodes {
         results.push(SearchResult {
-            title,
+            title: query.to_string(),
             thumbnail_url: None,
-            detail_key: format!("source:{}", searchstr),
+            detail_key: format!("source:{}", query),
         });
     }
 
@@ -284,18 +272,17 @@ mod tests {
 
     #[test]
     fn test_parse_empty_html() {
-        let result = parse_search_results("<html><body></body></html>").unwrap();
+        let result = parse_search_results("<html><body></body></html>", "金牌").unwrap();
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_parse_real_search_html_bangumi_cards() {
-        let results = parse_search_results(REAL_SEARCH_HTML).unwrap();
+        let results = parse_search_results(REAL_SEARCH_HTML, "金牌").unwrap();
 
-        // Should have 2 bangumi + 3 episodes = 5 total
-        assert_eq!(results.len(), 5, "Expected 2 bangumi + 3 episodes");
+        // Should have 2 bangumi + 1 source entry = 3 total
+        assert_eq!(results.len(), 3, "Expected 2 bangumi + 1 source entry");
 
-        // First two are bangumi
         assert_eq!(results[0].title, "金牌得主");
         assert_eq!(results[0].detail_key, "bangumi:3519");
         assert_eq!(
@@ -312,37 +299,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_real_search_html_episode_rows() {
-        let results = parse_search_results(REAL_SEARCH_HTML).unwrap();
+    fn test_parse_real_search_html_source_entry() {
+        let results = parse_search_results(REAL_SEARCH_HTML, "金牌").unwrap();
 
-        // Episodes start at index 2
-        let episodes = &results[2..];
-        assert_eq!(episodes.len(), 3);
-
-        // KITA episode: title has '_Ciallo' suffix, truncated at last '_'
-        assert_eq!(
-            episodes[0].title,
-            "[KITA]（双语人工翻译）\u{200b}金牌得主19，无法下载b站搜索KITA_Ciallo"
-        );
-        assert_eq!(
-            episodes[0].detail_key,
-            "source:[KITA]（双语人工翻译）\u{200b}金牌得主19，无法下载b站搜索KITA"
-        );
-        assert_eq!(episodes[0].thumbnail_url, None);
-
-        // 六四位元 episode: no '_', full title used as searchstr
-        assert_eq!(
-            episodes[1].title,
-            "六四位元字幕组★金牌得主 第二季 Medalist 2★19★1920x1080★AVC AAC MP4★繁体中文"
-        );
-        assert_eq!(
-            episodes[1].detail_key,
-            "source:六四位元字幕组★金牌得主 第二季 Medalist 2★19★1920x1080★AVC AAC MP4★繁体中文"
-        );
-
-        // 喵萌奶茶屋 episode: no '_'
-        assert!(episodes[2].detail_key.starts_with("source:"));
-        assert!(episodes[2].title.contains("喵萌奶茶屋"));
+        // Third entry is the ONE aggregated source entry
+        assert_eq!(results[2].title, "金牌");
+        assert_eq!(results[2].detail_key, "source:金牌");
+        assert_eq!(results[2].thumbnail_url, None);
     }
 
     #[test]
@@ -364,7 +327,7 @@ mod tests {
               </ul>
             </body></html>
         "#;
-        let results = parse_search_results(html).unwrap();
+        let results = parse_search_results(html, "test").unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].detail_key, "bangumi:9999");
         assert_eq!(
@@ -374,8 +337,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_episode_underscore_truncation() {
-        // title = "SubGroup_Show19_Ciallo" → searchstr = "SubGroup_Show19"
+    fn test_parse_episodes_collapse_to_one_source_entry() {
+        // Multiple episode rows → exactly ONE source entry
         let html = r#"
             <html><body>
               <div class="episode-table">
@@ -383,38 +346,22 @@ mod tests {
                   <tbody>
                     <tr class="js-search-results-row">
                       <td><input class="js-episode-select" data-magnet="magnet:test" /></td>
-                      <td><a href="/Home/Episode/abc123" class="magnet-link-wrap">SubGroup_Show19_Ciallo</a></td>
+                      <td><a href="/Home/Episode/abc123" class="magnet-link-wrap">[SubA] Show 19</a></td>
                     </tr>
-                  </tbody>
-                </table>
-              </div>
-            </body></html>
-        "#;
-        let results = parse_search_results(html).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].title, "SubGroup_Show19_Ciallo");
-        assert_eq!(results[0].detail_key, "source:SubGroup_Show19");
-    }
-
-    #[test]
-    fn test_parse_episode_no_underscore_uses_full_title() {
-        let html = r#"
-            <html><body>
-              <div class="episode-table">
-                <table>
-                  <tbody>
                     <tr class="js-search-results-row">
-                      <td><input class="js-episode-select" data-magnet="magnet:test" /></td>
-                      <td><a href="/Home/Episode/xyz789" class="magnet-link-wrap">[喵萌奶茶屋] 金牌得主 S02E19 1080p</a></td>
+                      <td><input class="js-episode-select" data-magnet="magnet:test2" /></td>
+                      <td><a href="/Home/Episode/def456" class="magnet-link-wrap">[SubB] Show 19</a></td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </body></html>
         "#;
-        let results = parse_search_results(html).unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].detail_key, "source:[喵萌奶茶屋] 金牌得主 S02E19 1080p");
+        let results = parse_search_results(html, "Show").unwrap();
+        assert_eq!(results.len(), 1, "All episodes should collapse to ONE source entry");
+        assert_eq!(results[0].title, "Show");
+        assert_eq!(results[0].detail_key, "source:Show");
+        assert_eq!(results[0].thumbnail_url, None);
     }
 
     #[test]
@@ -436,7 +383,7 @@ mod tests {
               </ul>
             </body></html>
         "#;
-        let results = parse_search_results(html).unwrap();
+        let results = parse_search_results(html, "金牌").unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].detail_key, "bangumi:3519");
     }
