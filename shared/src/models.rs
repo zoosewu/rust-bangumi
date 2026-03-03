@@ -62,6 +62,8 @@ pub struct Capabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_endpoint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_endpoint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub download_endpoint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_endpoint: Option<String>,
@@ -433,9 +435,10 @@ pub struct SearchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
     pub title: String,
-    pub description: Option<String>,
     pub thumbnail_url: Option<String>,
-    pub subscription_url: String,
+    /// Opaque key for the fetcher's /detail endpoint.
+    /// e.g. "bangumi:3822" or "source:[KITA]...金牌"
+    pub detail_key: String,
 }
 
 /// Fetcher → Core: search response
@@ -448,9 +451,8 @@ pub struct SearchResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedSearchResult {
     pub title: String,
-    pub description: Option<String>,
     pub thumbnail_url: Option<String>,
-    pub subscription_url: String,
+    pub detail_key: String,
     pub source: String,
 }
 
@@ -458,4 +460,23 @@ pub struct AggregatedSearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatedSearchResponse {
     pub results: Vec<AggregatedSearchResult>,
+}
+
+/// Frontend → Core → Fetcher: detail request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailRequest {
+    pub detail_key: String,
+}
+
+/// One row in the detail table
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailItem {
+    pub subgroup_name: String,
+    pub rss_url: String,
+}
+
+/// Fetcher → Core → Frontend: detail response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailResponse {
+    pub items: Vec<DetailItem>,
 }
