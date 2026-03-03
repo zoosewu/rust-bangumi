@@ -1,6 +1,7 @@
 use anyhow::Result;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
@@ -103,6 +104,260 @@ impl LanguageCodeMap {
     pub fn normalize(&self, tag: &str) -> String {
         let key = tag.to_uppercase();
         self.0.get(&key).cloned().unwrap_or_else(|| tag.to_string())
+    }
+}
+
+// ============ Episode Extraction — Chain of Responsibility ============
+
+/// Trait for episode number extraction strategies.
+/// Returns `Some(n)` if exactly one candidate is in `expected`; `None` to pass to next handler.
+pub trait EpisodeExtractHandler: Send + Sync {
+    fn extract(&self, stem: &str, expected: &HashSet<i32>) -> Option<i32>;
+}
+
+fn unique_match(candidates: Vec<i32>, expected: &HashSet<i32>) -> Option<i32> {
+    let matches: Vec<i32> = candidates
+        .into_iter()
+        .filter(|n| expected.contains(n))
+        .collect();
+    if matches.len() == 1 {
+        Some(matches[0])
+    } else {
+        None
+    }
+}
+
+/// Handler 1: explicit markers — EP01, E01 (standalone), 第01話
+///
+/// Standalone `E` is only matched when NOT preceded by an alphanumeric character
+/// (prevents false match on S02E07 season-episode notation).
+pub struct ExplicitMarkerHandler;
+
+impl EpisodeExtractHandler for ExplicitMarkerHandler {
+    fn extract(&self, stem: &str, expected: &HashSet<i32>) -> Option<i32> {
+        // EP01 — "EP" prefix (unambiguous)
+        let re_ep = Regex::new(r"(?i)EP(\d{1,3})").unwrap();
+        // 第01話 — CJK episode marker
+        let re_cjk = Regex::new(r"第(\d{1,3})").unwrap();
+        // E01 standalone — E must NOT be preceded by alphanumeric (rules out S02E07)
+        let re_e = Regex::new(r"(?i)(?:[^A-Za-z0-9]|^)E(\d{1,3})").unwrap();
+
+        let mut candidates: Vec<i32> = Vec::new();
+        for c in re_ep.captures_iter(stem) {
+            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+        }
+        for c in re_cjk.captures_iter(stem) {
+            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+        }
+        for c in re_e.captures_iter(stem) {
+            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+        }
+        unique_match(candidates, expected)
+    }
+}
+
+/// Handler 2: separator-bounded numbers — "- 07 ", "_07_", "-07v2"
+pub struct DashSeparatorHandler;
+
+impl EpisodeExtractHandler for DashSeparatorHandler {
+    fn extract(&self, stem: &str, expected: &HashSet<i32>) -> Option<i32> {
+        let re = Regex::new(r"(?:[\s\-_\.])(\d{1,3})(?:[\s\-_\.v]|$)").unwrap();
+        let candidates = re
+            .captures_iter(stem)
+            .filter_map(|c| c[1].parse::<i32>().ok())
+            .collect();
+        unique_match(candidates, expected)
+    }
+}
+
+/// Handler 3: any 1–3 digit sequence at a word boundary.
+///
+/// Uses `\b` (word boundary) instead of lookahead/lookbehind since the `regex`
+/// crate does not support look-around assertions.
+pub struct IsolatedDigitHandler;
+
+impl EpisodeExtractHandler for IsolatedDigitHandler {
+    fn extract(&self, stem: &str, expected: &HashSet<i32>) -> Option<i32> {
+        let re = Regex::new(r"\b(\d{1,3})\b").unwrap();
+        let candidates = re
+            .captures_iter(stem)
+            .filter_map(|c| c[1].parse::<i32>().ok())
+            .collect();
+        unique_match(candidates, expected)
+    }
+}
+
+/// Build the default three-handler chain (ExplicitMarker → DashSeparator → IsolatedDigit).
+pub fn build_default_chain() -> Vec<Box<dyn EpisodeExtractHandler>> {
+    vec![
+        Box::new(ExplicitMarkerHandler),
+        Box::new(DashSeparatorHandler),
+        Box::new(IsolatedDigitHandler),
+    ]
+}
+
+/// Walk the chain until a handler returns Some; otherwise return None.
+pub fn extract_episode_from_stem(
+    stem: &str,
+    expected: &HashSet<i32>,
+    chain: &[Box<dyn EpisodeExtractHandler>],
+) -> Option<i32> {
+    chain.iter().find_map(|h| h.extract(stem, expected))
+}
+
+/// Match all files in a completed batch torrent to their episode numbers.
+///
+/// Returns `episode_no → (Option<video_path>, Vec<subtitle_paths>)`.
+/// Episodes that cannot be uniquely matched are absent from the map.
+pub fn match_batch_files(
+    files: &[String],
+    episode_nos: &[i32],
+    chain: &[Box<dyn EpisodeExtractHandler>],
+) -> HashMap<i32, (Option<String>, Vec<String>)> {
+    let expected: HashSet<i32> = episode_nos.iter().copied().collect();
+    let classified = classify_files(files.to_vec());
+    let mut result: HashMap<i32, (Option<String>, Vec<String>)> = HashMap::new();
+
+    for mf in classified.iter().filter(|f| f.file_type == FileType::Video) {
+        let stem = Path::new(&mf.path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        if let Some(ep) = extract_episode_from_stem(stem, &expected, chain) {
+            result.entry(ep).or_default().0 = Some(mf.path.clone());
+        }
+    }
+
+    for mf in classified.iter().filter(|f| f.file_type == FileType::Subtitle) {
+        let stem = Path::new(&mf.path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        if let Some(ep) = extract_episode_from_stem(stem, &expected, chain) {
+            result.entry(ep).or_default().1.push(mf.path.clone());
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod episode_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    fn expected(range: std::ops::RangeInclusive<i32>) -> HashSet<i32> {
+        range.collect()
+    }
+
+    fn chain() -> Vec<Box<dyn EpisodeExtractHandler>> {
+        build_default_chain()
+    }
+
+    // ExplicitMarkerHandler tests
+    #[test]
+    fn test_explicit_ep_prefix() {
+        let ep = extract_episode_from_stem("Show EP07 [1080p]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    #[test]
+    fn test_explicit_e_prefix_uppercase() {
+        let ep = extract_episode_from_stem("Show E07 [1080p]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    #[test]
+    fn test_explicit_cjk_marker() {
+        let ep = extract_episode_from_stem("Show 第07話 [1080p]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    // DashSeparatorHandler tests
+    #[test]
+    fn test_dash_separator() {
+        let ep = extract_episode_from_stem("[Group] Show - 07 [1080p][ABCD]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    #[test]
+    fn test_dash_separator_version_suffix() {
+        // "07v2" — the v2 should not block matching
+        let ep = extract_episode_from_stem("[Group] Show - 07v2 [1080p]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    // IsolatedDigitHandler tests
+    #[test]
+    fn test_isolated_digit_fallback() {
+        let ep = extract_episode_from_stem("show.07.mkv.stem", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(7));
+    }
+
+    // Ambiguity → None
+    #[test]
+    fn test_ambiguous_returns_none() {
+        // "02" and "07" both in expected range — ambiguous
+        let ep = extract_episode_from_stem("S02E07", &expected(1..=12), &chain());
+        assert_eq!(ep, None);
+    }
+
+    // Out of range → None
+    #[test]
+    fn test_out_of_range_ignored() {
+        // Only number is 1080 which is not in expected range
+        let ep = extract_episode_from_stem("show [1080p]", &expected(1..=12), &chain());
+        assert_eq!(ep, None);
+    }
+
+    // Zero-padded parsing
+    #[test]
+    fn test_zero_padded_parsed_correctly() {
+        let ep = extract_episode_from_stem("[Group] Show - 01 [720p]", &expected(1..=12), &chain());
+        assert_eq!(ep, Some(1));
+    }
+
+    // match_batch_files tests
+    #[test]
+    fn test_match_batch_files_video_and_subtitle() {
+        let files = vec![
+            "/dl/Show/[G] Show - 01 [1080p].mkv".to_string(),
+            "/dl/Show/[G] Show - 01 [1080p].zh.ass".to_string(),
+            "/dl/Show/[G] Show - 02 [1080p].mkv".to_string(),
+            "/dl/Show/[G] Show - 02 [1080p].zh.ass".to_string(),
+        ];
+        let chain = build_default_chain();
+        let result = match_batch_files(&files, &[1, 2], &chain);
+
+        assert_eq!(result.get(&1).unwrap().0.as_deref(), Some("/dl/Show/[G] Show - 01 [1080p].mkv"));
+        assert_eq!(result.get(&1).unwrap().1, vec!["/dl/Show/[G] Show - 01 [1080p].zh.ass"]);
+        assert_eq!(result.get(&2).unwrap().0.as_deref(), Some("/dl/Show/[G] Show - 02 [1080p].mkv"));
+    }
+
+    #[test]
+    fn test_match_batch_files_unmatched_episode_absent() {
+        // ep 3 has no corresponding file
+        let files = vec![
+            "/dl/Show - 01.mkv".to_string(),
+            "/dl/Show - 02.mkv".to_string(),
+        ];
+        let chain = build_default_chain();
+        let result = match_batch_files(&files, &[1, 2, 3], &chain);
+
+        assert!(result.contains_key(&1));
+        assert!(result.contains_key(&2));
+        assert!(!result.contains_key(&3));
+    }
+
+    #[test]
+    fn test_match_batch_files_single_episode_not_confused() {
+        // Only one expected episode → no ambiguity
+        let files = vec![
+            "/dl/Show - 05 [1080p].mkv".to_string(),
+        ];
+        let chain = build_default_chain();
+        let result = match_batch_files(&files, &[5], &chain);
+        assert_eq!(result.get(&5).unwrap().0.as_deref(), Some("/dl/Show - 05 [1080p].mkv"));
     }
 }
 

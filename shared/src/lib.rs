@@ -10,7 +10,8 @@ pub mod retry;
 pub use api::*;
 pub use errors::*;
 pub use file_classifier::{
-    classify_files, collect_files_recursive, extract_language_tag, FileType, LanguageCodeMap,
+    build_default_chain, classify_files, collect_files_recursive, extract_episode_from_stem,
+    extract_language_tag, match_batch_files, EpisodeExtractHandler, FileType, LanguageCodeMap,
     MediaFile,
 };
 pub use models::*;
