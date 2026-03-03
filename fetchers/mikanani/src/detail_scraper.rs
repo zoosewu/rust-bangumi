@@ -70,38 +70,44 @@ async fn scrape_source(client: &reqwest::Client, searchstr: &str) -> Result<Deta
     parse_source_detail(&html, searchstr)
 }
 
-/// Parse the bangumi detail page for subgroup RSS subscriptions.
-/// Looks for anchor tags linking to RSS feeds with subgroupid parameter.
-/// Also returns the root RSS (no subgroupid) as "全部".
+/// Parse bangumi detail page for per-subgroup RSS links.
+///
+/// Real page structure from https://mikanani.me/Home/Bangumi/{id}:
+/// ```html
+/// <div class="subgroup-text" id="202">
+///   生肉/不明字幕
+///   <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=202" class="mikan-rss">...</a>
+///   <span class="subscribed" style="display:none;">已订阅</span>
+///   <a class="subgroup-subscribe ...">...</a>
+/// </div>
+/// ```
+///
+/// The subgroup name is the first non-empty text node of `div.subgroup-text`.
+/// The subgroup ID is the `id` attribute of `div.subgroup-text`.
 pub fn parse_bangumi_detail(html: &str, bangumi_id: &str) -> Result<DetailResponse, String> {
     let document = Html::parse_document(html);
 
-    // Look for anchor tags whose href contains both bangumiId and subgroupid
-    let link_sel = Selector::parse("a[href*='subgroupid']")
+    let subgroup_sel = Selector::parse("div.subgroup-text")
         .map_err(|e| format!("Invalid selector: {:?}", e))?;
 
     let mut items: Vec<DetailItem> = Vec::new();
-    let mut seen_subgroups = std::collections::HashSet::new();
 
-    for element in document.select(&link_sel) {
-        let href = match element.value().attr("href") {
-            Some(h) => h,
-            None => continue,
+    for element in document.select(&subgroup_sel) {
+        let subgroup_id = match element.value().attr("id") {
+            Some(id) if !id.is_empty() => id,
+            _ => continue,
         };
 
-        // Extract subgroupid from href
-        let subgroup_id = href
-            .split("subgroupid=")
-            .nth(1)
-            .and_then(|s| s.split('&').next())
-            .unwrap_or("");
+        // The subgroup name is the first non-empty direct text node of div.subgroup-text
+        // (subsequent nodes are the RSS icon <a>, <span class="subscribed">, etc.)
+        let subgroup_name = element
+            .children()
+            .filter_map(|child| child.value().as_text())
+            .map(|t| t.trim())
+            .find(|t| !t.is_empty())
+            .unwrap_or("")
+            .to_string();
 
-        if subgroup_id.is_empty() || seen_subgroups.contains(subgroup_id) {
-            continue;
-        }
-        seen_subgroups.insert(subgroup_id.to_string());
-
-        let subgroup_name = element.text().collect::<String>().trim().to_string();
         if subgroup_name.is_empty() {
             continue;
         }
@@ -114,7 +120,7 @@ pub fn parse_bangumi_detail(html: &str, bangumi_id: &str) -> Result<DetailRespon
         items.push(DetailItem { subgroup_name, rss_url });
     }
 
-    // Always add the root RSS (all subgroups) as the last item
+    // Always include a root RSS entry that covers all subgroups
     items.push(DetailItem {
         subgroup_name: "全部".to_string(),
         rss_url: format!("https://mikanani.me/RSS/Bangumi?bangumiId={}", bangumi_id),
@@ -123,32 +129,34 @@ pub fn parse_bangumi_detail(html: &str, bangumi_id: &str) -> Result<DetailRespon
     Ok(DetailResponse { items })
 }
 
-/// Parse source search results and group by subgroup.
-/// Each episode result title contains a subgroup in brackets: "[SubgroupName] ..."
-/// Uses the title-truncated-at-last-underscore as the RSS searchstr.
+/// Parse a search page re-fetched with the source searchstr, grouping results by subgroup.
+///
+/// Episode row structure (same as main search page):
+/// ```html
+/// <tr class="js-search-results-row">
+///   <td><input class="js-episode-select" data-magnet="..." /></td>
+///   <td><a href="/Home/Episode/{hash}" class="magnet-link-wrap">[SubGroup] Title_Suffix</a></td>
+/// </tr>
+/// ```
+///
+/// - Subgroup name: extracted from `[...]` brackets at the start of the title
+/// - RSS URL: `searchstr` = title truncated at last `_`; deduplicated by subgroup name
 pub fn parse_source_detail(html: &str, _original_searchstr: &str) -> Result<DetailResponse, String> {
     let document = Html::parse_document(html);
 
-    let item_sel = Selector::parse("a.an-info-group")
-        .map_err(|e| format!("Invalid selector: {:?}", e))?;
-    let title_sel = Selector::parse("p.an-text")
+    let episode_sel = Selector::parse("tr.js-search-results-row td a.magnet-link-wrap")
         .map_err(|e| format!("Invalid selector: {:?}", e))?;
 
     let mut items: Vec<DetailItem> = Vec::new();
     let mut seen_subgroups: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for element in document.select(&item_sel) {
+    for element in document.select(&episode_sel) {
         let href = element.value().attr("href").unwrap_or("");
         if !href.contains("/Home/Episode/") {
             continue;
         }
 
-        let title = element
-            .select(&title_sel)
-            .next()
-            .map(|el| el.text().collect::<String>().trim().to_string())
-            .unwrap_or_default();
-
+        let title = element.text().collect::<String>().trim().to_string();
         if title.is_empty() {
             continue;
         }
@@ -163,13 +171,13 @@ pub fn parse_source_detail(html: &str, _original_searchstr: &str) -> Result<Deta
             title.clone()
         };
 
-        // Deduplicate by subgroup name
+        // Deduplicate by subgroup name (one RSS entry per subgroup)
         if seen_subgroups.contains(&subgroup_name) {
             continue;
         }
         seen_subgroups.insert(subgroup_name.clone());
 
-        // Compute RSS searchstr: truncate at last '_'
+        // Compute RSS searchstr: truncate at last '_' (e.g. "_Ciallo" suffix)
         let searchstr = match title.rfind('_') {
             Some(idx) => &title[..idx],
             None => &title,
@@ -220,74 +228,186 @@ pub mod mock {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_parse_bangumi_detail_with_subgroups() {
-        let html = r#"
-            <html><body>
-              <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=202">花山映画</a>
-              <a href="/RSS/Bangumi?bangumiId=3822&subgroupid=80">喵萌奶茶屋</a>
-              <a href="/other-link">不相關連結</a>
-            </body></html>
-        "#;
+    // Real HTML structure from https://mikanani.me/Home/Bangumi/3822
+    // Each subgroup is in: div.subgroup-text[id=subgroupid] > TEXT_NODE + a.mikan-rss
+    static REAL_BANGUMI_DETAIL_HTML: &str = r#"
+        <html><body>
+          <div class="subgroup-scroll-top-202"></div>
+          <div class="subgroup-text" id="202">
+            生肉/不明字幕
+            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=202" class="mikan-rss"
+               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
+               <i class="fa fa-rss-square"></i>
+            </a>
+            <span class="subscribed" style="display:none;">已订阅</span>
+          </div>
+          <div class="subgroup-scroll-top-1243"></div>
+          <div class="subgroup-text" id="1243">
+            喵萌奶茶屋&LoliHouse
+            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=1243" class="mikan-rss"
+               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
+               <i class="fa fa-rss-square"></i>
+            </a>
+            <span class="subscribed" style="display:none;">已订阅</span>
+          </div>
+          <div class="subgroup-scroll-top-370"></div>
+          <div class="subgroup-text" id="370">
+            KITA
+            <a href="/RSS/Bangumi?bangumiId=3822&amp;subgroupid=370" class="mikan-rss"
+               data-placement="bottom" data-toggle="tooltip" data-original-title="RSS" target="_blank">
+               <i class="fa fa-rss-square"></i>
+            </a>
+            <span class="subscribed" style="display:none;">已订阅</span>
+          </div>
+        </body></html>
+    "#;
 
-        let result = parse_bangumi_detail(html, "3822").unwrap();
-        // 2 subgroups + 1 root
-        assert_eq!(result.items.len(), 3);
-        assert_eq!(result.items[0].subgroup_name, "花山映画");
+    // Real HTML for source search results (same episode-table structure as main search)
+    static REAL_SOURCE_DETAIL_HTML: &str = r#"
+        <html><body>
+          <div class="episode-table">
+            <table class="table table-striped tbl-border fadeIn">
+              <tbody>
+                <tr class="js-search-results-row" data-itemindex="0">
+                  <td><input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:a699e0962e20c6561bd6728386a0d3f2cd6edc5a"
+                    aria-label="选择此行" /></td>
+                  <td>
+                    <a href="/Home/Episode/a699e0962e20c6561bd6728386a0d3f2cd6edc5a" target="_blank"
+                       class="magnet-link-wrap">[KITA]（双语人工翻译）金牌得主19_Ciallo</a>
+                  </td>
+                </tr>
+                <tr class="js-search-results-row" data-itemindex="1">
+                  <td><input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:b699e0962e20c6561bd6728386a0d3f2cd6edc5b"
+                    aria-label="选择此行" /></td>
+                  <td>
+                    <a href="/Home/Episode/b699e0962e20c6561bd6728386a0d3f2cd6edc5b" target="_blank"
+                       class="magnet-link-wrap">[KITA]（双语人工翻译）金牌得主18_Ciallo</a>
+                  </td>
+                </tr>
+                <tr class="js-search-results-row" data-itemindex="2">
+                  <td><input type="checkbox" class="js-episode-select"
+                    data-magnet="magnet:?xt=urn:btih:14fc051e0ff8d17a27a9ab6077b6fc25c9ff628a"
+                    aria-label="选择此行" /></td>
+                  <td>
+                    <a href="/Home/Episode/14fc051e0ff8d17a27a9ab6077b6fc25c9ff628a" target="_blank"
+                       class="magnet-link-wrap">[喵萌奶茶屋&amp;LoliHouse] 金牌得主 / Medalist - 18 [WebRip 1080p HEVC-10bit AAC][简繁日内封字幕]</a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </body></html>
+    "#;
+
+    #[test]
+    fn test_parse_bangumi_detail_real_html_subgroup_names() {
+        let result = parse_bangumi_detail(REAL_BANGUMI_DETAIL_HTML, "3822").unwrap();
+
+        // 3 subgroups + 1 root "全部"
+        assert_eq!(result.items.len(), 4);
+
+        assert_eq!(result.items[0].subgroup_name, "生肉/不明字幕");
         assert_eq!(
             result.items[0].rss_url,
             "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=202"
         );
-        assert_eq!(result.items[2].subgroup_name, "全部");
+
+        assert_eq!(result.items[1].subgroup_name, "喵萌奶茶屋&LoliHouse");
+        assert_eq!(
+            result.items[1].rss_url,
+            "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=1243"
+        );
+
+        assert_eq!(result.items[2].subgroup_name, "KITA");
         assert_eq!(
             result.items[2].rss_url,
+            "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=370"
+        );
+
+        // Last item is always 全部
+        assert_eq!(result.items[3].subgroup_name, "全部");
+        assert_eq!(
+            result.items[3].rss_url,
             "https://mikanani.me/RSS/Bangumi?bangumiId=3822"
         );
     }
 
     #[test]
     fn test_parse_bangumi_detail_no_subgroups_returns_root_only() {
-        let html = "<html><body><p>no subgroups</p></body></html>";
+        let html = "<html><body><p>no subgroups here</p></body></html>";
         let result = parse_bangumi_detail(html, "9999").unwrap();
         assert_eq!(result.items.len(), 1);
         assert_eq!(result.items[0].subgroup_name, "全部");
+        assert_eq!(
+            result.items[0].rss_url,
+            "https://mikanani.me/RSS/Bangumi?bangumiId=9999"
+        );
     }
 
     #[test]
-    fn test_parse_source_detail_groups_by_subgroup() {
+    fn test_parse_source_detail_real_html_deduplicates_by_subgroup() {
+        let result = parse_source_detail(REAL_SOURCE_DETAIL_HTML, "[KITA]金牌").unwrap();
+
+        // KITA episodes 19 and 18 → same subgroup, dedup → 1 KITA entry
+        // 喵萌奶茶屋 → different subgroup → 1 entry
+        assert_eq!(result.items.len(), 2, "Expected KITA (deduped) + 喵萌奶茶屋");
+
+        assert_eq!(result.items[0].subgroup_name, "KITA");
+        // RSS URL uses title of FIRST KITA episode, truncated at last '_'
+        // "[KITA]（双语人工翻译）金牌得主19_Ciallo" → "[KITA]（双语人工翻译）金牌得主19"
+        assert!(
+            result.items[0].rss_url.contains("searchstr="),
+            "RSS URL should contain searchstr param"
+        );
+        assert!(
+            result.items[0].rss_url.contains("%E9%87%91%E7%89%8C"),  // 金牌
+            "RSS URL should contain encoded title"
+        );
+
+        assert_eq!(result.items[1].subgroup_name, "喵萌奶茶屋&LoliHouse");
+    }
+
+    #[test]
+    fn test_parse_source_detail_no_underscore_uses_full_title_as_searchstr() {
         let html = r#"
             <html><body>
-              <a class="an-info-group" href="/Home/Episode/abc">
-                <p class="an-text">[KITA]金牌得主19_Ciallo</p>
-              </a>
-              <a class="an-info-group" href="/Home/Episode/def">
-                <p class="an-text">[KITA]金牌得主18_Ciallo</p>
-              </a>
-              <a class="an-info-group" href="/Home/Episode/ghi">
-                <p class="an-text">[SubB]金牌得主19_release</p>
-              </a>
+              <div class="episode-table">
+                <table><tbody>
+                  <tr class="js-search-results-row">
+                    <td><input class="js-episode-select" data-magnet="magnet:test" /></td>
+                    <td><a href="/Home/Episode/abc" class="magnet-link-wrap">[SubB]金牌得主 S02E19 1080p</a></td>
+                  </tr>
+                </tbody></table>
+              </div>
             </body></html>
         "#;
-
-        let result = parse_source_detail(html, "[KITA]金牌").unwrap();
-        // KITA appears twice (same searchstr after truncation), SubB once
-        assert_eq!(result.items.len(), 2);
-        assert_eq!(result.items[0].subgroup_name, "KITA");
-        assert_eq!(result.items[1].subgroup_name, "SubB");
+        let result = parse_source_detail(html, "[SubB]金牌").unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].subgroup_name, "SubB");
+        assert!(result.items[0].rss_url.contains("searchstr="));
+        // Full title used since no '_'
+        assert!(result.items[0].rss_url.contains("SubB"));
     }
 
     #[test]
     fn test_parse_source_detail_title_without_brackets() {
         let html = r#"
             <html><body>
-              <a class="an-info-group" href="/Home/Episode/abc">
-                <p class="an-text">金牌得主19_noBrackets</p>
-              </a>
+              <div class="episode-table">
+                <table><tbody>
+                  <tr class="js-search-results-row">
+                    <td><input class="js-episode-select" data-magnet="magnet:test" /></td>
+                    <td><a href="/Home/Episode/abc" class="magnet-link-wrap">金牌得主19_noBrackets</a></td>
+                  </tr>
+                </tbody></table>
+              </div>
             </body></html>
         "#;
-
         let result = parse_source_detail(html, "金牌得主19").unwrap();
         assert_eq!(result.items.len(), 1);
+        // No brackets: full title is used as subgroup_name
         assert_eq!(result.items[0].subgroup_name, "金牌得主19_noBrackets");
     }
 }
