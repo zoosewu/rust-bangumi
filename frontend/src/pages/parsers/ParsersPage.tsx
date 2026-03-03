@@ -138,6 +138,8 @@ export default function ParsersPage() {
     anime_title_value: String(p.anime_title_value ?? ""),
     episode_no_source: String(p.episode_no_source ?? "regex"),
     episode_no_value: String(p.episode_no_value ?? ""),
+    episode_end_source: p.episode_end_source ? String(p.episode_end_source) : null,
+    episode_end_value: p.episode_end_value ? String(p.episode_end_value) : null,
     series_no_source: p.series_no_source ? String(p.series_no_source) : null,
     series_no_value: p.series_no_value ? String(p.series_no_value) : null,
     subtitle_group_source: p.subtitle_group_source ? String(p.subtitle_group_source) : null,
@@ -433,7 +435,11 @@ function PreviewResults({ preview }: { preview: ParserPreviewResponse }) {
               {r.parse_result && (
                 <div className="mt-1 text-[10px] opacity-75 flex gap-3 flex-wrap">
                   <span>Title: {r.parse_result.anime_title}</span>
-                  <span>EP: {r.parse_result.episode_no}</span>
+                  <span>
+                    {r.parse_result.episode_end != null
+                      ? `EP ${r.parse_result.episode_no}–${r.parse_result.episode_end}`
+                      : `EP ${r.parse_result.episode_no}`}
+                  </span>
                   {r.parse_result.subtitle_group && (
                     <span>Group: {r.parse_result.subtitle_group}</span>
                   )}

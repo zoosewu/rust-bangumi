@@ -154,6 +154,8 @@ export function ParserEditor({
       anime_title_value: parser.anime_title_value,
       episode_no_source: parser.episode_no_source,
       episode_no_value: parser.episode_no_value,
+      episode_end_source: parser.episode_end_source ?? null,
+      episode_end_value: parser.episode_end_value ?? null,
       series_no_source: parser.series_no_source,
       series_no_value: parser.series_no_value,
       subtitle_group_source: parser.subtitle_group_source,
@@ -331,7 +333,7 @@ export function ParserEditor({
                           <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-x-3 mt-1 ml-1 text-xs text-muted-foreground">
                             <span className="truncate">{t("parsers.matchedBy", "Matched by")}: <span className="text-foreground">{result.after_matched_by ?? "—"}</span></span>
                             <span className="truncate">{t("parsers.animeTitle", "Anime")}: <span className={cn("text-foreground", !result.parse_result?.anime_title && "text-destructive")}>{result.parse_result?.anime_title || "—"}</span></span>
-                            <span className="whitespace-nowrap">Ep: <span className={cn("text-foreground", result.parse_result?.episode_no == null && "text-destructive")}>{result.parse_result?.episode_no ?? "—"}</span></span>
+                            <span className="whitespace-nowrap">Ep: <span className={cn("text-foreground", result.parse_result?.episode_no == null && "text-destructive")}>{result.parse_result?.episode_end != null ? `${result.parse_result.episode_no}–${result.parse_result.episode_end}` : (result.parse_result?.episode_no ?? "—")}</span></span>
                             <span className="whitespace-nowrap">S: <span className="text-foreground">{result.parse_result?.series_no ?? "—"}</span></span>
                             <span className="whitespace-nowrap">{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result?.season || "—"}</span></span>
                             <span className="whitespace-nowrap">{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result?.subtitle_group || "—"}</span></span>
