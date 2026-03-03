@@ -6,6 +6,20 @@ use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
 use std::collections::HashMap;
 
+/// Group a slice of links by URL, preserving insertion order.
+/// Each unique URL maps to all links sharing that URL.
+fn group_links_by_url<'a>(links: &[&'a AnimeLink]) -> Vec<(String, Vec<&'a AnimeLink>)> {
+    let mut groups: Vec<(String, Vec<&'a AnimeLink>)> = Vec::new();
+    for link in links {
+        if let Some(g) = groups.iter_mut().find(|(url, _)| url == &link.url) {
+            g.1.push(link);
+        } else {
+            groups.push((link.url.clone(), vec![link]));
+        }
+    }
+    groups
+}
+
 pub struct DownloadDispatchService {
     db_pool: DbPool,
     http_client: reqwest::Client,
@@ -172,10 +186,11 @@ impl DownloadDispatchService {
             // Dispatch each preferred downloader group
             for (pref_id, pref_links) in &by_preferred {
                 let pref_dl = downloaders.iter().find(|d| d.module_id == *pref_id).unwrap();
-                let items: Vec<DownloadRequestItem> = pref_links
+                let url_groups = group_links_by_url(pref_links);
+                let items: Vec<DownloadRequestItem> = url_groups
                     .iter()
-                    .map(|link| DownloadRequestItem {
-                        url: link.url.clone(),
+                    .map(|(url, _)| DownloadRequestItem {
+                        url: url.clone(),
                         save_path: "/downloads".to_string(),
                     })
                     .collect();
@@ -184,23 +199,25 @@ impl DownloadDispatchService {
                 match self.send_batch_to_downloader(&download_url, items).await {
                     Ok(response) => {
                         for (i, result) in response.results.iter().enumerate() {
-                            if i >= pref_links.len() {
+                            if i >= url_groups.len() {
                                 break;
                             }
-                            let link = pref_links[i];
-                            if result.status == "accepted" {
-                                self.create_download_record(
-                                    &mut conn,
-                                    link.link_id,
-                                    &download_type,
-                                    "downloading",
-                                    Some(pref_dl.module_id),
-                                    result.hash.as_deref(),
-                                )?;
-                                total_dispatched += 1;
-                            } else {
-                                // rejected by preferred — fallback to cascade
-                                cascade_pending.push(link);
+                            let (_, links_for_url) = &url_groups[i];
+                            for link in links_for_url {
+                                if result.status == "accepted" {
+                                    self.create_download_record(
+                                        &mut conn,
+                                        link.link_id,
+                                        &download_type,
+                                        "downloading",
+                                        Some(pref_dl.module_id),
+                                        result.hash.as_deref(),
+                                    )?;
+                                    total_dispatched += 1;
+                                } else {
+                                    // rejected by preferred — fallback to cascade
+                                    cascade_pending.push(link);
+                                }
                             }
                         }
                     }
@@ -224,10 +241,11 @@ impl DownloadDispatchService {
                     break;
                 }
 
-                let items: Vec<DownloadRequestItem> = pending_links
+                let url_groups = group_links_by_url(&pending_links);
+                let items: Vec<DownloadRequestItem> = url_groups
                     .iter()
-                    .map(|link| DownloadRequestItem {
-                        url: link.url.clone(),
+                    .map(|(url, _)| DownloadRequestItem {
+                        url: url.clone(),
                         save_path: "/downloads".to_string(),
                     })
                     .collect();
@@ -238,23 +256,24 @@ impl DownloadDispatchService {
                         let mut rejected = Vec::new();
 
                         for (i, result) in response.results.iter().enumerate() {
-                            if i >= pending_links.len() {
+                            if i >= url_groups.len() {
                                 break;
                             }
-                            let link = pending_links[i];
-
-                            if result.status == "accepted" {
-                                self.create_download_record(
-                                    &mut conn,
-                                    link.link_id,
-                                    &download_type,
-                                    "downloading",
-                                    Some(downloader.module_id),
-                                    result.hash.as_deref(),
-                                )?;
-                                total_dispatched += 1;
-                            } else {
-                                rejected.push(link);
+                            let (_, links_for_url) = &url_groups[i];
+                            for link in links_for_url {
+                                if result.status == "accepted" {
+                                    self.create_download_record(
+                                        &mut conn,
+                                        link.link_id,
+                                        &download_type,
+                                        "downloading",
+                                        Some(downloader.module_id),
+                                        result.hash.as_deref(),
+                                    )?;
+                                    total_dispatched += 1;
+                                } else {
+                                    rejected.push(*link);
+                                }
                             }
                         }
 
@@ -449,5 +468,58 @@ impl DownloadDispatchService {
             .map_err(|e| format!("Failed to create download record: {}", e))?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::group_links_by_url;
+    use crate::models::AnimeLink;
+    use chrono::Utc;
+
+    fn make_link(id: i32, url: &str) -> AnimeLink {
+        let now = Utc::now().naive_utc();
+        AnimeLink {
+            link_id: id,
+            anime_id: 1,
+            group_id: 1,
+            episode_no: id,
+            title: None,
+            url: url.to_string(),
+            source_hash: format!("hash{}", id),
+            filtered_flag: false,
+            created_at: now,
+            raw_item_id: None,
+            download_type: Some("magnet".to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_group_links_by_url_deduplicates() {
+        let l1 = make_link(1, "magnet:?xt=urn:btih:ABC");
+        let l2 = make_link(2, "magnet:?xt=urn:btih:ABC");
+        let l3 = make_link(3, "magnet:?xt=urn:btih:DEF");
+        let refs = vec![&l1, &l2, &l3];
+
+        let groups = group_links_by_url(&refs);
+
+        assert_eq!(groups.len(), 2, "should have 2 unique URLs");
+        let abc_group = groups.iter().find(|(url, _)| url == "magnet:?xt=urn:btih:ABC").unwrap();
+        assert_eq!(abc_group.1.len(), 2);
+        let def_group = groups.iter().find(|(url, _)| url == "magnet:?xt=urn:btih:DEF").unwrap();
+        assert_eq!(def_group.1.len(), 1);
+    }
+
+    #[test]
+    fn test_group_links_by_url_preserves_order() {
+        let l1 = make_link(1, "magnet:?xt=urn:btih:AAA");
+        let l2 = make_link(2, "magnet:?xt=urn:btih:BBB");
+        let refs = vec![&l1, &l2];
+
+        let groups = group_links_by_url(&refs);
+        assert_eq!(groups[0].0, "magnet:?xt=urn:btih:AAA");
+        assert_eq!(groups[1].0, "magnet:?xt=urn:btih:BBB");
     }
 }
