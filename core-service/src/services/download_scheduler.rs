@@ -76,6 +76,11 @@ impl DownloadScheduler {
             }
         }
 
+        // Retry any batch_unmatched records
+        if let Ok(mut conn) = self.db_pool.get() {
+            self.retry_batch_unmatched(&mut conn);
+        }
+
         Ok(())
     }
 
@@ -337,6 +342,104 @@ impl DownloadScheduler {
                 tracing::error!("Failed to recover stale syncing downloads: {}", e);
             }
             _ => {}
+        }
+    }
+
+    /// Retry file matching for downloads in "batch_unmatched" status.
+    /// The torrent is already downloaded; re-scan the folder and attempt
+    /// to match again. On success, the record transitions to "completed"
+    /// and will be picked up by trigger_sync_for_completed.
+    fn retry_batch_unmatched(&self, conn: &mut PgConnection) {
+        use std::collections::HashMap;
+
+        let unmatched: Vec<Download> = match downloads::table
+            .filter(downloads::status.eq("batch_unmatched"))
+            .filter(downloads::file_path.is_not_null())
+            .load::<Download>(conn)
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("Failed to query batch_unmatched: {}", e);
+                return;
+            }
+        };
+
+        if unmatched.is_empty() {
+            return;
+        }
+
+        // Group by (torrent_hash, module_id) → (folder_path, records)
+        let mut groups: HashMap<(String, i32), (String, Vec<&Download>)> = HashMap::new();
+        for dl in &unmatched {
+            if let (Some(hash), Some(mid), Some(fp)) =
+                (&dl.torrent_hash, dl.module_id, &dl.file_path)
+            {
+                groups
+                    .entry((hash.clone(), mid))
+                    .or_insert_with(|| (fp.clone(), Vec::new()))
+                    .1
+                    .push(dl);
+            }
+        }
+
+        for ((hash, _module_id), (folder, group)) in &groups {
+            // Re-scan filesystem for current file list
+            let files = collect_files_recursive(std::path::Path::new(folder));
+            if files.is_empty() {
+                tracing::warn!("retry_batch_unmatched: no files found in {}", folder);
+                continue;
+            }
+
+            // Resolve episode_no for each link_id
+            let link_ids: Vec<i32> = group.iter().map(|d| d.link_id).collect();
+            let ep_map: HashMap<i32, i32> = anime_links::table
+                .filter(anime_links::link_id.eq_any(&link_ids))
+                .select((anime_links::link_id, anime_links::episode_no))
+                .load::<(i32, i32)>(conn)
+                .unwrap_or_default()
+                .into_iter()
+                .collect();
+
+            let episode_nos: Vec<i32> = ep_map.values().copied().collect();
+            let chain = build_default_chain();
+            let matches = match_batch_files(&files, &episode_nos, &chain);
+
+            let now = chrono::Utc::now().naive_utc();
+            for dl in group {
+                let ep = match ep_map.get(&dl.link_id) {
+                    Some(e) => *e,
+                    None => continue,
+                };
+                if let Some((video, subs)) = matches.get(&ep) {
+                    let subtitle_json = if subs.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_string(subs).ok()
+                    };
+                    let updated = diesel::update(
+                        downloads::table.filter(downloads::download_id.eq(dl.download_id)),
+                    )
+                    .set((
+                        downloads::status.eq("completed"),
+                        downloads::video_file.eq(video.as_deref()),
+                        downloads::subtitle_files.eq(subtitle_json.as_deref()),
+                        downloads::error_message.eq(None::<String>),
+                        downloads::updated_at.eq(now),
+                    ))
+                    .execute(conn);
+
+                    match updated {
+                        Ok(_) => tracing::info!(
+                            "retry_batch_unmatched: recovered download_id={} ep={} hash={}",
+                            dl.download_id, ep, hash
+                        ),
+                        Err(e) => tracing::error!(
+                            "retry_batch_unmatched: failed to update download_id={}: {}",
+                            dl.download_id, e
+                        ),
+                    }
+                }
+            }
         }
     }
 
