@@ -17,6 +17,11 @@ impl ServiceRegistry {
 
     pub fn register(&self, service: RegisteredService) -> Result<(), String> {
         let mut services = self.services.lock().map_err(|e| e.to_string())?;
+        // Deduplicate by (host, port): remove any stale registration at the same
+        // address so a restarted service doesn't accumulate duplicate entries.
+        services.retain(|_, existing| {
+            existing.host != service.host || existing.port != service.port
+        });
         services.insert(service.service_id, service.clone());
         tracing::info!(
             "Service registered: {} ({})",
@@ -116,11 +121,12 @@ mod tests {
     #[test]
     fn test_get_services() {
         let registry = ServiceRegistry::new();
-        let id1 = Uuid::new_v4();
-        let id2 = Uuid::new_v4();
 
-        let service1 = create_test_service(id1);
-        let service2 = create_test_service(id2);
+        let mut service1 = create_test_service(Uuid::new_v4());
+        service1.port = 8001;
+
+        let mut service2 = create_test_service(Uuid::new_v4());
+        service2.port = 8002; // different port → independent registration
 
         registry.register(service1).unwrap();
         registry.register(service2).unwrap();
@@ -140,6 +146,50 @@ mod tests {
 
         registry.unregister(service_id).unwrap();
         assert_eq!(registry.get_services().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_register_deduplicates_same_host_port() {
+        // When the same service restarts (new UUID, same host:port), the old
+        // registration must be replaced so search doesn't return duplicate results.
+        let registry = ServiceRegistry::new();
+
+        let id1 = Uuid::new_v4();
+        let mut service1 = create_test_service(id1);
+        service1.host = "localhost".to_string();
+        service1.port = 8001;
+        registry.register(service1).unwrap();
+        assert_eq!(registry.get_services().unwrap().len(), 1);
+
+        // Simulate restart: new UUID, same host:port
+        let id2 = Uuid::new_v4();
+        let mut service2 = create_test_service(id2);
+        service2.host = "localhost".to_string();
+        service2.port = 8001;
+        registry.register(service2).unwrap();
+
+        let services = registry.get_services().unwrap();
+        assert_eq!(services.len(), 1, "Re-registering same host:port must replace old entry");
+        assert_eq!(services[0].service_id, id2, "New registration should win");
+    }
+
+    #[test]
+    fn test_register_different_ports_are_independent() {
+        // Two services at different ports must both be kept.
+        let registry = ServiceRegistry::new();
+
+        let mut s1 = create_test_service(Uuid::new_v4());
+        s1.host = "localhost".to_string();
+        s1.port = 8001;
+
+        let mut s2 = create_test_service(Uuid::new_v4());
+        s2.host = "localhost".to_string();
+        s2.port = 8002;
+
+        registry.register(s1).unwrap();
+        registry.register(s2).unwrap();
+
+        assert_eq!(registry.get_services().unwrap().len(), 2);
     }
 
     #[test]
