@@ -289,6 +289,9 @@ diesel::table! {
         updated_at -> Timestamp,
         created_from_type -> Nullable<FilterTargetType>,
         created_from_id -> Nullable<Int4>,
+        episode_end_source -> Nullable<ParserSourceType>,
+        #[max_length = 255]
+        episode_end_value -> Nullable<Varchar>,
     }
 }
 
