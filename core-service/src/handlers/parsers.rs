@@ -382,13 +382,6 @@ pub async fn update_parser(
                 .transpose()?),
             title_parsers::episode_end_value.eq(&req.episode_end_value),
             title_parsers::updated_at.eq(now),
-            title_parsers::created_from_type.eq(req
-                .created_from_type
-                .as_ref()
-                .map(|s| s.parse::<FilterTargetType>())
-                .transpose()
-                .map_err(|e| (StatusCode::BAD_REQUEST, e))?),
-            title_parsers::created_from_id.eq(req.created_from_id),
         ))
         .get_result::<TitleParser>(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -413,6 +406,12 @@ pub async fn delete_parser(
         let mut conn = state
             .db
             .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // 先解除 raw_anime_items 對此 parser 的參照，避免 FK 違反
+        diesel::update(raw_anime_items::table.filter(raw_anime_items::parser_id.eq(parser_id)))
+            .set(raw_anime_items::parser_id.eq(Option::<i32>::None))
+            .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         let deleted =

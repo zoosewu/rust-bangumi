@@ -125,7 +125,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
-                    min={1}
+                    min={0}
                     value={editForm.fetch_interval_minutes}
                     onChange={(e) => setEditForm((f) => ({ ...f, fetch_interval_minutes: Number(e.target.value) }))}
                     className="h-8 text-sm w-20"
@@ -173,7 +173,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
           ) : (
             <>
               <InfoItem label={t("common.name")} value={subscription.name ?? "-"} />
-              <InfoItem label={t("subscriptions.interval", "Interval")} value={`${subscription.fetch_interval_minutes} min`} />
+              <InfoItem label={t("subscriptions.interval", "Interval")} value={subscription.fetch_interval_minutes === 0 ? t("subscriptions.fetchOnce", "Once") : `${subscription.fetch_interval_minutes} min`} />
               <InfoItem
                 label={t("common.status")}
                 value={subscription.is_active ? "Active" : "Inactive"}

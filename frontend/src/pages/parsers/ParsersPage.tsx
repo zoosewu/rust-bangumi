@@ -434,17 +434,17 @@ function PreviewResults({ preview }: { preview: ParserPreviewResponse }) {
               </div>
               {r.parse_result && (
                 <div className="mt-1 text-[10px] opacity-75 flex gap-3 flex-wrap">
-                  <span>Title: {r.parse_result.anime_title}</span>
+                  <span>{t("parsers.animeTitle", "Title")}: {r.parse_result.anime_title}</span>
                   <span>
-                    {r.parse_result.episode_end != null
-                      ? `EP ${r.parse_result.episode_no}–${r.parse_result.episode_end}`
-                      : `EP ${r.parse_result.episode_no}`}
+                    {t("parsers.episodeNo", "EP")}: {r.parse_result.episode_end != null
+                      ? `${r.parse_result.episode_no}-${r.parse_result.episode_end}`
+                      : r.parse_result.episode_no}
                   </span>
                   {r.parse_result.subtitle_group && (
-                    <span>Group: {r.parse_result.subtitle_group}</span>
+                    <span>{t("parsers.subtitleGroup", "Group")}: {r.parse_result.subtitle_group}</span>
                   )}
                   {r.parse_result.resolution && (
-                    <span>Res: {r.parse_result.resolution}</span>
+                    <span>{t("parsers.resolution", "Res")}: {r.parse_result.resolution}</span>
                   )}
                 </div>
               )}

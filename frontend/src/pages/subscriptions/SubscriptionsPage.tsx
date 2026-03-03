@@ -105,7 +105,7 @@ export default function SubscriptionsPage() {
     {
       key: "fetch_interval_minutes",
       header: t("subscriptions.interval"),
-      render: (item) => `${item.fetch_interval_minutes} min`,
+      render: (item) => item.fetch_interval_minutes === 0 ? t("subscriptions.fetchOnce", "Once") : `${item.fetch_interval_minutes} min`,
     },
     {
       key: "is_active",
@@ -213,7 +213,7 @@ export default function SubscriptionsPage() {
               <Label>{t("subscriptions.fetchInterval")}</Label>
               <Input
                 type="number"
-                min="1"
+                min="0"
                 value={newInterval}
                 onChange={(e) => setNewInterval(e.target.value)}
               />
@@ -250,7 +250,7 @@ export default function SubscriptionsPage() {
                 createSubscription({
                   source_url: newUrl.trim(),
                   name: newName.trim() || undefined,
-                  fetch_interval_minutes: parseInt(newInterval) || 30,
+                  fetch_interval_minutes: newInterval === "" ? 30 : parseInt(newInterval),
                   preferred_downloader_id: newPreferredDl,
                 }).then(() => {
                   setNewUrl("")

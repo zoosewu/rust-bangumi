@@ -436,20 +436,24 @@ async fn update_subscription_after_fetch(
         .first::<Subscription>(&mut conn)
         .map_err(|e| format!("Subscription not found: {}", e))?;
 
-    // 計算下次抓取時間
-    let next_fetch = now + chrono::Duration::minutes(subscription.fetch_interval_minutes as i64);
+    // interval=0 代表單次抓取，抓完後不排下一次
+    let next_fetch = if subscription.fetch_interval_minutes == 0 {
+        None
+    } else {
+        Some(now + chrono::Duration::minutes(subscription.fetch_interval_minutes as i64))
+    };
 
     diesel::update(subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id)))
         .set((
             subscriptions::last_fetched_at.eq(Some(now)),
-            subscriptions::next_fetch_at.eq(Some(next_fetch)),
+            subscriptions::next_fetch_at.eq(next_fetch),
             subscriptions::updated_at.eq(now),
         ))
         .execute(&mut conn)
         .map_err(|e| format!("Failed to update subscription: {}", e))?;
 
     tracing::info!(
-        "Updated subscription {}: last_fetched_at={}, next_fetch_at={}",
+        "Updated subscription {}: last_fetched_at={}, next_fetch_at={:?}",
         subscription_id,
         now,
         next_fetch

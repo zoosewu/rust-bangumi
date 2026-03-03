@@ -419,6 +419,8 @@ export function ParserAIButtons({
             subtitle_group_value: null,
             resolution_source: null,
             resolution_value: null,
+            episode_end_source: null,
+            episode_end_value: null,
             season_source: null,
             season_value: null,
             year_source: null,
