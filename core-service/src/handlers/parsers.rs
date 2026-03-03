@@ -40,6 +40,8 @@ pub struct CreateParserRequest {
     pub season_value: Option<String>,
     pub year_source: Option<String>,
     pub year_value: Option<String>,
+    pub episode_end_source: Option<String>,
+    pub episode_end_value: Option<String>,
     pub created_from_type: Option<String>,
     pub created_from_id: Option<i32>,
 }
@@ -94,6 +96,8 @@ pub struct ParserResponse {
     pub season_value: Option<String>,
     pub year_source: Option<String>,
     pub year_value: Option<String>,
+    pub episode_end_source: Option<String>,
+    pub episode_end_value: Option<String>,
     pub created_from_type: Option<String>,
     pub created_from_id: Option<i32>,
     pub created_from_name: Option<String>,
@@ -125,6 +129,8 @@ impl From<TitleParser> for ParserResponse {
             season_value: p.season_value,
             year_source: p.year_source.map(|s| s.to_string()),
             year_value: p.year_value,
+            episode_end_source: p.episode_end_source.map(|s| s.to_string()),
+            episode_end_value: p.episode_end_value,
             created_from_type: p.created_from_type.map(|t| t.to_string()),
             created_from_id: p.created_from_id,
             created_from_name: None,
@@ -278,6 +284,12 @@ pub async fn create_parser(
                 .transpose()
                 .map_err(|e| (StatusCode::BAD_REQUEST, e))?,
             created_from_id: req.created_from_id,
+            episode_end_source: req
+                .episode_end_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?,
+            episode_end_value: req.episode_end_value,
         };
 
         diesel::insert_into(title_parsers::table)
@@ -363,6 +375,12 @@ pub async fn update_parser(
                 .map(|s| parse_source_type(s))
                 .transpose()?),
             title_parsers::year_value.eq(&req.year_value),
+            title_parsers::episode_end_source.eq(req
+                .episode_end_source
+                .as_ref()
+                .map(|s| parse_source_type(s))
+                .transpose()?),
+            title_parsers::episode_end_value.eq(&req.episode_end_value),
             title_parsers::updated_at.eq(now),
             title_parsers::created_from_type.eq(req
                 .created_from_type
@@ -995,6 +1013,8 @@ pub struct ParserPreviewRequest {
     pub season_value: Option<String>,
     pub year_source: Option<String>,
     pub year_value: Option<String>,
+    pub episode_end_source: Option<String>,
+    pub episode_end_value: Option<String>,
     pub exclude_parser_id: Option<i32>,
     pub limit: Option<i64>,
 }
@@ -1003,6 +1023,7 @@ pub struct ParserPreviewRequest {
 pub struct ParsedFields {
     pub anime_title: String,
     pub episode_no: i32,
+    pub episode_end: Option<i32>,
     pub series_no: i32,
     pub subtitle_group: Option<String>,
     pub resolution: Option<String>,
@@ -1126,6 +1147,12 @@ pub async fn preview_parser(
         updated_at: now,
         created_from_type: None,
         created_from_id: None,
+        episode_end_source: req
+            .episode_end_source
+            .as_ref()
+            .map(|s| parse_source_type(s))
+            .transpose()?,
+        episode_end_value: req.episode_end_value.clone(),
     };
 
     // Build "after" parsers list: before_parsers + current_parser, sorted by priority desc
@@ -1152,6 +1179,7 @@ pub async fn preview_parser(
                 Ok(Some(r)) => (Some(ParsedFields {
                     anime_title: r.anime_title,
                     episode_no: r.episode_no,
+                    episode_end: r.episode_end,
                     series_no: r.series_no,
                     subtitle_group: r.subtitle_group,
                     resolution: r.resolution,

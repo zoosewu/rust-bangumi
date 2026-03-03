@@ -14,6 +14,7 @@ use crate::schema::{raw_anime_items, title_parsers};
 pub struct ParsedResult {
     pub anime_title: String,
     pub episode_no: i32,
+    pub episode_end: Option<i32>,  // None = single episode; Some(n) = batch end
     pub series_no: i32,
     pub subtitle_group: Option<String>,
     pub resolution: Option<String>,
@@ -140,9 +141,20 @@ impl TitleParserService {
 
         let year = Self::extract_optional_value(&parser.year_source, &parser.year_value, &captures);
 
+        // Extract episode_end (optional range end for batch torrents)
+        let episode_end = match Self::extract_optional_value(
+            &parser.episode_end_source,
+            &parser.episode_end_value,
+            &captures,
+        ) {
+            Some(v) => v.parse::<i32>().ok(),
+            None => None,
+        };
+
         Ok(Some(ParsedResult {
             anime_title,
             episode_no,
+            episode_end,
             series_no,
             subtitle_group,
             resolution,
@@ -245,11 +257,96 @@ impl TitleParserService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::db::{TitleParser, ParserSourceType};
+    use chrono::Utc;
 
     #[test]
     fn test_parse_status_as_str() {
         assert_eq!(ParseStatus::Pending.as_str(), "pending");
         assert_eq!(ParseStatus::Parsed.as_str(), "parsed");
         assert_eq!(ParseStatus::NoMatch.as_str(), "no_match");
+    }
+
+    fn make_batch_parser() -> TitleParser {
+        let now = Utc::now().naive_utc();
+        TitleParser {
+            parser_id: 1,
+            name: "batch_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: r"\d+-\d+".to_string(),
+            parse_regex: r"^(.+?)\s+(\d+)-(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$2".to_string(),
+            episode_end_source: Some(ParserSourceType::Regex),
+            episode_end_value: Some("$3".to_string()),
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+        }
+    }
+
+    #[test]
+    fn test_try_parser_extracts_episode_end() {
+        let parser = make_batch_parser();
+        let title = "動畫名 01-12 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+
+        assert_eq!(result.episode_no, 1);
+        assert_eq!(result.episode_end, Some(12));
+        assert_eq!(result.anime_title, "動畫名");
+    }
+
+    #[test]
+    fn test_try_parser_episode_end_none_for_single_episode() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 2,
+            name: "single_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: ".*".to_string(),
+            parse_regex: r"^(.+?)\s+(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$2".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+        };
+        let title = "動畫名 05 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+
+        assert_eq!(result.episode_no, 5);
+        assert_eq!(result.episode_end, None);
     }
 }

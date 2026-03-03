@@ -210,6 +210,8 @@ pub mod mock {
                 updated_at: parser.updated_at,
                 created_from_type: parser.created_from_type,
                 created_from_id: parser.created_from_id,
+                episode_end_source: parser.episode_end_source,
+                episode_end_value: parser.episode_end_value,
             };
             *next_id += 1;
             parsers.push(new_parser.clone());
@@ -264,6 +266,8 @@ mod tests {
             updated_at: now,
             created_from_type: None,
             created_from_id: None,
+            episode_end_source: None,
+            episode_end_value: None,
         }
     }
 
