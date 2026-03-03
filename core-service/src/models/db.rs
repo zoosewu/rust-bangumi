@@ -579,6 +579,8 @@ pub struct TitleParser {
     pub updated_at: NaiveDateTime,
     pub created_from_type: Option<FilterTargetType>,
     pub created_from_id: Option<i32>,
+    pub episode_end_source: Option<ParserSourceType>,
+    pub episode_end_value: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -608,6 +610,8 @@ pub struct NewTitleParser {
     pub updated_at: NaiveDateTime,
     pub created_from_type: Option<FilterTargetType>,
     pub created_from_id: Option<i32>,
+    pub episode_end_source: Option<ParserSourceType>,
+    pub episode_end_value: Option<String>,
 }
 
 // ============ RawAnimeItems ============
