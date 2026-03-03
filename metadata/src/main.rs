@@ -60,6 +60,8 @@ async fn main() -> anyhow::Result<()> {
             port: service_port,
             capabilities: shared::Capabilities {
                 fetch_endpoint: None,
+                search_endpoint: None,
+                detail_endpoint: None,
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],

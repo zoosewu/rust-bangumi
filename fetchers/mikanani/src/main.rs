@@ -34,6 +34,8 @@ async fn main() -> anyhow::Result<()> {
     // Build router with state
     let mut app = Router::new()
         .route("/fetch", post(handlers::fetch))
+        .route("/search", post(handlers::search))
+        .route("/detail", post(handlers::detail))
         .route("/health", get(handlers::health_check))
         .route(
             "/can-handle-subscription",
@@ -66,6 +68,8 @@ async fn main() -> anyhow::Result<()> {
             port: config.service_port,
             capabilities: shared::Capabilities {
                 fetch_endpoint: Some("/fetch".to_string()),
+                search_endpoint: Some("/search".to_string()),
+                detail_endpoint: Some("/detail".to_string()),
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],
@@ -92,6 +96,8 @@ async fn register_to_core<C: fetcher_mikanani::HttpClient>(
         port: config.service_port,
         capabilities: shared::Capabilities {
             fetch_endpoint: Some("/fetch".to_string()),
+            search_endpoint: None,
+            detail_endpoint: None,
             download_endpoint: None,
             sync_endpoint: None,
             supported_download_types: vec![],

@@ -6,6 +6,7 @@
     "anime": "動畫作品",
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
+    "search": "搜尋",
     "rawItems": "最新更新",
     "conflicts": "衝突",
     "parsers": "解析器",
@@ -250,5 +251,19 @@
     "episode": "集數",
     "subtitleGroup": "字幕組",
     "conflictCount": "衝突連結數"
+  },
+  "search": {
+    "title": "搜尋",
+    "placeholder": "搜尋動畫...",
+    "noResults": "找不到結果",
+    "hint": "輸入關鍵字搜尋所有來源",
+    "noImage": "無圖片",
+    "detail": {
+      "subgroup": "字幕組",
+      "rssUrl": "RSS 網址",
+      "subscribe": "訂閱",
+      "loading": "載入中...",
+      "noItems": "找不到可訂閱的 RSS"
+    }
   }
 }

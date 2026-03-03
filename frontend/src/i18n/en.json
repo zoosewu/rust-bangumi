@@ -6,6 +6,7 @@
     "anime": "Anime Titles",
     "subtitleGroups": "Subtitle Groups",
     "subscriptions": "Subscriptions",
+    "search": "Search",
     "rawItems": "Latest Updates",
     "conflicts": "Conflicts",
     "parsers": "Parsers",
@@ -250,5 +251,19 @@
     "episode": "Episode",
     "subtitleGroup": "Subtitle Group",
     "conflictCount": "Conflicting Links"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search anime...",
+    "noResults": "No results found",
+    "hint": "Type to search across all sources",
+    "noImage": "No image",
+    "detail": {
+      "subgroup": "Subgroup",
+      "rssUrl": "RSS URL",
+      "subscribe": "Subscribe",
+      "loading": "Loading...",
+      "noItems": "No RSS feeds found"
+    }
   }
 }

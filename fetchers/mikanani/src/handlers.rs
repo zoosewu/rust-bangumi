@@ -1,7 +1,10 @@
 use axum::{extract::State, http::StatusCode, Json};
-use fetcher_mikanani::{FetchTask, RealHttpClient, RssParser};
+use fetcher_mikanani::{
+    DetailScraper, FetchTask, RealDetailScraper, RealHttpClient, RealSearchScraper, RssParser,
+    SearchScraper,
+};
 use serde::{Deserialize, Serialize};
-use shared::{FetchTriggerRequest, FetchTriggerResponse};
+use shared::{DetailRequest, DetailResponse, FetchTriggerRequest, FetchTriggerResponse, SearchRequest, SearchResponse};
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +23,8 @@ pub struct CanHandleResponse {
 pub struct AppState {
     pub parser: Arc<RssParser>,
     pub http_client: Arc<RealHttpClient>,
+    pub search_scraper: Arc<dyn SearchScraper>,
+    pub detail_scraper: Arc<dyn DetailScraper>,
 }
 
 impl AppState {
@@ -27,6 +32,8 @@ impl AppState {
         Self {
             parser: Arc::new(RssParser::new()),
             http_client: Arc::new(RealHttpClient::new()),
+            search_scraper: Arc::new(RealSearchScraper::new()),
+            detail_scraper: Arc::new(RealDetailScraper::new()),
         }
     }
 }
@@ -107,6 +114,42 @@ pub async fn can_handle_subscription(
     (status, Json(response))
 }
 
+pub async fn search(
+    State(state): State<AppState>,
+    Json(payload): Json<SearchRequest>,
+) -> (StatusCode, Json<SearchResponse>) {
+    tracing::info!("Received search request: query={:?}", payload.query);
+
+    match state.search_scraper.scrape(&payload.query).await {
+        Ok(results) => {
+            tracing::info!("Search returned {} results", results.len());
+            (StatusCode::OK, Json(SearchResponse { results }))
+        }
+        Err(e) => {
+            tracing::error!("Search scraping failed: {}", e);
+            (StatusCode::OK, Json(SearchResponse { results: vec![] }))
+        }
+    }
+}
+
+pub async fn detail(
+    State(state): State<AppState>,
+    Json(payload): Json<DetailRequest>,
+) -> (StatusCode, Json<DetailResponse>) {
+    tracing::info!("Received detail request: detail_key={:?}", payload.detail_key);
+
+    match state.detail_scraper.scrape(&payload.detail_key).await {
+        Ok(response) => {
+            tracing::info!("Detail returned {} items", response.items.len());
+            (StatusCode::OK, Json(response))
+        }
+        Err(e) => {
+            tracing::error!("Detail scraping failed: {}", e);
+            (StatusCode::OK, Json(DetailResponse { items: vec![] }))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +215,33 @@ mod tests {
         assert_eq!(status, StatusCode::ACCEPTED);
         assert!(response.accepted);
         assert!(response.message.contains("123"));
+    }
+
+    #[tokio::test]
+    async fn test_detail_returns_items_from_scraper() {
+        use fetcher_mikanani::detail_scraper::mock::MockDetailScraper;
+
+        let state = AppState {
+            parser: Arc::new(RssParser::new()),
+            http_client: Arc::new(RealHttpClient::new()),
+            search_scraper: Arc::new(
+                fetcher_mikanani::search_scraper::mock::MockSearchScraper::with_results(vec![])
+            ),
+            detail_scraper: Arc::new(MockDetailScraper::with_items(vec![
+                shared::DetailItem {
+                    subgroup_name: "TestGroup".to_string(),
+                    rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=1".to_string(),
+                }
+            ])),
+        };
+
+        let payload = Json(shared::DetailRequest {
+            detail_key: "bangumi:1".to_string(),
+        });
+
+        let (status, body) = detail(State(state), payload).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.items.len(), 1);
+        assert_eq!(body.items[0].subgroup_name, "TestGroup");
     }
 }

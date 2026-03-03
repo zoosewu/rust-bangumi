@@ -2,6 +2,10 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
+import {
+  AggregatedSearchResponseSchema,
+  DetailResponseSchema,
+} from "@/schemas/search"
 import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
@@ -310,6 +314,23 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Struct({ animes: Schema.Array(AnimeWork) }),
       ).pipe(Effect.map((r) => r.animes))
     },
+
+    search: (query) => {
+      const qs = new URLSearchParams()
+      qs.set("q", query)
+      return fetchJson(
+        HttpClientRequest.get(`/api/core/search?${qs.toString()}`),
+        AggregatedSearchResponseSchema,
+      )
+    },
+
+    getDetail: (detail_key, source) =>
+      fetchJson(
+        HttpClientRequest.post("/api/core/detail").pipe(
+          HttpClientRequest.bodyUnsafeJson({ detail_key, source }),
+        ),
+        DetailResponseSchema,
+      ),
 
   })
 })

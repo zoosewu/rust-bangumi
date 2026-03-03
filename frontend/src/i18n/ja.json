@@ -6,6 +6,7 @@
     "anime": "アニメ作品",
     "subtitleGroups": "字幕グループ",
     "subscriptions": "サブスクリプション",
+    "search": "検索",
     "rawItems": "最新情報",
     "conflicts": "コンフリクト",
     "parsers": "パーサー",
@@ -250,5 +251,13 @@
     "episode": "話数",
     "subtitleGroup": "字幕グループ",
     "conflictCount": "競合リンク数"
+  },
+  "search": {
+    "title": "検索",
+    "placeholder": "アニメを検索...",
+    "noResults": "結果が見つかりません",
+    "subscribe": "サブスクライブ",
+    "hint": "すべてのソースを検索するには入力してください",
+    "noImage": "画像なし"
   }
 }
