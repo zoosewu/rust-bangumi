@@ -250,6 +250,7 @@ async fn main() -> anyhow::Result<()> {
         )
         // 搜尋
         .route("/search", get(handlers::search::search))
+        .route("/detail", post(handlers::detail::detail))
         // 健康檢查
         .route("/health", get(health_check))
         // 應用狀態
@@ -310,6 +311,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::Capabilities {
                                     fetch_endpoint: Some("/fetch".to_string()),
                                     search_endpoint: Some("/search".to_string()),
+                                    detail_endpoint: Some("/detail".to_string()),
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
@@ -320,6 +322,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::Capabilities {
                                     fetch_endpoint: None,
                                     search_endpoint: None,
+                                    detail_endpoint: None,
                                     download_endpoint: Some("/downloads".to_string()),
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
@@ -330,6 +333,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::Capabilities {
                                     fetch_endpoint: None,
                                     search_endpoint: None,
+                                    detail_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: Some("/sync".to_string()),
                                     supported_download_types: vec![],
@@ -340,6 +344,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                 shared::Capabilities {
                                     fetch_endpoint: None,
                                     search_endpoint: None,
+                                    detail_endpoint: None,
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],

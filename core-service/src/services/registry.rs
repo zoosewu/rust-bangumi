@@ -94,6 +94,7 @@ mod tests {
             capabilities: Capabilities {
                 fetch_endpoint: Some("/fetch".to_string()),
                 search_endpoint: None,
+                detail_endpoint: None,
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],

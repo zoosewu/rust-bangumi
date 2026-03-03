@@ -82,9 +82,8 @@ pub async fn search(
                         .into_iter()
                         .map(|r| AggregatedSearchResult {
                             title: r.title,
-                            description: r.description,
                             thumbnail_url: r.thumbnail_url,
-                            subscription_url: r.subscription_url,
+                            detail_key: r.detail_key,
                             source: source.clone(),
                         })
                         .collect::<Vec<_>>(),
