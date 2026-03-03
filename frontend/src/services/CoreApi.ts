@@ -1,5 +1,5 @@
 import { Effect, Context } from "effect"
-import type { AggregatedSearchResponse } from "@/schemas/search"
+import type { AggregatedSearchResponse, DetailResponse } from "@/schemas/search"
 import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
@@ -95,5 +95,6 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getConflictingLinks: Effect.Effect<readonly ConflictingLink[]>
     readonly getAnimeWorksFiltered: (params?: { hasLinks?: boolean }) => Effect.Effect<readonly AnimeWork[]>
     readonly search: (query: string) => Effect.Effect<AggregatedSearchResponse>
+    readonly getDetail: (detail_key: string, source: string) => Effect.Effect<DetailResponse>
   }
 >() {}

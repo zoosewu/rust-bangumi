@@ -256,8 +256,14 @@
     "title": "Search",
     "placeholder": "Search anime...",
     "noResults": "No results found",
-    "subscribe": "Subscribe",
     "hint": "Type to search across all sources",
-    "noImage": "No image"
+    "noImage": "No image",
+    "detail": {
+      "subgroup": "Subgroup",
+      "rssUrl": "RSS URL",
+      "subscribe": "Subscribe",
+      "loading": "Loading...",
+      "noItems": "No RSS feeds found"
+    }
   }
 }
