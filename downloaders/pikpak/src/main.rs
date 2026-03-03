@@ -127,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
             capabilities: shared::Capabilities {
                 fetch_endpoint: None,
                 search_endpoint: None,
+                detail_endpoint: None,
                 download_endpoint: Some("/downloads".to_string()),
                 sync_endpoint: None,
                 supported_download_types: vec![DownloadType::Magnet, DownloadType::Http],
