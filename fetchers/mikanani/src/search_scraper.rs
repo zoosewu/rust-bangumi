@@ -75,18 +75,6 @@ pub fn parse_search_results(html: &str) -> Result<Vec<SearchResult>, String> {
             None => continue,
         };
 
-        if !href.contains("/Home/Bangumi/") {
-            continue;
-        }
-
-        let bangumi_id: u32 = match href.rsplit('/').next().and_then(|s| s.parse().ok()) {
-            Some(id) => id,
-            None => {
-                tracing::warn!("Could not parse bangumi ID from href: {}", href);
-                continue;
-            }
-        };
-
         let title = element
             .select(&title_sel)
             .next()
@@ -109,16 +97,30 @@ pub fn parse_search_results(html: &str) -> Result<Vec<SearchResult>, String> {
                 }
             });
 
-        let subscription_url = format!(
-            "https://mikanani.me/RSS/Bangumi?bangumiId={}",
-            bangumi_id
-        );
+        let detail_key = if href.contains("/Home/Bangumi/") {
+            let bangumi_id: u32 = match href.rsplit('/').next().and_then(|s| s.parse().ok()) {
+                Some(id) => id,
+                None => {
+                    tracing::warn!("Could not parse bangumi ID from href: {}", href);
+                    continue;
+                }
+            };
+            format!("bangumi:{}", bangumi_id)
+        } else if href.contains("/Home/Episode/") {
+            // Truncate title at the last '_' to get the searchstr
+            let searchstr = match title.rfind('_') {
+                Some(idx) => &title[..idx],
+                None => &title,
+            };
+            format!("source:{}", searchstr)
+        } else {
+            continue; // Skip unknown link types
+        };
 
         results.push(SearchResult {
             title,
-            description: None,
             thumbnail_url,
-            subscription_url,
+            detail_key,
         });
     }
 
@@ -191,10 +193,7 @@ mod tests {
         let results = parse_search_results(html).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "葬送的芙莉蓮");
-        assert_eq!(
-            results[0].subscription_url,
-            "https://mikanani.me/RSS/Bangumi?bangumiId=3310"
-        );
+        assert_eq!(results[0].detail_key, "bangumi:3310");
         assert_eq!(
             results[0].thumbnail_url,
             Some("https://mikanani.me/images/Bangumi/3310/cover.jpg".to_string())
@@ -202,16 +201,45 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_skips_non_bangumi_links() {
+    fn test_parse_magnet_source_card() {
         let html = r#"
             <html><body>
-              <a class="an-info-group" href="/Home/Episode/abc123">
-                <p class="an-text">Some Episode</p>
+              <div class="an-ul">
+                <a class="an-info-group" href="/Home/Episode/abc123hash">
+                  <div class="an-img-cell">
+                    <img src="/images/Bangumi/3822/cover.jpg" />
+                  </div>
+                  <div class="an-info">
+                    <p class="an-text">[KITA]（双语人工翻译）金牌得主19_Ciallo</p>
+                  </div>
+                </a>
+              </div>
+            </body></html>
+        "#;
+
+        let results = parse_search_results(html).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "[KITA]（双语人工翻译）金牌得主19_Ciallo");
+        assert_eq!(
+            results[0].detail_key,
+            "source:[KITA]（双语人工翻译）金牌得主19"
+        );
+    }
+
+    #[test]
+    fn test_parse_magnet_source_no_underscore_uses_full_title() {
+        let html = r#"
+            <html><body>
+              <a class="an-info-group" href="/Home/Episode/xyz">
+                <img src="/img/cover.jpg" />
+                <p class="an-text">SomeTitle NoUnderscore</p>
               </a>
             </body></html>
         "#;
+
         let results = parse_search_results(html).unwrap();
-        assert!(results.is_empty());
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].detail_key, "source:SomeTitle NoUnderscore");
     }
 
     #[test]
