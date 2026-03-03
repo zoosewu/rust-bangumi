@@ -38,5 +38,6 @@ url = "2.5"
 
 # HTML 解析
 scraper = "0.20"
+urlencoding = "2"
 
 [dev-dependencies]
