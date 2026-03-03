@@ -1,34 +1,59 @@
+use async_trait::async_trait;
 use scraper::{Html, Selector};
 use shared::SearchResult;
 
-/// Scrape Mikanani search page for a given query.
-pub async fn scrape_mikanani_search(query: &str) -> Result<Vec<SearchResult>, String> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .user_agent("Mozilla/5.0 (compatible; bangumi-bot/1.0)")
-        .build()
-        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+#[async_trait]
+pub trait SearchScraper: Send + Sync {
+    async fn scrape(&self, query: &str) -> Result<Vec<SearchResult>, String>;
+}
 
-    let response = client
-        .get("https://mikanani.me/Home/Search")
-        .query(&[("searchstr", query)])
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch Mikanani search: {}", e))?;
+pub struct RealSearchScraper {
+    client: reqwest::Client,
+}
 
-    if !response.status().is_success() {
-        return Err(format!(
-            "Mikanani search returned status {}",
-            response.status()
-        ));
+impl RealSearchScraper {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(20))
+                .user_agent("Mozilla/5.0 (compatible; bangumi-bot/1.0)")
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
+        }
     }
+}
 
-    let html = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read response body: {}", e))?;
+impl Default for RealSearchScraper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    parse_search_results(&html)
+#[async_trait]
+impl SearchScraper for RealSearchScraper {
+    async fn scrape(&self, query: &str) -> Result<Vec<SearchResult>, String> {
+        let response = self
+            .client
+            .get("https://mikanani.me/Home/Search")
+            .query(&[("searchstr", query)])
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch Mikanani search: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!(
+                "Mikanani search returned status {}",
+                response.status()
+            ));
+        }
+
+        let html = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+        parse_search_results(&html)
+    }
 }
 
 /// Parse HTML from Mikanani search results page.
@@ -104,6 +129,36 @@ pub fn parse_search_results(html: &str) -> Result<Vec<SearchResult>, String> {
     );
 
     Ok(results)
+}
+
+pub mod mock {
+    use super::*;
+    use std::sync::Mutex;
+
+    pub struct MockSearchScraper {
+        result: Mutex<Result<Vec<SearchResult>, String>>,
+    }
+
+    impl MockSearchScraper {
+        pub fn with_results(results: Vec<SearchResult>) -> Self {
+            Self {
+                result: Mutex::new(Ok(results)),
+            }
+        }
+
+        pub fn with_error(message: impl Into<String>) -> Self {
+            Self {
+                result: Mutex::new(Err(message.into())),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl SearchScraper for MockSearchScraper {
+        async fn scrape(&self, _query: &str) -> Result<Vec<SearchResult>, String> {
+            self.result.lock().unwrap().clone()
+        }
+    }
 }
 
 #[cfg(test)]

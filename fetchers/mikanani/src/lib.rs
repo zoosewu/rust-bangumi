@@ -8,3 +8,4 @@ pub use config::FetcherConfig;
 pub use fetch_task::{FetchTask, FetchTaskError, FetcherResultsPayload};
 pub use http_client::{HttpClient, HttpError, HttpResponse, RealHttpClient};
 pub use rss_parser::RssParser;
+pub use search_scraper::{RealSearchScraper, SearchScraper};

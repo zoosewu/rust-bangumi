@@ -1,5 +1,5 @@
 use axum::{extract::State, http::StatusCode, Json};
-use fetcher_mikanani::{search_scraper::scrape_mikanani_search, FetchTask, RealHttpClient, RssParser};
+use fetcher_mikanani::{FetchTask, RealHttpClient, RealSearchScraper, RssParser, SearchScraper};
 use serde::{Deserialize, Serialize};
 use shared::{FetchTriggerRequest, FetchTriggerResponse, SearchRequest, SearchResponse};
 use std::sync::Arc;
@@ -20,6 +20,7 @@ pub struct CanHandleResponse {
 pub struct AppState {
     pub parser: Arc<RssParser>,
     pub http_client: Arc<RealHttpClient>,
+    pub search_scraper: Arc<dyn SearchScraper>,
 }
 
 impl AppState {
@@ -27,6 +28,7 @@ impl AppState {
         Self {
             parser: Arc::new(RssParser::new()),
             http_client: Arc::new(RealHttpClient::new()),
+            search_scraper: Arc::new(RealSearchScraper::new()),
         }
     }
 }
@@ -108,11 +110,12 @@ pub async fn can_handle_subscription(
 }
 
 pub async fn search(
+    State(state): State<AppState>,
     Json(payload): Json<SearchRequest>,
 ) -> (StatusCode, Json<SearchResponse>) {
     tracing::info!("Received search request: query={:?}", payload.query);
 
-    match scrape_mikanani_search(&payload.query).await {
+    match state.search_scraper.scrape(&payload.query).await {
         Ok(results) => {
             tracing::info!("Search returned {} results", results.len());
             (StatusCode::OK, Json(SearchResponse { results }))
