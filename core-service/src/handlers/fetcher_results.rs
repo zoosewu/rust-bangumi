@@ -518,8 +518,8 @@ pub async fn receive_raw_fetcher_results(
                     Ok(Some(parsed)) => {
                         // 解析成功，建立相關記錄
                         match process_parsed_result(&mut conn, &saved_item, &parsed) {
-                            Ok(link_id) => {
-                                new_link_ids.push(link_id);
+                            Ok(ids) => {
+                                new_link_ids.extend(ids);
                                 TitleParserService::update_raw_item_status(
                                     &mut conn,
                                     saved_item.item_id,
@@ -647,12 +647,12 @@ pub async fn receive_raw_fetcher_results(
 }
 
 /// 處理解析成功的結果，建立 anime, series, group, link 記錄
-/// 回傳新建的 link_id
+/// 回傳新建的 link_id 列表（批次合輯時為多個）
 pub(crate) fn process_parsed_result(
     conn: &mut PgConnection,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
-) -> Result<i32, String> {
+) -> Result<Vec<i32>, String> {
     use sha2::{Digest, Sha256};
 
     // 1. 建立或取得 anime work
@@ -680,48 +680,74 @@ pub(crate) fn process_parsed_result(
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
     let group = create_or_get_subtitle_group(conn, group_name)?;
 
-    // 5. 生成 source_hash
+    // 5. 計算 base source_hash
     let mut hasher = Sha256::new();
     hasher.update(raw_item.download_url.as_bytes());
-    let source_hash = format!("{:x}", hasher.finalize());
+    let base_hash = format!("{:x}", hasher.finalize());
 
-    // 6. 建立 anime_link
+    // 決定 episode 範圍（批次合輯展開）
+    let ep_start = parsed.episode_no;
+    let ep_end = match parsed.episode_end {
+        Some(end) if end >= ep_start && (end - ep_start) <= 200 => end,
+        Some(bad) => {
+            tracing::warn!(
+                "episode_end ({}) is invalid relative to episode_no ({}), treating as single episode",
+                bad, ep_start
+            );
+            ep_start
+        }
+        None => ep_start,
+    };
+
+    let is_batch = ep_end > ep_start;
     let now = Utc::now().naive_utc();
     let detected_type =
         crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
-    let new_link = NewAnimeLink {
-        anime_id: anime.anime_id,
-        group_id: group.group_id,
-        episode_no: parsed.episode_no,
-        title: Some(raw_item.title.clone()),
-        url: raw_item.download_url.clone(),
-        source_hash,
-        filtered_flag: false,
-        created_at: now,
-        raw_item_id: Some(raw_item.item_id),
-        download_type: detected_type.map(|dt| dt.to_string()),
-        conflict_flag: false,
-        link_status: "active".to_string(),
-    };
+    let mut link_ids = Vec::new();
 
-    let created_link: AnimeLink = diesel::insert_into(anime_links::table)
-        .values(&new_link)
-        .get_result(conn)
-        .map_err(|e| format!("Failed to create anime link: {}", e))?;
+    for ep in ep_start..=ep_end {
+        let source_hash = if is_batch {
+            format!("{}#ep{}", base_hash, ep)
+        } else {
+            base_hash.clone()
+        };
 
-    // Compute and update filtered_flag based on current filter rules
-    match crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link) {
-        Ok(flag) if flag != created_link.filtered_flag => {
-            diesel::update(anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)))
-                .set(anime_links::filtered_flag.eq(flag))
-                .execute(conn)
-                .map_err(|e| format!("Failed to update filtered_flag: {}", e))?;
+        let new_link = NewAnimeLink {
+            anime_id: anime.anime_id,
+            group_id: group.group_id,
+            episode_no: ep,
+            title: Some(raw_item.title.clone()),
+            url: raw_item.download_url.clone(),
+            source_hash,
+            filtered_flag: false,
+            created_at: now,
+            raw_item_id: Some(raw_item.item_id),
+            download_type: detected_type.as_ref().map(|dt| dt.to_string()),
+            conflict_flag: false,
+            link_status: "active".to_string(),
+        };
+
+        let created_link: AnimeLink = diesel::insert_into(anime_links::table)
+            .values(&new_link)
+            .get_result(conn)
+            .map_err(|e| format!("Failed to create anime link ep {}: {}", ep, e))?;
+
+        // Compute and update filtered_flag based on current filter rules
+        match crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link) {
+            Ok(flag) if flag != created_link.filtered_flag => {
+                diesel::update(anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)))
+                    .set(anime_links::filtered_flag.eq(flag))
+                    .execute(conn)
+                    .map_err(|e| format!("Failed to update filtered_flag: {}", e))?;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to compute filtered_flag for link {}: {}", created_link.link_id, e);
+            }
+            _ => {}
         }
-        Err(e) => {
-            tracing::warn!("Failed to compute filtered_flag for link {}: {}", created_link.link_id, e);
-        }
-        _ => {}
+
+        link_ids.push(created_link.link_id);
     }
 
-    Ok(created_link.link_id)
+    Ok(link_ids)
 }

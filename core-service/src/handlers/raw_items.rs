@@ -252,7 +252,7 @@ pub async fn reparse_item(
     match TitleParserService::parse_title(&mut conn, &item.title) {
         Ok(Some(parsed)) => {
             match super::fetcher_results::process_parsed_result(&mut conn, &item, &parsed) {
-                Ok(link_id) => {
+                Ok(link_ids) => {
                     TitleParserService::update_raw_item_status(
                         &mut conn,
                         item_id,
@@ -265,7 +265,7 @@ pub async fn reparse_item(
                     // 觸發 dispatch 下載
                     let dispatch_service = state.dispatch_service.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = dispatch_service.dispatch_new_links(vec![link_id]).await {
+                        if let Err(e) = dispatch_service.dispatch_new_links(link_ids).await {
                             tracing::warn!("reparse dispatch 失敗: {}", e);
                         }
                     });
