@@ -2,42 +2,19 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
-import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { PageHeader } from "@/components/shared/PageHeader"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "sonner"
 import type { SearchResult } from "@/schemas/search"
-import type { ServiceModule } from "@/schemas/service-module"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { DetailDialog } from "./DetailDialog"
 
 export default function SearchPage() {
   const { t } = useTranslation()
   const [rawQuery, setRawQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
-  const [subscribeTarget, setSubscribeTarget] = useState<SearchResult | null>(null)
-  const [newName, setNewName] = useState("")
-  const [newInterval, setNewInterval] = useState("30")
-  const [newPreferredDl, setNewPreferredDl] = useState<number | null>(null)
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
 
-  // Debounce search input by 500ms
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(rawQuery.trim())
@@ -54,52 +31,6 @@ export default function SearchPage() {
       }),
     [debouncedQuery],
   )
-
-  const { data: downloaderModules } = useEffectQuery(
-    () =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getDownloaderModules
-      }),
-    [],
-  )
-
-  const { mutate: createSubscription, isLoading: creating } = useEffectMutation(
-    (req: {
-      source_url: string
-      name?: string
-      fetch_interval_minutes?: number
-      preferred_downloader_id?: number | null
-    }) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.createSubscription(req)
-      }),
-  )
-
-  const handleSubscribeClick = (result: SearchResult) => {
-    setSubscribeTarget(result)
-    setNewName("")
-    setNewInterval("30")
-    setNewPreferredDl(null)
-  }
-
-  const handleCreateSubscription = () => {
-    if (!subscribeTarget) return
-    createSubscription({
-      source_url: subscribeTarget.subscription_url,
-      name: newName || undefined,
-      fetch_interval_minutes: Number(newInterval) || 30,
-      preferred_downloader_id: newPreferredDl,
-    })
-      .then(() => {
-        toast.success(t("subscriptions.created", "Subscription created"))
-        setSubscribeTarget(null)
-      })
-      .catch(() => {
-        toast.error(t("common.saveFailed", "Failed to create subscription"))
-      })
-  }
 
   const searchResults = results?.results ?? []
 
@@ -128,17 +59,21 @@ export default function SearchPage() {
       )}
 
       {!debouncedQuery && !isLoading && (
-        <p className="text-sm text-muted-foreground">{t("search.hint", "Type to search across all sources")}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("search.hint", "Type to search across all sources")}
+        </p>
       )}
 
       {searchResults.length > 0 && (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {searchResults.map((result, idx) => (
-            <div
-              key={`${result.source}-${result.subscription_url}-${idx}`}
-              className="flex items-start gap-4 p-4 border rounded-lg bg-card"
+            <button
+              key={`${result.source}-${result.detail_key}-${idx}`}
+              type="button"
+              className="flex flex-col items-center gap-2 p-3 border rounded-lg bg-card hover:bg-accent cursor-pointer text-left transition-colors"
+              onClick={() => setSelectedResult(result)}
             >
-              <div className="w-16 h-20 flex-shrink-0 rounded overflow-hidden bg-muted">
+              <div className="w-full aspect-[3/4] rounded overflow-hidden bg-muted flex-shrink-0">
                 {result.thumbnail_url ? (
                   <img
                     src={result.thumbnail_url}
@@ -150,103 +85,23 @@ export default function SearchPage() {
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
-                    {t("search.noImage", "No image")}
+                    {t("search.noImage")}
                   </div>
                 )}
               </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{result.title}</p>
-                {result.description && (
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {result.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge variant="outline" className="text-xs">
-                    {result.source}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground font-mono truncate max-w-[300px]">
-                    {result.subscription_url}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                size="sm"
-                onClick={() => handleSubscribeClick(result)}
-                className="flex-shrink-0"
-              >
-                {t("search.subscribe")}
-              </Button>
-            </div>
+              <p className="text-sm font-medium line-clamp-2 w-full">{result.title}</p>
+              <Badge variant="outline" className="text-xs self-start">
+                {result.source}
+              </Badge>
+            </button>
           ))}
         </div>
       )}
 
-      <Dialog open={!!subscribeTarget} onOpenChange={(open) => { if (!open) setSubscribeTarget(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("subscriptions.addSubscription")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {subscribeTarget && (
-              <div className="space-y-1">
-                <Label>{t("subscriptions.sourceUrl")}</Label>
-                <p className="text-sm font-mono text-muted-foreground break-all">
-                  {subscribeTarget.subscription_url}
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>{t("subscriptions.name")}</Label>
-              <Input
-                placeholder={subscribeTarget?.title ?? t("subscriptions.name")}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("subscriptions.fetchInterval")}</Label>
-              <Input
-                type="number"
-                min="1"
-                value={newInterval}
-                onChange={(e) => setNewInterval(e.target.value)}
-              />
-            </div>
-            {downloaderModules && (downloaderModules as ServiceModule[]).length > 0 && (
-              <div className="space-y-2">
-                <Label>{t("subscriptions.preferredDownloader")}</Label>
-                <Select
-                  value={newPreferredDl ? String(newPreferredDl) : "none"}
-                  onValueChange={(v) => setNewPreferredDl(v === "none" ? null : Number(v))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("subscriptions.useGlobalPriority")}</SelectItem>
-                    {(downloaderModules as ServiceModule[]).map((m) => (
-                      <SelectItem key={m.module_id} value={String(m.module_id)}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubscribeTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button onClick={handleCreateSubscription} disabled={creating}>
-              {creating ? t("common.creating") : t("common.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DetailDialog
+        result={selectedResult}
+        onClose={() => setSelectedResult(null)}
+      />
     </div>
   )
 }
