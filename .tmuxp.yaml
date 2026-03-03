@@ -6,9 +6,9 @@ windows:
   panes:
   - cd frontend && bun run dev -- --host
   - cargo run -p core-service
-  - cargo run -p fetcher-mikanani
-  - cargo run -p downloader-qbittorrent
-  - cargo run -p viewer-jellyfin
-  - cargo run -p metadata-service
-  - cargo run -p downloader-pikpak
+  - sleep & cargo run -p fetcher-mikanani
+  - sleep & cargo run -p downloader-qbittorrent
+  - sleep & cargo run -p viewer-jellyfin
+  - sleep & cargo run -p metadata-service
+  - sleep & cargo run -p downloader-pikpak
   window_name: services
