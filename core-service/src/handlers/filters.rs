@@ -63,6 +63,7 @@ pub async fn create_filter_rule(
         updated_at: now,
         target_type,
         target_id: payload.target_id,
+        pending_result_id: None,
     };
 
     match state.repos.filter_rule.create(new_rule).await {
@@ -525,6 +526,7 @@ pub async fn preview_filter(
         updated_at: now,
         target_type,
         target_id: req.target_id,
+        pending_result_id: None,
     };
 
     let mut before_passed = vec![];

@@ -310,6 +310,7 @@ pub struct FilterRule {
     pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
+    pub pending_result_id: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -322,6 +323,7 @@ pub struct NewFilterRule {
     pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
+    pub pending_result_id: Option<i32>,
 }
 
 // ============ Downloads ============
@@ -581,6 +583,7 @@ pub struct TitleParser {
     pub created_from_id: Option<i32>,
     pub episode_end_source: Option<ParserSourceType>,
     pub episode_end_value: Option<String>,
+    pub pending_result_id: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -612,6 +615,7 @@ pub struct NewTitleParser {
     pub created_from_id: Option<i32>,
     pub episode_end_source: Option<ParserSourceType>,
     pub episode_end_value: Option<String>,
+    pub pending_result_id: Option<i32>,
 }
 
 // ============ RawAnimeItems ============
@@ -668,6 +672,74 @@ pub struct NewAnimeCoverImage {
     pub source_name: String,
     pub is_default: bool,
     pub created_at: chrono::NaiveDateTime,
+}
+
+// ============ AiSettings ============
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[diesel(table_name = crate::schema::ai_settings)]
+pub struct AiSettings {
+    pub id: i32,
+    pub base_url: String,
+    pub api_key: String,
+    pub model_name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(AsChangeset, Debug, serde::Deserialize)]
+#[diesel(table_name = crate::schema::ai_settings)]
+pub struct UpdateAiSettings {
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model_name: Option<String>,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ AiPromptSettings ============
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[diesel(table_name = crate::schema::ai_prompt_settings)]
+pub struct AiPromptSettings {
+    pub id: i32,
+    pub fixed_parser_prompt: Option<String>,
+    pub fixed_filter_prompt: Option<String>,
+    pub custom_parser_prompt: Option<String>,
+    pub custom_filter_prompt: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+// ============ PendingAiResult ============
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[diesel(table_name = crate::schema::pending_ai_results)]
+pub struct PendingAiResult {
+    pub id: i32,
+    pub result_type: String,
+    pub source_title: String,
+    pub generated_data: Option<serde_json::Value>,
+    pub status: String,
+    pub error_message: Option<String>,
+    pub raw_item_id: Option<i32>,
+    pub used_fixed_prompt: String,
+    pub used_custom_prompt: Option<String>,
+    pub expires_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable, Debug)]
+#[diesel(table_name = crate::schema::pending_ai_results)]
+pub struct NewPendingAiResult {
+    pub result_type: String,
+    pub source_title: String,
+    pub generated_data: Option<serde_json::Value>,
+    pub status: String,
+    pub error_message: Option<String>,
+    pub raw_item_id: Option<i32>,
+    pub used_fixed_prompt: String,
+    pub used_custom_prompt: Option<String>,
+    pub expires_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[cfg(test)]

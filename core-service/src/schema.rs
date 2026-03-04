@@ -145,6 +145,7 @@ diesel::table! {
         is_positive -> Bool,
         target_type -> FilterTargetType,
         target_id -> Nullable<Int4>,
+        pending_result_id -> Nullable<Int4>,
     }
 }
 
@@ -292,6 +293,49 @@ diesel::table! {
         episode_end_source -> Nullable<ParserSourceType>,
         #[max_length = 255]
         episode_end_value -> Nullable<Varchar>,
+        pending_result_id -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
+    ai_settings (id) {
+        id         -> Int4,
+        base_url   -> Text,
+        api_key    -> Text,
+        model_name -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    ai_prompt_settings (id) {
+        id                   -> Int4,
+        fixed_parser_prompt  -> Nullable<Text>,
+        fixed_filter_prompt  -> Nullable<Text>,
+        custom_parser_prompt -> Nullable<Text>,
+        custom_filter_prompt -> Nullable<Text>,
+        created_at           -> Timestamp,
+        updated_at           -> Timestamp,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    pending_ai_results (id) {
+        id                 -> Int4,
+        result_type        -> Text,
+        source_title       -> Text,
+        generated_data     -> Nullable<Jsonb>,
+        status             -> Text,
+        error_message      -> Nullable<Text>,
+        raw_item_id        -> Nullable<Int4>,
+        used_fixed_prompt  -> Text,
+        used_custom_prompt -> Nullable<Text>,
+        expires_at         -> Nullable<Timestamp>,
+        created_at         -> Timestamp,
+        updated_at         -> Timestamp,
     }
 }
 
@@ -314,6 +358,8 @@ diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));
 diesel::joinable!(subscriptions -> service_modules (preferred_downloader_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    ai_prompt_settings,
+    ai_settings,
     anime_cover_images,
     anime_link_conflicts,
     anime_links,
@@ -323,6 +369,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     downloader_capabilities,
     downloads,
     filter_rules,
+    pending_ai_results,
     raw_anime_items,
     seasons,
     service_modules,

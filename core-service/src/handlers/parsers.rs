@@ -290,6 +290,7 @@ pub async fn create_parser(
                 .map(|s| parse_source_type(s))
                 .transpose()?,
             episode_end_value: req.episode_end_value,
+            pending_result_id: None,
         };
 
         diesel::insert_into(title_parsers::table)
@@ -1152,6 +1153,7 @@ pub async fn preview_parser(
             .map(|s| parse_source_type(s))
             .transpose()?,
         episode_end_value: req.episode_end_value.clone(),
+        pending_result_id: None,
     };
 
     // Build "after" parsers list: before_parsers + current_parser, sorted by priority desc
