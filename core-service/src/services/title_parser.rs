@@ -76,6 +76,49 @@ impl TitleParserService {
         Ok(None)
     }
 
+    /// 解析標題，失敗時背景觸發 AI 生成（非同步）
+    pub fn parse_title_with_ai_fallback(
+        conn: &mut PgConnection,
+        pool: std::sync::Arc<crate::db::DbPool>,
+        title: &str,
+        raw_item_id: Option<i32>,
+    ) -> Result<Option<ParsedResult>, String> {
+        let result = Self::parse_title(conn, title)?;
+
+        if result.is_none() {
+            use crate::schema::pending_ai_results;
+            let already_pending: bool = pending_ai_results::table
+                .filter(pending_ai_results::result_type.eq("parser"))
+                .filter(pending_ai_results::source_title.eq(title))
+                .filter(
+                    pending_ai_results::status.eq_any(vec!["generating", "pending"]),
+                )
+                .count()
+                .get_result::<i64>(conn)
+                .unwrap_or(0)
+                > 0;
+
+            if !already_pending {
+                let pool_clone = pool.clone();
+                let title_owned = title.to_string();
+                tokio::spawn(async move {
+                    if let Err(e) = crate::ai::parser_generator::generate_parser_for_title(
+                        pool_clone,
+                        title_owned,
+                        raw_item_id,
+                        None,
+                    )
+                    .await
+                    {
+                        tracing::warn!("AI parser 觸發失敗: {}", e);
+                    }
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
     /// 嘗試使用單一解析器解析標題
     pub fn try_parser(parser: &TitleParser, title: &str) -> Result<Option<ParsedResult>, String> {
         // 檢查 condition_regex 是否匹配
