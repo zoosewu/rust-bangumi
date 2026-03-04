@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use tracing_subscriber;
 use uuid;
 
+mod ai;
 mod config;
 mod cors;
 mod db;
