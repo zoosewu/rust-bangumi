@@ -45,6 +45,23 @@ RSS 訂閱 → Fetcher 爬取 → Core 解析標題 → 自動下載派送 → V
 └── docs/                   # 架構、API 規格、計劃
 ```
 
+## 函數式設計原則
+
+實作盡可能遵守函數式編程：優先使用 `map`, `filter`, `fold`, `Option`/`Result` 組合器而非 `match` 和可變狀態。
+
+**關鍵實踐**：
+- 使用迭代器鏈而非 `for` 迴圈
+- 鏈式組合 `Option`/`Result` (`and_then`, `map`, `or_else`) 避免多層 `match`
+- `filter_map` 同時過濾和轉換，減少中間集合
+- 實現 `From`/`Into` traits 進行聲明式轉換
+- 將複雜邏輯拆分為可組合的單元函數
+
+**在項目中的應用**：RSS 解析 (`and_then` 鏈), 衝突解析 (`filter_map`), 訂閱列表轉換 (`map` 管道)
+
+**例外**：複雜邏輯流控制或副作用密集時，命令式代碼更清晰。優先函數式，但要以可讀性為最高目標。
+
+---
+
 ## 核心設計模式
 
 ### 1. Trait-Based Abstraction
