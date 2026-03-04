@@ -4,12 +4,21 @@ import { Copy, Check } from "lucide-react"
 export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = (e: React.MouseEvent) => {
+  const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const el = document.createElement("textarea")
+      el.value = text
+      el.style.cssText = "position:fixed;opacity:0;pointer-events:none;"
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand("copy")
+      el.remove()
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   return (

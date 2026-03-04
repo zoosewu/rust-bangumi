@@ -313,15 +313,24 @@ function CopyPromptButton({ text, label }: { text: string; label: string }) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const el = document.createElement("textarea")
+      el.value = text
+      el.style.cssText = "position:fixed;opacity:0;pointer-events:none;"
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand("copy")
+      el.remove()
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
-    <Button
-      onClick={() => {
-        navigator.clipboard.writeText(text).then(() => {
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
-        })
-      }}
-    >
+    <Button onClick={handleCopy}>
       {copied ? (
         <>
           <Check className="h-4 w-4 mr-1" />
