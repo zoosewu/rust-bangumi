@@ -67,6 +67,7 @@ impl AppState {
         let conflict_detection = ConflictDetectionService::new(
             repos.anime_link.clone(),
             repos.anime_link_conflict.clone(),
+            Arc::new(db.clone()),
         );
         let cancel_service = DownloadCancelService::new(db.clone());
         Self {

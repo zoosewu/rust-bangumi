@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::db::repository::{AnimeLinkConflictRepository, AnimeLinkRepository};
+use crate::db::DbPool;
 
 /// Result of conflict detection, including links that need dispatch after auto-resolution.
 pub struct ConflictDetectionResult {
@@ -12,16 +13,19 @@ pub struct ConflictDetectionResult {
 pub struct ConflictDetectionService {
     link_repo: Arc<dyn AnimeLinkRepository>,
     conflict_repo: Arc<dyn AnimeLinkConflictRepository>,
+    pool: Arc<DbPool>,
 }
 
 impl ConflictDetectionService {
     pub fn new(
         link_repo: Arc<dyn AnimeLinkRepository>,
         conflict_repo: Arc<dyn AnimeLinkConflictRepository>,
+        pool: Arc<DbPool>,
     ) -> Self {
         Self {
             link_repo,
             conflict_repo,
+            pool,
         }
     }
 
@@ -80,6 +84,28 @@ impl ConflictDetectionService {
                     episode_no,
                     links.len()
                 );
+
+                // 觸發 AI filter 生成（背景非同步）
+                let conflict_titles: Vec<String> = links
+                    .iter()
+                    .filter_map(|l| l.title.clone())
+                    .collect();
+                if !conflict_titles.is_empty() {
+                    let pool_clone = self.pool.clone();
+                    let source = conflict_titles[0].clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = crate::ai::filter_generator::generate_filter_for_conflict(
+                            pool_clone,
+                            conflict_titles,
+                            source,
+                            None,
+                        )
+                        .await
+                        {
+                            tracing::warn!("AI filter 觸發失敗: {}", e);
+                        }
+                    });
+                }
             }
         }
 
