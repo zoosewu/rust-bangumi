@@ -364,7 +364,7 @@ export function ParserAIButtons({
     try {
       const parsed = JSON.parse(importJson)
       if (!parsed.name || !parsed.condition_regex || !parsed.parse_regex) {
-        setImportError(t("parser.importError"))
+        setImportError(t("parser.importError", "Missing required fields: name, condition_regex, parse_regex"))
         return
       }
       onImport({
@@ -392,8 +392,11 @@ export function ParserAIButtons({
       setImportOpen(false)
       setImportJson("")
       setImportError("")
-    } catch {
-      setImportError(t("parser.importError"))
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
+      setImportError(
+        `Invalid JSON: ${errorMsg}. Make sure backslashes in regex are DOUBLED (e.g., "\\\\[" not "\\[").`
+      )
     }
   }, [importJson, t, onImport])
 
@@ -435,12 +438,20 @@ export function ParserAIButtons({
 
     const prompt = `I need you to create a parser configuration JSON for an anime RSS title parser.
 
+## ⚠️ CRITICAL: JSON Escaping for Regex
+In JSON strings, backslashes MUST be escaped with double backslashes (\\\\):
+- Regex: \`\\[Group\\]\` → JSON: "condition_regex": "\\\\[Group\\\\]"
+- Regex: \`\\d+\` → JSON: "parse_regex": "\\\\d+"
+- Regex: \`\\s*\` → JSON: "condition_regex": "\\\\s*"
+
+Every single backslash in your regex pattern MUST be doubled in JSON. This is non-negotiable.
+
 ## Parser JSON Format
 \`\`\`json
 {
   "name": "string - descriptive name for this parser",
-  "condition_regex": "string - regex pattern to match titles this parser should handle. Make this as strict and specific as possible.",
-  "parse_regex": "string - regex with numbered capture groups to extract fields",
+  "condition_regex": "string - regex pattern (with ESCAPED BACKSLASHES) to match titles this parser should handle. Make this as strict and specific as possible.",
+  "parse_regex": "string - regex with numbered capture groups (with ESCAPED BACKSLASHES) to extract fields",
   "priority": "number - see Priority Rules below",
   "anime_title_source": "'regex' or 'static' - how to determine the anime title",
   "anime_title_value": "string - capture group ref (e.g. $1) if regex, or fixed value if static",
@@ -467,6 +478,13 @@ When source is "regex", the value uses \`$N\` format where N is the capture grou
 - \`$2\` = 2nd capture group in parse_regex
 - etc.
 The backend reads \`$1\` as index 1.
+
+## Regex Escaping Examples
+Remember to DOUBLE-escape all backslashes when generating JSON:
+- \`[Group]\` patterns: use "\\\\[" and "\\\\]"
+- \`\\d\` for digits: use "\\\\d"
+- \`\\s\` for whitespace: use "\\\\s"
+- \`\\w\` for word chars: use "\\\\w"
 
 ## Priority Rules
 - If this parser targets a **single specific anime** (e.g. one show title), set priority to **9999**. The condition_regex should be very strict, matching only that specific anime's naming pattern.
