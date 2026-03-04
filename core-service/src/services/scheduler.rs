@@ -278,3 +278,43 @@ mod tests {
         // attempt 3: 60 * 2^3 = 480 (but won't happen as max_retries is 3)
     }
 }
+
+// ============ CleanupScheduler ============
+
+pub struct CleanupScheduler {
+    db_pool: DbPool,
+}
+
+impl CleanupScheduler {
+    pub fn new(db_pool: DbPool) -> Self {
+        Self { db_pool }
+    }
+
+    pub async fn start(self: Arc<Self>) {
+        let mut ticker = tokio::time::interval(Duration::from_secs(3600)); // 每小時
+        loop {
+            ticker.tick().await;
+            let mut conn = match self.db_pool.get() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("CleanupScheduler DB 連接失敗: {}", e);
+                    continue;
+                }
+            };
+            use crate::schema::pending_ai_results;
+            match diesel::delete(
+                pending_ai_results::table
+                    .filter(pending_ai_results::expires_at.lt(Utc::now().naive_utc())),
+            )
+            .execute(&mut conn)
+            {
+                Ok(n) => {
+                    if n > 0 {
+                        tracing::info!("清除 {} 筆過期 pending_ai_results", n);
+                    }
+                }
+                Err(e) => tracing::warn!("清除過期記錄失敗: {}", e),
+            }
+        }
+    }
+}

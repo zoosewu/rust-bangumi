@@ -15,6 +15,6 @@ pub use download_cancel::DownloadCancelService;
 pub use download_dispatch::DownloadDispatchService;
 pub use download_scheduler::DownloadScheduler;
 pub use registry::ServiceRegistry;
-pub use scheduler::FetchScheduler;
+pub use scheduler::{CleanupScheduler, FetchScheduler};
 pub use sync_service::SyncService;
 pub use title_parser::TitleParserService;

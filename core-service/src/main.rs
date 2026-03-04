@@ -74,6 +74,15 @@ async fn main() -> anyhow::Result<()> {
     });
     tracing::info!("DownloadScheduler started");
 
+    // 啟動 CleanupScheduler
+    let cleanup_scheduler =
+        std::sync::Arc::new(services::CleanupScheduler::new(app_state.db.clone()));
+    let cs_clone = cleanup_scheduler.clone();
+    tokio::spawn(async move {
+        cs_clone.start().await;
+    });
+    tracing::info!("CleanupScheduler started");
+
     // 構建應用路由
     let mut app = Router::new()
         // 服務註冊
