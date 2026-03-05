@@ -227,6 +227,7 @@ pub async fn reject_pending(
 #[derive(Debug, Deserialize)]
 pub struct RegenerateRequest {
     pub custom_prompt: Option<String>,
+    pub fixed_prompt: Option<String>,
 }
 
 // POST /pending-ai-results/:id/regenerate
@@ -285,6 +286,7 @@ pub async fn regenerate_pending(
                 source_title,
                 None,
                 req.custom_prompt,
+                req.fixed_prompt,
             )
             .await
         }
@@ -295,6 +297,7 @@ pub async fn regenerate_pending(
                 source_title,
                 req.custom_prompt,
                 None,
+                req.fixed_prompt,
             )
             .await
         }
@@ -359,6 +362,7 @@ async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
                                 pool_clone,
                                 title,
                                 Some(item_id),
+                                None,
                                 None,
                             )
                             .await

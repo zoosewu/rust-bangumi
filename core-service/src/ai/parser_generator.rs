@@ -32,6 +32,7 @@ pub async fn generate_parser_for_title(
     source_title: String,
     raw_item_id: Option<i32>,
     temp_custom_prompt: Option<String>,
+    temp_fixed_prompt: Option<String>,
 ) -> Result<PendingAiResult, String> {
     let now = Utc::now().naive_utc();
 
@@ -51,6 +52,9 @@ pub async fn generate_parser_for_title(
         });
         (fixed, custom)
     };
+
+    // 若呼叫方提供臨時 fixed_prompt，以其覆蓋 DB 設定
+    let fixed_prompt = temp_fixed_prompt.unwrap_or(fixed_prompt);
 
     // 從 raw_item_id 查詢所屬 subscription_id
     let subscription_id: Option<i32> = raw_item_id.and_then(|rid| {

@@ -16,6 +16,7 @@ pub async fn generate_filter_for_conflict(
     source_title: String,
     temp_custom_prompt: Option<String>,
     subscription_id: Option<i32>,
+    temp_fixed_prompt: Option<String>,
 ) -> Result<PendingAiResult, String> {
     let now = Utc::now().naive_utc();
 
@@ -34,6 +35,9 @@ pub async fn generate_filter_for_conflict(
         });
         (fixed, custom)
     };
+
+    // 若呼叫方提供臨時 fixed_prompt，以其覆蓋 DB 設定
+    let fixed_prompt = temp_fixed_prompt.unwrap_or(fixed_prompt);
 
     let pending = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
