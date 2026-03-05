@@ -30,8 +30,9 @@ interface CreateSubscriptionWizardProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
-  /** When provided, skip step 1 and start polling from step 2 */
-  initialSubscriptionId?: number
+  initialUrl?: string
+  initialName?: string
+  initialInterval?: string
 }
 
 type WizardStep = 1 | 2 | 3
@@ -40,14 +41,16 @@ export function CreateSubscriptionWizard({
   open,
   onOpenChange,
   onCreated,
-  initialSubscriptionId,
+  initialUrl = "",
+  initialName = "",
+  initialInterval = "",
 }: CreateSubscriptionWizardProps) {
-  const [step, setStep] = useState<WizardStep>(initialSubscriptionId ? 2 : 1)
-  const [url, setUrl] = useState("")
-  const [name, setName] = useState("")
-  const [interval, setIntervalVal] = useState("30")
+  const [step, setStep] = useState<WizardStep>(1)
+  const [url, setUrl] = useState(initialUrl)
+  const [name, setName] = useState(initialName)
+  const [interval, setIntervalVal] = useState(initialInterval || "30")
   const [fetcherId, setFetcherId] = useState<number | undefined>(undefined)
-  const [subscriptionId, setSubscriptionId] = useState<number | undefined>(initialSubscriptionId)
+  const [subscriptionId, setSubscriptionId] = useState<number | undefined>(undefined)
 
   // Step 2 state
   const [rawItems, setRawItems] = useState<RawAnimeItem[]>([])
@@ -140,13 +143,22 @@ export function CreateSubscriptionWizard({
     [],
   )
 
-  // When wizard opens with a pre-existing subscription, jump to step 2
+  // Re-initialize form from props whenever wizard opens
   useEffect(() => {
-    if (open && initialSubscriptionId !== undefined) {
-      setStep(2)
-      setSubscriptionId(initialSubscriptionId)
+    if (open) {
+      setStep(1)
+      setUrl(initialUrl)
+      setName(initialName)
+      setIntervalVal(initialInterval || "30")
+      setFetcherId(undefined)
+      setSubscriptionId(undefined)
+      setRawItems([])
+      setParserPendings([])
+      setFilterPendings([])
+      setStep2Polling(false)
+      setStep3Polling(false)
     }
-  }, [open, initialSubscriptionId])
+  }, [open, initialUrl, initialName, initialInterval])
 
   // Start step 2 polling when entering step 2
   useEffect(() => {

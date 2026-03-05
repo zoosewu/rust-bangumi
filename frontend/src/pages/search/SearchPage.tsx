@@ -15,7 +15,9 @@ export default function SearchPage() {
   const [rawQuery, setRawQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
-  const [wizardSubId, setWizardSubId] = useState<number | undefined>(undefined)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardInitialUrl, setWizardInitialUrl] = useState("")
+  const [wizardInitialName, setWizardInitialName] = useState("")
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -103,16 +105,19 @@ export default function SearchPage() {
       <DetailDialog
         result={selectedResult}
         onClose={() => setSelectedResult(null)}
-        onSubscribed={(subId) => {
+        onSubscribeClick={(sourceUrl, name) => {
           setSelectedResult(null)
-          setWizardSubId(subId)
+          setWizardInitialUrl(sourceUrl)
+          setWizardInitialName(name)
+          setWizardOpen(true)
         }}
       />
 
       <CreateSubscriptionWizard
-        open={wizardSubId !== undefined}
-        onOpenChange={(open) => { if (!open) setWizardSubId(undefined) }}
-        initialSubscriptionId={wizardSubId}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        initialUrl={wizardInitialUrl}
+        initialName={wizardInitialName}
       />
     </div>
   )
