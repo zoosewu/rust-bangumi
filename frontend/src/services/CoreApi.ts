@@ -76,6 +76,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     }) => Effect.Effect<Anime>
     readonly getRawItem: (itemId: number) => Effect.Effect<RawAnimeItem>
     readonly getDownloaderModules: Effect.Effect<readonly ServiceModule[]>
+    readonly getFetcherModules: Effect.Effect<readonly ServiceModule[]>
     readonly updateServiceModule: (id: number, req: { priority?: number; is_enabled?: boolean }) => Effect.Effect<ServiceModule>
     readonly createSubscription: (req: {
       source_url: string
@@ -106,7 +107,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly revertParserPrompt: Effect.Effect<{ value: string }>
     readonly revertFilterPrompt: Effect.Effect<{ value: string }>
     // 待確認管理
-    readonly getPendingAiResults: (params?: { result_type?: string; status?: string }) => Effect.Effect<readonly PendingAiResult[]>
+    readonly getPendingAiResults: (params?: { result_type?: string; status?: string; subscription_id?: number }) => Effect.Effect<readonly PendingAiResult[]>
     readonly getPendingAiResult: (id: number) => Effect.Effect<PendingAiResult>
     readonly updatePendingAiResult: (id: number, generated_data: Record<string, unknown>) => Effect.Effect<PendingAiResult>
     readonly confirmPendingAiResult: (id: number, req: ConfirmPendingRequest) => Effect.Effect<void>

@@ -25,6 +25,7 @@ export interface PendingAiResult {
   status: "generating" | "pending" | "confirmed" | "failed"
   error_message: string | null
   raw_item_id: number | null
+  subscription_id: number | null
   used_fixed_prompt: string
   used_custom_prompt: string | null
   expires_at: string | null
@@ -39,4 +40,5 @@ export interface ConfirmPendingRequest {
 
 export interface RegenerateRequest {
   custom_prompt?: string
+  fixed_prompt?: string
 }

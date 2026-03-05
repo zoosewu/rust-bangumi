@@ -242,6 +242,11 @@ const makeCoreApi = Effect.gen(function* () {
       Schema.Struct({ modules: Schema.Array(ServiceModule) }),
     ).pipe(Effect.map((r) => r.modules)),
 
+    getFetcherModules: fetchJson(
+      HttpClientRequest.get("/api/core/fetcher-modules"),
+      Schema.Struct({ modules: Schema.Array(ServiceModule) }),
+    ).pipe(Effect.map((r) => r.modules)),
+
     updateServiceModule: (id, req) =>
       client
         .execute(
@@ -414,6 +419,7 @@ const makeCoreApi = Effect.gen(function* () {
       const qs = new URLSearchParams()
       if (params?.result_type) qs.set("result_type", params.result_type)
       if (params?.status) qs.set("status", params.status)
+      if (params?.subscription_id != null) qs.set("subscription_id", String(params.subscription_id))
       const q = qs.toString()
       return client
         .execute(HttpClientRequest.get(`/api/core/pending-ai-results${q ? `?${q}` : ""}`))
