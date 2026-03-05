@@ -290,6 +290,7 @@ pub async fn regenerate_pending(
                 vec![source_title.clone()],
                 source_title,
                 req.custom_prompt,
+                None,
             )
             .await
         }

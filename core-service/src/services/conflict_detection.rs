@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use diesel::prelude::*;
+
 use crate::db::repository::{AnimeLinkConflictRepository, AnimeLinkRepository};
 use crate::db::DbPool;
 
@@ -93,12 +95,28 @@ impl ConflictDetectionService {
                 if !conflict_titles.is_empty() {
                     let pool_clone = self.pool.clone();
                     let source = conflict_titles[0].clone();
+
+                    // 從 links 的 raw_item_id 查詢 subscription_id
+                    let filter_sub_id: Option<i32> = {
+                        use crate::schema::raw_anime_items;
+                        let raw_id = links.iter().find_map(|l| l.raw_item_id);
+                        raw_id.and_then(|rid| {
+                            let mut conn = self.pool.get().ok()?;
+                            raw_anime_items::table
+                                .filter(raw_anime_items::item_id.eq(rid))
+                                .select(raw_anime_items::subscription_id)
+                                .first::<i32>(&mut conn)
+                                .ok()
+                        })
+                    };
+
                     tokio::spawn(async move {
                         if let Err(e) = crate::ai::filter_generator::generate_filter_for_conflict(
                             pool_clone,
                             conflict_titles,
                             source,
                             None,
+                            filter_sub_id,
                         )
                         .await
                         {

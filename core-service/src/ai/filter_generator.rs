@@ -15,6 +15,7 @@ pub async fn generate_filter_for_conflict(
     conflict_titles: Vec<String>,
     source_title: String,
     temp_custom_prompt: Option<String>,
+    subscription_id: Option<i32>,
 ) -> Result<PendingAiResult, String> {
     let now = Utc::now().naive_utc();
 
@@ -49,7 +50,7 @@ pub async fn generate_filter_for_conflict(
                 expires_at: None,
                 created_at: now,
                 updated_at: now,
-                subscription_id: None,
+                subscription_id,
             })
             .get_result::<PendingAiResult>(&mut conn)
             .map_err(|e| e.to_string())?
