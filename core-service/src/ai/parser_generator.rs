@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::db::DbPool;
 use crate::models::{NewPendingAiResult, NewTitleParser, PendingAiResult};
-use crate::schema::{ai_prompt_settings, ai_settings, pending_ai_results, title_parsers};
+use crate::schema::{ai_prompt_settings, ai_settings, pending_ai_results, raw_anime_items, title_parsers};
 use super::client::AiClient;
 use super::client::AiError;
 use super::openai::OpenAiClient;
@@ -52,6 +52,16 @@ pub async fn generate_parser_for_title(
         (fixed, custom)
     };
 
+    // 從 raw_item_id 查詢所屬 subscription_id
+    let subscription_id: Option<i32> = raw_item_id.and_then(|rid| {
+        let mut conn = pool.get().ok()?;
+        raw_anime_items::table
+            .filter(raw_anime_items::item_id.eq(rid))
+            .select(raw_anime_items::subscription_id)
+            .first::<i32>(&mut conn)
+            .ok()
+    });
+
     // 建立 pending record（status=generating）
     let pending = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
@@ -68,7 +78,7 @@ pub async fn generate_parser_for_title(
                 expires_at: None,
                 created_at: now,
                 updated_at: now,
-                subscription_id: None,
+                subscription_id,
             })
             .get_result::<PendingAiResult>(&mut conn)
             .map_err(|e| e.to_string())?
