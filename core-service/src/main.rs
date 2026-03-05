@@ -194,6 +194,10 @@ async fn main() -> anyhow::Result<()> {
             delete(handlers::subscriptions::delete_subscription)
                 .patch(handlers::subscriptions::update_subscription),
         )
+        .route(
+            "/subscriptions/:id/fetch",
+            post(handlers::subscriptions::trigger_fetch_now),
+        )
         // Fetcher 結果接收
         .route(
             "/fetcher-results",

@@ -1033,6 +1033,53 @@ async fn delete_subscription_purge(
     }
 }
 
+/// 同步觸發訂閱爬取（等待完成後才回應）
+pub async fn trigger_fetch_now(
+    State(state): State<AppState>,
+    Path(subscription_id): Path<i32>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut conn = match state.db.get() {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "db_error", "message": e.to_string() })),
+            )
+        }
+    };
+
+    let sub = match subscriptions::table
+        .filter(subscriptions::subscription_id.eq(subscription_id))
+        .filter(subscriptions::is_active.eq(true))
+        .select(Subscription::as_select())
+        .first::<Subscription>(&mut conn)
+    {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "not_found", "message": "Subscription not found" })),
+            )
+        }
+    };
+
+    drop(conn);
+
+    match trigger_immediate_fetch(&state.db, sub.subscription_id, &sub.source_url, sub.fetcher_id).await {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(json!({
+                "subscription_id": subscription_id,
+                "message": "Fetch completed"
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "fetch_failed", "message": e })),
+        ),
+    }
+}
+
 /// Best-effort 即時觸發撈取（新訂閱建立後立即呼叫 Fetcher）
 async fn trigger_immediate_fetch(
     db: &crate::db::DbPool,
