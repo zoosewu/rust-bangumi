@@ -340,6 +340,7 @@ mod tests {
             updated_at: now,
             created_from_type: None,
             created_from_id: None,
+            pending_result_id: None,
         }
     }
 
@@ -385,6 +386,7 @@ mod tests {
             updated_at: now,
             created_from_type: None,
             created_from_id: None,
+            pending_result_id: None,
         };
         let title = "動畫名 05 [1080p]";
         let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();

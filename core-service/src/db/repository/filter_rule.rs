@@ -203,6 +203,7 @@ pub mod mock {
                 regex_pattern: rule.regex_pattern,
                 created_at: rule.created_at,
                 updated_at: rule.updated_at,
+                pending_result_id: None,
             };
             *next_id += 1;
             rules.push(new_rule.clone());
@@ -240,6 +241,7 @@ mod tests {
             regex_pattern: "test.*".to_string(),
             created_at: now,
             updated_at: now,
+            pending_result_id: None,
         };
         let created = repo.create(rule).await.unwrap();
         assert_eq!(created.rule_id, 1);
@@ -258,6 +260,7 @@ mod tests {
             regex_pattern: "pattern1".to_string(),
             created_at: now,
             updated_at: now,
+            pending_result_id: None,
         };
         let rule2 = FilterRule {
             rule_id: 2,
@@ -268,6 +271,7 @@ mod tests {
             regex_pattern: "pattern2".to_string(),
             created_at: now,
             updated_at: now,
+            pending_result_id: None,
         };
         let repo = MockFilterRuleRepository::with_data(vec![rule1, rule2]);
 
@@ -296,6 +300,7 @@ mod tests {
             regex_pattern: "test".to_string(),
             created_at: now,
             updated_at: now,
+            pending_result_id: None,
         };
         let repo = MockFilterRuleRepository::with_data(vec![rule]);
 

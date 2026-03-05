@@ -84,6 +84,7 @@ mod tests {
             updated_at: now,
             target_type: FilterTargetType::Anime,
             target_id: Some(1),
+            pending_result_id: None,
         }
     }
 
@@ -104,6 +105,7 @@ mod tests {
             updated_at: now,
             target_type,
             target_id,
+            pending_result_id: None,
         }
     }
 

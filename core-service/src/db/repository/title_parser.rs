@@ -212,6 +212,7 @@ pub mod mock {
                 created_from_id: parser.created_from_id,
                 episode_end_source: parser.episode_end_source,
                 episode_end_value: parser.episode_end_value,
+                pending_result_id: None,
             };
             *next_id += 1;
             parsers.push(new_parser.clone());
@@ -268,6 +269,7 @@ mod tests {
             created_from_id: None,
             episode_end_source: None,
             episode_end_value: None,
+            pending_result_id: None,
         }
     }
 
