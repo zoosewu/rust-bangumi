@@ -9,6 +9,8 @@
     "search": "Search",
     "rawItems": "Latest Updates",
     "conflicts": "Conflicts",
+    "pending": "Pending",
+    "settings": "Settings",
     "parsers": "Parsers",
     "filters": "Filters",
     "others": "Others"

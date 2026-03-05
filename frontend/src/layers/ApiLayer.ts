@@ -13,6 +13,7 @@ import { Subscription } from "@/schemas/subscription"
 import { ServiceModule } from "@/schemas/service-module"
 import { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
+import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
 
 const makeCoreApi = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient
@@ -331,6 +332,154 @@ const makeCoreApi = Effect.gen(function* () {
         ),
         DetailResponseSchema,
       ),
+
+    // AI 設定
+    getAiSettings: client
+      .execute(HttpClientRequest.get("/api/core/ai-settings"))
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as AiSettings),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    updateAiSettings: (req) =>
+      client
+        .execute(
+          HttpClientRequest.put("/api/core/ai-settings").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    testAiConnection: client
+      .execute(
+        HttpClientRequest.post("/api/core/ai-settings/test").pipe(
+          HttpClientRequest.bodyUnsafeJson({}),
+        ),
+      )
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as { ok: boolean; error?: string }),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    getAiPromptSettings: client
+      .execute(HttpClientRequest.get("/api/core/ai-prompt-settings"))
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as AiPromptSettings),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    updateAiPromptSettings: (req) =>
+      client
+        .execute(
+          HttpClientRequest.put("/api/core/ai-prompt-settings").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    revertParserPrompt: client
+      .execute(
+        HttpClientRequest.post("/api/core/ai-prompt-settings/revert-parser").pipe(
+          HttpClientRequest.bodyUnsafeJson({}),
+        ),
+      )
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as { value: string }),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    revertFilterPrompt: client
+      .execute(
+        HttpClientRequest.post("/api/core/ai-prompt-settings/revert-filter").pipe(
+          HttpClientRequest.bodyUnsafeJson({}),
+        ),
+      )
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as { value: string }),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    // 待確認管理
+    getPendingAiResults: (params) => {
+      const qs = new URLSearchParams()
+      if (params?.result_type) qs.set("result_type", params.result_type)
+      if (params?.status) qs.set("status", params.status)
+      const q = qs.toString()
+      return client
+        .execute(HttpClientRequest.get(`/api/core/pending-ai-results${q ? `?${q}` : ""}`))
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as readonly PendingAiResult[]),
+          Effect.scoped,
+          Effect.orDie,
+        )
+    },
+
+    getPendingAiResult: (id) =>
+      client
+        .execute(HttpClientRequest.get(`/api/core/pending-ai-results/${id}`))
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as PendingAiResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    updatePendingAiResult: (id, generated_data) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/pending-ai-results/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson({ generated_data }),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as PendingAiResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    confirmPendingAiResult: (id, req: ConfirmPendingRequest) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/pending-ai-results/${id}/confirm`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    rejectPendingAiResult: (id) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/pending-ai-results/${id}/reject`).pipe(
+            HttpClientRequest.bodyUnsafeJson({}),
+          ),
+        )
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    regeneratePendingAiResult: (id, req: RegenerateRequest) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/pending-ai-results/${id}/regenerate`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as PendingAiResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
 
   })
 })

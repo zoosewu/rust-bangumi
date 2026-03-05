@@ -6,11 +6,12 @@ import AnimePage from "@/pages/anime-series/AnimeSeriesPage"
 import AnimeWorksPage from "@/pages/anime/AnimePage"
 import SubscriptionsPage from "@/pages/subscriptions/SubscriptionsPage"
 import RawItemsPage from "@/pages/raw-items/RawItemsPage"
-import ConflictsPage from "@/pages/conflicts/ConflictsPage"
 import SubtitleGroupsPage from "@/pages/subtitle-groups/SubtitleGroupsPage"
 import ParsersPage from "@/pages/parsers/ParsersPage"
 import FiltersPage from "@/pages/filters/FiltersPage"
 import SearchPage from "@/pages/search/SearchPage"
+import PendingPage from "@/pages/pending/PendingPage"
+import SettingsPage from "@/pages/settings/SettingsPage"
 
 export default function App() {
   return (
@@ -21,7 +22,8 @@ export default function App() {
           <Route path="anime" element={<AnimePage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
           <Route path="raw-items" element={<RawItemsPage />} />
-          <Route path="conflicts" element={<ConflictsPage />} />
+          <Route path="pending" element={<PendingPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="anime-works" element={<AnimeWorksPage />} />
           <Route path="subtitle-groups" element={<SubtitleGroupsPage />} />
           <Route path="parsers" element={<ParsersPage />} />

@@ -7,7 +7,7 @@ import {
   Film,
   Rss,
   RefreshCw,
-  AlertTriangle,
+  Clock,
   Users,
   Library,
   ScanText,
@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   Search,
+  Settings,
 } from "lucide-react"
 
 const mainNavItems = [
@@ -23,7 +24,8 @@ const mainNavItems = [
   { to: "/search", icon: Search, labelKey: "sidebar.search" },
   { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries" },
   { to: "/raw-items", icon: RefreshCw, labelKey: "sidebar.rawItems" },
-  { to: "/conflicts", icon: AlertTriangle, labelKey: "sidebar.conflicts" },
+  { to: "/pending", icon: Clock, labelKey: "sidebar.pending" },
+  { to: "/settings", icon: Settings, labelKey: "sidebar.settings" },
 ]
 
 const otherNavItems = [

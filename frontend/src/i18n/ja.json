@@ -9,6 +9,8 @@
     "search": "検索",
     "rawItems": "最新情報",
     "conflicts": "コンフリクト",
+    "pending": "確認待ち",
+    "settings": "設定",
     "parsers": "パーサー",
     "filters": "フィルター",
     "others": "その他"

@@ -9,6 +9,8 @@
     "search": "搜尋",
     "rawItems": "最新更新",
     "conflicts": "衝突",
+    "pending": "待確認",
+    "settings": "設定",
     "parsers": "解析器",
     "filters": "篩選器",
     "others": "其他"

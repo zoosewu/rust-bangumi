@@ -7,6 +7,7 @@ import type { Subscription } from "@/schemas/subscription"
 import type { ServiceModule } from "@/schemas/service-module"
 import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
+import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
 
 export class CoreApi extends Context.Tag("CoreApi")<
   CoreApi,
@@ -96,5 +97,20 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getAnimeWorksFiltered: (params?: { hasLinks?: boolean }) => Effect.Effect<readonly AnimeWork[]>
     readonly search: (query: string) => Effect.Effect<AggregatedSearchResponse>
     readonly getDetail: (detail_key: string, source: string) => Effect.Effect<DetailResponse>
+    // AI 設定
+    readonly getAiSettings: Effect.Effect<AiSettings>
+    readonly updateAiSettings: (req: Partial<Pick<AiSettings, "base_url" | "api_key" | "model_name">>) => Effect.Effect<void>
+    readonly testAiConnection: Effect.Effect<{ ok: boolean; error?: string }>
+    readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
+    readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>
+    readonly revertParserPrompt: Effect.Effect<{ value: string }>
+    readonly revertFilterPrompt: Effect.Effect<{ value: string }>
+    // 待確認管理
+    readonly getPendingAiResults: (params?: { result_type?: string; status?: string }) => Effect.Effect<readonly PendingAiResult[]>
+    readonly getPendingAiResult: (id: number) => Effect.Effect<PendingAiResult>
+    readonly updatePendingAiResult: (id: number, generated_data: Record<string, unknown>) => Effect.Effect<PendingAiResult>
+    readonly confirmPendingAiResult: (id: number, req: ConfirmPendingRequest) => Effect.Effect<void>
+    readonly rejectPendingAiResult: (id: number) => Effect.Effect<void>
+    readonly regeneratePendingAiResult: (id: number, req: RegenerateRequest) => Effect.Effect<PendingAiResult>
   }
 >() {}

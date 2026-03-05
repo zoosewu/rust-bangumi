@@ -10,35 +10,15 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import { DeleteSubscriptionDialog } from "@/components/shared/DeleteSubscriptionDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Plus } from "lucide-react"
 import { SubscriptionDialog } from "./SubscriptionDialog"
+import { CreateSubscriptionWizard } from "./CreateSubscriptionWizard"
 import type { Subscription } from "@/schemas/subscription"
-import type { ServiceModule } from "@/schemas/service-module"
 
 export default function SubscriptionsPage() {
   const { t } = useTranslation()
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [newUrl, setNewUrl] = useState("")
-  const [newName, setNewName] = useState("")
-  const [newInterval, setNewInterval] = useState("30")
-  const [newPreferredDl, setNewPreferredDl] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number
     name: string
@@ -51,23 +31,6 @@ export default function SubscriptionsPage() {
         return yield* api.getSubscriptions
       }),
     [],
-  )
-
-  const { data: downloaderModules } = useEffectQuery(
-    () =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.getDownloaderModules
-      }),
-    [],
-  )
-
-  const { mutate: createSubscription, isLoading: creating } = useEffectMutation(
-    (req: { source_url: string; name?: string; fetch_interval_minutes?: number; preferred_downloader_id?: number | null }) =>
-      Effect.gen(function* () {
-        const api = yield* CoreApi
-        return yield* api.createSubscription(req)
-      }),
   )
 
   const { mutate: deleteSubscription, isLoading: deleting } = useEffectMutation(
@@ -186,87 +149,12 @@ export default function SubscriptionsPage() {
         />
       )}
 
-      {/* Create Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("subscriptions.addSubscription")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t("subscriptions.sourceUrl")}</Label>
-              <Input
-                placeholder="https://mikanani.me/RSS/..."
-                value={newUrl}
-                onChange={(e) => setNewUrl(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("subscriptions.name")}</Label>
-              <Input
-                placeholder={t("subscriptions.name")}
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("subscriptions.fetchInterval")}</Label>
-              <Input
-                type="number"
-                min="0"
-                value={newInterval}
-                onChange={(e) => setNewInterval(e.target.value)}
-              />
-            </div>
-            {downloaderModules && downloaderModules.length > 0 && (
-              <div className="space-y-2">
-                <Label>{t("subscriptions.preferredDownloader")}</Label>
-                <Select
-                  value={newPreferredDl ? String(newPreferredDl) : "none"}
-                  onValueChange={(v) => setNewPreferredDl(v === "none" ? null : Number(v))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{t("subscriptions.useGlobalPriority")}</SelectItem>
-                    {(downloaderModules as ServiceModule[]).map((m) => (
-                      <SelectItem key={m.module_id} value={String(m.module_id)}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={!newUrl.trim() || creating}
-              onClick={() => {
-                createSubscription({
-                  source_url: newUrl.trim(),
-                  name: newName.trim() || undefined,
-                  fetch_interval_minutes: newInterval === "" ? 30 : parseInt(newInterval),
-                  preferred_downloader_id: newPreferredDl,
-                }).then(() => {
-                  setNewUrl("")
-                  setNewName("")
-                  setNewInterval("30")
-                  setNewPreferredDl(null)
-                  setCreateOpen(false)
-                  refetch()
-                })
-              }}
-            >
-              {creating ? t("common.creating") : t("common.create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create Wizard */}
+      <CreateSubscriptionWizard
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={refetch}
+      />
 
       {/* Delete Confirm */}
       <DeleteSubscriptionDialog
