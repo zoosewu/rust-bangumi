@@ -8,12 +8,14 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { Badge } from "@/components/ui/badge"
 import type { SearchResult } from "@/schemas/search"
 import { DetailDialog } from "./DetailDialog"
+import { CreateSubscriptionWizard } from "@/pages/subscriptions/CreateSubscriptionWizard"
 
 export default function SearchPage() {
   const { t } = useTranslation()
   const [rawQuery, setRawQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
+  const [wizardSubId, setWizardSubId] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -101,6 +103,16 @@ export default function SearchPage() {
       <DetailDialog
         result={selectedResult}
         onClose={() => setSelectedResult(null)}
+        onSubscribed={(subId) => {
+          setSelectedResult(null)
+          setWizardSubId(subId)
+        }}
+      />
+
+      <CreateSubscriptionWizard
+        open={wizardSubId !== undefined}
+        onOpenChange={(open) => { if (!open) setWizardSubId(undefined) }}
+        initialSubscriptionId={wizardSubId}
       />
     </div>
   )

@@ -28,9 +28,10 @@ import type { SearchResult, DetailItem } from "@/schemas/search"
 interface DetailDialogProps {
   result: SearchResult | null
   onClose: () => void
+  onSubscribed?: (subscriptionId: number) => void
 }
 
-export function DetailDialog({ result, onClose }: DetailDialogProps) {
+export function DetailDialog({ result, onClose, onSubscribed }: DetailDialogProps) {
   const { t } = useTranslation()
   const [subscribeTarget, setSubscribeTarget] = useState<DetailItem & { animeTitle: string } | null>(null)
   const [newName, setNewName] = useState("")
@@ -67,9 +68,13 @@ export function DetailDialog({ result, onClose }: DetailDialogProps) {
       name: newName || undefined,
       fetch_interval_minutes: Number(newInterval) || 30,
     })
-      .then(() => {
-        toast.success(t("subscriptions.created", "Subscription created"))
+      .then((sub) => {
         setSubscribeTarget(null)
+        if (sub && onSubscribed) {
+          onSubscribed(sub.subscription_id)
+        } else {
+          toast.success(t("subscriptions.created", "Subscription created"))
+        }
       })
       .catch(() => {
         toast.error(t("common.saveFailed", "Failed to create subscription"))

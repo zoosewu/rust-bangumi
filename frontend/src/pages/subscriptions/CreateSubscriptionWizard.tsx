@@ -30,6 +30,8 @@ interface CreateSubscriptionWizardProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated?: () => void
+  /** When provided, skip step 1 and start polling from step 2 */
+  initialSubscriptionId?: number
 }
 
 type WizardStep = 1 | 2 | 3
@@ -38,13 +40,14 @@ export function CreateSubscriptionWizard({
   open,
   onOpenChange,
   onCreated,
+  initialSubscriptionId,
 }: CreateSubscriptionWizardProps) {
-  const [step, setStep] = useState<WizardStep>(1)
+  const [step, setStep] = useState<WizardStep>(initialSubscriptionId ? 2 : 1)
   const [url, setUrl] = useState("")
   const [name, setName] = useState("")
   const [interval, setIntervalVal] = useState("30")
   const [fetcherId, setFetcherId] = useState<number | undefined>(undefined)
-  const [subscriptionId, setSubscriptionId] = useState<number | undefined>(undefined)
+  const [subscriptionId, setSubscriptionId] = useState<number | undefined>(initialSubscriptionId)
 
   // Step 2 state
   const [rawItems, setRawItems] = useState<RawAnimeItem[]>([])
@@ -136,6 +139,14 @@ export function CreateSubscriptionWizard({
     },
     [],
   )
+
+  // When wizard opens with a pre-existing subscription, jump to step 2
+  useEffect(() => {
+    if (open && initialSubscriptionId !== undefined) {
+      setStep(2)
+      setSubscriptionId(initialSubscriptionId)
+    }
+  }, [open, initialSubscriptionId])
 
   // Start step 2 polling when entering step 2
   useEffect(() => {
