@@ -51,6 +51,7 @@ export function CreateSubscriptionWizard({
   const [interval, setIntervalVal] = useState(initialInterval || "30")
   const [fetcherId, setFetcherId] = useState<number | undefined>(undefined)
   const [subscriptionId, setSubscriptionId] = useState<number | undefined>(undefined)
+  const [fetching, setFetching] = useState(false)
 
   // Step 2 state
   const [rawItems, setRawItems] = useState<RawAnimeItem[]>([])
@@ -194,6 +195,35 @@ export function CreateSubscriptionWizard({
     setStep3Polling(false)
   }
 
+  // Step 2 返回 Step 1：刪除訂閱，保留表單內容
+  const goBackToStep1 = async () => {
+    stopStep2Polling()
+    if (subscriptionId !== undefined) {
+      await AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+      ).catch(() => {})
+    }
+    setSubscriptionId(undefined)
+    setRawItems([])
+    setParserPendings([])
+    setFilterPendings([])
+    setStep2Polling(false)
+    setStep(1)
+  }
+
+  // Step 2/3 取消：刪除訂閱，關閉 wizard
+  const closeAndCleanup = async () => {
+    stopStep2Polling()
+    stopStep3Polling()
+    if (subscriptionId !== undefined) {
+      await AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+      ).catch(() => {})
+    }
+    reset()
+    onOpenChange(false)
+  }
+
   const { mutate: createSub, isLoading: creating } = useEffectMutation(() =>
     Effect.flatMap(CoreApi, (api) =>
       api.createSubscription({
@@ -205,10 +235,17 @@ export function CreateSubscriptionWizard({
     ),
   )
 
+  const { mutate: runTriggerFetch } = useEffectMutation((subId: number) =>
+    Effect.flatMap(CoreApi, (api) => api.triggerFetch(subId)),
+  )
+
   const handleCreate = () => {
-    createSub().then((sub) => {
+    createSub().then(async (sub) => {
       if (sub) {
         setSubscriptionId(sub.subscription_id)
+        setFetching(true)
+        await runTriggerFetch(sub.subscription_id).catch(() => {})
+        setFetching(false)
         setStep(2)
       }
     })
@@ -239,8 +276,18 @@ export function CreateSubscriptionWizard({
     <Dialog
       open={open}
       onOpenChange={(v) => {
-        if (!v) reset()
-        onOpenChange(v)
+        if (!v) {
+          if (subscriptionId !== undefined) {
+            // fire-and-forget 刪除，不阻塞關閉
+            AppRuntime.runPromise(
+              Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+            ).catch(() => {})
+          }
+          reset()
+          onOpenChange(false)
+        } else {
+          onOpenChange(true)
+        }
       }}
     >
       <DialogContent className="sm:max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
@@ -385,30 +432,52 @@ export function CreateSubscriptionWizard({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 取消
               </Button>
-              <Button onClick={handleCreate} disabled={!url.trim() || creating}>
-                {creating && <Loader2 className="mr-1 size-4 animate-spin" />}
-                建立訂閱
+              <Button onClick={handleCreate} disabled={!url.trim() || creating || fetching}>
+                {(creating || fetching) && <Loader2 className="mr-1 size-4 animate-spin" />}
+                {fetching ? "爬取中..." : "建立訂閱"}
               </Button>
             </>
           )}
 
           {step === 2 && (
-            <Button onClick={() => setStep(3)} disabled={!step2NextEnabled}>
-              下一步
-            </Button>
+            <>
+              <Button variant="outline" onClick={closeAndCleanup}>
+                取消
+              </Button>
+              <Button variant="outline" onClick={goBackToStep1}>
+                返回
+              </Button>
+              <Button onClick={() => setStep(3)} disabled={!step2NextEnabled}>
+                下一步
+              </Button>
+            </>
           )}
 
           {step === 3 && (
-            <Button
-              onClick={() => {
-                onCreated?.()
-                onOpenChange(false)
-                reset()
-              }}
-              disabled={!step3DoneEnabled}
-            >
-              完成
-            </Button>
+            <>
+              <Button variant="outline" onClick={closeAndCleanup}>
+                取消
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  stopStep3Polling()
+                  setStep(2)
+                }}
+              >
+                返回
+              </Button>
+              <Button
+                onClick={() => {
+                  onCreated?.()
+                  onOpenChange(false)
+                  reset()
+                }}
+                disabled={!step3DoneEnabled}
+              >
+                完成
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>
