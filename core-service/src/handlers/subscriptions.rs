@@ -52,18 +52,6 @@ pub struct SubscriptionResponse {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct FetcherModuleResponse {
-    pub module_id: i32,
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub is_enabled: bool,
-    pub config_schema: Option<String>,
-    pub priority: i32,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CanHandleRequest {
@@ -540,58 +528,37 @@ pub async fn get_fetcher_subscriptions(
 /// List all registered fetcher modules
 pub async fn list_fetcher_modules(
     State(state): State<AppState>,
-) -> (StatusCode, Json<serde_json::Value>) {
-    match state.db.get() {
-        Ok(mut conn) => {
-            match service_modules::table
-                .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
-                .select(ServiceModule::as_select())
-                .load::<ServiceModule>(&mut conn)
-            {
-                Ok(modules) => {
-                    let responses: Vec<FetcherModuleResponse> = modules
-                        .into_iter()
-                        .map(|m| FetcherModuleResponse {
-                            module_id: m.module_id,
-                            name: m.name,
-                            version: m.version,
-                            description: m.description,
-                            is_enabled: m.is_enabled,
-                            config_schema: m.config_schema,
-                            priority: m.priority,
-                            created_at: m.created_at,
-                            updated_at: m.updated_at,
-                        })
-                        .collect();
-                    tracing::info!("Listed {} fetcher modules", responses.len());
-                    (
-                        StatusCode::OK,
-                        Json(json!({ "fetcher_modules": responses })),
-                    )
-                }
-                Err(e) => {
-                    tracing::error!("Failed to list fetcher modules: {}", e);
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(json!({
-                            "error": "database_error",
-                            "message": format!("Failed to list fetcher modules: {}", e),
-                            "fetcher_modules": []
-                        })),
-                    )
-                }
-            }
+) -> Json<serde_json::Value> {
+    let Ok(mut conn) = state.db.get() else {
+        return Json(json!({ "modules": [] }));
+    };
+
+    match service_modules::table
+        .filter(service_modules::module_type.eq(ModuleTypeEnum::Fetcher))
+        .order(service_modules::priority.desc())
+        .load::<ServiceModule>(&mut conn)
+    {
+        Ok(modules) => {
+            let result: Vec<serde_json::Value> = modules
+                .iter()
+                .map(|m| {
+                    json!({
+                        "module_id": m.module_id,
+                        "name": m.name,
+                        "module_type": m.module_type.to_string(),
+                        "priority": m.priority,
+                        "is_enabled": m.is_enabled,
+                        "base_url": m.base_url,
+                        "description": m.description,
+                        "updated_at": m.updated_at,
+                    })
+                })
+                .collect();
+            Json(json!({ "modules": result }))
         }
         Err(e) => {
-            tracing::error!("Failed to get database connection: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "connection_error",
-                    "message": format!("Failed to get database connection: {}", e),
-                    "fetcher_modules": []
-                })),
-            )
+            tracing::error!("Failed to list fetcher modules: {}", e);
+            Json(json!({ "modules": [] }))
         }
     }
 }

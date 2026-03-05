@@ -108,7 +108,7 @@ export function CreateSubscriptionWizard({
         setStep2Polling(false)
       }
     },
-    [stopStep2Polling],
+    [],
   )
 
   const pollStep3 = useCallback(
@@ -134,7 +134,7 @@ export function CreateSubscriptionWizard({
         setStep3Polling(false)
       }
     },
-    [stopStep3Polling],
+    [],
   )
 
   // Start step 2 polling when entering step 2

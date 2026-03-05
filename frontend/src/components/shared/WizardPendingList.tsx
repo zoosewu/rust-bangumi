@@ -15,6 +15,9 @@ interface WizardPendingRowProps {
 function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
   const [expanded, setExpanded] = useState(false)
   const [localResult, setLocalResult] = useState(result)
+  const [jsonText, setJsonText] = useState(() =>
+    result.generated_data ? JSON.stringify(result.generated_data, null, 2) : "",
+  )
 
   const { mutate: updateData } = useEffectMutation(
     (generated_data: Record<string, unknown>) =>
@@ -23,9 +26,10 @@ function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
       ),
   )
 
-  const handleDataChange = (jsonText: string) => {
+  const handleDataChange = (text: string) => {
+    setJsonText(text)
     try {
-      const parsed = JSON.parse(jsonText)
+      const parsed = JSON.parse(text)
       setLocalResult((prev) => ({ ...prev, generated_data: parsed }))
       updateData(parsed)
     } catch {
@@ -40,6 +44,7 @@ function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
 
   const handleRegenerated = (updated: PendingAiResult) => {
     setLocalResult(updated)
+    setJsonText(updated.generated_data ? JSON.stringify(updated.generated_data, null, 2) : "")
     onAnyChange()
   }
 
@@ -56,13 +61,13 @@ function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
           <ChevronRight className="size-4 text-muted-foreground shrink-0" />
         )}
         <span className="text-xs px-2 py-0.5 rounded bg-muted font-mono uppercase">
-          {result.result_type}
+          {localResult.result_type}
         </span>
-        <span className="flex-1 text-sm">{result.source_title}</span>
+        <span className="flex-1 text-sm">{localResult.source_title}</span>
         <span className="text-xs text-muted-foreground">
-          {new Date(result.created_at).toLocaleDateString()}
+          {new Date(localResult.created_at).toLocaleDateString()}
         </span>
-        <StatusDot status={result.status} />
+        <StatusDot status={localResult.status} />
       </button>
 
       {expanded && (
@@ -76,12 +81,12 @@ function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
             {localResult.generated_data && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground font-mono">
-                  生成的 {result.result_type} 資料（可直接編輯 JSON）
+                  生成的 {localResult.result_type} 資料（可直接編輯 JSON）
                 </p>
                 <Textarea
                   className="font-mono text-xs min-h-[200px]"
-                  defaultValue={JSON.stringify(localResult.generated_data, null, 2)}
-                  onBlur={(e) => handleDataChange(e.target.value)}
+                  value={jsonText}
+                  onChange={(e) => handleDataChange(e.target.value)}
                 />
               </div>
             )}
@@ -107,7 +112,7 @@ function StatusDot({ status }: { status: string }) {
 }
 
 interface WizardPendingListProps {
-  results: PendingAiResult[]
+  results: readonly PendingAiResult[]
   onAnyChange: () => void
 }
 

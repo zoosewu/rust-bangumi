@@ -129,7 +129,7 @@ export function AiResultPanel({
             regenerate().then((updated) => {
               if (updated) {
                 setTempPrompt("")
-                setTempFixedPrompt(result.used_fixed_prompt)
+                setTempFixedPrompt(updated.used_fixed_prompt)
                 onRegenerated?.(updated)
               }
             })
