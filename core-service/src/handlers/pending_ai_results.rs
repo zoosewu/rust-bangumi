@@ -17,6 +17,7 @@ use crate::state::AppState;
 pub struct ListPendingQuery {
     pub result_type: Option<String>,
     pub status: Option<String>,
+    pub subscription_id: Option<i32>,
 }
 
 // GET /pending-ai-results
@@ -41,6 +42,9 @@ pub async fn list_pending(
     }
     if let Some(s) = q.status {
         query = query.filter(pending_ai_results::status.eq(s));
+    }
+    if let Some(sub_id) = q.subscription_id {
+        query = query.filter(pending_ai_results::subscription_id.eq(sub_id));
     }
 
     let results = query
