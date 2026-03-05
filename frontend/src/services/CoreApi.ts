@@ -87,6 +87,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     }) => Effect.Effect<Subscription>
     readonly updateSubscription: (id: number, req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean; preferred_downloader_id?: number | null }) => Effect.Effect<Subscription>
     readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
+    readonly triggerFetch: (subscriptionId: number) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
     readonly getAnimeCoverImages: (
       animeWorkId: number,

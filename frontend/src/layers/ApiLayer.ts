@@ -283,6 +283,11 @@ const makeCoreApi = Effect.gen(function* () {
         .execute(HttpClientRequest.del(`/api/core/subscriptions/${id}${purge ? '?purge=true' : ''}`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
+    triggerFetch: (subscriptionId) =>
+      client
+        .execute(HttpClientRequest.post(`/api/core/subscriptions/${subscriptionId}/fetch`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
     getRawItemsCount: (subscriptionId, status) =>
       fetchJson(
         HttpClientRequest.get(
