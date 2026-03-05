@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useLayoutEffect, useRef } from "react"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -17,6 +17,44 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, RotateCcw } from "lucide-react"
+
+const MAX_AUTO_LINES = 20
+
+function PromptTextarea({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = "auto"
+    const style = getComputedStyle(el)
+    const lineHeight = parseFloat(style.lineHeight) || 20
+    const paddingY =
+      parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+    const maxH = lineHeight * MAX_AUTO_LINES + paddingY
+    const newH = Math.min(el.scrollHeight, maxH)
+    el.style.height = newH + "px"
+    el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden"
+  }, [value])
+
+  return (
+    <Textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="font-mono text-sm resize-y [field-sizing:normal]"
+    />
+  )
+}
 
 export default function SettingsPage() {
   return (
@@ -177,21 +215,17 @@ function ParserPromptSection() {
               Revert 預設值
             </Button>
           </div>
-          <Textarea
+          <PromptTextarea
             value={fixed}
-            onChange={(e) => setFixed(e.target.value)}
-            rows={6}
-            className="font-mono text-sm"
+            onChange={setFixed}
             placeholder="留空則不使用固定 Prompt"
           />
         </div>
         <div className="space-y-2">
           <Label>自訂 Prompt（追加在固定 Prompt 之後）</Label>
-          <Textarea
+          <PromptTextarea
             value={custom}
-            onChange={(e) => setCustom(e.target.value)}
-            rows={3}
-            className="font-mono text-sm"
+            onChange={setCustom}
             placeholder="留空"
           />
         </div>
@@ -260,21 +294,17 @@ function FilterPromptSection() {
               Revert 預設值
             </Button>
           </div>
-          <Textarea
+          <PromptTextarea
             value={fixed}
-            onChange={(e) => setFixed(e.target.value)}
-            rows={6}
-            className="font-mono text-sm"
+            onChange={setFixed}
             placeholder="留空則不使用固定 Prompt"
           />
         </div>
         <div className="space-y-2">
           <Label>自訂 Prompt（追加在固定 Prompt 之後）</Label>
-          <Textarea
+          <PromptTextarea
             value={custom}
-            onChange={(e) => setCustom(e.target.value)}
-            rows={3}
-            className="font-mono text-sm"
+            onChange={setCustom}
             placeholder="留空"
           />
         </div>

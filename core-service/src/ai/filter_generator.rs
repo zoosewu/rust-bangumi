@@ -72,7 +72,7 @@ pub async fn generate_filter_for_conflict(
     };
 
     match ai_result {
-        Ok(json_str) => match serde_json::from_str::<Value>(&json_str) {
+        Ok(json_str) => match serde_json::from_str::<Value>(super::extract_json(&json_str)) {
             Ok(data) => {
                 if data.get("rules").and_then(|r| r.as_array()).is_none() {
                     let err = "AI 返回的 JSON 缺少 rules 陣列".to_string();

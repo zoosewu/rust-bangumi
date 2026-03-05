@@ -20,47 +20,48 @@ Return a single JSON object with these fields:
 - **anime_title_source** (string): `"regex"` or `"static"`
 - **anime_title_value** (string): Capture group ref like `"$1"` if regex; fixed string if static
 - **episode_no_source** (string): `"regex"` or `"static"`
-- **episode_no_value** (string): Capture group ref or fixed value
+- **episode_no_value** (string): Capture group ref or a numeric string (e.g. `"12"`) — **must parse as integer**
 - **episode_end_source** (string | null): `"regex"`, `"static"`, or `null`
-- **episode_end_value** (string | null): Capture group ref or `null`
+- **episode_end_value** (string | null): Capture group ref, numeric string (e.g. `"24"`), or `null` — **must parse as integer**
 - **series_no_source** (string | null): `"regex"`, `"static"`, or `null`
-- **series_no_value** (string | null): Capture group ref or `null`
+- **series_no_value** (string | null): Capture group ref, numeric string (e.g. `"2"`), or `null` — **must parse as integer**
 - **subtitle_group_source** (string | null): `"regex"`, `"static"`, or `null`
-- **subtitle_group_value** (string | null): Capture group ref or `null`
+- **subtitle_group_value** (string | null): Capture group ref, fixed group name, or `null`
 - **resolution_source** (string | null): `"regex"`, `"static"`, or `null`
-- **resolution_value** (string | null): Capture group ref or `null`
+- **resolution_value** (string | null): Capture group ref, fixed string (e.g. `"1080p"`), or `null` — include the `p` suffix (e.g. `"1080p"`, `"720p"`); capture regex should be `(\\d+p)` not `(\\d+)`
 - **season_source** (string | null): `"regex"`, `"static"`, or `null`
-- **season_value** (string | null): Capture group ref or `null`
+- **season_value** (string | null): Capture group ref, fixed season name, or `null`
 - **year_source** (string | null): `"regex"`, `"static"`, or `null`
-- **year_value** (string | null): Capture group ref or `null`
+- **year_value** (string | null): Capture group ref, 4-digit numeric string (e.g. `"2024"`), or `null` — **must parse as integer**
 
 ## Capture Group Index Convention
 
 Use `$1`, `$2`, `$3`... to reference capture groups from `parse_regex` in order of appearance.
 Example: if `parse_regex` is `"(\\w+) - (\\d+)"`, then `$1` = first group, `$2` = second group.
 
-## Regex Escaping Examples
-
-| Literal character | Escaped in regex | In JSON string |
-|-------------------|-----------------|----------------|
-| `[`               | `\[`            | `"\\["`        |
-| `]`               | `\]`            | `"\\]"`        |
-| `\d`              | `\d`            | `"\\d"`        |
-| `\s`              | `\s`            | `"\\s"`        |
-| `\w`              | `\w`            | `"\\w"`        |
-
 ## Priority Rules
 
 - **9999**: Parser targets a single specific anime (condition_regex matches only that title)
 - **50**: General-purpose parser that can match many different anime titles
 
+## Field Type Constraints
+
+The following fields must produce values parseable as **integers**:
+- **episode_no**: required integer (e.g. `"12"`, `"01"`)
+- **episode_end**: optional integer, only for batch torrents (e.g. `"12"`)
+- **series_no**: optional integer ≥ 1, defaults to 1 if absent (e.g. `"2"`, `"3"`)
+- **year**: optional 4-digit integer string (e.g. `"2024"`)
+
+Non-numeric values cannot be stored directly. If the value can be converted to an integer (e.g. Roman numerals, ordinal words), use `"static"` source with the converted integer string.
+If a series number genuinely cannot be expressed as an integer (e.g. "final", "OVA"), leave `series_no_source` as null.
+
 ## ⚠️ IMPORTANT: anime_title Must Be Base Title Only
 
 `anime_title` must contain ONLY the base work title — no season numbers, season suffixes, or series identifiers:
-- "Sword Art Online Season 3" → anime_title: `"Sword Art Online"`, series_no: `"3"`
-- "進擊の巨人 The Final Season" → anime_title: `"進擊の巨人"`, series_no: (final)
-- "Re:Zero 2nd Season" → anime_title: `"Re:Zero"`, series_no: `"2"`
-- "Overlord IV" → anime_title: `"Overlord"`, series_no: `"4"`
+- "Sword Art Online Season 3" → anime_title: `"Sword Art Online"`, series_no_source: `"static"`, series_no_value: `"3"`
+- "Re:Zero 2nd Season" → anime_title: `"Re:Zero"`, series_no_source: `"static"`, series_no_value: `"2"`
+- "Overlord IV" → anime_title: `"Overlord"`, series_no_source: `"static"`, series_no_value: `"4"` (IV converted to 4)
+- "進擊の巨人 The Final Season" → anime_title: `"進擊の巨人"`, series_no_source: null ("final" has no integer equivalent)
 
 Season/series information belongs in `series_no`, NOT in `anime_title`.
 

@@ -92,7 +92,7 @@ pub async fn generate_parser_for_title(
     };
 
     match ai_result {
-        Ok(json_str) => match serde_json::from_str::<Value>(&json_str) {
+        Ok(json_str) => match serde_json::from_str::<Value>(super::extract_json(&json_str)) {
             Ok(data) => {
                 if data.get("condition_regex").is_none() || data.get("parse_regex").is_none() {
                     let err =
@@ -144,6 +144,13 @@ async fn create_unconfirmed_parser(
             _ => ParserSourceType::Regex,
         }
     };
+    let parse_opt_source = |key: &str| -> Option<ParserSourceType> {
+        match data.get(key).and_then(|v| v.as_str()) {
+            Some("static") => Some(ParserSourceType::Static),
+            Some("regex") => Some(ParserSourceType::Regex),
+            _ => None,
+        }
+    };
 
     let new_parser = NewTitleParser {
         name: get_str("name"),
@@ -156,34 +163,22 @@ async fn create_unconfirmed_parser(
         anime_title_value: get_str("anime_title_value"),
         episode_no_source: parse_source("episode_no_source"),
         episode_no_value: get_str("episode_no_value"),
-        series_no_source: None,
-        series_no_value: None,
-        subtitle_group_source: get_opt_str("subtitle_group_source").map(|s| {
-            if s == "static" {
-                ParserSourceType::Static
-            } else {
-                ParserSourceType::Regex
-            }
-        }),
+        episode_end_source: parse_opt_source("episode_end_source"),
+        episode_end_value: get_opt_str("episode_end_value"),
+        series_no_source: parse_opt_source("series_no_source"),
+        series_no_value: get_opt_str("series_no_value"),
+        subtitle_group_source: parse_opt_source("subtitle_group_source"),
         subtitle_group_value: get_opt_str("subtitle_group_value"),
-        resolution_source: get_opt_str("resolution_source").map(|s| {
-            if s == "static" {
-                ParserSourceType::Static
-            } else {
-                ParserSourceType::Regex
-            }
-        }),
+        resolution_source: parse_opt_source("resolution_source"),
         resolution_value: get_opt_str("resolution_value"),
-        season_source: None,
-        season_value: None,
-        year_source: None,
-        year_value: None,
+        season_source: parse_opt_source("season_source"),
+        season_value: get_opt_str("season_value"),
+        year_source: parse_opt_source("year_source"),
+        year_value: get_opt_str("year_value"),
         created_at: now,
         updated_at: now,
         created_from_type: None,
         created_from_id: None,
-        episode_end_source: None,
-        episode_end_value: None,
         pending_result_id: Some(pending_id),
     };
 

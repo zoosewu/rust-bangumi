@@ -155,7 +155,7 @@ pub async fn test_ai_connection(
     {
         Some(client) => {
             use crate::ai::client::AiClient;
-            match client.chat_completion("", "test").await {
+            match client.chat_completion("", "Reply with a simple json: {\"ok\": true}").await {
                 Ok(_) => Ok(Json(serde_json::json!({ "ok": true }))),
                 Err(e) => Ok(Json(
                     serde_json::json!({ "ok": false, "error": e.to_string() }),
