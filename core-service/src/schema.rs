@@ -336,6 +336,7 @@ diesel::table! {
         expires_at         -> Nullable<Timestamp>,
         created_at         -> Timestamp,
         updated_at         -> Timestamp,
+        subscription_id    -> Nullable<Int4>,
     }
 }
 
@@ -352,6 +353,7 @@ diesel::joinable!(animes -> seasons (season_id));
 diesel::joinable!(downloader_capabilities -> service_modules (module_id));
 diesel::joinable!(downloads -> anime_links (link_id));
 diesel::joinable!(downloads -> service_modules (module_id));
+diesel::joinable!(pending_ai_results -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> title_parsers (parser_id));
 diesel::joinable!(subscription_conflicts -> subscriptions (subscription_id));

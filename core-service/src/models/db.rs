@@ -724,6 +724,7 @@ pub struct PendingAiResult {
     pub expires_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub subscription_id: Option<i32>,
 }
 
 #[derive(Insertable, Debug)]
@@ -740,6 +741,7 @@ pub struct NewPendingAiResult {
     pub expires_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub subscription_id: Option<i32>,
 }
 
 #[cfg(test)]

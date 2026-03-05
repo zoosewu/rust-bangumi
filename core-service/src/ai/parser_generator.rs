@@ -68,6 +68,7 @@ pub async fn generate_parser_for_title(
                 expires_at: None,
                 created_at: now,
                 updated_at: now,
+                subscription_id: None,
             })
             .get_result::<PendingAiResult>(&mut conn)
             .map_err(|e| e.to_string())?
