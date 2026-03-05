@@ -141,11 +141,16 @@ pub async fn confirm_pending(
             .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-            // 觸發 re-run（背景非同步）
+            // 觸發 re-run + conflict detection（背景非同步）
             let pool_arc = Arc::new(pool.clone());
+            let conflict_detection = state.conflict_detection.clone();
             tokio::spawn(async move {
                 if let Err(e) = rerun_unmatched_raw_items(pool_arc).await {
                     tracing::warn!("rerun_unmatched_raw_items 失敗: {}", e);
+                }
+                // 解析完成後重跑 conflict detection，觸發 AI filter 生成
+                if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
+                    tracing::warn!("conflict detection after parser confirm 失敗: {}", e);
                 }
             });
         }
