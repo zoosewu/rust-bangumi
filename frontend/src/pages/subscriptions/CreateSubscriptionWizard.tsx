@@ -51,7 +51,6 @@ export function CreateSubscriptionWizard({
   const [interval, setIntervalVal] = useState(initialInterval || "30")
   const [fetcherId, setFetcherId] = useState<number | undefined>(undefined)
   const [subscriptionId, setSubscriptionId] = useState<number | undefined>(undefined)
-  const [fetching, setFetching] = useState(false)
 
   // Step 2 state
   const [rawItems, setRawItems] = useState<RawAnimeItem[]>([])
@@ -102,7 +101,8 @@ export function CreateSubscriptionWizard({
         setRawItems(items as RawAnimeItem[])
         setParserPendings(pendings as PendingAiResult[])
 
-        const allRawSettled = (items as RawAnimeItem[]).every((item) => item.status !== "pending")
+        const rawList = items as RawAnimeItem[]
+        const allRawSettled = rawList.length > 0 && rawList.every((item) => item.status !== "pending")
         const hasGeneratingPendings = (pendings as PendingAiResult[]).some(
           (p) => p.status === "generating",
         )
@@ -200,7 +200,7 @@ export function CreateSubscriptionWizard({
     stopStep2Polling()
     if (subscriptionId !== undefined) {
       await AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId, true)),
       ).catch(() => {})
     }
     setSubscriptionId(undefined)
@@ -217,7 +217,7 @@ export function CreateSubscriptionWizard({
     stopStep3Polling()
     if (subscriptionId !== undefined) {
       await AppRuntime.runPromise(
-        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+        Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId, true)),
       ).catch(() => {})
     }
     reset()
@@ -235,17 +235,10 @@ export function CreateSubscriptionWizard({
     ),
   )
 
-  const { mutate: runTriggerFetch } = useEffectMutation((subId: number) =>
-    Effect.flatMap(CoreApi, (api) => api.triggerFetch(subId)),
-  )
-
   const handleCreate = () => {
-    createSub().then(async (sub) => {
+    createSub().then((sub) => {
       if (sub) {
         setSubscriptionId(sub.subscription_id)
-        setFetching(true)
-        await runTriggerFetch(sub.subscription_id).catch(() => {})
-        setFetching(false)
         setStep(2)
       }
     })
@@ -280,7 +273,7 @@ export function CreateSubscriptionWizard({
           if (subscriptionId !== undefined) {
             // fire-and-forget 刪除，不阻塞關閉
             AppRuntime.runPromise(
-              Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId)),
+              Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId, true)),
             ).catch(() => {})
           }
           reset()
@@ -432,9 +425,9 @@ export function CreateSubscriptionWizard({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 取消
               </Button>
-              <Button onClick={handleCreate} disabled={!url.trim() || creating || fetching}>
-                {(creating || fetching) && <Loader2 className="mr-1 size-4 animate-spin" />}
-                {fetching ? "爬取中..." : "建立訂閱"}
+              <Button onClick={handleCreate} disabled={!url.trim() || creating}>
+                {creating && <Loader2 className="mr-1 size-4 animate-spin" />}
+                建立訂閱
               </Button>
             </>
           )}
