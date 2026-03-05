@@ -95,8 +95,11 @@ export function CreateSubscriptionWizard({
         setRawItems(items as RawAnimeItem[])
         setParserPendings(pendings as PendingAiResult[])
 
-        const allSettled = (items as RawAnimeItem[]).every((item) => item.status !== "pending")
-        if (!allSettled) {
+        const allRawSettled = (items as RawAnimeItem[]).every((item) => item.status !== "pending")
+        const hasGeneratingPendings = (pendings as PendingAiResult[]).some(
+          (p) => p.status === "generating",
+        )
+        if (!allRawSettled || hasGeneratingPendings) {
           step2PollRef.current = setTimeout(() => pollStep2(subId), 1000)
         } else {
           setStep2Polling(false)

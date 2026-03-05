@@ -34,7 +34,7 @@ export function AiResultPanel({
   previewSlot,
 }: AiResultPanelProps) {
   const [tempPrompt, setTempPrompt] = useState("")
-  const [tempFixedPrompt, setTempFixedPrompt] = useState("")
+  const [tempFixedPrompt, setTempFixedPrompt] = useState(result.used_fixed_prompt)
   const [level, setLevel] = useState<"global" | "subscription" | "anime_work">("global")
   const [targetId, setTargetId] = useState<string>("")
 
@@ -105,7 +105,7 @@ export function AiResultPanel({
       <div className="space-y-2">
         <Label className="text-sm">固定 Prompt（臨時覆蓋，不影響全局設定）</Label>
         <Textarea
-          value={tempFixedPrompt || result.used_fixed_prompt}
+          value={tempFixedPrompt}
           onChange={(e) => setTempFixedPrompt(e.target.value)}
           rows={4}
           className="text-sm font-mono"
@@ -129,7 +129,7 @@ export function AiResultPanel({
             regenerate().then((updated) => {
               if (updated) {
                 setTempPrompt("")
-                setTempFixedPrompt("")
+                setTempFixedPrompt(result.used_fixed_prompt)
                 onRegenerated?.(updated)
               }
             })
