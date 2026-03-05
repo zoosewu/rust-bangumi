@@ -34,6 +34,7 @@ export function AiResultPanel({
   previewSlot,
 }: AiResultPanelProps) {
   const [tempPrompt, setTempPrompt] = useState("")
+  const [tempFixedPrompt, setTempFixedPrompt] = useState("")
   const [level, setLevel] = useState<"global" | "subscription" | "anime_work">("global")
   const [targetId, setTargetId] = useState<string>("")
 
@@ -51,6 +52,7 @@ export function AiResultPanel({
       Effect.flatMap(CoreApi, (api) =>
         api.regeneratePendingAiResult(result.id, {
           custom_prompt: tempPrompt || undefined,
+          fixed_prompt: tempFixedPrompt || undefined,
         }),
       ),
   )
@@ -99,6 +101,17 @@ export function AiResultPanel({
       {/* 預覽比較（由外部注入） */}
       {isPending && previewSlot && <div>{previewSlot}</div>}
 
+      {/* 固定 Prompt（可臨時覆蓋） */}
+      <div className="space-y-2">
+        <Label className="text-sm">固定 Prompt（臨時覆蓋，不影響全局設定）</Label>
+        <Textarea
+          value={tempFixedPrompt || result.used_fixed_prompt}
+          onChange={(e) => setTempFixedPrompt(e.target.value)}
+          rows={4}
+          className="text-sm font-mono"
+        />
+      </div>
+
       {/* 臨時自訂 Prompt */}
       <div className="space-y-2">
         <Label className="text-sm">臨時自訂 Prompt（僅影響本次重新生成）</Label>
@@ -116,6 +129,7 @@ export function AiResultPanel({
             regenerate().then((updated) => {
               if (updated) {
                 setTempPrompt("")
+                setTempFixedPrompt("")
                 onRegenerated?.(updated)
               }
             })
