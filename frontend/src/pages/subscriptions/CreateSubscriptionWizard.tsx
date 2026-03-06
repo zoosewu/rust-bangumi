@@ -246,8 +246,8 @@ export function CreateSubscriptionWizard({
 
   // Step 2 computed values
   const total = rawItems.length
-  const parsed = rawItems.filter((i) => i.status === "matched" || i.status === "completed" || i.status === "downloaded").length
-  const failed = rawItems.filter((i) => i.status === "unmatched" || i.status === "failed").length
+  const parsed = rawItems.filter((i) => i.status === "parsed" || i.status === "partial").length
+  const failed = rawItems.filter((i) => i.status === "no_match" || i.status === "failed").length
   const allParserSettled =
     parserPendings.length === 0 ||
     parserPendings.every((p) => p.status === "confirmed" || p.status === "rejected" || p.status === "failed")

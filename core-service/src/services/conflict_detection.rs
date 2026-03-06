@@ -54,6 +54,12 @@ impl ConflictDetectionService {
             .map_err(|e| format!("Failed to detect conflicts: {}", e))?;
 
         let mut conflicts_found = 0;
+        // 收集各訂閱的衝突群組，用於批次 AI filter 生成
+        // key: Option<subscription_id>, value: Vec<(titles, source_title)>
+        let mut subscription_conflict_groups: std::collections::HashMap<
+            Option<i32>,
+            Vec<(Vec<String>, String)>,
+        > = std::collections::HashMap::new();
 
         for (anime_id, group_id, episode_no) in &conflict_groups {
             let links = self
@@ -87,13 +93,12 @@ impl ConflictDetectionService {
                     links.len()
                 );
 
-                // 觸發 AI filter 生成（背景非同步）
+                // 收集衝突標題，準備批次 AI filter 生成
                 let conflict_titles: Vec<String> = links
                     .iter()
                     .filter_map(|l| l.title.clone())
                     .collect();
                 if !conflict_titles.is_empty() {
-                    let pool_clone = self.pool.clone();
                     let source = conflict_titles[0].clone();
 
                     // 從 links 的 raw_item_id 查詢 subscription_id
@@ -110,22 +115,27 @@ impl ConflictDetectionService {
                         })
                     };
 
-                    tokio::spawn(async move {
-                        if let Err(e) = crate::ai::filter_generator::generate_filter_for_conflict(
-                            pool_clone,
-                            conflict_titles,
-                            source,
-                            None,
-                            filter_sub_id,
-                            None,
-                        )
-                        .await
-                        {
-                            tracing::warn!("AI filter 觸發失敗: {}", e);
-                        }
-                    });
+                    subscription_conflict_groups
+                        .entry(filter_sub_id)
+                        .or_default()
+                        .push((conflict_titles, source));
                 }
             }
+        }
+
+        // 每個訂閱批次觸發一次 AI filter 生成（背景非同步）
+        for (sub_id, groups) in subscription_conflict_groups {
+            let pool_clone = self.pool.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    crate::ai::filter_generator::generate_filters_for_subscription_batch(
+                        pool_clone, sub_id, groups,
+                    )
+                    .await
+                {
+                    tracing::warn!("批次 AI filter 觸發失敗 subscription={:?}: {}", sub_id, e);
+                }
+            });
         }
 
         // Auto-resolve conflict records that no longer have actual conflicts

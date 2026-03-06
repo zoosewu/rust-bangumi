@@ -308,7 +308,44 @@ mod tests {
     fn test_parse_status_as_str() {
         assert_eq!(ParseStatus::Pending.as_str(), "pending");
         assert_eq!(ParseStatus::Parsed.as_str(), "parsed");
+        assert_eq!(ParseStatus::Partial.as_str(), "partial");
+        assert_eq!(ParseStatus::Failed.as_str(), "failed");
         assert_eq!(ParseStatus::NoMatch.as_str(), "no_match");
+        assert_eq!(ParseStatus::Skipped.as_str(), "skipped");
+    }
+
+    fn make_parser(id: i32, condition: &str, parse: &str) -> TitleParser {
+        let now = Utc::now().naive_utc();
+        TitleParser {
+            parser_id: id,
+            name: format!("test_{}", id),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: condition.to_string(),
+            parse_regex: parse.to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$2".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        }
     }
 
     fn make_batch_parser() -> TitleParser {
@@ -394,5 +431,290 @@ mod tests {
 
         assert_eq!(result.episode_no, 5);
         assert_eq!(result.episode_end, None);
+    }
+
+    /// condition_regex 不匹配時回傳 None
+    #[test]
+    fn test_try_parser_condition_no_match_returns_none() {
+        let parser = make_parser(3, r"^\[.+\]", r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)");
+        let title = "Title without brackets - 01";
+        let result = TitleParserService::try_parser(&parser, title).unwrap();
+        assert!(result.is_none(), "Should return None when condition_regex does not match");
+    }
+
+    /// condition_regex 匹配但 parse_regex 不匹配時回傳 None
+    #[test]
+    fn test_try_parser_parse_regex_no_match_returns_none() {
+        let parser = make_parser(4, r"^\[.+\]", r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)");
+        // 有 [Group] 和 - 數字，但缺少解析度資訊
+        let title = "[Group] Title - 01";
+        let result = TitleParserService::try_parser(&parser, title).unwrap();
+        assert!(result.is_none(), "Should return None when parse_regex does not capture");
+    }
+
+    /// 使用 Static source type 提取 anime_title
+    #[test]
+    fn test_try_parser_static_source_type() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 5,
+            name: "static_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: ".*".to_string(),
+            parse_regex: r"^.*?\s+(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Static,
+            anime_title_value: "固定動畫名".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$1".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let title = "任意標題 07 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        assert_eq!(result.anime_title, "固定動畫名");
+        assert_eq!(result.episode_no, 7);
+    }
+
+    /// capture group index 使用無前綴數字（"1" 而非 "$1"）
+    #[test]
+    fn test_try_parser_numeric_capture_index_without_dollar() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 6,
+            name: "numeric_index_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: ".*".to_string(),
+            parse_regex: r"^(.+?)\s+-\s*(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "1".to_string(), // 不帶 $ 前綴
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "2".to_string(), // 不帶 $ 前綴
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let title = "進擊的巨人 - 25 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        assert_eq!(result.anime_title, "進擊的巨人");
+        assert_eq!(result.episode_no, 25);
+    }
+
+    /// 解析所有可選欄位：subtitle_group、resolution、season、year
+    #[test]
+    fn test_try_parser_all_optional_fields() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 7,
+            name: "full_fields_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: r"^\[.+\]".to_string(),
+            // [字幕組] 標題 - 集數 [解析度]
+            parse_regex: r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[(\d{3,4}p)\]".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$2".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$3".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: Some(ParserSourceType::Regex),
+            subtitle_group_value: Some("$1".to_string()),
+            resolution_source: Some(ParserSourceType::Regex),
+            resolution_value: Some("$4".to_string()),
+            season_source: Some(ParserSourceType::Static),
+            season_value: Some("春".to_string()),
+            year_source: Some(ParserSourceType::Static),
+            year_value: Some("2025".to_string()),
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let title = "[LoliHouse] 進擊的巨人 - 25 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+
+        assert_eq!(result.anime_title, "進擊的巨人");
+        assert_eq!(result.episode_no, 25);
+        assert_eq!(result.subtitle_group, Some("LoliHouse".to_string()));
+        assert_eq!(result.resolution, Some("1080p".to_string()));
+        assert_eq!(result.season, Some("春".to_string()));
+        assert_eq!(result.year, Some("2025".to_string()));
+        assert_eq!(result.parser_id, 7);
+    }
+
+    /// series_no 從 capture group 提取
+    #[test]
+    fn test_try_parser_series_no_from_regex() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 8,
+            name: "series_no_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: ".*".to_string(),
+            parse_regex: r"^(.+?)\s+S(\d+)E(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$3".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: Some(ParserSourceType::Regex),
+            series_no_value: Some("$2".to_string()),
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let title = "鬼滅之刃 S03E08";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        assert_eq!(result.anime_title, "鬼滅之刃");
+        assert_eq!(result.series_no, 3);
+        assert_eq!(result.episode_no, 8);
+    }
+
+    /// series_no 未設定時預設為 1
+    #[test]
+    fn test_try_parser_series_no_defaults_to_one() {
+        let parser = make_parser(9, ".*", r"^(.+?)\s+-\s*(\d+)");
+        let title = "進擊的巨人 - 10";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        assert_eq!(result.series_no, 1);
+    }
+
+    /// episode_no 無法轉換為 i32 時回傳 Err
+    #[test]
+    fn test_try_parser_episode_no_parse_error() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 10,
+            name: "err_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: ".*".to_string(),
+            parse_regex: r"^(.+?)\s+-\s*([A-Za-z]+)".to_string(), // 集數是字母，不能轉 i32
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$2".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let title = "タイトル - SP";
+        let result = TitleParserService::try_parser(&parser, title);
+        assert!(result.is_err(), "Should return Err when episode_no is not numeric");
+    }
+
+    /// invalid condition_regex 回傳 Err
+    #[test]
+    fn test_try_parser_invalid_condition_regex_returns_err() {
+        let now = Utc::now().naive_utc();
+        let parser = TitleParser {
+            parser_id: 11,
+            name: "invalid_regex_test".to_string(),
+            description: None,
+            priority: 50,
+            is_enabled: true,
+            condition_regex: r"[invalid(regex".to_string(), // 無效 regex
+            parse_regex: r"^(.+?)\s+-\s*(\d+)".to_string(),
+            anime_title_source: ParserSourceType::Regex,
+            anime_title_value: "$1".to_string(),
+            episode_no_source: ParserSourceType::Regex,
+            episode_no_value: "$2".to_string(),
+            episode_end_source: None,
+            episode_end_value: None,
+            series_no_source: None,
+            series_no_value: None,
+            subtitle_group_source: None,
+            subtitle_group_value: None,
+            resolution_source: None,
+            resolution_value: None,
+            season_source: None,
+            season_value: None,
+            year_source: None,
+            year_value: None,
+            created_at: now,
+            updated_at: now,
+            created_from_type: None,
+            created_from_id: None,
+            pending_result_id: None,
+        };
+        let result = TitleParserService::try_parser(&parser, "some title - 01");
+        assert!(result.is_err(), "Should return Err for invalid condition_regex");
+    }
+
+    /// episode_end 無效時（end < start）視為單集
+    #[test]
+    fn test_batch_parser_episode_end_invalid_when_end_less_than_start() {
+        let parser = make_batch_parser();
+        // 05-01 不合理，end < start → 視為單集（解析成功但 episode_end 仍回傳 Some(1)）
+        // try_parser 只做 regex 解析，不做業務驗證，所以 episode_end = Some(1) 是正確的
+        let title = "動畫名 05-01 [1080p]";
+        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        assert_eq!(result.episode_no, 5);
+        assert_eq!(result.episode_end, Some(1));
     }
 }

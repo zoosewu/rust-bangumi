@@ -313,11 +313,12 @@ pub async fn regenerate_pending(
     Ok(Json(result))
 }
 
-/// 重新解析所有未匹配的 raw_items，對第一個仍然失敗的觸發新一輪 AI 生成
+/// 重新解析所有未匹配的 raw_items：先用現有解析器 re-parse，仍失敗的按 subscription 觸發批次 AI 生成
 async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
     use crate::models::RawAnimeItem;
     use crate::schema::raw_anime_items;
     use crate::services::title_parser::{ParseStatus, TitleParserService};
+    use std::collections::HashSet;
 
     let items: Vec<RawAnimeItem> = {
         let mut conn = pool.get().map_err(|e: diesel::r2d2::PoolError| e.to_string())?;
@@ -331,55 +332,49 @@ async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
             .map_err(|e| e.to_string())?
     };
 
+    // 先嘗試用現有解析器重新解析
+    let mut still_unmatched_subs: HashSet<i32> = HashSet::new();
     for item in &items {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
         match TitleParserService::parse_title(&mut conn, &item.title) {
             Ok(Some(_)) => {
                 TitleParserService::update_raw_item_status(
-                    &mut conn,
-                    item.item_id,
-                    ParseStatus::Parsed,
-                    None,
-                    None,
-                )
-                .ok();
+                    &mut conn, item.item_id, ParseStatus::Parsed, None, None,
+                ).ok();
             }
             Ok(None) => {
-                let already_pending: bool = pending_ai_results::table
-                    .filter(pending_ai_results::result_type.eq("parser"))
-                    .filter(pending_ai_results::source_title.eq(&item.title))
-                    .filter(
-                        pending_ai_results::status
-                            .eq_any(vec!["generating", "pending"]),
-                    )
-                    .count()
-                    .get_result::<i64>(&mut conn)
-                    .unwrap_or(0)
-                    > 0;
-
-                if !already_pending {
-                    let pool_clone = pool.clone();
-                    let title = item.title.clone();
-                    let item_id = item.item_id;
-                    tokio::spawn(async move {
-                        if let Err(e) =
-                            crate::ai::parser_generator::generate_parser_for_title(
-                                pool_clone,
-                                title,
-                                Some(item_id),
-                                None,
-                                None,
-                            )
-                            .await
-                        {
-                            tracing::warn!("AI parser 生成觸發失敗: {}", e);
-                        }
-                    });
-                    break;
-                }
+                still_unmatched_subs.insert(item.subscription_id);
             }
             Err(_) => {}
         }
     }
+
+    // 對每個仍有未匹配項目的訂閱，檢查是否已有進行中的批次 pending，若無則觸發
+    for sub_id in still_unmatched_subs {
+        let already_generating = {
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            pending_ai_results::table
+                .filter(pending_ai_results::result_type.eq("parser"))
+                .filter(pending_ai_results::subscription_id.eq(sub_id))
+                .filter(pending_ai_results::status.eq("generating"))
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap_or(0)
+                > 0
+        };
+
+        if !already_generating {
+            let pool_clone = pool.clone();
+            tokio::spawn(async move {
+                if let Err(e) = crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+                    pool_clone,
+                    sub_id,
+                ).await {
+                    tracing::warn!("Batch parser 生成失敗 subscription={}: {}", sub_id, e);
+                }
+            });
+        }
+    }
+
     Ok(())
 }

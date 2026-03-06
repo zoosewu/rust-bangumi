@@ -492,6 +492,8 @@ pub async fn receive_raw_fetcher_results(
     let mut errors = Vec::new();
     let mut new_link_ids: Vec<i32> = Vec::new();
 
+    let pool = std::sync::Arc::new(state.db.clone());
+
     match state.db.get() {
         Ok(mut conn) => {
             for raw_item in payload.items {
@@ -580,6 +582,20 @@ pub async fn receive_raw_fetcher_results(
                         errors.push(e);
                     }
                 }
+            }
+
+            // 若有未匹配項目，背景觸發批次 AI 解析器生成
+            if items_failed > 0 {
+                let pool_clone = pool.clone();
+                let sub_id = payload.subscription_id;
+                tokio::spawn(async move {
+                    if let Err(e) = crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+                        pool_clone,
+                        sub_id,
+                    ).await {
+                        tracing::warn!("Batch parser generation failed for subscription={}: {}", sub_id, e);
+                    }
+                });
             }
 
             // 批次派發新建的下載連結
