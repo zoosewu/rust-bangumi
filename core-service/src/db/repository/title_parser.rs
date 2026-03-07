@@ -58,6 +58,7 @@ impl TitleParserRepository for DieselTitleParserRepository {
             let mut conn = pool.get()?;
             title_parsers::table
                 .filter(title_parsers::is_enabled.eq(true))
+                .filter(title_parsers::pending_result_id.is_null())
                 .order(title_parsers::priority.desc())
                 .load::<TitleParser>(&mut conn)
                 .map_err(RepositoryError::from)
@@ -170,7 +171,7 @@ pub mod mock {
                 .lock()
                 .unwrap()
                 .iter()
-                .filter(|p| p.is_enabled)
+                .filter(|p| p.is_enabled && p.pending_result_id.is_none())
                 .cloned()
                 .collect();
             parsers.sort_by(|a, b| b.priority.cmp(&a.priority));
@@ -298,6 +299,24 @@ mod tests {
         assert_eq!(enabled.len(), 2);
         assert_eq!(enabled[0].name, "Parser B");
         assert_eq!(enabled[1].name, "Parser A");
+    }
+
+    #[tokio::test]
+    async fn test_mock_find_enabled_excludes_pending_parsers() {
+        // 已確認的解析器（pending_result_id = None）
+        let confirmed = create_test_parser(1, "Confirmed", 50, true);
+        // 待確認的解析器（pending_result_id = Some(...)）
+        let mut pending = create_test_parser(2, "Pending", 80, true);
+        pending.pending_result_id = Some(99);
+        // 停用的解析器
+        let disabled = create_test_parser(3, "Disabled", 30, false);
+
+        let repo = MockTitleParserRepository::with_data(vec![confirmed, pending, disabled]);
+
+        let enabled = repo.find_enabled_sorted_by_priority().await.unwrap();
+        // 只應回傳已確認且啟用的解析器，pending 和 disabled 都排除
+        assert_eq!(enabled.len(), 1);
+        assert_eq!(enabled[0].name, "Confirmed");
     }
 
     #[tokio::test]

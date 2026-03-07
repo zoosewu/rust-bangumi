@@ -54,12 +54,6 @@ impl ConflictDetectionService {
             .map_err(|e| format!("Failed to detect conflicts: {}", e))?;
 
         let mut conflicts_found = 0;
-        // 收集各訂閱的衝突群組，用於批次 AI filter 生成
-        // key: Option<subscription_id>, value: Vec<(titles, source_title)>
-        let mut subscription_conflict_groups: std::collections::HashMap<
-            Option<i32>,
-            Vec<(Vec<String>, String)>,
-        > = std::collections::HashMap::new();
 
         for (anime_id, group_id, episode_no) in &conflict_groups {
             let links = self
@@ -93,49 +87,7 @@ impl ConflictDetectionService {
                     links.len()
                 );
 
-                // 收集衝突標題，準備批次 AI filter 生成
-                let conflict_titles: Vec<String> = links
-                    .iter()
-                    .filter_map(|l| l.title.clone())
-                    .collect();
-                if !conflict_titles.is_empty() {
-                    let source = conflict_titles[0].clone();
-
-                    // 從 links 的 raw_item_id 查詢 subscription_id
-                    let filter_sub_id: Option<i32> = {
-                        use crate::schema::raw_anime_items;
-                        let raw_id = links.iter().find_map(|l| l.raw_item_id);
-                        raw_id.and_then(|rid| {
-                            let mut conn = self.pool.get().ok()?;
-                            raw_anime_items::table
-                                .filter(raw_anime_items::item_id.eq(rid))
-                                .select(raw_anime_items::subscription_id)
-                                .first::<i32>(&mut conn)
-                                .ok()
-                        })
-                    };
-
-                    subscription_conflict_groups
-                        .entry(filter_sub_id)
-                        .or_default()
-                        .push((conflict_titles, source));
-                }
             }
-        }
-
-        // 每個訂閱批次觸發一次 AI filter 生成（背景非同步）
-        for (sub_id, groups) in subscription_conflict_groups {
-            let pool_clone = self.pool.clone();
-            tokio::spawn(async move {
-                if let Err(e) =
-                    crate::ai::filter_generator::generate_filters_for_subscription_batch(
-                        pool_clone, sub_id, groups,
-                    )
-                    .await
-                {
-                    tracing::warn!("批次 AI filter 觸發失敗 subscription={:?}: {}", sub_id, e);
-                }
-            });
         }
 
         // Auto-resolve conflict records that no longer have actual conflicts

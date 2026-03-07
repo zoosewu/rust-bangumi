@@ -73,7 +73,9 @@ pub async fn get_pending(
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePendingRequest {
-    pub generated_data: serde_json::Value,
+    pub generated_data: Option<serde_json::Value>,
+    pub confirm_level: Option<String>,
+    pub confirm_target_id: Option<i32>,
 }
 
 // PUT /pending-ai-results/:id
@@ -86,9 +88,12 @@ pub async fn update_pending(
         .db
         .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
     let result = diesel::update(pending_ai_results::table.find(id))
         .set((
-            pending_ai_results::generated_data.eq(Some(req.generated_data)),
+            pending_ai_results::generated_data.eq(req.generated_data),
+            pending_ai_results::confirm_level.eq(req.confirm_level),
+            pending_ai_results::confirm_target_id.eq(req.confirm_target_id),
             pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
         ))
         .get_result::<PendingAiResult>(&mut conn)
@@ -191,8 +196,6 @@ pub async fn reject_pending(
         .db
         .get()
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let now = Utc::now().naive_utc();
-    let expires_at = now + chrono::Duration::days(7);
 
     let pending = pending_ai_results::table
         .find(id)
@@ -217,12 +220,7 @@ pub async fn reject_pending(
         _ => {}
     }
 
-    diesel::update(pending_ai_results::table.find(id))
-        .set((
-            pending_ai_results::status.eq("failed"),
-            pending_ai_results::expires_at.eq(Some(expires_at)),
-            pending_ai_results::updated_at.eq(now),
-        ))
+    diesel::delete(pending_ai_results::table.find(id))
         .execute(&mut conn)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -332,20 +330,47 @@ async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
             .map_err(|e| e.to_string())?
     };
 
-    // 先嘗試用現有解析器重新解析
+    // 先嘗試用現有解析器重新解析，並建立 anime_links
+    let mut new_link_ids: Vec<i32> = Vec::new();
     let mut still_unmatched_subs: HashSet<i32> = HashSet::new();
     for item in &items {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
         match TitleParserService::parse_title(&mut conn, &item.title) {
-            Ok(Some(_)) => {
-                TitleParserService::update_raw_item_status(
-                    &mut conn, item.item_id, ParseStatus::Parsed, None, None,
-                ).ok();
+            Ok(Some(parsed)) => {
+                match crate::handlers::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
+                    Ok(link_ids) => {
+                        new_link_ids.extend(link_ids);
+                        TitleParserService::update_raw_item_status(
+                            &mut conn, item.item_id, ParseStatus::Parsed,
+                            Some(parsed.parser_id), None,
+                        ).ok();
+                    }
+                    Err(e) => {
+                        TitleParserService::update_raw_item_status(
+                            &mut conn, item.item_id, ParseStatus::Failed,
+                            Some(parsed.parser_id), Some(&e),
+                        ).ok();
+                    }
+                }
             }
             Ok(None) => {
                 still_unmatched_subs.insert(item.subscription_id);
             }
             Err(_) => {}
+        }
+    }
+
+    // 派送新建立的下載連結
+    if !new_link_ids.is_empty() {
+        let dispatch = crate::services::DownloadDispatchService::new(pool.as_ref().clone());
+        match dispatch.dispatch_new_links(new_link_ids).await {
+            Ok(result) => {
+                tracing::info!(
+                    "rerun 後派送：dispatched={}, no_downloader={}, failed={}",
+                    result.dispatched, result.no_downloader, result.failed
+                );
+            }
+            Err(e) => tracing::warn!("rerun 後派送失敗: {}", e),
         }
     }
 

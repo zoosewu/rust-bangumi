@@ -55,6 +55,8 @@ pub async fn generate_filter_for_conflict(
                 created_at: now,
                 updated_at: now,
                 subscription_id,
+                confirm_level: None,
+                confirm_target_id: None,
             })
             .get_result::<PendingAiResult>(&mut conn)
             .map_err(|e| e.to_string())?
@@ -255,6 +257,8 @@ pub async fn generate_filters_for_subscription_batch(
                     created_at: now,
                     updated_at: now,
                     subscription_id,
+                    confirm_level: None,
+                    confirm_target_id: None,
                 })
                 .get_result::<PendingAiResult>(&mut conn)
                 .map_err(|e| e.to_string())?

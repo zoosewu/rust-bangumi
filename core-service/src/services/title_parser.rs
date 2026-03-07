@@ -51,10 +51,11 @@ impl ParseStatus {
 pub struct TitleParserService;
 
 impl TitleParserService {
-    /// 取得所有啟用的解析器（按 priority 降序）
+    /// 取得所有已啟用且已確認（非 pending）的解析器（按 priority 降序）
     pub fn get_enabled_parsers(conn: &mut PgConnection) -> Result<Vec<TitleParser>, String> {
         title_parsers::table
             .filter(title_parsers::is_enabled.eq(true))
+            .filter(title_parsers::pending_result_id.is_null())
             .order(title_parsers::priority.desc())
             .load::<TitleParser>(conn)
             .map_err(|e| format!("Failed to load title parsers: {}", e))

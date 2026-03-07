@@ -725,6 +725,8 @@ pub struct PendingAiResult {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub subscription_id: Option<i32>,
+    pub confirm_level: Option<String>,
+    pub confirm_target_id: Option<i32>,
 }
 
 #[derive(Insertable, Debug)]
@@ -742,6 +744,8 @@ pub struct NewPendingAiResult {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub subscription_id: Option<i32>,
+    pub confirm_level: Option<String>,
+    pub confirm_target_id: Option<i32>,
 }
 
 #[cfg(test)]

@@ -4,9 +4,9 @@ use serde_json::Value;
 use std::sync::Arc;
 
 use crate::db::DbPool;
-use crate::models::{NewPendingAiResult, NewTitleParser, PendingAiResult, RawAnimeItem, TitleParser};
+use crate::models::{NewPendingAiResult, NewTitleParser, PendingAiResult, RawAnimeItem};
 use crate::schema::{ai_prompt_settings, ai_settings, pending_ai_results, raw_anime_items, title_parsers};
-use crate::services::title_parser::{ParseStatus, TitleParserService};
+use crate::services::title_parser::ParseStatus;
 use super::client::AiClient;
 use super::client::AiError;
 use super::openai::OpenAiClient;
@@ -84,6 +84,8 @@ pub async fn generate_parser_for_title(
                 created_at: now,
                 updated_at: now,
                 subscription_id,
+                confirm_level: None,
+                confirm_target_id: None,
             })
             .get_result::<PendingAiResult>(&mut conn)
             .map_err(|e| e.to_string())?
@@ -319,6 +321,8 @@ pub async fn generate_parsers_for_subscription_batch(
                     created_at: now,
                     updated_at: now,
                     subscription_id: Some(subscription_id),
+                    confirm_level: None,
+                    confirm_target_id: None,
                 })
                 .returning(pending_ai_results::id)
                 .get_result::<i32>(&mut conn)
@@ -442,90 +446,9 @@ pub async fn generate_parsers_for_subscription_batch(
         tracing::info!("批次 parser_id={} 已建立，subscription={}", parser_id, subscription_id);
         update_pending_success(&pool, pending_id, data).await.ok();
 
-        // 載入新解析器並套用到所有 no_match 項目
-        let new_parser: TitleParser = {
-            let mut conn = pool.get().map_err(|e| e.to_string())?;
-            title_parsers::table
-                .filter(title_parsers::parser_id.eq(parser_id))
-                .first::<TitleParser>(&mut conn)
-                .map_err(|e| e.to_string())?
-        };
-
-        let mut parsed_count = 0;
-        let mut new_link_ids: Vec<i32> = Vec::new();
-
-        for item in &unmatched {
-            match TitleParserService::try_parser(&new_parser, &item.title) {
-                Ok(Some(parsed)) => {
-                    let mut conn = match pool.get() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            tracing::warn!("DB 連線失敗 item={}: {}", item.item_id, e);
-                            continue;
-                        }
-                    };
-                    match crate::handlers::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
-                        Ok(link_ids) => {
-                            new_link_ids.extend(link_ids);
-                            TitleParserService::update_raw_item_status(
-                                &mut conn, item.item_id, ParseStatus::Parsed,
-                                Some(parsed.parser_id), None,
-                            ).ok();
-                            parsed_count += 1;
-                        }
-                        Err(e) => {
-                            TitleParserService::update_raw_item_status(
-                                &mut conn, item.item_id, ParseStatus::Failed,
-                                Some(parsed.parser_id), Some(&e),
-                            ).ok();
-                        }
-                    }
-                }
-                Ok(None) => {} // 維持 no_match，等下一輪
-                Err(e) => {
-                    tracing::warn!("try_parser 錯誤 item={}: {}", item.item_id, e);
-                }
-            }
-        }
-
-        tracing::info!(
-            "Batch iteration={}: parser={} 匹配 {}/{} 項目",
-            iteration, parser_id, parsed_count, unmatched.len()
-        );
-
-        // 派送新建立的下載連結，並觸發 conflict detection
-        if !new_link_ids.is_empty() {
-            let dispatch = crate::services::DownloadDispatchService::new(pool.as_ref().clone());
-            match dispatch.dispatch_new_links(new_link_ids).await {
-                Ok(result) => {
-                    tracing::info!(
-                        "批次解析後派送：dispatched={}, no_downloader={}, failed={}",
-                        result.dispatched, result.no_downloader, result.failed
-                    );
-                }
-                Err(e) => tracing::warn!("批次解析後派送失敗: {}", e),
-            }
-
-            // 建立新 links 後觸發 conflict detection，偵測新衝突並觸發批次過濾器生成
-            let conflict_service = crate::services::ConflictDetectionService::new(
-                std::sync::Arc::new(crate::db::repository::DieselAnimeLinkRepository::new(
-                    pool.as_ref().clone(),
-                )),
-                std::sync::Arc::new(crate::db::repository::DieselAnimeLinkConflictRepository::new(
-                    pool.as_ref().clone(),
-                )),
-                pool.clone(),
-            );
-            if let Err(e) = conflict_service.detect_and_mark_conflicts().await {
-                tracing::warn!("批次解析後 conflict detection 失敗: {}", e);
-            }
-        }
-
-        // 若此輪沒有新解析，停止避免無限重試
-        if parsed_count == 0 {
-            tracing::warn!("Batch iteration={}: 解析器未匹配任何項目，停止重試", iteration);
-            break;
-        }
+        // 解析器已建立為待確認狀態，等使用者確認後才套用到 raw items
+        // 每次批次生成一個解析器即可，使用者確認後系統會重跑未匹配項目
+        break;
     }
 
     Ok(())

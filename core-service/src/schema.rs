@@ -337,6 +337,8 @@ diesel::table! {
         created_at         -> Timestamp,
         updated_at         -> Timestamp,
         subscription_id    -> Nullable<Int4>,
+        confirm_level      -> Nullable<Text>,
+        confirm_target_id  -> Nullable<Int4>,
     }
 }
 

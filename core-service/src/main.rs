@@ -198,6 +198,10 @@ async fn main() -> anyhow::Result<()> {
             "/subscriptions/:id/fetch",
             post(handlers::subscriptions::trigger_fetch_now),
         )
+        .route(
+            "/subscriptions/:id/detect-conflicts",
+            post(handlers::subscriptions::detect_conflicts_and_generate_filters),
+        )
         // Fetcher 結果接收
         .route(
             "/fetcher-results",

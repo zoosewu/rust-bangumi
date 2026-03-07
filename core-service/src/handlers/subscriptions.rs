@@ -1144,3 +1144,109 @@ async fn trigger_immediate_fetch(
         ))
     }
 }
+
+/// 觸發訂閱的衝突偵測與 AI 過濾器生成（進入 step 3 時呼叫）
+pub async fn detect_conflicts_and_generate_filters(
+    State(state): State<AppState>,
+    Path(subscription_id): Path<i32>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::models::AnimeLink;
+    use std::sync::Arc;
+
+    // 1. 先跑全局衝突偵測（標記衝突 flag）
+    if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
+        tracing::warn!("detect_conflicts_and_generate_filters: conflict detection 失敗: {}", e);
+    }
+
+    // 2. 查詢此訂閱的衝突連結，組成衝突群組
+    let pool = Arc::new(state.db.clone());
+    let conflict_groups: Vec<(Vec<String>, String)> = {
+        let mut conn = match pool.get() {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "db_error", "message": e.to_string() })),
+                )
+            }
+        };
+
+        // 查詢此訂閱的 raw_item_ids
+        let raw_item_ids: Vec<i32> = raw_anime_items::table
+            .filter(raw_anime_items::subscription_id.eq(subscription_id))
+            .select(raw_anime_items::item_id)
+            .load::<i32>(&mut conn)
+            .unwrap_or_default();
+
+        if raw_item_ids.is_empty() {
+            vec![]
+        } else {
+            // 查詢這些 raw_items 對應的衝突 links
+            let my_conflict_links: Vec<AnimeLink> = anime_links::table
+                .filter(anime_links::raw_item_id.eq_any(&raw_item_ids))
+                .filter(anime_links::conflict_flag.eq(true))
+                .load::<AnimeLink>(&mut conn)
+                .unwrap_or_default();
+
+            // 對每個衝突的 (anime_id, group_id, episode_no)，找出所有衝突 links 的標題
+            let mut groups: std::collections::HashMap<(i32, i32, i32), Vec<String>> =
+                std::collections::HashMap::new();
+            for link in &my_conflict_links {
+                let key = (link.anime_id, link.group_id, link.episode_no);
+                // 取得該集衝突的所有 links（不限本訂閱）
+                let all_conflict_titles: Vec<String> = anime_links::table
+                    .filter(anime_links::anime_id.eq(link.anime_id))
+                    .filter(anime_links::group_id.eq(link.group_id))
+                    .filter(anime_links::episode_no.eq(link.episode_no))
+                    .filter(anime_links::conflict_flag.eq(true))
+                    .select(anime_links::title)
+                    .load::<Option<String>>(&mut conn)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .flatten()
+                    .collect();
+                if all_conflict_titles.len() > 1 {
+                    groups.entry(key).or_insert(all_conflict_titles);
+                }
+            }
+
+            groups
+                .into_values()
+                .map(|titles| {
+                    let source = titles[0].clone();
+                    (titles, source)
+                })
+                .collect()
+        }
+    };
+
+    let groups_count = conflict_groups.len();
+
+    // 3. 觸發 AI 過濾器生成（背景非同步）
+    if !conflict_groups.is_empty() {
+        let pool_clone = pool.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::ai::filter_generator::generate_filters_for_subscription_batch(
+                pool_clone,
+                Some(subscription_id),
+                conflict_groups,
+            )
+            .await
+            {
+                tracing::warn!(
+                    "detect_conflicts_and_generate_filters: filter 生成失敗 subscription={}: {}",
+                    subscription_id,
+                    e
+                );
+            }
+        });
+    }
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "subscription_id": subscription_id,
+            "conflict_groups": groups_count
+        })),
+    )
+}
