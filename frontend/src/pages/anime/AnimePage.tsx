@@ -169,6 +169,8 @@ export default function AnimeWorksPage() {
         title={t("anime.deleteAnime")}
         description={t("anime.deleteConfirm", { title: deleteTarget?.title })}
         loading={deleting}
+        confirmLabel={t("common.delete", "Delete")}
+        confirmLoadingLabel={t("common.deleting", "Deleting...")}
         onConfirm={() => {
           if (deleteTarget) {
             deleteAnime(deleteTarget.id).then(() => {

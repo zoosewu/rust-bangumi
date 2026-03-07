@@ -1,13 +1,13 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { AutoResizeTextarea } from "@/components/shared/AutoResizeTextarea"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Card,
   CardContent,
@@ -18,8 +18,6 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Loader2, RotateCcw } from "lucide-react"
 
-const MAX_AUTO_LINES = 20
-
 function PromptTextarea({
   value,
   onChange,
@@ -29,29 +27,12 @@ function PromptTextarea({
   onChange: (v: string) => void
   placeholder?: string
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = "auto"
-    const style = getComputedStyle(el)
-    const lineHeight = parseFloat(style.lineHeight) || 20
-    const paddingY =
-      parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-    const maxH = lineHeight * MAX_AUTO_LINES + paddingY
-    const newH = Math.min(el.scrollHeight, maxH)
-    el.style.height = newH + "px"
-    el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden"
-  }, [value])
-
   return (
-    <Textarea
-      ref={ref}
+    <AutoResizeTextarea
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="font-mono text-sm resize-y [field-sizing:normal]"
+      className="font-mono text-sm"
     />
   )
 }

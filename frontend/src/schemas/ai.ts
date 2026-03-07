@@ -31,6 +31,8 @@ export interface PendingAiResult {
   expires_at: string | null
   created_at: string
   updated_at: string
+  confirm_level: "global" | "subscription" | "anime_work" | null
+  confirm_target_id: number | null
 }
 
 export interface ConfirmPendingRequest {

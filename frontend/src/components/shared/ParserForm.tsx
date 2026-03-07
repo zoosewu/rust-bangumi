@@ -5,14 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -20,9 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Import, FileText, Copy, Check } from "lucide-react"
+import { Import, FileText, AlertTriangle } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
+import { cn } from "@/lib/utils"
+import { CopyButton } from "@/components/shared/CopyButton"
+import { RegexInput } from "@/components/shared/RegexInput"
+import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
+import type { ParserPreviewResponse } from "@/schemas/parser"
 
 // --- Types ---
 
@@ -198,10 +196,9 @@ export function ParserFormFields({
       {/* Condition Regex */}
       <div>
         <Label className="text-xs">{t("parsers.conditionRegex", "Condition Regex")}</Label>
-        <Input
-          className="font-mono text-sm"
+        <RegexInput
           value={form.condition_regex}
-          onChange={(e) => onChange("condition_regex", e.target.value)}
+          onChange={(v) => onChange("condition_regex", v)}
           placeholder={t("parsers.conditionRegexPlaceholder", "Must match to activate this parser")}
         />
       </div>
@@ -209,10 +206,9 @@ export function ParserFormFields({
       {/* Parse Regex */}
       <div>
         <Label className="text-xs">{t("parsers.parseRegex", "Parse Regex")}</Label>
-        <Input
-          className="font-mono text-sm"
+        <RegexInput
           value={form.parse_regex}
-          onChange={(e) => onChange("parse_regex", e.target.value)}
+          onChange={(v) => onChange("parse_regex", v)}
           placeholder={t("parsers.parseRegexPlaceholder", "Capture groups for field extraction")}
         />
       </div>
@@ -304,45 +300,6 @@ export function ParserFormFields({
         </div>
       </div>
     </div>
-  )
-}
-
-// --- CopyPromptButton ---
-
-function CopyPromptButton({ text, label }: { text: string; label: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const el = document.createElement("textarea")
-      el.value = text
-      el.style.cssText = "position:fixed;opacity:0;pointer-events:none;"
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand("copy")
-      el.remove()
-    }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-
-  return (
-    <Button onClick={handleCopy}>
-      {copied ? (
-        <>
-          <Check className="h-4 w-4 mr-1" />
-          {label}
-        </>
-      ) : (
-        <>
-          <Copy className="h-4 w-4 mr-1" />
-          {t("parser.copyPrompt", "Copy")}
-        </>
-      )}
-    </Button>
   )
 }
 
@@ -543,12 +500,24 @@ Return ONLY the JSON object, no extra text.`
       </Button>
 
       {/* Import Dialog */}
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("parser.importTitle", "Import Parser JSON")}</DialogTitle>
-            <DialogDescription>{t("parser.importDescription", "Paste AI-generated parser JSON to auto-fill the form fields.")}</DialogDescription>
-          </DialogHeader>
+      <FullScreenDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title={t("parser.importTitle", "Import Parser JSON")}
+        description={t("parser.importDescription", "Paste AI-generated parser JSON to auto-fill the form fields.")}
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(false)}>
+              {t("common.cancel", "Cancel")}
+            </Button>
+            <Button onClick={handleImport} disabled={!importJson.trim()}>
+              {t("parser.import", "Import")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2">
           <Textarea
             className="font-mono text-sm min-h-[200px]"
             value={importJson}
@@ -561,36 +530,117 @@ Return ONLY the JSON object, no extra text.`
           {importError && (
             <p className="text-sm text-destructive">{importError}</p>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportOpen(false)}>
-              {t("common.cancel", "Cancel")}
-            </Button>
-            <Button onClick={handleImport} disabled={!importJson.trim()}>
-              {t("parser.import", "Import")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </FullScreenDialog>
 
       {/* Export Prompt Dialog */}
-      <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>{t("parser.exportPrompt", "Export Prompt")}</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            className="font-mono text-xs flex-1 min-h-0 resize-none"
-            value={promptText}
-            readOnly
-          />
-          <DialogFooter>
+      <FullScreenDialog
+        open={promptOpen}
+        onOpenChange={setPromptOpen}
+        title={t("parser.exportPrompt", "Export Prompt")}
+        size="md"
+        footer={
+          <>
             <Button variant="outline" onClick={() => setPromptOpen(false)}>
               {t("common.cancel", "Cancel")}
             </Button>
-            <CopyPromptButton text={promptText} label={t("parser.copied", "Copied!")} />
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <CopyButton text={promptText} label={t("parser.copyPrompt", "Copy")} copiedLabel={t("parser.copied", "Copied!")} />
+          </>
+        }
+      >
+        <Textarea
+          className="font-mono text-xs resize-none h-full min-h-[400px]"
+          value={promptText}
+          readOnly
+        />
+      </FullScreenDialog>
     </>
+  )
+}
+
+// --- ParserPreviewSection ---
+
+/**
+ * 顯示 previewParser API 回傳的結果，供 ParserEditor 及 WizardPendingList 共用。
+ */
+export function ParserPreviewSection({ preview }: { preview: ParserPreviewResponse | null }) {
+  const { t } = useTranslation()
+  const [searchQuery, setSearchQuery] = useState("")
+
+  if (!preview) return null
+
+  return (
+    <div className="space-y-2">
+      {(!preview.condition_regex_valid || !preview.parse_regex_valid) && (
+        <p className="text-sm text-destructive">
+          {t("parsers.regexError", "Regex error")}: {preview.regex_error}
+        </p>
+      )}
+      {preview.condition_regex_valid && preview.parse_regex_valid && (
+        preview.results.length > 0 ? (
+          <>
+            <Input
+              placeholder={t("parsers.searchPlaceholder", "Search titles...")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="text-sm"
+            />
+            <div className="rounded-md border divide-y">
+              {preview.results
+                .filter((r) => !searchQuery || r.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((result, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "px-3 py-2 text-xs",
+                      result.is_newly_matched && "bg-green-50 dark:bg-green-950/30",
+                      result.is_override && "bg-yellow-50 dark:bg-yellow-950/30",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5">
+                        {result.is_newly_matched && (
+                          <Badge variant="default" className="text-xs">
+                            {t("parsers.newlyMatched", "new")}
+                          </Badge>
+                        )}
+                        {result.is_override && (
+                          <Badge variant="secondary" className="text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            {t("parsers.override", "override")}
+                          </Badge>
+                        )}
+                        {!result.is_newly_matched && !result.is_override && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">
+                            {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className="font-mono break-all">{result.title}</span>
+                    </div>
+                    <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-x-3 mt-1 ml-1 text-xs text-muted-foreground">
+                      <span className="truncate">{t("parsers.matchedBy", "Matched by")}: <span className="text-foreground">{result.after_matched_by ?? "—"}</span></span>
+                      <span className="truncate">{t("parsers.animeTitle", "Anime")}: <span className={cn("text-foreground", !result.parse_result?.anime_title && "text-destructive")}>{result.parse_result?.anime_title || "—"}</span></span>
+                      <span className="whitespace-nowrap">{t("parsers.episodeNo", "Ep")}: <span className={cn("text-foreground", result.parse_result?.episode_no == null && "text-destructive")}>{result.parse_result?.episode_end != null ? `${result.parse_result.episode_no}-${result.parse_result.episode_end}` : (result.parse_result?.episode_no ?? "—")}</span></span>
+                      <span className="whitespace-nowrap">S: <span className="text-foreground">{result.parse_result?.series_no ?? "—"}</span></span>
+                      <span className="whitespace-nowrap">{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result?.season || "—"}</span></span>
+                      <span className="whitespace-nowrap">{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result?.subtitle_group || "—"}</span></span>
+                      <span className="whitespace-nowrap">{t("parsers.resolution", "Res")}: <span className="text-foreground">{result.parse_result?.resolution || "—"}</span></span>
+                      <span className="whitespace-nowrap">{t("parsers.year", "Year")}: <span className="text-foreground">{result.parse_result?.year || "—"}</span></span>
+                    </div>
+                    {result.parse_error && (
+                      <div className="mt-1 ml-1 text-xs text-destructive">
+                        {t("parsers.parseError", "Parse error")}: {result.parse_error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("common.noMatch", "No matching items")}</p>
+        )
+      )}
+    </div>
   )
 }

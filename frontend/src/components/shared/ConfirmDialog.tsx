@@ -1,11 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { Button } from "@/components/ui/button"
 
 interface ConfirmDialogProps {
@@ -15,6 +8,9 @@ interface ConfirmDialogProps {
   description: string
   onConfirm: () => void
   loading?: boolean
+  confirmLabel?: string
+  confirmLoadingLabel?: string
+  confirmVariant?: "destructive" | "default"
   children?: React.ReactNode
 }
 
@@ -25,25 +21,30 @@ export function ConfirmDialog({
   description,
   onConfirm,
   loading,
+  confirmLabel = "Confirm",
+  confirmLoadingLabel,
+  confirmVariant = "destructive",
   children,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        {children}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+    <FullScreenDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      description={description}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={loading}>
-            {loading ? "Deleting..." : "Delete"}
+          <Button variant={confirmVariant} onClick={onConfirm} disabled={loading}>
+            {loading ? (confirmLoadingLabel ?? `${confirmLabel}...`) : confirmLabel}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      {children ?? <div />}
+    </FullScreenDialog>
   )
 }

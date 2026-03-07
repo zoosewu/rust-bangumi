@@ -88,6 +88,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly updateSubscription: (id: number, req: { name?: string; fetch_interval_minutes?: number; is_active?: boolean; preferred_downloader_id?: number | null }) => Effect.Effect<Subscription>
     readonly deleteSubscription: (id: number, purge?: boolean) => Effect.Effect<void>
     readonly triggerFetch: (subscriptionId: number) => Effect.Effect<void>
+    readonly detectConflicts: (subscriptionId: number) => Effect.Effect<void>
     readonly getRawItemsCount: (subscriptionId: number, status: string) => Effect.Effect<number>
     readonly getAnimeCoverImages: (
       animeWorkId: number,
@@ -111,7 +112,11 @@ export class CoreApi extends Context.Tag("CoreApi")<
     // 待確認管理
     readonly getPendingAiResults: (params?: { result_type?: string; status?: string; subscription_id?: number }) => Effect.Effect<readonly PendingAiResult[]>
     readonly getPendingAiResult: (id: number) => Effect.Effect<PendingAiResult>
-    readonly updatePendingAiResult: (id: number, generated_data: Record<string, unknown>) => Effect.Effect<PendingAiResult>
+    readonly updatePendingAiResult: (id: number, req: {
+      generated_data?: Record<string, unknown>
+      confirm_level?: string | null
+      confirm_target_id?: number | null
+    }) => Effect.Effect<PendingAiResult>
     readonly confirmPendingAiResult: (id: number, req: ConfirmPendingRequest) => Effect.Effect<void>
     readonly rejectPendingAiResult: (id: number) => Effect.Effect<void>
     readonly regeneratePendingAiResult: (id: number, req: RegenerateRequest) => Effect.Effect<PendingAiResult>

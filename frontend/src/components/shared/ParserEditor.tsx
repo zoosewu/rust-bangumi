@@ -2,22 +2,21 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Plus, ChevronUp, Pencil, AlertTriangle } from "lucide-react"
+import { Trash2, Plus, ChevronUp, Pencil } from "lucide-react"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
 import type { TitleParser, ParserPreviewResponse, ReparseStats } from "@/schemas/parser"
-import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   type ParserFormState,
   EMPTY_PARSER_FORM,
   buildParserRequest,
   ParserFormFields,
+  ParserPreviewSection,
 } from "./ParserForm"
 
 interface ParserEditorProps {
@@ -37,7 +36,6 @@ export function ParserEditor({
   const [form, setForm] = useState<ParserFormState>(EMPTY_PARSER_FORM)
   const [preview, setPreview] = useState<ParserPreviewResponse | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TitleParser | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load parsers for this target
@@ -276,87 +274,7 @@ export function ParserEditor({
           </Button>
 
           {/* Live preview results */}
-          {preview && (
-            <div className="space-y-2">
-              {!preview.condition_regex_valid && (
-                <p className="text-sm text-destructive">
-                  {t("parsers.regexError", "Regex error")}: {preview.regex_error}
-                </p>
-              )}
-              {!preview.parse_regex_valid && (
-                <p className="text-sm text-destructive">
-                  {t("parsers.regexError", "Regex error")}: {preview.regex_error}
-                </p>
-              )}
-              {preview.condition_regex_valid && preview.parse_regex_valid && (
-                preview.results.length > 0 ? (
-                  <>
-                    <Input
-                      placeholder={t("parsers.searchPlaceholder", "Search titles...")}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="text-sm"
-                    />
-                    <div className="rounded-md border divide-y">
-                      {preview.results
-                        .filter((r) => !searchQuery || r.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                        .map((result, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            "px-3 py-2 text-xs",
-                            result.is_newly_matched && "bg-green-50 dark:bg-green-950/30",
-                            result.is_override && "bg-yellow-50 dark:bg-yellow-950/30",
-                          )}
-                        >
-                          {/* Row 1: status badge + full title */}
-                          <div className="flex items-start gap-2">
-                            <span className="shrink-0 mt-0.5">
-                              {result.is_newly_matched && (
-                                <Badge variant="default" className="text-xs">
-                                  {t("parsers.newlyMatched", "new")}
-                                </Badge>
-                              )}
-                              {result.is_override && (
-                                <Badge variant="secondary" className="text-xs">
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
-                                  {t("parsers.override", "override")}
-                                </Badge>
-                              )}
-                              {!result.is_newly_matched && !result.is_override && (
-                                <Badge variant="outline" className="text-xs text-muted-foreground">
-                                  {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
-                                </Badge>
-                              )}
-                            </span>
-                            <span className="font-mono break-all">{result.title}</span>
-                          </div>
-                          {/* Row 2: parsed details in fixed-width grid */}
-                          <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-x-3 mt-1 ml-1 text-xs text-muted-foreground">
-                            <span className="truncate">{t("parsers.matchedBy", "Matched by")}: <span className="text-foreground">{result.after_matched_by ?? "—"}</span></span>
-                            <span className="truncate">{t("parsers.animeTitle", "Anime")}: <span className={cn("text-foreground", !result.parse_result?.anime_title && "text-destructive")}>{result.parse_result?.anime_title || "—"}</span></span>
-                            <span className="whitespace-nowrap">{t("parsers.episodeNo", "Ep")}: <span className={cn("text-foreground", result.parse_result?.episode_no == null && "text-destructive")}>{result.parse_result?.episode_end != null ? `${result.parse_result.episode_no}-${result.parse_result.episode_end}` : (result.parse_result?.episode_no ?? "—")}</span></span>
-                            <span className="whitespace-nowrap">S: <span className="text-foreground">{result.parse_result?.series_no ?? "—"}</span></span>
-                            <span className="whitespace-nowrap">{t("parsers.season", "Season")}: <span className="text-foreground">{result.parse_result?.season || "—"}</span></span>
-                            <span className="whitespace-nowrap">{t("parsers.subtitleGroup", "Group")}: <span className="text-foreground">{result.parse_result?.subtitle_group || "—"}</span></span>
-                            <span className="whitespace-nowrap">{t("parsers.resolution", "Res")}: <span className="text-foreground">{result.parse_result?.resolution || "—"}</span></span>
-                            <span className="whitespace-nowrap">{t("parsers.year", "Year")}: <span className="text-foreground">{result.parse_result?.year || "—"}</span></span>
-                          </div>
-                          {result.parse_error && (
-                            <div className="mt-1 ml-1 text-xs text-destructive">
-                              {t("parsers.parseError", "Parse error")}: {result.parse_error}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t("common.noMatch", "No matching items")}</p>
-                )
-              )}
-            </div>
-          )}
+          <ParserPreviewSection preview={preview} />
         </div>
       )}
 
@@ -369,6 +287,8 @@ export function ParserEditor({
         description={deleteTarget ? `${deleteTarget.name} (priority: ${deleteTarget.priority})` : ""}
         onConfirm={handleDeleteConfirm}
         loading={deleting}
+        confirmLabel={t("common.delete", "Delete")}
+        confirmLoadingLabel={t("common.deleting", "Deleting...")}
       />
     </div>
   )

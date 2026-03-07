@@ -5,13 +5,7 @@ import { AppRuntime } from "@/runtime/AppRuntime"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { WizardPendingList } from "@/components/shared/WizardPendingList"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,6 +56,7 @@ export function CreateSubscriptionWizard({
   const [filterPendings, setFilterPendings] = useState<PendingAiResult[]>([])
   const [step3Polling, setStep3Polling] = useState(false)
   const step3PollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [detecting, setDetecting] = useState(false)
 
   const { data: fetcherModules } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getFetcherModules),
@@ -248,15 +243,14 @@ export function CreateSubscriptionWizard({
   const total = rawItems.length
   const parsed = rawItems.filter((i) => i.status === "parsed" || i.status === "partial").length
   const failed = rawItems.filter((i) => i.status === "no_match" || i.status === "failed").length
-  const allParserSettled =
-    parserPendings.length === 0 ||
-    parserPendings.every((p) => p.status === "confirmed" || p.status === "rejected" || p.status === "failed")
-  const step2NextEnabled = !step2Polling && allParserSettled
+  // 過濾掉生成失敗的解析器，只顯示待確認或仍在生成中的項目
+  const displayParserPendings = parserPendings.filter((p) => p.status !== "failed")
+  const step2NextEnabled = !step2Polling
 
   // Step 3 computed values
   const allFilterSettled =
     filterPendings.length === 0 ||
-    filterPendings.every((p) => p.status === "confirmed" || p.status === "rejected" || p.status === "failed")
+    filterPendings.every((p) => p.status === "confirmed" || p.status === "failed")
   const step3DoneEnabled = !step3Polling && allFilterSettled
 
   const stepLabels: Record<WizardStep, string> = {
@@ -265,31 +259,74 @@ export function CreateSubscriptionWizard({
     3: "衝突過濾",
   }
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) {
-          if (subscriptionId !== undefined) {
-            // fire-and-forget 刪除，不阻塞關閉
-            AppRuntime.runPromise(
-              Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId, true)),
-            ).catch(() => {})
-          }
-          reset()
-          onOpenChange(false)
-        } else {
-          onOpenChange(true)
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>新增訂閱 — {stepLabels[step]}</DialogTitle>
-        </DialogHeader>
+  const handleClose = (v: boolean) => {
+    if (!v) {
+      if (subscriptionId !== undefined) {
+        AppRuntime.runPromise(
+          Effect.flatMap(CoreApi, (api) => api.deleteSubscription(subscriptionId, true)),
+        ).catch(() => {})
+      }
+      reset()
+      onOpenChange(false)
+    } else {
+      onOpenChange(true)
+    }
+  }
 
-        {/* Step indicator */}
-        <div className="flex gap-2 mb-2">
+  const stepFooter = (() => {
+    if (step === 1) return (
+      <>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+        <Button onClick={handleCreate} disabled={!url.trim() || creating}>
+          {creating && <Loader2 className="mr-1 size-4 animate-spin" />}
+          建立訂閱
+        </Button>
+      </>
+    )
+    if (step === 2) return (
+      <>
+        <Button variant="outline" onClick={closeAndCleanup}>取消</Button>
+        <Button variant="outline" onClick={goBackToStep1}>返回</Button>
+        <Button
+          onClick={async () => {
+            if (subscriptionId !== undefined) {
+              setDetecting(true)
+              await AppRuntime.runPromise(
+                Effect.flatMap(CoreApi, (api) => api.detectConflicts(subscriptionId)),
+              ).catch(() => {})
+              setDetecting(false)
+            }
+            setStep(3)
+          }}
+          disabled={!step2NextEnabled || detecting}
+        >
+          {detecting && <Loader2 className="mr-1 size-4 animate-spin" />}
+          下一步
+        </Button>
+      </>
+    )
+    return (
+      <>
+        <Button variant="outline" onClick={closeAndCleanup}>取消</Button>
+        <Button variant="outline" onClick={() => { stopStep3Polling(); setStep(2) }}>返回</Button>
+        <Button
+          onClick={() => { onCreated?.(); onOpenChange(false); reset() }}
+          disabled={!step3DoneEnabled}
+        >
+          完成
+        </Button>
+      </>
+    )
+  })()
+
+  return (
+    <FullScreenDialog
+      open={open}
+      onOpenChange={handleClose}
+      title={`新增訂閱 — ${stepLabels[step]}`}
+      size="md"
+      subHeader={
+        <div className="flex gap-2">
           {([1, 2, 3] as WizardStep[]).map((s) => (
             <div
               key={s}
@@ -297,183 +334,114 @@ export function CreateSubscriptionWizard({
             />
           ))}
         </div>
+      }
+      footer={stepFooter}
+    >
+      {/* Step 1: 基本設定 */}
+      {step === 1 && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>RSS URL *</Label>
+            <Input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://mikanani.me/RSS/..."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>名稱</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>抓取間隔（分鐘）</Label>
+            <Input
+              type="number"
+              min="0"
+              value={interval}
+              onChange={(e) => setIntervalVal(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Fetcher</Label>
+            <Select
+              value={fetcherId !== undefined ? String(fetcherId) : "auto"}
+              onValueChange={(v) => setFetcherId(v === "auto" ? undefined : Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="自動選擇" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">自動選擇</SelectItem>
+                {(fetcherModules ?? []).map((m) => (
+                  <SelectItem key={m.module_id} value={String(m.module_id)}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
-        <div className="flex-1 overflow-y-auto min-h-0">
-          {/* Step 1: 基本設定 */}
-          {step === 1 && (
-            <div className="space-y-4 py-1 pr-1">
-              <div className="space-y-2">
-                <Label>RSS URL *</Label>
-                <Input
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://mikanani.me/RSS/..."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>名稱</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>抓取間隔（分鐘）</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={interval}
-                  onChange={(e) => setIntervalVal(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Fetcher</Label>
-                <Select
-                  value={fetcherId !== undefined ? String(fetcherId) : "auto"}
-                  onValueChange={(v) =>
-                    setFetcherId(v === "auto" ? undefined : Number(v))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="自動選擇" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">自動選擇</SelectItem>
-                    {(fetcherModules ?? []).map((m) => (
-                      <SelectItem key={m.module_id} value={String(m.module_id)}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* Step 2: 解析確認 */}
+      {step === 2 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            {step2Polling && <Loader2 className="size-4 animate-spin" />}
+            <span>共 {total} 項、{parsed} 已解析、{failed} 解析失敗</span>
+          </div>
+          {!step2Polling && displayParserPendings.length === 0 ? (
+            <div className="flex items-center gap-2 text-green-600 py-4">
+              <CheckCircle2 className="size-5" />
+              <span className="text-sm font-medium">所有項目解析成功</span>
             </div>
-          )}
-
-          {/* Step 2: 解析確認 */}
-          {step === 2 && (
-            <div className="space-y-4 py-1 pr-1">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                {step2Polling && <Loader2 className="size-4 animate-spin" />}
-                <span>
-                  共 {total} 項、{parsed} 已解析、{failed} 解析失敗
-                </span>
-              </div>
-
-              {!step2Polling && parserPendings.length === 0 ? (
-                <div className="flex items-center gap-2 text-green-600 py-4">
-                  <CheckCircle2 className="size-5" />
-                  <span className="text-sm font-medium">所有項目解析成功</span>
-                </div>
-              ) : (
-                <WizardPendingList
-                  results={parserPendings}
-                  onAnyChange={() => {
-                    if (subscriptionId !== undefined) {
-                      AppRuntime.runPromise(
-                        Effect.flatMap(CoreApi, (api) =>
-                          api.getPendingAiResults({
-                            subscription_id: subscriptionId,
-                            result_type: "parser",
-                          }),
-                        ),
-                      ).then((pendings) => setParserPendings(pendings as PendingAiResult[]))
-                    }
-                  }}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Step 3: Conflict Filter */}
-          {step === 3 && (
-            <div className="space-y-4 py-1 pr-1">
-              {step3Polling && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>正在偵測衝突...</span>
-                </div>
-              )}
-
-              {!step3Polling && filterPendings.length === 0 ? (
-                <div className="flex items-center gap-2 text-green-600 py-4">
-                  <CheckCircle2 className="size-5" />
-                  <span className="text-sm font-medium">無衝突</span>
-                </div>
-              ) : (
-                <WizardPendingList
-                  results={filterPendings}
-                  onAnyChange={() => {
-                    if (subscriptionId !== undefined) {
-                      AppRuntime.runPromise(
-                        Effect.flatMap(CoreApi, (api) =>
-                          api.getPendingAiResults({
-                            subscription_id: subscriptionId,
-                            result_type: "filter",
-                          }),
-                        ),
-                      ).then((pendings) => setFilterPendings(pendings as PendingAiResult[]))
-                    }
-                  }}
-                />
-              )}
-            </div>
+          ) : (
+            <WizardPendingList
+              results={displayParserPendings}
+              onAnyChange={() => {
+                if (subscriptionId !== undefined) {
+                  AppRuntime.runPromise(
+                    Effect.flatMap(CoreApi, (api) =>
+                      api.getPendingAiResults({ subscription_id: subscriptionId, result_type: "parser" }),
+                    ),
+                  ).then((pendings) => setParserPendings(pendings as PendingAiResult[]))
+                }
+              }}
+            />
           )}
         </div>
+      )}
 
-        {/* Footer */}
-        <DialogFooter className="pt-2 border-t">
-          {step === 1 && (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                取消
-              </Button>
-              <Button onClick={handleCreate} disabled={!url.trim() || creating}>
-                {creating && <Loader2 className="mr-1 size-4 animate-spin" />}
-                建立訂閱
-              </Button>
-            </>
+      {/* Step 3: Conflict Filter */}
+      {step === 3 && (
+        <div className="space-y-4">
+          {step3Polling && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>正在偵測衝突...</span>
+            </div>
           )}
-
-          {step === 2 && (
-            <>
-              <Button variant="outline" onClick={closeAndCleanup}>
-                取消
-              </Button>
-              <Button variant="outline" onClick={goBackToStep1}>
-                返回
-              </Button>
-              <Button onClick={() => setStep(3)} disabled={!step2NextEnabled}>
-                下一步
-              </Button>
-            </>
+          {!step3Polling && filterPendings.length === 0 ? (
+            <div className="flex items-center gap-2 text-green-600 py-4">
+              <CheckCircle2 className="size-5" />
+              <span className="text-sm font-medium">無衝突</span>
+            </div>
+          ) : (
+            <WizardPendingList
+              results={filterPendings}
+              onAnyChange={() => {
+                if (subscriptionId !== undefined) {
+                  AppRuntime.runPromise(
+                    Effect.flatMap(CoreApi, (api) =>
+                      api.getPendingAiResults({ subscription_id: subscriptionId, result_type: "filter" }),
+                    ),
+                  ).then((pendings) => setFilterPendings(pendings as PendingAiResult[]))
+                }
+              }}
+            />
           )}
-
-          {step === 3 && (
-            <>
-              <Button variant="outline" onClick={closeAndCleanup}>
-                取消
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  stopStep3Polling()
-                  setStep(2)
-                }}
-              >
-                返回
-              </Button>
-              <Button
-                onClick={() => {
-                  onCreated?.()
-                  onOpenChange(false)
-                  reset()
-                }}
-                disabled={!step3DoneEnabled}
-              >
-                完成
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </FullScreenDialog>
   )
 }

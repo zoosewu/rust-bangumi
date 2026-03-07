@@ -288,6 +288,11 @@ const makeCoreApi = Effect.gen(function* () {
         .execute(HttpClientRequest.post(`/api/core/subscriptions/${subscriptionId}/fetch`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
+    detectConflicts: (subscriptionId) =>
+      client
+        .execute(HttpClientRequest.post(`/api/core/subscriptions/${subscriptionId}/detect-conflicts`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
     getRawItemsCount: (subscriptionId, status) =>
       fetchJson(
         HttpClientRequest.get(
@@ -446,11 +451,11 @@ const makeCoreApi = Effect.gen(function* () {
           Effect.orDie,
         ),
 
-    updatePendingAiResult: (id, generated_data) =>
+    updatePendingAiResult: (id, req) =>
       client
         .execute(
           HttpClientRequest.put(`/api/core/pending-ai-results/${id}`).pipe(
-            HttpClientRequest.bodyUnsafeJson({ generated_data }),
+            HttpClientRequest.bodyUnsafeJson(req),
           ),
         )
         .pipe(

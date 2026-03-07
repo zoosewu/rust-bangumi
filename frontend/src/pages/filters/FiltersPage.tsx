@@ -9,14 +9,12 @@ import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { FilterAddForm } from "@/components/shared/FilterAddForm"
-import { FilterPreviewPanel } from "@/components/shared/FilterPreviewPanel"
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { DeleteFilterRuleDialog } from "@/components/shared/DeleteFilterRuleDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
-import { AppRuntime } from "@/runtime/AppRuntime"
-import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
+import type { FilterRule } from "@/schemas/filter"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { useTableSearch } from "@/hooks/useTableSearch"
 
@@ -32,7 +30,6 @@ export default function FiltersPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<FilterRule | null>(null)
-  const [deletePreview, setDeletePreview] = useState<FilterPreviewResponse | null>(null)
 
   const { data: rules, isLoading, error, refetch } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getFilterRules()),
@@ -62,24 +59,12 @@ export default function FiltersPage() {
 
   const handleDeleteClick = useCallback((rule: FilterRule) => {
     setDeleteTarget(rule)
-    AppRuntime.runPromise(
-      Effect.flatMap(CoreApi, (api) =>
-        api.previewFilter({
-          target_type: rule.target_type,
-          target_id: rule.target_id,
-          regex_pattern: rule.regex_pattern,
-          is_positive: rule.is_positive,
-          exclude_filter_id: rule.rule_id,
-        }),
-      ),
-    ).then(setDeletePreview).catch(() => setDeletePreview(null))
   }, [])
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteTarget) return
     await deleteRule(deleteTarget.rule_id)
     setDeleteTarget(null)
-    setDeletePreview(null)
     refetch()
   }, [deleteTarget, deleteRule, refetch])
 
@@ -198,30 +183,15 @@ export default function FiltersPage() {
       </FullScreenDialog>
 
       {/* Delete Confirm */}
-      <ConfirmDialog
+      <DeleteFilterRuleDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTarget(null)
-            setDeletePreview(null)
-          }
-        }}
-        title={t("filter.confirmRemove")}
-        description={
-          deleteTarget
-            ? `${deleteTarget.is_positive ? "Include" : "Exclude"}: ${deleteTarget.regex_pattern}`
-            : ""
-        }
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+        rule={deleteTarget ? { is_positive: deleteTarget.is_positive, regex_pattern: deleteTarget.regex_pattern, id: deleteTarget.rule_id } : null}
+        targetType={deleteTarget?.target_type ?? "global"}
+        targetId={deleteTarget?.target_id ?? null}
         onConfirm={handleDeleteConfirm}
         loading={deleting}
-      >
-        {deletePreview?.regex_valid && (
-          <FilterPreviewPanel
-            before={deletePreview.after}
-            after={deletePreview.before}
-          />
-        )}
-      </ConfirmDialog>
+      />
     </div>
   )
 }

@@ -1,7 +1,14 @@
 import { useState } from "react"
 import { Copy, Check } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
-export function CopyButton({ text }: { text: string }) {
+interface CopyButtonProps {
+  text: string
+  label?: string
+  copiedLabel?: string
+}
+
+export function CopyButton({ text, label, copiedLabel }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -19,6 +26,24 @@ export function CopyButton({ text }: { text: string }) {
     }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  if (label !== undefined) {
+    return (
+      <Button onClick={handleCopy}>
+        {copied ? (
+          <>
+            <Check className="h-4 w-4 mr-1" />
+            {copiedLabel ?? label}
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4 mr-1" />
+            {label}
+          </>
+        )}
+      </Button>
+    )
   }
 
   return (

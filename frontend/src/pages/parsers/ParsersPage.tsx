@@ -10,9 +10,6 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
 import { Plus, Trash2 } from "lucide-react"
 import type { ParserPreviewResponse, ReparseStats } from "@/schemas/parser"
 import { toast } from "sonner"
@@ -21,6 +18,7 @@ import {
   EMPTY_PARSER_FORM,
   buildParserRequest,
   ParserFormFields,
+  ParserPreviewSection,
 } from "@/components/shared/ParserForm"
 import { AppRuntime } from "@/runtime/AppRuntime"
 import { SearchBar } from "@/components/shared/SearchBar"
@@ -327,7 +325,7 @@ export default function ParsersPage() {
           </Button>
 
           {/* Preview results */}
-          {preview && <PreviewResults preview={preview} />}
+          <ParserPreviewSection preview={preview} />
         </div>
       </FullScreenDialog>
 
@@ -369,6 +367,8 @@ export default function ParsersPage() {
         title={t("parsers.deleteParser")}
         description={t("parsers.deleteConfirm", { name: deleteTarget?.name })}
         loading={deleting}
+        confirmLabel={t("common.delete", "Delete")}
+        confirmLoadingLabel={t("common.deleting", "Deleting...")}
         onConfirm={() => {
           if (deleteTarget) {
             deleteParser(deleteTarget.id).then((result) => {
@@ -379,84 +379,6 @@ export default function ParsersPage() {
           }
         }}
       />
-    </div>
-  )
-}
-
-function PreviewResults({ preview }: { preview: ParserPreviewResponse }) {
-  const { t } = useTranslation()
-
-  if (!preview.condition_regex_valid || !preview.parse_regex_valid) {
-    return (
-      <Card className="border-destructive">
-        <CardContent className="pt-4">
-          <p className="text-sm text-destructive">{t("parsers.regexError")}: {preview.regex_error}</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  const newlyMatched = preview.results.filter((r) => r.is_newly_matched)
-  const overridden = preview.results.filter((r) => r.is_override)
-  const unmatched = preview.results.filter(
-    (r) => !r.is_newly_matched && !r.is_override && !r.after_matched_by,
-  )
-  const existingMatch = preview.results.filter(
-    (r) => !r.is_newly_matched && !r.is_override && !!r.after_matched_by,
-  )
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-4 text-sm">
-        <span className="text-green-600">{t("parsers.newlyMatched")}: {newlyMatched.length}</span>
-        <span className="text-orange-600">{t("parsers.override")}: {overridden.length}</span>
-        <span className="text-muted-foreground">{t("parsers.existing")}: {existingMatch.length}</span>
-        <span className="text-muted-foreground">{t("parsers.unmatched")}: {unmatched.length}</span>
-      </div>
-      <ScrollArea className="h-80">
-        <div className="space-y-1">
-          {preview.results.map((r, i) => (
-            <div
-              key={i}
-              className={cn(
-                "text-xs px-2 py-1.5 rounded font-mono",
-                r.is_newly_matched && "bg-green-50 text-green-800",
-                r.is_override && "bg-orange-50 text-orange-800",
-                !r.is_newly_matched && !r.is_override && r.after_matched_by && "bg-blue-50 text-blue-700",
-                !r.after_matched_by && "bg-gray-50 text-gray-500",
-              )}
-            >
-              <div className="flex justify-between items-start gap-2">
-                <span className="truncate flex-1">{r.title}</span>
-                <span className="text-[10px] shrink-0">
-                  {r.after_matched_by ?? t("common.noMatch")}
-                </span>
-              </div>
-              {r.parse_result && (
-                <div className="mt-1 text-[10px] opacity-75 flex gap-3 flex-wrap">
-                  <span>{t("parsers.animeTitle", "Title")}: {r.parse_result.anime_title}</span>
-                  <span>
-                    {t("parsers.episodeNo", "EP")}: {r.parse_result.episode_end != null
-                      ? `${r.parse_result.episode_no}-${r.parse_result.episode_end}`
-                      : r.parse_result.episode_no}
-                  </span>
-                  {r.parse_result.subtitle_group && (
-                    <span>{t("parsers.subtitleGroup", "Group")}: {r.parse_result.subtitle_group}</span>
-                  )}
-                  {r.parse_result.resolution && (
-                    <span>{t("parsers.resolution", "Res")}: {r.parse_result.resolution}</span>
-                  )}
-                </div>
-              )}
-              {r.parse_error && (
-                <div className="mt-1 text-[10px] text-destructive">
-                  {t("parsers.parseError")}: {r.parse_error}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
     </div>
   )
 }

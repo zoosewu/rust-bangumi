@@ -169,6 +169,8 @@ export default function SubtitleGroupsPage() {
         title={t("subtitleGroups.deleteGroup")}
         description={t("subtitleGroups.deleteConfirm", { name: deleteTarget?.name })}
         loading={deleting}
+        confirmLabel={t("common.delete", "Delete")}
+        confirmLoadingLabel={t("common.deleting", "Deleting...")}
         onConfirm={() => {
           if (deleteTarget !== null) {
             deleteGroup(deleteTarget.id).then(() => {

@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { RegexInput } from "@/components/shared/RegexInput"
 import { Plus } from "lucide-react"
 import { FilterPreviewPanel } from "./FilterPreviewPanel"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
@@ -19,6 +19,11 @@ interface FilterAddFormProps {
   onSuccess: () => void
   /** 若不傳則由元件自動載入 baseline */
   baseline?: FilterPreviewResponse | null
+  /**
+   * 若提供，則跳過 API createFilterRule 呼叫，改由此 callback 處理（draft 模式）。
+   * callback 執行完後仍會呼叫 onSuccess。
+   */
+  onAddRule?: (rule: { is_positive: boolean; regex_pattern: string }) => void | Promise<void>
 }
 
 export function FilterAddForm({
@@ -27,6 +32,7 @@ export function FilterAddForm({
   currentRuleCount,
   onSuccess,
   baseline: baselineProp,
+  onAddRule,
 }: FilterAddFormProps) {
   const { t } = useTranslation()
   const [newPattern, setNewPattern] = useState("")
@@ -94,11 +100,15 @@ export function FilterAddForm({
 
   const handleAdd = useCallback(async () => {
     if (!newPattern.trim()) return
-    await createRule(newPattern, isPositive)
+    if (onAddRule) {
+      await onAddRule({ is_positive: isPositive, regex_pattern: newPattern })
+    } else {
+      await createRule(newPattern, isPositive)
+    }
     setNewPattern("")
     setPreview(null)
     onSuccess()
-  }, [newPattern, isPositive, createRule, onSuccess])
+  }, [newPattern, isPositive, createRule, onAddRule, onSuccess])
 
   const showBefore = baseline?.before ?? null
   const showAfter = preview?.regex_valid ? preview.after : null
@@ -106,11 +116,11 @@ export function FilterAddForm({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <Input
+        <RegexInput
           placeholder={t("filter.regexPlaceholder", "Enter regex pattern...")}
           value={newPattern}
-          onChange={(e) => setNewPattern(e.target.value)}
-          className="flex-1 font-mono text-sm"
+          onChange={setNewPattern}
+          className="flex-1"
         />
         <div className="flex items-center gap-2">
           <Label className="text-xs whitespace-nowrap">
