@@ -3,7 +3,7 @@ import { Effect } from "effect"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Trash2, ChevronDown, ChevronRight } from "lucide-react"
+import { Trash2, ChevronDown, ChevronRight, Plus, ChevronUp } from "lucide-react"
 import { FilterPreviewPanel } from "./FilterPreviewPanel"
 import { FilterAddForm } from "./FilterAddForm"
 import { DeleteFilterRuleDialog } from "./DeleteFilterRuleDialog"
@@ -39,6 +39,8 @@ interface FilterRulePanelProps {
   /** 提供時規則可行內編輯（draft 模式），不提供則顯示唯讀 badge（持久化模式） */
   onUpdate?: (idx: number, changes: { is_positive?: boolean; regex_pattern?: string }) => void
   requireDeleteConfirm?: boolean
+  /** 唯讀模式：隱藏新增/刪除操作，僅顯示規則列表 */
+  readOnly?: boolean
 }
 
 // --- FilterRuleRow ---
@@ -51,6 +53,7 @@ function FilterRuleRow({
   onUpdate,
   requireDeleteConfirm,
   onDeleteRequest,
+  readOnly,
 }: {
   rule: FilterRuleDraft
   idx: number
@@ -59,6 +62,7 @@ function FilterRuleRow({
   onUpdate?: (idx: number, changes: { is_positive?: boolean; regex_pattern?: string }) => void
   requireDeleteConfirm: boolean
   onDeleteRequest: (idx: number) => void
+  readOnly: boolean
 }) {
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -115,14 +119,16 @@ function FilterRuleRow({
         )}
 
         {/* Delete */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 shrink-0"
-          onClick={handleDeleteClick}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        {!readOnly && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={handleDeleteClick}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* AI reasoning */}
@@ -144,12 +150,14 @@ export function FilterRulePanel({
   onDelete,
   onUpdate,
   requireDeleteConfirm = false,
+  readOnly = false,
 }: FilterRulePanelProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [rulePreview, setRulePreview] = useState<FilterPreviewResponse | null>(null)
   const [baseline, setBaseline] = useState<FilterPreviewResponse | null>(null)
   const [deleteConfirmIdx, setDeleteConfirmIdx] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
 
   const loadBaseline = useCallback(() => {
     AppRuntime.runPromise(
@@ -225,6 +233,7 @@ export function FilterRulePanel({
               onUpdate={onUpdate}
               requireDeleteConfirm={requireDeleteConfirm}
               onDeleteRequest={handleDeleteRequest}
+              readOnly={readOnly}
             />
           ))}
         </div>
@@ -238,20 +247,35 @@ export function FilterRulePanel({
         />
       )}
 
-      {/* Add rule form */}
-      <div className="rounded-md border p-3">
-        <FilterAddForm
-          targetType={targetType as "global" | "anime_work" | "anime" | "subtitle_group" | "fetcher"}
-          targetId={targetId}
-          currentRuleCount={rules.length}
-          baseline={baseline}
-          onAddRule={addRuleOverride}
-          onSuccess={() => {
-            loadBaseline()
-            onAddSuccess()
-          }}
-        />
-      </div>
+      {/* Add rule toggle + form — hidden in read-only mode */}
+      {!readOnly && (
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddForm((v) => !v)}
+          >
+            {showAddForm ? <ChevronUp className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+            Add Rule
+          </Button>
+          {showAddForm && (
+            <div className="rounded-md border p-3 mt-2">
+              <FilterAddForm
+                targetType={targetType as "global" | "anime_work" | "anime" | "subtitle_group" | "fetcher"}
+                targetId={targetId}
+                currentRuleCount={rules.length}
+                baseline={baseline}
+                onAddRule={addRuleOverride}
+                onSuccess={() => {
+                  loadBaseline()
+                  onAddSuccess()
+                  setShowAddForm(false)
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Delete confirm dialog (persistent mode) */}
       {requireDeleteConfirm && (

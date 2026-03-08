@@ -259,18 +259,46 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
                   <TabsTrigger value="parsers">{t("dialog.parsers", "Parsers")}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="filters" className="mt-4">
-                  <FilterRuleEditor
-                    targetType="anime"
-                    targetId={series.series_id}
-                    onRulesChange={refetchLinks}
-                  />
+                  <div className="space-y-6">
+                    <FilterRuleEditor
+                      targetType="anime"
+                      targetId={series.series_id}
+                      onRulesChange={refetchLinks}
+                    />
+                    {series.subscriptions.map((sub) => (
+                      <div key={sub.subscription_id}>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                        </p>
+                        <FilterRuleEditor
+                          targetType="fetcher"
+                          targetId={sub.subscription_id}
+                          readOnly
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </TabsContent>
                 <TabsContent value="parsers" className="mt-4">
-                  <ParserEditor
-                    createdFromType="anime"
-                    createdFromId={series.series_id}
-                    onParsersChange={refetchLinks}
-                  />
+                  <div className="space-y-6">
+                    <ParserEditor
+                      createdFromType="anime"
+                      createdFromId={series.series_id}
+                      onParsersChange={refetchLinks}
+                    />
+                    {series.subscriptions.map((sub) => (
+                      <div key={sub.subscription_id}>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                        </p>
+                        <ParserEditor
+                          createdFromType="subscription"
+                          createdFromId={sub.subscription_id}
+                          readOnly
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </TabsContent>
               </Tabs>
             </TabsContent>

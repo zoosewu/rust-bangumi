@@ -73,7 +73,8 @@
     "details": "詳細",
     "animeLinks": "アニメリンク",
     "filterRules": "フィルタールール",
-    "parsers": "パーサー"
+    "parsers": "パーサー",
+    "fromSubscription": "元サブスクリプション"
   },
   "anime": {
     "title": "アニメ作品",
@@ -148,7 +149,22 @@
     "deactivateDesc": "サブスクリプションを無効化します。すべてのデータは保持され、いつでも再有効化できます。",
     "purgeDesc": "このサブスクリプションのすべてのデータが完全に削除されます。ダウンロード済みのアニメファイルも含まれ、元に戻せません。",
     "preferredDownloader": "優先ダウンローダー",
-    "useGlobalPriority": "なし（グローバル優先度を使用）"
+    "useGlobalPriority": "なし（グローバル優先度を使用）",
+    "createSubscription": "サブスクリプションを作成",
+    "wizardTitle": "サブスクリプション追加 — {{step}}",
+    "wizardStep1": "基本設定",
+    "wizardStep2": "解析確認",
+    "wizardStep3": "競合フィルター",
+    "wizardNext": "次へ",
+    "wizardDone": "完了",
+    "confirmAllNext": "全て確認して次へ",
+    "confirmAllDone": "全て確認して完了",
+    "allParsed": "全アイテムの解析成功",
+    "noConflicts": "競合なし",
+    "detectingConflicts": "競合を検出中...",
+    "parseStats": "計 {{total}} 件、{{parsed}} 解析済み、{{failed}} 失敗",
+    "autoSelect": "自動選択",
+    "fetchIntervalMinutes": "取得間隔（分）"
   },
   "rawItems": {
     "title": "最新情報",

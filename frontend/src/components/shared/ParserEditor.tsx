@@ -23,12 +23,14 @@ interface ParserEditorProps {
   createdFromType: "global" | "anime_work" | "anime" | "subtitle_group" | "subscription"
   createdFromId: number | null
   onParsersChange?: () => void
+  readOnly?: boolean
 }
 
 export function ParserEditor({
   createdFromType,
   createdFromId,
   onParsersChange,
+  readOnly,
 }: ParserEditorProps) {
   const { t } = useTranslation()
   const [showForm, setShowForm] = useState(false)
@@ -202,80 +204,88 @@ export function ParserEditor({
               <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
                 {parser.condition_regex}
               </code>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => handleEdit(parser)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setDeleteTarget(parser)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {!readOnly && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleEdit(parser)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => setDeleteTarget(parser)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Toggle form */}
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (showForm) {
-              setShowForm(false)
-              setEditTarget(null)
-              setForm(EMPTY_PARSER_FORM)
-              setPreview(null)
-            } else {
-              setEditTarget(null)
-              setForm(EMPTY_PARSER_FORM)
-              setPreview(null)
-              setShowForm(true)
-            }
-          }}
-        >
-          {showForm ? (
-            <ChevronUp className="h-4 w-4 mr-1" />
-          ) : (
-            <Plus className="h-4 w-4 mr-1" />
+      {/* Toggle form + Add/Edit form — hidden in read-only mode */}
+      {!readOnly && (
+        <>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (showForm) {
+                  setShowForm(false)
+                  setEditTarget(null)
+                  setForm(EMPTY_PARSER_FORM)
+                  setPreview(null)
+                } else {
+                  setEditTarget(null)
+                  setForm(EMPTY_PARSER_FORM)
+                  setPreview(null)
+                  setShowForm(true)
+                }
+              }}
+            >
+              {showForm ? (
+                <ChevronUp className="h-4 w-4 mr-1" />
+              ) : (
+                <Plus className="h-4 w-4 mr-1" />
+              )}
+              {t("parser.addParser", "Add Parser")}
+            </Button>
+          </div>
+
+          {/* Add/Edit form */}
+          {showForm && (
+            <div className="space-y-3 rounded-md border p-4">
+              <ParserFormFields
+                form={form}
+                onChange={updateForm}
+                onImport={handleImport}
+                targetType={createdFromType}
+                targetId={createdFromId}
+              />
+
+              {/* Save/Create button */}
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={(creating || updating) || !form.name || !form.condition_regex || !form.parse_regex}
+              >
+                {editTarget
+                  ? (updating ? t("parser.saving") : t("parser.save"))
+                  : (creating ? t("common.creating") : t("parser.create"))}
+              </Button>
+
+              {/* Live preview results */}
+              <ParserPreviewSection preview={preview} />
+            </div>
           )}
-          {t("parser.addParser", "Add Parser")}
-        </Button>
-      </div>
-
-      {/* Add/Edit form */}
-      {showForm && (
-        <div className="space-y-3 rounded-md border p-4">
-          <ParserFormFields
-            form={form}
-            onChange={updateForm}
-            onImport={handleImport}
-            targetType={createdFromType}
-            targetId={createdFromId}
-          />
-
-          {/* Save/Create button */}
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={(creating || updating) || !form.name || !form.condition_regex || !form.parse_regex}
-          >
-            {editTarget
-              ? (updating ? t("parser.saving") : t("parser.save"))
-              : (creating ? t("common.creating") : t("parser.create"))}
-          </Button>
-
-          {/* Live preview results */}
-          <ParserPreviewSection preview={preview} />
-        </div>
+        </>
       )}
 
       <ConfirmDialog

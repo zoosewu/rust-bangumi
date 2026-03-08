@@ -10,12 +10,14 @@ interface FilterRuleEditorProps {
   targetType: "global" | "anime_work" | "anime" | "subtitle_group" | "fetcher"
   targetId: number | null
   onRulesChange?: () => void
+  readOnly?: boolean
 }
 
 export function FilterRuleEditor({
   targetType,
   targetId,
   onRulesChange,
+  readOnly,
 }: FilterRuleEditorProps) {
   const { data: rules, refetch: refetchRules } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getFilterRules(targetType, targetId ?? undefined)),
@@ -53,6 +55,7 @@ export function FilterRuleEditor({
       onAddSuccess={handleAddSuccess}
       onDelete={handleDelete}
       requireDeleteConfirm
+      readOnly={readOnly}
     />
   )
 }

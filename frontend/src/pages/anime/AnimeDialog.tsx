@@ -169,17 +169,53 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
               <TabsTrigger value="parsers">{t("dialog.parsers", "Parsers")}</TabsTrigger>
             </TabsList>
             <TabsContent value="filters" className="mt-4">
-              <FilterRuleEditor
-                targetType="anime_work"
-                targetId={anime.anime_id}
-              />
+              <div className="space-y-6">
+                <FilterRuleEditor
+                  targetType="anime_work"
+                  targetId={anime.anime_id}
+                />
+                {Array.from(
+                  new Map(
+                    animeSeries.flatMap((s) => s.subscriptions).map((sub) => [sub.subscription_id, sub])
+                  ).values()
+                ).map((sub) => (
+                  <div key={sub.subscription_id}>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                    </p>
+                    <FilterRuleEditor
+                      targetType="fetcher"
+                      targetId={sub.subscription_id}
+                      readOnly
+                    />
+                  </div>
+                ))}
+              </div>
             </TabsContent>
             <TabsContent value="parsers" className="mt-4">
-              <ParserEditor
-                createdFromType="anime_work"
-                createdFromId={anime.anime_id}
-                onParsersChange={refetchSeries}
-              />
+              <div className="space-y-6">
+                <ParserEditor
+                  createdFromType="anime_work"
+                  createdFromId={anime.anime_id}
+                  onParsersChange={refetchSeries}
+                />
+                {Array.from(
+                  new Map(
+                    animeSeries.flatMap((s) => s.subscriptions).map((sub) => [sub.subscription_id, sub])
+                  ).values()
+                ).map((sub) => (
+                  <div key={sub.subscription_id}>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                    </p>
+                    <ParserEditor
+                      createdFromType="subscription"
+                      createdFromId={sub.subscription_id}
+                      readOnly
+                    />
+                  </div>
+                ))}
+              </div>
             </TabsContent>
           </Tabs>
         </div>

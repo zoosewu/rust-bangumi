@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
@@ -39,6 +40,7 @@ export function CreateSubscriptionWizard({
   initialName = "",
   initialInterval = "",
 }: CreateSubscriptionWizardProps) {
+  const { t } = useTranslation()
   const [step, setStep] = useState<WizardStep>(1)
   const [url, setUrl] = useState(initialUrl)
   const [name, setName] = useState(initialName)
@@ -57,6 +59,7 @@ export function CreateSubscriptionWizard({
   const [step3Polling, setStep3Polling] = useState(false)
   const step3PollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [confirmingAll, setConfirmingAll] = useState(false)
 
   const { data: fetcherModules } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getFetcherModules),
@@ -219,6 +222,23 @@ export function CreateSubscriptionWizard({
     onOpenChange(false)
   }
 
+  // 確認全部待決項目（使用各自已設定的 confirm_level，否則預設 subscription）
+  const confirmAllPending = useCallback(async (items: PendingAiResult[]) => {
+    const pending = items.filter((p) => p.status === "pending")
+    await Promise.all(
+      pending.map((p) => {
+        const level = (p.confirm_level ?? "subscription") as "global" | "subscription" | "anime_work"
+        const targetId =
+          level === "global" ? undefined : (p.confirm_target_id ?? subscriptionId)
+        return AppRuntime.runPromise(
+          Effect.flatMap(CoreApi, (api) =>
+            api.confirmPendingAiResult(p.result_id, { level, target_id: targetId }),
+          ),
+        ).catch(() => {})
+      }),
+    )
+  }, [subscriptionId])
+
   const { mutate: createSub, isLoading: creating } = useEffectMutation(() =>
     Effect.flatMap(CoreApi, (api) =>
       api.createSubscription({
@@ -245,18 +265,20 @@ export function CreateSubscriptionWizard({
   const failed = rawItems.filter((i) => i.status === "no_match" || i.status === "failed").length
   // 過濾掉生成失敗的解析器，只顯示待確認或仍在生成中的項目
   const displayParserPendings = parserPendings.filter((p) => p.status !== "failed")
-  const step2NextEnabled = !step2Polling
+  const hasPendingParsers = displayParserPendings.some((p) => p.status === "pending")
+  const step2NextEnabled = !step2Polling && !confirmingAll
 
   // Step 3 computed values
+  const hasPendingFilters = filterPendings.some((p) => p.status === "pending")
   const allFilterSettled =
     filterPendings.length === 0 ||
     filterPendings.every((p) => p.status === "confirmed" || p.status === "failed")
-  const step3DoneEnabled = !step3Polling && allFilterSettled
+  const step3DoneEnabled = !step3Polling && allFilterSettled && !confirmingAll
 
   const stepLabels: Record<WizardStep, string> = {
-    1: "基本設定",
-    2: "解析確認",
-    3: "衝突過濾",
+    1: t("subscriptions.wizardStep1"),
+    2: t("subscriptions.wizardStep2"),
+    3: t("subscriptions.wizardStep3"),
   }
 
   const handleClose = (v: boolean) => {
@@ -276,19 +298,24 @@ export function CreateSubscriptionWizard({
   const stepFooter = (() => {
     if (step === 1) return (
       <>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>{t("common.cancel")}</Button>
         <Button onClick={handleCreate} disabled={!url.trim() || creating}>
           {creating && <Loader2 className="mr-1 size-4 animate-spin" />}
-          建立訂閱
+          {t("subscriptions.createSubscription")}
         </Button>
       </>
     )
     if (step === 2) return (
       <>
-        <Button variant="outline" onClick={closeAndCleanup}>取消</Button>
-        <Button variant="outline" onClick={goBackToStep1}>返回</Button>
+        <Button variant="outline" onClick={closeAndCleanup}>{t("common.cancel")}</Button>
+        <Button variant="outline" onClick={goBackToStep1}>{t("common.back")}</Button>
         <Button
           onClick={async () => {
+            if (hasPendingParsers) {
+              setConfirmingAll(true)
+              await confirmAllPending(displayParserPendings)
+              setConfirmingAll(false)
+            }
             if (subscriptionId !== undefined) {
               setDetecting(true)
               await AppRuntime.runPromise(
@@ -300,20 +327,30 @@ export function CreateSubscriptionWizard({
           }}
           disabled={!step2NextEnabled || detecting}
         >
-          {detecting && <Loader2 className="mr-1 size-4 animate-spin" />}
-          下一步
+          {(confirmingAll || detecting) && <Loader2 className="mr-1 size-4 animate-spin" />}
+          {hasPendingParsers ? t("subscriptions.confirmAllNext") : t("subscriptions.wizardNext")}
         </Button>
       </>
     )
     return (
       <>
-        <Button variant="outline" onClick={closeAndCleanup}>取消</Button>
-        <Button variant="outline" onClick={() => { stopStep3Polling(); setStep(2) }}>返回</Button>
+        <Button variant="outline" onClick={closeAndCleanup}>{t("common.cancel")}</Button>
+        <Button variant="outline" onClick={() => { stopStep3Polling(); setStep(2) }}>{t("common.back")}</Button>
         <Button
-          onClick={() => { onCreated?.(); onOpenChange(false); reset() }}
-          disabled={!step3DoneEnabled}
+          onClick={async () => {
+            if (hasPendingFilters) {
+              setConfirmingAll(true)
+              await confirmAllPending(filterPendings)
+              setConfirmingAll(false)
+            }
+            onCreated?.()
+            onOpenChange(false)
+            reset()
+          }}
+          disabled={!step3DoneEnabled && !hasPendingFilters || confirmingAll}
         >
-          完成
+          {confirmingAll && <Loader2 className="mr-1 size-4 animate-spin" />}
+          {hasPendingFilters ? t("subscriptions.confirmAllDone") : t("subscriptions.wizardDone")}
         </Button>
       </>
     )
@@ -323,7 +360,7 @@ export function CreateSubscriptionWizard({
     <FullScreenDialog
       open={open}
       onOpenChange={handleClose}
-      title={`新增訂閱 — ${stepLabels[step]}`}
+      title={t("subscriptions.wizardTitle", { step: stepLabels[step] })}
       size="md"
       subHeader={
         <div className="flex gap-2">
@@ -349,11 +386,11 @@ export function CreateSubscriptionWizard({
             />
           </div>
           <div className="space-y-2">
-            <Label>名稱</Label>
+            <Label>{t("common.name")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>抓取間隔（分鐘）</Label>
+            <Label>{t("subscriptions.fetchIntervalMinutes")}</Label>
             <Input
               type="number"
               min="0"
@@ -368,10 +405,10 @@ export function CreateSubscriptionWizard({
               onValueChange={(v) => setFetcherId(v === "auto" ? undefined : Number(v))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="自動選擇" />
+                <SelectValue placeholder={t("subscriptions.autoSelect")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">自動選擇</SelectItem>
+                <SelectItem value="auto">{t("subscriptions.autoSelect")}</SelectItem>
                 {(fetcherModules ?? []).map((m) => (
                   <SelectItem key={m.module_id} value={String(m.module_id)}>
                     {m.name}
@@ -388,12 +425,12 @@ export function CreateSubscriptionWizard({
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {step2Polling && <Loader2 className="size-4 animate-spin" />}
-            <span>共 {total} 項、{parsed} 已解析、{failed} 解析失敗</span>
+            <span>{t("subscriptions.parseStats", { total, parsed, failed })}</span>
           </div>
           {!step2Polling && displayParserPendings.length === 0 ? (
             <div className="flex items-center gap-2 text-green-600 py-4">
               <CheckCircle2 className="size-5" />
-              <span className="text-sm font-medium">所有項目解析成功</span>
+              <span className="text-sm font-medium">{t("subscriptions.allParsed")}</span>
             </div>
           ) : (
             <WizardPendingList
@@ -418,13 +455,13 @@ export function CreateSubscriptionWizard({
           {step3Polling && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              <span>正在偵測衝突...</span>
+              <span>{t("subscriptions.detectingConflicts")}</span>
             </div>
           )}
           {!step3Polling && filterPendings.length === 0 ? (
             <div className="flex items-center gap-2 text-green-600 py-4">
               <CheckCircle2 className="size-5" />
-              <span className="text-sm font-medium">無衝突</span>
+              <span className="text-sm font-medium">{t("subscriptions.noConflicts")}</span>
             </div>
           ) : (
             <WizardPendingList

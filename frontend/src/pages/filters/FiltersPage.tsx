@@ -23,6 +23,7 @@ const TARGET_ROUTES: Record<string, string> = {
   anime: "/anime",
   subtitle_group: "/subtitle-groups",
   fetcher: "/subscriptions",
+  subscription: "/subscriptions",
 }
 
 export default function FiltersPage() {
@@ -159,7 +160,7 @@ export default function FiltersPage() {
           {t("common.error")}: {String(error)}
         </p>
       ) : filteredRules.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{searchQuery ? t("common.noResults") : t("filters.noRules", "No filter rules found.")}</p>
+        <p className="text-sm text-muted-foreground">{searchQuery ? t("common.noResults") : t("filters.noRules")}</p>
       ) : (
         <DataTable
           columns={columns}

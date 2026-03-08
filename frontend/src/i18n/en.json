@@ -73,7 +73,8 @@
     "details": "Details",
     "animeLinks": "Anime Links",
     "filterRules": "Filter Rules",
-    "parsers": "Parsers"
+    "parsers": "Parsers",
+    "fromSubscription": "From Subscription"
   },
   "anime": {
     "title": "Anime Titles",
@@ -148,7 +149,22 @@
     "deactivateDesc": "The subscription will be deactivated. All data is preserved and can be reactivated anytime.",
     "purgeDesc": "All data for this subscription will be permanently deleted, including downloaded anime files. This cannot be undone.",
     "preferredDownloader": "Preferred Downloader",
-    "useGlobalPriority": "None (use global priority)"
+    "useGlobalPriority": "None (use global priority)",
+    "createSubscription": "Create Subscription",
+    "wizardTitle": "Add Subscription — {{step}}",
+    "wizardStep1": "Basic Setup",
+    "wizardStep2": "Parser Review",
+    "wizardStep3": "Conflict Filter",
+    "wizardNext": "Next",
+    "wizardDone": "Done",
+    "confirmAllNext": "Confirm All & Next",
+    "confirmAllDone": "Confirm All & Done",
+    "allParsed": "All items parsed successfully",
+    "noConflicts": "No conflicts",
+    "detectingConflicts": "Detecting conflicts...",
+    "parseStats": "Total {{total}}, {{parsed}} parsed, {{failed}} failed",
+    "autoSelect": "Auto",
+    "fetchIntervalMinutes": "Fetch Interval (minutes)"
   },
   "rawItems": {
     "title": "Latest Updates",
