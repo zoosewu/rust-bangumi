@@ -127,7 +127,7 @@ pub async fn confirm_pending(
         .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
 
     let target_type = match req.level.as_str() {
-        "subscription" => FilterTargetType::Subscription,
+        "subscription" => FilterTargetType::Fetcher,
         "anime_work" => FilterTargetType::AnimeWork,
         _ => FilterTargetType::Global,
     };
@@ -171,6 +171,66 @@ pub async fn confirm_pending(
             ))
             .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            // 觸發 filter recalc + conflict detection（背景非同步）
+            let db = pool.clone();
+            let conflict_detection = state.conflict_detection.clone();
+            let cancel_service = state.cancel_service.clone();
+            let dispatch_service = state.dispatch_service.clone();
+            let target_id = req.target_id;
+            tokio::spawn(async move {
+                let recalc = if let Ok(mut conn) = db.get() {
+                    match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, target_type, target_id) {
+                        Ok(r) => {
+                            tracing::info!("filter_recalc after confirm: updated {} links", r.updated_count);
+                            r
+                        }
+                        Err(e) => {
+                            tracing::error!("filter_recalc after confirm failed: {}", e);
+                            crate::services::filter_recalc::FilterRecalcResult {
+                                updated_count: 0,
+                                newly_filtered: vec![],
+                                newly_unfiltered: vec![],
+                            }
+                        }
+                    }
+                } else {
+                    crate::services::filter_recalc::FilterRecalcResult {
+                        updated_count: 0,
+                        newly_filtered: vec![],
+                        newly_unfiltered: vec![],
+                    }
+                };
+
+                if !recalc.newly_filtered.is_empty() {
+                    match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
+                        Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
+                        Err(e) => tracing::warn!("Failed to cancel downloads: {}", e),
+                    }
+                }
+
+                let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
+                    Ok(result) => result.auto_dispatch_link_ids,
+                    Err(e) => {
+                        tracing::error!("conflict detection after filter confirm failed: {}", e);
+                        vec![]
+                    }
+                };
+
+                let mut to_dispatch = recalc.newly_unfiltered;
+                to_dispatch.extend(auto_dispatch_ids);
+                to_dispatch.sort_unstable();
+                to_dispatch.dedup();
+                if !to_dispatch.is_empty() {
+                    match dispatch_service.dispatch_new_links(to_dispatch).await {
+                        Ok(r) => tracing::info!(
+                            "Re-dispatched after filter confirm: {} dispatched, {} no_downloader, {} failed",
+                            r.dispatched, r.no_downloader, r.failed
+                        ),
+                        Err(e) => tracing::warn!("Failed to dispatch after filter confirm: {}", e),
+                    }
+                }
+            });
         }
         _ => {}
     }

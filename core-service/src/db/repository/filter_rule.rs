@@ -64,16 +64,23 @@ impl FilterRuleRepository for DieselFilterRuleRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
+            // When querying for Fetcher, also include legacy Subscription rules
+            // (filters confirmed before the Fetcher/Subscription unification stored as Subscription)
+            let types: Vec<FilterTargetType> = if target_type == FilterTargetType::Fetcher {
+                vec![FilterTargetType::Fetcher, FilterTargetType::Subscription]
+            } else {
+                vec![target_type]
+            };
             if target_id.is_some() {
                 filter_rules::table
-                    .filter(filter_rules::target_type.eq(target_type))
+                    .filter(filter_rules::target_type.eq_any(types))
                     .filter(filter_rules::target_id.eq(target_id))
                     .order(filter_rules::rule_order.asc())
                     .load::<FilterRule>(&mut conn)
                     .map_err(RepositoryError::from)
             } else {
                 filter_rules::table
-                    .filter(filter_rules::target_type.eq(target_type))
+                    .filter(filter_rules::target_type.eq_any(types))
                     .filter(filter_rules::target_id.is_null())
                     .order(filter_rules::rule_order.asc())
                     .load::<FilterRule>(&mut conn)

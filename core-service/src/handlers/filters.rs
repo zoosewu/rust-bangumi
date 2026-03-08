@@ -207,7 +207,10 @@ pub async fn get_filter_rules(
         let work_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::AnimeWork).filter_map(|r| r.target_id).collect();
         let anime_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::Anime).filter_map(|r| r.target_id).collect();
         let group_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::SubtitleGroup).filter_map(|r| r.target_id).collect();
-        let fetcher_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::Fetcher).filter_map(|r| r.target_id).collect();
+        let fetcher_ids: Vec<i32> = rules.iter()
+            .filter(|r| r.target_type == FilterTargetType::Fetcher || r.target_type == FilterTargetType::Subscription)
+            .filter_map(|r| r.target_id)
+            .collect();
 
         let work_names: HashMap<i32, String> = if work_ids.is_empty() { HashMap::new() } else {
             anime_works::table.filter(anime_works::work_id.eq_any(&work_ids))
@@ -240,7 +243,7 @@ pub async fn get_filter_rules(
                 FilterTargetType::AnimeWork => work_names.get(&id).cloned(),
                 FilterTargetType::Anime => anime_names.get(&id).cloned(),
                 FilterTargetType::SubtitleGroup => group_names.get(&id).cloned(),
-                FilterTargetType::Fetcher => sub_names.get(&id).cloned(),
+                FilterTargetType::Fetcher | FilterTargetType::Subscription => sub_names.get(&id).cloned(),
                 _ => None,
             });
             to_response(r, name)
