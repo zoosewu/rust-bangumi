@@ -232,7 +232,7 @@ export function CreateSubscriptionWizard({
           level === "global" ? undefined : (p.confirm_target_id ?? subscriptionId)
         return AppRuntime.runPromise(
           Effect.flatMap(CoreApi, (api) =>
-            api.confirmPendingAiResult(p.result_id, { level, target_id: targetId }),
+            api.confirmPendingAiResult(p.id, { level, target_id: targetId }),
           ),
         ).catch(() => {})
       }),
@@ -361,7 +361,7 @@ export function CreateSubscriptionWizard({
       open={open}
       onOpenChange={handleClose}
       title={t("subscriptions.wizardTitle", { step: stepLabels[step] })}
-      size="md"
+      size="full"
       subHeader={
         <div className="flex gap-2">
           {([1, 2, 3] as WizardStep[]).map((s) => (

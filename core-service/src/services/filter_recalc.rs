@@ -216,14 +216,17 @@ pub fn collect_all_rules_for_link(
         .map_err(|e| format!("Failed to load group rules: {}", e))?;
     all_rules.extend(group_rules);
 
-    // Fetcher rules (if subscription known)
+    // Fetcher/Subscription rules (if subscription known)
     if let Some(sub_id) = subscription_id {
-        let fetcher_rules: Vec<FilterRule> = filter_rules::table
-            .filter(filter_rules::target_type.eq(FilterTargetType::Fetcher))
+        let sub_rules: Vec<FilterRule> = filter_rules::table
+            .filter(
+                filter_rules::target_type.eq(FilterTargetType::Fetcher)
+                    .or(filter_rules::target_type.eq(FilterTargetType::Subscription)),
+            )
             .filter(filter_rules::target_id.eq(sub_id))
             .load(conn)
-            .map_err(|e| format!("Failed to load fetcher rules: {}", e))?;
-        all_rules.extend(fetcher_rules);
+            .map_err(|e| format!("Failed to load fetcher/subscription rules: {}", e))?;
+        all_rules.extend(sub_rules);
     }
 
     Ok(all_rules)

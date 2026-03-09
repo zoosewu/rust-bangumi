@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react"
-import { Link } from "react-router-dom"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { EntityLink } from "@/components/shared/EntityLink"
 import { RawItemDialog } from "./RawItemDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
@@ -116,15 +116,12 @@ export default function RawItemsPage() {
       header: t("rawItems.subscriptionSource"),
       render: (item) => {
         const id = Number(item.subscription_id)
-        const name = subMap.get(id) ?? `#${id}`
         return (
-          <Link
-            to="/subscriptions"
-            className="text-primary underline cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {name}
-          </Link>
+          <EntityLink
+            type="subscription"
+            id={id}
+            name={subMap.get(id)}
+          />
         )
       },
     },
@@ -134,15 +131,12 @@ export default function RawItemsPage() {
       render: (item) => {
         if (item.parser_id == null) return "-"
         const id = Number(item.parser_id)
-        const name = parserMap.get(id) ?? `#${id}`
         return (
-          <Link
-            to="/parsers"
-            className="text-primary underline cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {name}
-          </Link>
+          <EntityLink
+            type="parser"
+            id={id}
+            name={parserMap.get(id)}
+          />
         )
       },
     },

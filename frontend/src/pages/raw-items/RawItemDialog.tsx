@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router-dom"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -9,6 +8,7 @@ import { InfoSection } from "@/components/shared/InfoSection"
 import { InfoItem } from "@/components/shared/InfoItem"
 import { MonospaceBlock } from "@/components/shared/MonospaceBlock"
 import { DownloadBadge } from "@/components/shared/DownloadBadge"
+import { EntityLink } from "@/components/shared/EntityLink"
 
 interface RawItemDialogProps {
   itemId: number
@@ -116,27 +116,23 @@ export function RawItemDialog({
           )}
 
           {/* Subscription */}
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">{t("rawItems.subscriptionSource")}</p>
-            <Link
-              to="/subscriptions"
-              className="text-sm text-primary underline"
-            >
-              {subMap.get(item.subscription_id) ?? `#${item.subscription_id}`}
-            </Link>
-          </div>
+          <InfoItem label={t("rawItems.subscriptionSource")}>
+            <EntityLink
+              type="subscription"
+              id={item.subscription_id}
+              name={subMap.get(item.subscription_id)}
+            />
+          </InfoItem>
 
           {/* Parser */}
           {item.parser_id != null && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">{t("rawItems.parser")}</p>
-              <Link
-                to="/parsers"
-                className="text-sm text-primary underline"
-              >
-                {parserMap.get(item.parser_id) ?? `#${item.parser_id}`}
-              </Link>
-            </div>
+            <InfoItem label={t("rawItems.parser")}>
+              <EntityLink
+                type="parser"
+                id={item.parser_id}
+                name={parserMap.get(item.parser_id)}
+              />
+            </InfoItem>
           )}
         </div>
       )}

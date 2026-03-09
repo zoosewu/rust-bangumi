@@ -1153,13 +1153,19 @@ pub async fn detect_conflicts_and_generate_filters(
     use crate::models::AnimeLink;
     use std::sync::Arc;
 
-    // 1. 先跑全局衝突偵測（標記衝突 flag）
+    // 1. 先確保所有未解析的 raw items 都重新解析（避免 race condition：
+    //    parser confirmation 的背景 rerun 可能尚未完成）
+    let pool = Arc::new(state.db.clone());
+    if let Err(e) = crate::handlers::pending_ai_results::rerun_unmatched_raw_items(pool.clone()).await {
+        tracing::warn!("detect_conflicts_and_generate_filters: rerun_unmatched_raw_items 失敗: {}", e);
+    }
+
+    // 2. 跑全局衝突偵測（標記衝突 flag）
     if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
         tracing::warn!("detect_conflicts_and_generate_filters: conflict detection 失敗: {}", e);
     }
 
-    // 2. 查詢此訂閱的衝突連結，組成衝突群組
-    let pool = Arc::new(state.db.clone());
+    // 3. 查詢此訂閱的衝突連結，組成衝突群組
     let conflict_groups: Vec<(Vec<String>, String)> = {
         let mut conn = match pool.get() {
             Ok(c) => c,

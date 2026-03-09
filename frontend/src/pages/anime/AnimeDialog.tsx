@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
+import { EntityLink } from "@/components/shared/EntityLink"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
@@ -181,7 +182,7 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
                 ).map((sub) => (
                   <div key={sub.subscription_id}>
                     <p className="text-xs text-muted-foreground mb-2">
-                      {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                      {t("dialog.fromSubscription")}: <EntityLink type="subscription" id={sub.subscription_id} name={sub.name} />
                     </p>
                     <FilterRuleEditor
                       targetType="fetcher"
@@ -206,7 +207,7 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
                 ).map((sub) => (
                   <div key={sub.subscription_id}>
                     <p className="text-xs text-muted-foreground mb-2">
-                      {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                      {t("dialog.fromSubscription")}: <EntityLink type="subscription" id={sub.subscription_id} name={sub.name} />
                     </p>
                     <ParserEditor
                       createdFromType="subscription"

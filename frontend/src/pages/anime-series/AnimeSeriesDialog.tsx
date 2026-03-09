@@ -4,6 +4,7 @@ import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
+import { EntityLink } from "@/components/shared/EntityLink"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
@@ -268,7 +269,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
                     {series.subscriptions.map((sub) => (
                       <div key={sub.subscription_id}>
                         <p className="text-xs text-muted-foreground mb-2">
-                          {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                          {t("dialog.fromSubscription")}: <EntityLink type="subscription" id={sub.subscription_id} name={sub.name} />
                         </p>
                         <FilterRuleEditor
                           targetType="fetcher"
@@ -289,7 +290,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
                     {series.subscriptions.map((sub) => (
                       <div key={sub.subscription_id}>
                         <p className="text-xs text-muted-foreground mb-2">
-                          {t("dialog.fromSubscription")}: {sub.name ?? `#${sub.subscription_id}`}
+                          {t("dialog.fromSubscription")}: <EntityLink type="subscription" id={sub.subscription_id} name={sub.name} />
                         </p>
                         <ParserEditor
                           createdFromType="subscription"
@@ -396,13 +397,13 @@ function LinkRow({
     >
       <span className="shrink-0 w-4 text-center font-bold">{passed ? "+" : "-"}</span>
       <span className="w-12 shrink-0">Ep{link.episode_no}</span>
-      <button
-        type="button"
-        className="shrink-0 underline cursor-pointer hover:opacity-80"
+      <EntityLink
+        type="subtitle_group"
+        id={link.group_id}
+        name={link.group_name}
         onClick={() => onGroupClick({ id: link.group_id, name: link.group_name })}
-      >
-        {link.group_name}
-      </button>
+        className="shrink-0"
+      />
       <span className="flex-1 truncate text-xs opacity-70">{link.title ?? ""}</span>
       {link.conflict_flag && (
         <button

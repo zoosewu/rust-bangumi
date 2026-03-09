@@ -127,7 +127,7 @@ pub async fn confirm_pending(
         .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
 
     let target_type = match req.level.as_str() {
-        "subscription" => FilterTargetType::Fetcher,
+        "subscription" => FilterTargetType::Subscription,
         "anime_work" => FilterTargetType::AnimeWork,
         _ => FilterTargetType::Global,
     };
@@ -372,7 +372,7 @@ pub async fn regenerate_pending(
 }
 
 /// 重新解析所有未匹配的 raw_items：先用現有解析器 re-parse，仍失敗的按 subscription 觸發批次 AI 生成
-async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
+pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
     use crate::models::RawAnimeItem;
     use crate::schema::raw_anime_items;
     use crate::services::title_parser::{ParseStatus, TitleParserService};

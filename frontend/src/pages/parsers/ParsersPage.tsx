@@ -7,6 +7,7 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { EntityLink } from "@/components/shared/EntityLink"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { Button } from "@/components/ui/button"
@@ -223,26 +224,14 @@ export default function ParsersPage() {
     {
       key: "created_from_name",
       header: t("parsers.entity", "Belongs To"),
-      render: (item) => {
-        const type = item.created_from_type as string | null
-        const name = item.created_from_name as string | null
-        const id = item.created_from_id as number | null
-        if (!type || type === "global") {
-          return <span className="text-muted-foreground text-xs">Global</span>
-        }
-        return (
-          <button
-            type="button"
-            className="text-xs underline hover:opacity-70 text-left"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleEntityClick(item)
-            }}
-          >
-            {name ?? `#${id}`}
-          </button>
-        )
-      },
+      render: (item) => (
+        <EntityLink
+          type={item.created_from_type as string | null}
+          id={item.created_from_id as number | null}
+          name={item.created_from_name as string | null}
+          onClick={() => handleEntityClick(item)}
+        />
+      ),
     },
     {
       key: "actions",

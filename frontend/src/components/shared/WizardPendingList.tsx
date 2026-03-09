@@ -308,13 +308,14 @@ function FilterPendingRow({
           >
             <FilterRulePanel
               rules={localRules}
-              targetType="global"
-              targetId={null}
+              targetType={localResult.subscription_id != null ? "subscription" : "global"}
+              targetId={localResult.subscription_id ?? null}
               onAddSuccess={() => {/* rules already updated via handleAdd */}}
               addRuleOverride={handleAdd}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
               requireDeleteConfirm={false}
+              alwaysShowPreview
             />
           </AiResultPanel>
         </div>

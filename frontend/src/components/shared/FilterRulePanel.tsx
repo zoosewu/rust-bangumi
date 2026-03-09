@@ -41,6 +41,8 @@ interface FilterRulePanelProps {
   requireDeleteConfirm?: boolean
   /** 唯讀模式：隱藏新增/刪除操作，僅顯示規則列表 */
   readOnly?: boolean
+  /** 始終顯示預覽面板（不需點擊規則才觸發），點擊規則時顯示 after 比較 */
+  alwaysShowPreview?: boolean
 }
 
 // --- FilterRuleRow ---
@@ -151,6 +153,7 @@ export function FilterRulePanel({
   onUpdate,
   requireDeleteConfirm = false,
   readOnly = false,
+  alwaysShowPreview = false,
 }: FilterRulePanelProps) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null)
   const [rulePreview, setRulePreview] = useState<FilterPreviewResponse | null>(null)
@@ -239,11 +242,11 @@ export function FilterRulePanel({
         </div>
       )}
 
-      {/* Preview for selected rule */}
-      {selectedRule && baseline && (
+      {/* Preview panel: 始終顯示（alwaysShowPreview）或點擊規則後顯示 */}
+      {baseline && (alwaysShowPreview || selectedRule) && (
         <FilterPreviewPanel
           before={baseline.before}
-          after={rulePreview?.regex_valid ? rulePreview.after : null}
+          after={selectedRule && rulePreview?.regex_valid ? rulePreview.after : null}
         />
       )}
 

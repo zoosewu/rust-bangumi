@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router-dom"
 import { Effect } from "effect"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,16 +14,9 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { CoreApi } from "@/services/CoreApi"
 import type { FilterRule } from "@/schemas/filter"
+import { EntityLink } from "@/components/shared/EntityLink"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { useTableSearch } from "@/hooks/useTableSearch"
-
-const TARGET_ROUTES: Record<string, string> = {
-  anime_work: "/anime-works",
-  anime: "/anime",
-  subtitle_group: "/subtitle-groups",
-  fetcher: "/subscriptions",
-  subscription: "/subscriptions",
-}
 
 export default function FiltersPage() {
   const { t } = useTranslation()
@@ -96,23 +88,13 @@ export default function FiltersPage() {
       header: t("parsers.entity"),
       render: (item) => {
         const rule = item as unknown as FilterRule
-        if (rule.target_type === "global") {
-          return <span className="text-muted-foreground text-xs">Global</span>
-        }
-        const route = TARGET_ROUTES[rule.target_type]
-        const label = rule.target_name ?? `#${rule.target_id}`
-        if (route) {
-          return (
-            <Link
-              to={route}
-              className="text-xs text-primary underline-offset-2 hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {label}
-            </Link>
-          )
-        }
-        return <span className="text-xs">{label}</span>
+        return (
+          <EntityLink
+            type={rule.target_type}
+            id={rule.target_id}
+            name={rule.target_name}
+          />
+        )
       },
     },
     {
