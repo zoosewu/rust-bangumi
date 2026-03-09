@@ -22,6 +22,7 @@ import { AnimeWorkDialog } from "./AnimeDialog"
 import type { AnimeWork } from "@/schemas/anime"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { useTableSearch } from "@/hooks/useTableSearch"
+import { formatDate } from "@/lib/datetime"
 
 export default function AnimeWorksPage() {
   const { t } = useTranslation()
@@ -66,7 +67,7 @@ export default function AnimeWorksPage() {
     {
       key: "created_at",
       header: t("anime.created"),
-      render: (item) => String(item.created_at).slice(0, 10),
+      render: (item) => formatDate(String(item.created_at)),
     },
     {
       key: "actions",

@@ -14,6 +14,7 @@ import { Plus } from "lucide-react"
 import { SubscriptionDialog } from "./SubscriptionDialog"
 import { CreateSubscriptionWizard } from "./CreateSubscriptionWizard"
 import type { Subscription } from "@/schemas/subscription"
+import { formatDateTime } from "@/lib/datetime"
 
 export default function SubscriptionsPage() {
   const { t } = useTranslation()
@@ -82,7 +83,7 @@ export default function SubscriptionsPage() {
       header: t("subscriptions.lastFetched"),
       render: (item) =>
         item.last_fetched_at
-          ? String(item.last_fetched_at).slice(0, 19).replace("T", " ")
+          ? formatDateTime(String(item.last_fetched_at))
           : t("common.never"),
     },
     {

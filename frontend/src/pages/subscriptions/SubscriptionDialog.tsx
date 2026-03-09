@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { formatDateTime } from "@/lib/datetime"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
@@ -186,7 +187,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
           )}
           <InfoItem
             label={t("subscriptions.lastFetched", "Last Fetched")}
-            value={subscription.last_fetched_at ? String(subscription.last_fetched_at).slice(0, 19).replace("T", " ") : t("common.never")}
+            value={subscription.last_fetched_at ? formatDateTime(String(subscription.last_fetched_at)) : t("common.never")}
           />
         </InfoSection>
 

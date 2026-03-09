@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next"
+import { formatDateTime } from "@/lib/datetime"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -89,18 +90,18 @@ export function RawItemDialog({
             </InfoItem>
             <InfoItem
               label={t("rawItems.created")}
-              value={item.created_at.slice(0, 19).replace("T", " ")}
+              value={formatDateTime(item.created_at)}
             />
             {item.pub_date && (
               <InfoItem
                 label={t("rawItems.pubDate", "Published")}
-                value={item.pub_date.slice(0, 19).replace("T", " ")}
+                value={formatDateTime(item.pub_date)}
               />
             )}
             {item.parsed_at && (
               <InfoItem
                 label={t("rawItems.parsedAt", "Parsed At")}
-                value={item.parsed_at.slice(0, 19).replace("T", " ")}
+                value={formatDateTime(item.parsed_at)}
               />
             )}
           </InfoSection>

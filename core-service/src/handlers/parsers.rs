@@ -134,8 +134,8 @@ impl From<TitleParser> for ParserResponse {
             created_from_type: p.created_from_type.map(|t| t.to_string()),
             created_from_id: p.created_from_id,
             created_from_name: None,
-            created_at: p.created_at.to_string(),
-            updated_at: p.updated_at.to_string(),
+            created_at: crate::serde_utils::format_utc(&p.created_at),
+            updated_at: crate::serde_utils::format_utc(&p.updated_at),
         }
     }
 }

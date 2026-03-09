@@ -11,7 +11,9 @@ pub struct AnimeWorkRequest {
 pub struct AnimeWorkResponse {
     pub anime_id: i32,
     pub title: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
@@ -27,6 +29,7 @@ pub struct SeasonResponse {
     pub season_id: i32,
     pub year: i32,
     pub season: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
@@ -50,7 +53,9 @@ pub struct AnimeResponse {
     pub description: Option<String>,
     pub aired_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
@@ -72,6 +77,7 @@ pub struct SubtitleGroupRequest {
 pub struct SubtitleGroupResponse {
     pub group_id: i32,
     pub group_name: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
@@ -94,7 +100,9 @@ pub struct FilterRuleResponse {
     pub rule_order: i32,
     pub is_positive: bool,
     pub regex_pattern: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
@@ -124,7 +132,9 @@ pub struct AnimeRichResponse {
     pub description: Option<String>,
     pub aired_date: Option<NaiveDate>,
     pub end_date: Option<NaiveDate>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
     pub cover_image_url: Option<String>,
 }
@@ -152,6 +162,7 @@ pub struct AnimeLinkRichResponse {
     pub conflict_flag: bool,
     pub conflicting_link_ids: Vec<i32>,
     pub download: Option<DownloadInfo>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
@@ -213,6 +224,7 @@ pub struct AnimeLinkResponse {
     pub title: Option<String>,
     pub url: String,
     pub source_hash: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
@@ -227,6 +239,7 @@ pub struct AnimeLinkConflictLink {
     pub conflict_flag: bool,
     pub link_status: String,
     pub download: Option<DownloadInfo>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
@@ -241,6 +254,7 @@ pub struct AnimeLinkConflictInfo {
     pub resolution_status: String,
     pub chosen_link_id: Option<i32>,
     pub links: Vec<AnimeLinkConflictLink>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 

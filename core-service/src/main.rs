@@ -15,6 +15,7 @@ mod dto;
 mod handlers;
 mod models;
 mod schema;
+mod serde_utils;
 mod services;
 mod state;
 

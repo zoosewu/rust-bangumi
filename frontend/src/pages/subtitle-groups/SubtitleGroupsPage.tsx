@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { formatDateTime } from "@/lib/datetime"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -67,7 +68,7 @@ export default function SubtitleGroupsPage() {
     {
       key: "created_at",
       header: t("rawItems.created"),
-      render: (item) => String(item.created_at).slice(0, 19).replace("T", " "),
+      render: (item) => formatDateTime(String(item.created_at)),
     },
     {
       key: "actions",

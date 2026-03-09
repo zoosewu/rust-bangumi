@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
+import { formatDate } from "@/lib/datetime"
 import { Effect } from "effect"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
@@ -125,7 +126,7 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
           <InfoSection>
             <InfoItem label={t("common.id")} value={String(anime.anime_id)} />
             <InfoItem label={t("common.name")} value={anime.title} />
-            <InfoItem label={t("anime.created", "Created")} value={anime.created_at.slice(0, 10)} />
+            <InfoItem label={t("anime.created", "Created")} value={formatDate(anime.created_at)} />
           </InfoSection>
 
           {/* Series list */}

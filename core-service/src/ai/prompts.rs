@@ -101,19 +101,19 @@ All backslashes must be doubled in JSON: `\[` in regex → `\\[` in JSON string.
 
 ## Strategy
 
-1. Analyze ALL titles and find the most common format pattern.
-2. Generate ONE parser maximizing coverage.
-3. Titles that don't fit go into `unmatched_titles` for a future retry.
+1. Identify the **exact anime title** from the input titles.
+2. Generate ONE parser that matches **only that specific anime** — lock every fixed structural element.
+3. Titles with an incompatible format go into `unmatched_titles` for a future retry.
 
 ## JSON Format
 
 Return a **single JSON object**:
 
-- **name** (string): Parser name, e.g. `"LoliHouse Standard Parser"`
-- **condition_regex** (string): Regex that must match for this parser to activate
-- **parse_regex** (string): Regex with numbered capture groups
-- **priority** (number): `9999` for single-anime parsers; `50` for general-purpose
-- **anime_title_source** / **anime_title_value**: `"regex"`→`"$N"` | `"static"`→fixed string
+- **name** (string): Parser name including group + title, e.g. `"LoliHouse - Attack on Titan"`
+- **condition_regex** (string): MUST contain the **literal anime title** (regex-escaped) in addition to the subtitle group. Lock subtitle group + title + separator style. e.g. `^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+`
+- **parse_regex** (string): MUST contain the **literal anime title**. Lock every fixed structural element (group brackets, separator, episode position, resolution format). Use capture groups only for variable parts. e.g. `^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*(\\d+)\\s*\\[(\\d+[Pp])`
+- **priority** (number): Always `9999`
+- **anime_title_source** / **anime_title_value**: Always `"static"` / exact base title. NEVER use `"regex"` to extract the title dynamically.
 - **episode_no_source** / **episode_no_value**: `"regex"`→`"$N"` | `"static"`→`"12"` — **integer required**
 - **episode_end_source** / **episode_end_value**: same as above, or `null` — integer; only for batch torrents
 - **series_no_source** / **series_no_value**: same, or `null` — integer ≥ 1
@@ -145,11 +145,11 @@ Strip season numbers and identifiers — `anime_title` must be the base work tit
 
 ```json
 {
-  "name": "LoliHouse Standard Parser",
-  "condition_regex": "^\\[LoliHouse\\]",
-  "parse_regex": "^\\[LoliHouse\\]\\s*(.+?)\\s+-\\s*(\\d+)\\s*\\[(\\d+p)",
-  "priority": 50,
-  "anime_title_source": "regex", "anime_title_value": "$1",
+  "name": "LoliHouse - Attack on Titan",
+  "condition_regex": "^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+",
+  "parse_regex": "^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*(\\d+)\\s*\\[(\\d+[Pp])",
+  "priority": 9999,
+  "anime_title_source": "static", "anime_title_value": "Attack on Titan",
   "episode_no_source": "regex", "episode_no_value": "$2",
   "episode_end_source": null, "episode_end_value": null,
   "series_no_source": null, "series_no_value": null,
@@ -175,16 +175,16 @@ In JSON strings, ALL backslashes must be doubled. This is mandatory:
 
 ## Strategy
 
-1. Analyze ALL conflict groups and identify the most common pattern (e.g., most groups prefer a specific subtitle group).
-2. Generate ONE set of filter rules targeting that pattern — prioritize resolving the **most groups**.
-3. Groups that cannot be resolved by these rules go into `unresolved_groups` for a future retry.
+1. Analyze ALL conflict groups and identify the most commonly preferred subtitle group/format.
+2. Generate ONE set of filter rules — each rule MUST be as narrow as possible: include subtitle group + anime title + every additional fixed structural element visible in the titles (resolution, bracket style, separator, language tag). NEVER use only the subtitle group alone.
+3. Prioritize resolving the **most groups**. Groups that cannot be resolved go into `unresolved_groups` for a future retry.
 
 ## Filter Rule JSON Format
 
 Return a **single JSON object** with these fields:
 
 - **rules** (array): Filter rules, each containing:
-  - **regex_pattern** (string): Regex pattern to match against titles (double-escape backslashes)
+  - **regex_pattern** (string): MUST include subtitle group AND anime title AND any additional fixed structural elements visible in the titles (resolution, bracket style, separator, language tag). Lock as many elements as possible. e.g. `^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+.*\\[1080[Pp]`
   - **is_positive** (boolean): `true` to keep matching titles; `false` to exclude matching titles
   - **rule_order** (integer): Evaluation order starting from 1 — higher value executes first
 - **resolved_groups** (array of integers): 1-indexed group numbers that your rules successfully resolve
@@ -219,7 +219,7 @@ Input:
 {
   "rules": [
     {
-      "regex_pattern": "\\[LoliHouse\\]",
+      "regex_pattern": "^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+.*\\[1080[Pp]",
       "is_positive": true,
       "rule_order": 1
     }

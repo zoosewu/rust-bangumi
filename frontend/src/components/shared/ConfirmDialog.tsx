@@ -12,6 +12,7 @@ interface ConfirmDialogProps {
   confirmLoadingLabel?: string
   confirmVariant?: "destructive" | "default"
   children?: React.ReactNode
+  size?: "full" | "md" | "sm"
 }
 
 export function ConfirmDialog({
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   confirmLoadingLabel,
   confirmVariant = "destructive",
   children,
+  size = "sm",
 }: ConfirmDialogProps) {
   return (
     <FullScreenDialog
@@ -32,7 +34,7 @@ export function ConfirmDialog({
       onOpenChange={onOpenChange}
       title={title}
       description={description}
-      size="sm"
+      size={size}
       footer={
         <>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

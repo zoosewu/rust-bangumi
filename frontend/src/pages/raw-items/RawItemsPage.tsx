@@ -19,6 +19,7 @@ import { EntityLink } from "@/components/shared/EntityLink"
 import { RawItemDialog } from "./RawItemDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
+import { formatDateTime } from "@/lib/datetime"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
@@ -143,7 +144,7 @@ export default function RawItemsPage() {
     {
       key: "created_at",
       header: t("rawItems.created"),
-      render: (item) => String(item.created_at).slice(0, 19).replace("T", " "),
+      render: (item) => formatDateTime(String(item.created_at)),
     },
   ]
 

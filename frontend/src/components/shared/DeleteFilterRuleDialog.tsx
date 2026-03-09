@@ -59,6 +59,7 @@ export function DeleteFilterRuleDialog({
       open={open}
       onOpenChange={handleOpenChange}
       title={t("filter.confirmRemove", "Remove filter rule?")}
+      size="full"
       description={
         rule
           ? `${rule.is_positive ? "Include" : "Exclude"}: ${rule.regex_pattern}`

@@ -90,8 +90,8 @@ pub async fn list_downloads(
                 error_message: d.error_message,
                 torrent_hash: d.torrent_hash,
                 file_path: d.file_path,
-                created_at: d.created_at.to_string(),
-                updated_at: d.updated_at.to_string(),
+                created_at: crate::serde_utils::format_utc(&d.created_at),
+                updated_at: crate::serde_utils::format_utc(&d.updated_at),
             }
         })
         .collect();

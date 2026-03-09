@@ -8,6 +8,7 @@ import { AutoResizeTextarea } from "@/components/shared/AutoResizeTextarea"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, RotateCcw } from "lucide-react"
+import { toast } from "sonner"
+import type { ServiceModule } from "@/schemas/service-module"
 
 function PromptTextarea({
   value,
@@ -41,12 +44,89 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <PageHeader title="設定" />
+      <DownloaderPrioritySection />
+      <Separator />
       <AiConnectionSection />
       <Separator />
       <ParserPromptSection />
       <Separator />
       <FilterPromptSection />
     </div>
+  )
+}
+
+function DownloaderPrioritySection() {
+  const { data: modules, refetch } = useEffectQuery(
+    () => Effect.flatMap(CoreApi, (api) => api.getDownloaderModules),
+    [],
+  )
+
+  const { mutate: doUpdate, isLoading: saving } = useEffectMutation(
+    ({ id, priority }: { id: number; priority: number }) =>
+      Effect.flatMap(CoreApi, (api) => api.updateServiceModule(id, { priority })),
+  )
+
+  const [drafts, setDrafts] = useState<Record<number, string>>({})
+
+  useEffect(() => {
+    if (modules) {
+      const initial: Record<number, string> = {}
+      modules.forEach((m: ServiceModule) => { initial[m.module_id] = String(m.priority) })
+      setDrafts(initial)
+    }
+  }, [modules])
+
+  if (!modules || modules.length === 0) return null
+
+  const sorted = [...modules].sort((a: ServiceModule, b: ServiceModule) => b.priority - a.priority)
+
+  const handleSaveAll = async () => {
+    for (const m of sorted) {
+      const priority = Number(drafts[m.module_id] ?? m.priority)
+      if (priority !== m.priority) {
+        await doUpdate({ id: m.module_id, priority })
+      }
+    }
+    toast.success("已儲存")
+    refetch()
+  }
+
+  const hasPendingChanges = sorted.some(
+    (m: ServiceModule) => String(drafts[m.module_id] ?? m.priority) !== String(m.priority),
+  )
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>下載器優先順序</CardTitle>
+        <CardDescription>數值越高優先使用，當訂閱未指定下載器時依此順序派送</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {sorted.map((m: ServiceModule, idx: number) => (
+          <div key={m.module_id} className="flex items-center gap-3">
+            <Badge variant="outline" className="text-xs w-5 justify-center shrink-0">
+              {idx + 1}
+            </Badge>
+            <span className="text-sm flex-1 truncate">{m.name}</span>
+            <span className="text-xs text-muted-foreground shrink-0">優先度</span>
+            <Input
+              type="number"
+              className="w-20 h-8 text-sm"
+              value={drafts[m.module_id] ?? m.priority}
+              onChange={(e) =>
+                setDrafts((d) => ({ ...d, [m.module_id]: e.target.value }))
+              }
+            />
+          </div>
+        ))}
+        <div className="flex justify-end pt-1">
+          <Button size="sm" onClick={handleSaveAll} disabled={saving || !hasPendingChanges}>
+            {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
+            儲存
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

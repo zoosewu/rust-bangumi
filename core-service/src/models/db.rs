@@ -431,15 +431,20 @@ pub struct Subscription {
     pub source_url: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc_opt::serialize")]
     pub last_fetched_at: Option<NaiveDateTime>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc_opt::serialize")]
     pub next_fetch_at: Option<NaiveDateTime>,
     pub fetch_interval_minutes: i32,
     pub is_active: bool,
     pub config: Option<JsonValue>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
     pub source_type: String,
     pub assignment_status: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc_opt::serialize")]
     pub assigned_at: Option<NaiveDateTime>,
     pub auto_selected: bool,
     pub preferred_downloader_id: Option<i32>,
@@ -660,6 +665,7 @@ pub struct AnimeCoverImage {
     pub service_module_id: Option<i32>,
     pub source_name: String,
     pub is_default: bool,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: chrono::NaiveDateTime,
 }
 
@@ -682,7 +688,9 @@ pub struct AiSettings {
     pub base_url: String,
     pub api_key: String,
     pub model_name: String,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
@@ -704,7 +712,9 @@ pub struct AiPromptSettings {
     pub fixed_filter_prompt: Option<String>,
     pub custom_parser_prompt: Option<String>,
     pub custom_filter_prompt: Option<String>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
@@ -721,8 +731,11 @@ pub struct PendingAiResult {
     pub raw_item_id: Option<i32>,
     pub used_fixed_prompt: String,
     pub used_custom_prompt: Option<String>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc_opt::serialize")]
     pub expires_at: Option<NaiveDateTime>,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
     pub subscription_id: Option<i32>,
     pub confirm_level: Option<String>,

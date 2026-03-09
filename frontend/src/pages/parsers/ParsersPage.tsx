@@ -355,6 +355,7 @@ export default function ParsersPage() {
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         title={t("parsers.deleteParser")}
         description={t("parsers.deleteConfirm", { name: deleteTarget?.name })}
+        size="full"
         loading={deleting}
         confirmLabel={t("common.delete", "Delete")}
         confirmLoadingLabel={t("common.deleting", "Deleting...")}
