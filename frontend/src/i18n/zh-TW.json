@@ -6,7 +6,7 @@
     "anime": "動畫作品",
     "subtitleGroups": "字幕組",
     "subscriptions": "訂閱",
-    "search": "搜尋",
+    "search": "搜尋資源",
     "rawItems": "最新更新",
     "conflicts": "衝突",
     "pending": "待確認",
@@ -273,10 +273,10 @@
     "conflictCount": "衝突連結數"
   },
   "search": {
-    "title": "搜尋",
-    "placeholder": "搜尋動畫...",
+    "title": "搜尋網路資源",
+    "placeholder": "輸入動畫名稱...",
     "noResults": "找不到結果",
-    "hint": "輸入關鍵字搜尋所有來源",
+    "hint": "輸入動畫名稱，搜尋網路上的可用資源",
     "noImage": "無圖片",
     "detail": {
       "subgroup": "字幕組",

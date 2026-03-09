@@ -6,7 +6,7 @@
     "anime": "Anime Titles",
     "subtitleGroups": "Subtitle Groups",
     "subscriptions": "Subscriptions",
-    "search": "Search",
+    "search": "Search Resources",
     "rawItems": "Latest Updates",
     "conflicts": "Conflicts",
     "pending": "Pending",
@@ -273,10 +273,10 @@
     "conflictCount": "Conflicting Links"
   },
   "search": {
-    "title": "Search",
-    "placeholder": "Search anime...",
+    "title": "Search Online Resources",
+    "placeholder": "Enter anime title...",
     "noResults": "No results found",
-    "hint": "Type to search across all sources",
+    "hint": "Enter an anime title to search for available online resources",
     "noImage": "No image",
     "detail": {
       "subgroup": "Subgroup",
