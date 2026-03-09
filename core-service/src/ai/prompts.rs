@@ -231,6 +231,11 @@ Input:
 
 Return ONLY the JSON object, no extra text."#;
 
+/// 將空字串或純空白視為 None，用於 prompt cascade fallback
+pub fn non_empty(s: Option<String>) -> Option<String> {
+    s.filter(|v| !v.trim().is_empty())
+}
+
 /// 組裝最終的 system prompt
 pub fn build_system_prompt(fixed: Option<&str>) -> String {
     fixed.unwrap_or("").to_string()

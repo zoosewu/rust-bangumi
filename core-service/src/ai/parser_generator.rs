@@ -44,18 +44,13 @@ pub async fn generate_parser_for_title(
             .first::<crate::models::AiPromptSettings>(&mut conn)
             .optional()
             .map_err(|e| e.to_string())?;
-        let fixed = prompt_settings
-            .as_ref()
-            .and_then(|p| p.fixed_parser_prompt.clone())
+        let fixed = non_empty(temp_fixed_prompt)
+            .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_parser_prompt.clone())))
             .unwrap_or_else(|| DEFAULT_FIXED_PARSER_PROMPT.to_string());
-        let custom = temp_custom_prompt.or_else(|| {
-            prompt_settings.and_then(|p| p.custom_parser_prompt)
-        });
+        let custom = non_empty(temp_custom_prompt)
+            .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_parser_prompt)));
         (fixed, custom)
     };
-
-    // 若呼叫方提供臨時 fixed_prompt，以其覆蓋 DB 設定
-    let fixed_prompt = temp_fixed_prompt.unwrap_or(fixed_prompt);
 
     // 從 raw_item_id 查詢所屬 subscription_id
     let subscription_id: Option<i32> = raw_item_id.and_then(|rid| {
@@ -265,10 +260,9 @@ pub async fn generate_parsers_for_subscription_batch(
             .first::<crate::models::AiPromptSettings>(&mut conn)
             .optional()
             .map_err(|e| e.to_string())?;
-        let fixed = ps.as_ref()
-            .and_then(|p| p.fixed_parser_prompt.clone())
+        let fixed = non_empty(ps.as_ref().and_then(|p| p.fixed_parser_prompt.clone()))
             .unwrap_or_else(|| DEFAULT_FIXED_PARSER_PROMPT.to_string());
-        let custom = ps.and_then(|p| p.custom_parser_prompt);
+        let custom = non_empty(ps.and_then(|p| p.custom_parser_prompt));
         (fixed, custom)
     };
 

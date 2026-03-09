@@ -26,18 +26,13 @@ pub async fn generate_filter_for_conflict(
             .first::<crate::models::AiPromptSettings>(&mut conn)
             .optional()
             .map_err(|e| e.to_string())?;
-        let fixed = prompt_settings
-            .as_ref()
-            .and_then(|p| p.fixed_filter_prompt.clone())
+        let fixed = non_empty(temp_fixed_prompt)
+            .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_filter_prompt.clone())))
             .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string());
-        let custom = temp_custom_prompt.or_else(|| {
-            prompt_settings.and_then(|p| p.custom_filter_prompt)
-        });
+        let custom = non_empty(temp_custom_prompt)
+            .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_filter_prompt)));
         (fixed, custom)
     };
-
-    // 若呼叫方提供臨時 fixed_prompt，以其覆蓋 DB 設定
-    let fixed_prompt = temp_fixed_prompt.unwrap_or(fixed_prompt);
 
     let pending = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
@@ -196,15 +191,11 @@ fn load_filter_prompts(
         .first::<AiPromptSettings>(conn)
         .optional()
         .map_err(|e| e.to_string())?;
-    let fixed = temp_fixed.unwrap_or_else(|| {
-        prompt_settings
-            .as_ref()
-            .and_then(|p| p.fixed_filter_prompt.clone())
-            .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string())
-    });
-    let custom = temp_custom.or_else(|| {
-        prompt_settings.and_then(|p| p.custom_filter_prompt)
-    });
+    let fixed = non_empty(temp_fixed)
+        .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_filter_prompt.clone())))
+        .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string());
+    let custom = non_empty(temp_custom)
+        .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_filter_prompt)));
     Ok((fixed, custom))
 }
 
