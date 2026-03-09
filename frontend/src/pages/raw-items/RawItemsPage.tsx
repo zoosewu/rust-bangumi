@@ -105,7 +105,7 @@ export default function RawItemsPage() {
       render: (item) => (
         <div className="flex items-center gap-1.5">
           <StatusBadge status={String(item.status)} />
-          {item.conflict_flag && (
+          {Boolean(item.conflict_flag) && (
             <Badge variant="destructive" className="text-xs px-1.5 py-0">
               {t("rawItems.conflict")}
             </Badge>
