@@ -173,7 +173,8 @@
     "parser": "解析器",
     "created": "建立時間",
     "download": "下載",
-    "filterStatus": "篩選狀態"
+    "filterStatus": "篩選狀態",
+    "conflict": "衝突"
   },
   "downloads": {
     "title": "下載",

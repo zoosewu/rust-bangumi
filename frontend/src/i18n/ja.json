@@ -173,7 +173,8 @@
     "parser": "パーサー",
     "created": "作成日時",
     "download": "ダウンロード",
-    "filterStatus": "フィルター状態"
+    "filterStatus": "フィルター状態",
+    "conflict": "コンフリクト"
   },
   "downloads": {
     "title": "ダウンロード",

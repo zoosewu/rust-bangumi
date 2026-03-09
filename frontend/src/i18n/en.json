@@ -173,7 +173,8 @@
     "parser": "Parser",
     "created": "Created",
     "download": "Download",
-    "filterStatus": "Filter Status"
+    "filterStatus": "Filter Status",
+    "conflict": "Conflict"
   },
   "downloads": {
     "title": "Downloads",

@@ -6,6 +6,7 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
+import { Badge } from "@/components/ui/badge"
 import { DownloadBadge } from "@/components/shared/DownloadBadge"
 import { Button } from "@/components/ui/button"
 import {
@@ -101,7 +102,16 @@ export default function RawItemsPage() {
     {
       key: "status",
       header: t("common.status"),
-      render: (item) => <StatusBadge status={String(item.status)} />,
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <StatusBadge status={String(item.status)} />
+          {item.conflict_flag && (
+            <Badge variant="destructive" className="text-xs px-1.5 py-0">
+              {t("rawItems.conflict")}
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: "download",

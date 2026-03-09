@@ -48,10 +48,11 @@ pub struct RawItemResponse {
     pub created_at: String,
     pub download: Option<RawItemDownloadInfo>,
     pub filter_passed: Option<bool>,
+    pub conflict_flag: bool,
 }
 
 impl RawItemResponse {
-    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>, filter_passed: Option<bool>) -> Self {
+    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>, filter_passed: Option<bool>, conflict_flag: bool) -> Self {
         Self {
             item_id: item.item_id,
             title: item.title,
@@ -66,6 +67,7 @@ impl RawItemResponse {
             created_at: crate::serde_utils::format_utc(&item.created_at),
             download,
             filter_passed,
+            conflict_flag,
         }
     }
 }
@@ -102,6 +104,21 @@ fn load_download_info(
         }
     }
     Ok(map)
+}
+
+/// Batch-load conflict flags for a set of raw_item_ids.
+/// Returns a set of item_ids that have at least one conflicting anime_link.
+fn load_conflict_flags(
+    conn: &mut diesel::PgConnection,
+    item_ids: &[i32],
+) -> Result<std::collections::HashSet<i32>, diesel::result::Error> {
+    let rows: Vec<Option<i32>> = anime_links::table
+        .filter(anime_links::raw_item_id.eq_any(item_ids))
+        .filter(anime_links::conflict_flag.eq(true))
+        .select(anime_links::raw_item_id)
+        .load(conn)?;
+
+    Ok(rows.into_iter().flatten().collect())
 }
 
 fn status_priority(status: &str) -> u8 {
@@ -164,6 +181,8 @@ pub async fn list_raw_items(
     let item_ids: Vec<i32> = items.iter().map(|i| i.item_id).collect();
     let dl_map = load_download_info(&mut conn, &item_ids)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let conflict_set = load_conflict_flags(&mut conn, &item_ids)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(
         items
@@ -173,7 +192,8 @@ pub async fn list_raw_items(
                     status: d.status.clone(),
                     progress: d.progress,
                 });
-                RawItemResponse::from_item(item, dl, None)
+                let conflict_flag = conflict_set.contains(&item.item_id);
+                RawItemResponse::from_item(item, dl, None, conflict_flag)
             })
             .collect(),
     ))
@@ -200,6 +220,9 @@ pub async fn get_raw_item(
         status: d.status.clone(),
         progress: d.progress,
     });
+    let conflict_flag = load_conflict_flags(&mut conn, &[item_id])
+        .map(|s| s.contains(&item_id))
+        .unwrap_or(false);
 
     // Evaluate filter rules for this item
     let filter_passed = {
@@ -231,7 +254,7 @@ pub async fn get_raw_item(
         }
     };
 
-    Ok(Json(RawItemResponse::from_item(item, dl, filter_passed)))
+    Ok(Json(RawItemResponse::from_item(item, dl, filter_passed, conflict_flag)))
 }
 
 /// POST /raw-items/:item_id/reparse - 重新解析單一項目
