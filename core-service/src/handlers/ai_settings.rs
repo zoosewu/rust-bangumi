@@ -31,6 +31,8 @@ pub struct UpdateAiSettingsRequest {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub model_name: Option<String>,
+    pub max_tokens: Option<i32>,
+    pub response_format_mode: Option<String>,
 }
 
 // PUT /ai-settings
@@ -38,6 +40,15 @@ pub async fn update_ai_settings(
     State(state): State<AppState>,
     Json(req): Json<UpdateAiSettingsRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // 驗證 response_format_mode
+    if let Some(ref mode) = req.response_format_mode {
+        if !matches!(mode.as_str(), "strict" | "non_strict" | "inject_schema") {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("invalid response_format_mode: {mode}"),
+            ));
+        }
+    }
     let mut conn = state
         .db
         .get()
@@ -48,6 +59,8 @@ pub async fn update_ai_settings(
             base_url: req.base_url,
             api_key: req.api_key,
             model_name: req.model_name,
+            max_tokens: req.max_tokens,
+            response_format_mode: req.response_format_mode,
             updated_at: now,
         })
         .execute(&mut conn)

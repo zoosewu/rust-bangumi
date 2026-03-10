@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -16,10 +17,18 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import type { ServiceModule } from "@/schemas/service-module"
+import type { ResponseFormatMode } from "@/schemas/ai"
 
 function PromptTextarea({
   value,
@@ -41,9 +50,10 @@ function PromptTextarea({
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation()
   return (
     <div className="space-y-6 max-w-2xl">
-      <PageHeader title="設定" />
+      <PageHeader title={t("settings.title")} />
       <DownloaderPrioritySection />
       <Separator />
       <AiConnectionSection />
@@ -56,6 +66,7 @@ export default function SettingsPage() {
 }
 
 function DownloaderPrioritySection() {
+  const { t } = useTranslation()
   const { data: modules, refetch } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getDownloaderModules),
     [],
@@ -87,7 +98,7 @@ function DownloaderPrioritySection() {
         await doUpdate({ id: m.module_id, priority })
       }
     }
-    toast.success("已儲存")
+    toast.success(t("settings.saved"))
     refetch()
   }
 
@@ -98,8 +109,8 @@ function DownloaderPrioritySection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>下載器優先順序</CardTitle>
-        <CardDescription>數值越高優先使用，當訂閱未指定下載器時依此順序派送</CardDescription>
+        <CardTitle>{t("settings.downloader.title")}</CardTitle>
+        <CardDescription>{t("settings.downloader.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {sorted.map((m: ServiceModule, idx: number) => (
@@ -108,7 +119,7 @@ function DownloaderPrioritySection() {
               {idx + 1}
             </Badge>
             <span className="text-sm flex-1 truncate">{m.name}</span>
-            <span className="text-xs text-muted-foreground shrink-0">優先度</span>
+            <span className="text-xs text-muted-foreground shrink-0">{t("settings.downloader.priority")}</span>
             <Input
               type="number"
               className="w-20 h-8 text-sm"
@@ -122,7 +133,7 @@ function DownloaderPrioritySection() {
         <div className="flex justify-end pt-1">
           <Button size="sm" onClick={handleSaveAll} disabled={saving || !hasPendingChanges}>
             {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
-            儲存
+            {t("common.save")}
           </Button>
         </div>
       </CardContent>
@@ -131,6 +142,26 @@ function DownloaderPrioritySection() {
 }
 
 function AiConnectionSection() {
+  const { t } = useTranslation()
+
+  const responseFormatOptions: { value: ResponseFormatMode; label: string; description: string }[] = [
+    {
+      value: "strict",
+      label: t("settings.ai.responseFormat_strict_label"),
+      description: t("settings.ai.responseFormat_strict_desc"),
+    },
+    {
+      value: "non_strict",
+      label: t("settings.ai.responseFormat_non_strict_label"),
+      description: t("settings.ai.responseFormat_non_strict_desc"),
+    },
+    {
+      value: "inject_schema",
+      label: t("settings.ai.responseFormat_inject_schema_label"),
+      description: t("settings.ai.responseFormat_inject_schema_desc"),
+    },
+  ]
+
   const { data: settings } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getAiSettings),
     [],
@@ -139,12 +170,16 @@ function AiConnectionSection() {
   const [baseUrl, setBaseUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
   const [modelName, setModelName] = useState("")
+  const [maxTokens, setMaxTokens] = useState("4096")
+  const [responseFormatMode, setResponseFormatMode] = useState<ResponseFormatMode>("strict")
   const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
 
   useEffect(() => {
     if (settings) {
       setBaseUrl(settings.base_url)
       setModelName(settings.model_name)
+      setMaxTokens(String(settings.max_tokens))
+      setResponseFormatMode(settings.response_format_mode)
     }
   }, [settings])
 
@@ -155,6 +190,8 @@ function AiConnectionSection() {
           base_url: baseUrl,
           api_key: apiKey || undefined,
           model_name: modelName,
+          max_tokens: Number(maxTokens) || 4096,
+          response_format_mode: responseFormatMode,
         }),
       ),
   )
@@ -163,11 +200,13 @@ function AiConnectionSection() {
     () => Effect.flatMap(CoreApi, (api) => api.testAiConnection),
   )
 
+  const selectedOption = responseFormatOptions.find((o) => o.value === responseFormatMode)
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI 連線設定</CardTitle>
-        <CardDescription>設定 OpenAI-compatible API 連線資訊</CardDescription>
+        <CardTitle>{t("settings.ai.title")}</CardTitle>
+        <CardDescription>{t("settings.ai.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
@@ -184,7 +223,7 @@ function AiConnectionSection() {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="輸入新 API Key（留空保持不變）"
+            placeholder={t("settings.ai.apiKeyPlaceholder")}
           />
         </div>
         <div className="space-y-2">
@@ -195,9 +234,45 @@ function AiConnectionSection() {
             placeholder="gpt-4o-mini"
           />
         </div>
+        <div className="space-y-2">
+          <Label>{t("settings.ai.maxTokens")}</Label>
+          <Input
+            type="number"
+            value={maxTokens}
+            onChange={(e) => setMaxTokens(e.target.value)}
+            placeholder="4096"
+            min={256}
+            max={128000}
+            className="w-40"
+          />
+          <p className="text-xs text-muted-foreground">{t("settings.ai.maxTokensHint")}</p>
+        </div>
+        <div className="space-y-2">
+          <Label>{t("settings.ai.responseFormat")}</Label>
+          <Select
+            value={responseFormatMode}
+            onValueChange={(v) => setResponseFormatMode(v as ResponseFormatMode)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {responseFormatOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedOption && (
+            <p className="text-xs text-muted-foreground">{selectedOption.description}</p>
+          )}
+        </div>
         {testResult && (
           <p className={`text-sm ${testResult.ok ? "text-green-600" : "text-destructive"}`}>
-            {testResult.ok ? "連線成功" : `連線失敗: ${testResult.error}`}
+            {testResult.ok
+              ? t("settings.ai.testSuccess")
+              : t("settings.ai.testFailure", { error: testResult.error })}
           </p>
         )}
         <div className="flex gap-2">
@@ -208,11 +283,11 @@ function AiConnectionSection() {
             disabled={testing}
           >
             {testing && <Loader2 className="mr-1 size-3 animate-spin" />}
-            測試連線
+            {t("settings.ai.testConnection")}
           </Button>
           <Button size="sm" onClick={() => save()} disabled={saving}>
             {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
-            儲存
+            {t("common.save")}
           </Button>
         </div>
       </CardContent>
@@ -221,6 +296,7 @@ function AiConnectionSection() {
 }
 
 function ParserPromptSection() {
+  const { t } = useTranslation()
   const { data: settings, refetch } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getAiPromptSettings),
     [],
@@ -252,13 +328,13 @@ function ParserPromptSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Parser Prompt 設定</CardTitle>
-        <CardDescription>AI 生成解析器時使用的 Prompt</CardDescription>
+        <CardTitle>{t("settings.parserPrompt.title")}</CardTitle>
+        <CardDescription>{t("settings.parserPrompt.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>固定 Prompt</Label>
+            <Label>{t("settings.parserPrompt.fixedPrompt")}</Label>
             <Button
               variant="ghost"
               size="sm"
@@ -273,26 +349,26 @@ function ParserPromptSection() {
               disabled={reverting}
             >
               <RotateCcw className="mr-1 size-3" />
-              Revert 預設值
+              {t("settings.parserPrompt.revertDefault")}
             </Button>
           </div>
           <PromptTextarea
             value={fixed}
             onChange={setFixed}
-            placeholder="留空則不使用固定 Prompt"
+            placeholder={t("settings.parserPrompt.fixedPromptPlaceholder")}
           />
         </div>
         <div className="space-y-2">
-          <Label>自訂 Prompt（追加在固定 Prompt 之後）</Label>
+          <Label>{t("settings.parserPrompt.customPrompt")}</Label>
           <PromptTextarea
             value={custom}
             onChange={setCustom}
-            placeholder="留空"
+            placeholder={t("settings.parserPrompt.customPromptPlaceholder")}
           />
         </div>
         <Button size="sm" onClick={() => save()} disabled={saving}>
           {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
-          儲存
+          {t("common.save")}
         </Button>
       </CardContent>
     </Card>
@@ -300,6 +376,7 @@ function ParserPromptSection() {
 }
 
 function FilterPromptSection() {
+  const { t } = useTranslation()
   const { data: settings, refetch } = useEffectQuery(
     () => Effect.flatMap(CoreApi, (api) => api.getAiPromptSettings),
     [],
@@ -331,13 +408,13 @@ function FilterPromptSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Filter Prompt 設定</CardTitle>
-        <CardDescription>AI 生成過濾規則時使用的 Prompt</CardDescription>
+        <CardTitle>{t("settings.filterPrompt.title")}</CardTitle>
+        <CardDescription>{t("settings.filterPrompt.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>固定 Prompt</Label>
+            <Label>{t("settings.filterPrompt.fixedPrompt")}</Label>
             <Button
               variant="ghost"
               size="sm"
@@ -352,26 +429,26 @@ function FilterPromptSection() {
               disabled={reverting}
             >
               <RotateCcw className="mr-1 size-3" />
-              Revert 預設值
+              {t("settings.filterPrompt.revertDefault")}
             </Button>
           </div>
           <PromptTextarea
             value={fixed}
             onChange={setFixed}
-            placeholder="留空則不使用固定 Prompt"
+            placeholder={t("settings.filterPrompt.fixedPromptPlaceholder")}
           />
         </div>
         <div className="space-y-2">
-          <Label>自訂 Prompt（追加在固定 Prompt 之後）</Label>
+          <Label>{t("settings.filterPrompt.customPrompt")}</Label>
           <PromptTextarea
             value={custom}
             onChange={setCustom}
-            placeholder="留空"
+            placeholder={t("settings.filterPrompt.customPromptPlaceholder")}
           />
         </div>
         <Button size="sm" onClick={() => save()} disabled={saving}>
           {saving && <Loader2 className="mr-1 size-3 animate-spin" />}
-          儲存
+          {t("common.save")}
         </Button>
       </CardContent>
     </Card>

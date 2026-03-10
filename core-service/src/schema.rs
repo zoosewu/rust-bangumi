@@ -299,12 +299,14 @@ diesel::table! {
 
 diesel::table! {
     ai_settings (id) {
-        id         -> Int4,
-        base_url   -> Text,
-        api_key    -> Text,
-        model_name -> Text,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        id                   -> Int4,
+        base_url             -> Text,
+        api_key              -> Text,
+        model_name           -> Text,
+        max_tokens           -> Int4,
+        response_format_mode -> Text,
+        created_at           -> Timestamp,
+        updated_at           -> Timestamp,
     }
 }
 

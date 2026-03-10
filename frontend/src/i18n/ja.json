@@ -273,6 +273,64 @@
     "subtitleGroup": "字幕グループ",
     "conflictCount": "競合リンク数"
   },
+  "settings": {
+    "title": "設定",
+    "saved": "保存しました",
+    "downloader": {
+      "title": "ダウンローダー優先度",
+      "description": "数値が大きいほど優先度が高い。サブスクリプションにダウンローダーが指定されていない場合に使用",
+      "priority": "優先度"
+    },
+    "ai": {
+      "title": "AI接続設定",
+      "description": "OpenAI互換APIの接続情報を設定",
+      "apiKeyPlaceholder": "新しいAPI Keyを入力（空欄で変更なし）",
+      "maxTokens": "1回の生成あたり最大トークン数",
+      "maxTokensHint": "AI生成ごとの最大トークン数を制御します（デフォルト: 4096）",
+      "responseFormat": "Response Format 厳格度",
+      "responseFormat_strict_label": "厳格モード（strict: true）",
+      "responseFormat_strict_desc": "JSON Schema + strict:true を使用。AIはスキーマ構造を厳密に守る必要があります",
+      "responseFormat_non_strict_label": "緩和モード（strict: false）",
+      "responseFormat_non_strict_desc": "JSON Schema + strict:false を使用。AIは追加フィールドを出力できます",
+      "responseFormat_inject_schema_label": "Schemaを注入（response_formatなし）",
+      "responseFormat_inject_schema_desc": "response_formatフィールドを送信せず、JSONスキーマをsystemプロンプトに注入します",
+      "testConnection": "接続テスト",
+      "testSuccess": "接続成功",
+      "testFailure": "接続失敗: {{error}}"
+    },
+    "parserPrompt": {
+      "title": "Parser Prompt設定",
+      "description": "AIがパーサーを生成する際に使用するプロンプト",
+      "fixedPrompt": "固定Prompt",
+      "fixedPromptPlaceholder": "空欄でシステムデフォルトを使用",
+      "customPrompt": "カスタムPrompt（固定Promptの後に追加）",
+      "customPromptPlaceholder": "空欄でカスタム説明なし",
+      "revertDefault": "デフォルトに戻す"
+    },
+    "filterPrompt": {
+      "title": "Filter Prompt設定",
+      "description": "AIがフィルタールールを生成する際に使用するプロンプト",
+      "fixedPrompt": "固定Prompt",
+      "fixedPromptPlaceholder": "空欄でシステムデフォルトを使用",
+      "customPrompt": "カスタムPrompt（固定Promptの後に追加）",
+      "customPromptPlaceholder": "空欄でカスタム説明なし",
+      "revertDefault": "デフォルトに戻す"
+    }
+  },
+  "aiResult": {
+    "fixedPrompt": "固定Prompt",
+    "customPrompt": "カスタムPrompt",
+    "promptPlaceholder": "空欄で設定値を使用",
+    "regenerate": "再生成",
+    "applyLevel": "適用レベル",
+    "levelGlobal": "グローバル",
+    "levelSubscription": "サブスクリプション",
+    "levelAnimeWork": "アニメ作品",
+    "selectSubscription": "サブスクリプションを選択",
+    "selectAnimeWork": "アニメ作品を選択",
+    "reject": "拒否",
+    "confirm": "確認して適用"
+  },
   "search": {
     "title": "オンラインリソース検索",
     "placeholder": "アニメタイトルを入力...",

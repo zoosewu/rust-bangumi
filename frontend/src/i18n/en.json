@@ -273,6 +273,64 @@
     "subtitleGroup": "Subtitle Group",
     "conflictCount": "Conflicting Links"
   },
+  "settings": {
+    "title": "Settings",
+    "saved": "Saved",
+    "downloader": {
+      "title": "Downloader Priority",
+      "description": "Higher value = higher priority; used when a subscription has no assigned downloader",
+      "priority": "Priority"
+    },
+    "ai": {
+      "title": "AI Connection Settings",
+      "description": "Configure OpenAI-compatible API connection",
+      "apiKeyPlaceholder": "Enter new API Key (leave blank to keep unchanged)",
+      "maxTokens": "Max Tokens per Generation",
+      "maxTokensHint": "Controls the maximum token count per AI generation (default: 4096)",
+      "responseFormat": "Response Format Strictness",
+      "responseFormat_strict_label": "Strict mode (strict: true)",
+      "responseFormat_strict_desc": "Uses JSON Schema + strict:true; AI must exactly follow the schema structure",
+      "responseFormat_non_strict_label": "Relaxed mode (strict: false)",
+      "responseFormat_non_strict_desc": "Uses JSON Schema + strict:false; AI may output extra fields",
+      "responseFormat_inject_schema_label": "Inject Schema (no response_format field)",
+      "responseFormat_inject_schema_desc": "Does not send the response_format field; instead injects the JSON Schema into the system prompt",
+      "testConnection": "Test Connection",
+      "testSuccess": "Connection successful",
+      "testFailure": "Connection failed: {{error}}"
+    },
+    "parserPrompt": {
+      "title": "Parser Prompt Settings",
+      "description": "Prompt used when AI generates parsers",
+      "fixedPrompt": "Fixed Prompt",
+      "fixedPromptPlaceholder": "Leave blank to use system default",
+      "customPrompt": "Custom Prompt (appended after fixed prompt)",
+      "customPromptPlaceholder": "Leave blank for no custom instructions",
+      "revertDefault": "Revert to Default"
+    },
+    "filterPrompt": {
+      "title": "Filter Prompt Settings",
+      "description": "Prompt used when AI generates filter rules",
+      "fixedPrompt": "Fixed Prompt",
+      "fixedPromptPlaceholder": "Leave blank to use system default",
+      "customPrompt": "Custom Prompt (appended after fixed prompt)",
+      "customPromptPlaceholder": "Leave blank for no custom instructions",
+      "revertDefault": "Revert to Default"
+    }
+  },
+  "aiResult": {
+    "fixedPrompt": "Fixed Prompt",
+    "customPrompt": "Custom Prompt",
+    "promptPlaceholder": "Leave blank to use setting value",
+    "regenerate": "Regenerate",
+    "applyLevel": "Apply Level",
+    "levelGlobal": "Global",
+    "levelSubscription": "Subscription",
+    "levelAnimeWork": "Anime Work",
+    "selectSubscription": "Select subscription",
+    "selectAnimeWork": "Select anime work",
+    "reject": "Reject",
+    "confirm": "Confirm & Apply"
+  },
   "search": {
     "title": "Search Online Resources",
     "placeholder": "Enter anime title...",

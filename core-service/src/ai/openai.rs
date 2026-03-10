@@ -8,10 +8,13 @@ pub struct OpenAiClient {
     base_url: String,
     api_key: String,
     model: String,
+    max_tokens: i32,
+    /// "strict" | "non_strict" | "inject_schema"
+    response_format_mode: String,
 }
 
 impl OpenAiClient {
-    pub fn new(base_url: &str, api_key: &str, model: &str) -> Self {
+    pub fn new(base_url: &str, api_key: &str, model: &str, max_tokens: i32, response_format_mode: &str) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -20,6 +23,8 @@ impl OpenAiClient {
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
             model: model.to_string(),
+            max_tokens,
+            response_format_mode: response_format_mode.to_string(),
         }
     }
 
@@ -32,16 +37,18 @@ impl OpenAiClient {
         json!(messages)
     }
 
-    async fn do_request(&self, messages: Value, response_format: Value) -> Result<String, AiError> {
+    async fn do_request(&self, messages: Value, response_format: Option<Value>) -> Result<String, AiError> {
         if self.api_key.is_empty() {
             return Err(AiError::NotConfigured);
         }
-        let body = json!({
+        let mut body = json!({
             "model": self.model,
             "messages": messages,
-            "max_tokens": 4096,
-            "response_format": response_format,
+            "max_tokens": self.max_tokens,
         });
+        if let Some(fmt) = response_format {
+            body["response_format"] = fmt;
+        }
         let resp = self.http
             .post(format!("{}/chat/completions", self.base_url))
             .bearer_auth(&self.api_key)
@@ -86,7 +93,12 @@ impl AiClient for OpenAiClient {
         user_prompt: &str,
     ) -> Result<String, AiError> {
         let messages = Self::build_messages(system_prompt, user_prompt);
-        self.do_request(messages, json!({"type": "json_object"})).await
+        let response_format = if self.response_format_mode == "inject_schema" {
+            None
+        } else {
+            Some(json!({"type": "json_object"}))
+        };
+        self.do_request(messages, response_format).await
     }
 
     async fn chat_completion_structured(
@@ -95,15 +107,31 @@ impl AiClient for OpenAiClient {
         user_prompt: &str,
         schema: &Value,
     ) -> Result<String, AiError> {
-        let messages = Self::build_messages(system_prompt, user_prompt);
-        let response_format = json!({
-            "type": "json_schema",
-            "json_schema": {
-                "name": "output",
-                "strict": true,
-                "schema": schema
+        match self.response_format_mode.as_str() {
+            "inject_schema" => {
+                // 將 JSON Schema 注入 system prompt，不傳 response_format
+                let schema_text = serde_json::to_string_pretty(schema)
+                    .unwrap_or_else(|_| schema.to_string());
+                let augmented_system = format!(
+                    "{}\n\n## Output JSON Schema\nYou MUST output valid JSON matching this schema exactly:\n```json\n{}\n```",
+                    system_prompt, schema_text
+                );
+                let messages = Self::build_messages(&augmented_system, user_prompt);
+                self.do_request(messages, None).await
             }
-        });
-        self.do_request(messages, response_format).await
+            mode => {
+                let strict = mode == "strict";
+                let messages = Self::build_messages(system_prompt, user_prompt);
+                let response_format = json!({
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "output",
+                        "strict": strict,
+                        "schema": schema
+                    }
+                });
+                self.do_request(messages, Some(response_format)).await
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
@@ -40,6 +41,7 @@ export function AiResultPanel({
   defaultLevel = "global",
   defaultTargetId,
 }: AiResultPanelProps) {
+  const { t } = useTranslation()
   const [fixedPrompt, setFixedPrompt] = useState(result.used_fixed_prompt)
   const [customPrompt, setCustomPrompt] = useState(result.used_custom_prompt ?? "")
 
@@ -189,19 +191,20 @@ export function AiResultPanel({
       <div className="space-y-2">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">固定 Prompt</Label>
+            <Label className="text-xs">{t("aiResult.fixedPrompt")}</Label>
             <AutoResizeTextarea
               value={fixedPrompt}
               onChange={(e) => setFixedPrompt(e.target.value)}
+              placeholder={t("aiResult.promptPlaceholder")}
               className="text-xs font-mono"
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">自訂 Prompt</Label>
+            <Label className="text-xs">{t("aiResult.customPrompt")}</Label>
             <AutoResizeTextarea
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              placeholder="留空使用全局設定"
+              placeholder={t("aiResult.promptPlaceholder")}
               className="text-xs font-mono"
             />
           </div>
@@ -225,7 +228,7 @@ export function AiResultPanel({
           ) : (
             <RefreshCw className="mr-1 size-3" />
           )}
-          重新生成
+          {t("aiResult.regenerate")}
         </Button>
       </div>
 
@@ -242,15 +245,15 @@ export function AiResultPanel({
         <div className="flex items-center gap-3 pt-2 border-t flex-wrap">
           {isPending && (
             <div className="flex items-center gap-2 flex-1 flex-wrap">
-              <Label className="text-sm whitespace-nowrap">套用層級</Label>
+              <Label className="text-sm whitespace-nowrap">{t("aiResult.applyLevel")}</Label>
               <Select value={level} onValueChange={(v) => handleLevelChange(v as typeof level)}>
                 <SelectTrigger className="w-32 h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="global">全局</SelectItem>
-                  <SelectItem value="subscription">訂閱</SelectItem>
-                  <SelectItem value="anime_work">動畫作品</SelectItem>
+                  <SelectItem value="global">{t("aiResult.levelGlobal")}</SelectItem>
+                  <SelectItem value="subscription">{t("aiResult.levelSubscription")}</SelectItem>
+                  <SelectItem value="anime_work">{t("aiResult.levelAnimeWork")}</SelectItem>
                 </SelectContent>
               </Select>
               {level !== "global" && (
@@ -260,7 +263,7 @@ export function AiResultPanel({
                 >
                   <SelectTrigger className="h-8 min-w-[200px] flex-1">
                     <SelectValue
-                      placeholder={level === "subscription" ? "選擇訂閱" : "選擇動畫作品"}
+                      placeholder={level === "subscription" ? t("aiResult.selectSubscription") : t("aiResult.selectAnimeWork")}
                     />
                   </SelectTrigger>
                   <SelectContent>
@@ -281,7 +284,7 @@ export function AiResultPanel({
             onClick={() => reject().then(() => onRejected?.())}
             disabled={rejecting}
           >
-            拒絕
+            {t("aiResult.reject")}
           </Button>
           {isPending && (
             <Button
@@ -295,7 +298,7 @@ export function AiResultPanel({
               disabled={confirming}
             >
               {confirming && <Loader2 className="mr-1 size-3 animate-spin" />}
-              確認套用
+              {t("aiResult.confirm")}
             </Button>
           )}
         </div>

@@ -688,6 +688,8 @@ pub struct AiSettings {
     pub base_url: String,
     pub api_key: String,
     pub model_name: String,
+    pub max_tokens: i32,
+    pub response_format_mode: String,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
@@ -700,6 +702,8 @@ pub struct UpdateAiSettings {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub model_name: Option<String>,
+    pub max_tokens: Option<i32>,
+    pub response_format_mode: Option<String>,
     pub updated_at: NaiveDateTime,
 }
 

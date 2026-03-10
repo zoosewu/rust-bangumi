@@ -21,7 +21,7 @@ pub fn build_ai_client(conn: &mut PgConnection) -> Result<Option<OpenAiClient>, 
 
     match settings {
         Some(s) if !s.api_key.is_empty() && !s.base_url.is_empty() => {
-            Ok(Some(OpenAiClient::new(&s.base_url, &s.api_key, &s.model_name)))
+            Ok(Some(OpenAiClient::new(&s.base_url, &s.api_key, &s.model_name, s.max_tokens, &s.response_format_mode)))
         }
         _ => Ok(None),
     }

@@ -103,7 +103,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getDetail: (detail_key: string, source: string) => Effect.Effect<DetailResponse>
     // AI 設定
     readonly getAiSettings: Effect.Effect<AiSettings>
-    readonly updateAiSettings: (req: Partial<Pick<AiSettings, "base_url" | "api_key" | "model_name">>) => Effect.Effect<void>
+    readonly updateAiSettings: (req: Partial<Pick<AiSettings, "base_url" | "api_key" | "model_name" | "max_tokens" | "response_format_mode">>) => Effect.Effect<void>
     readonly testAiConnection: Effect.Effect<{ ok: boolean; error?: string }>
     readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
     readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>

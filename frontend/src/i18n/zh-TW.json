@@ -273,6 +273,64 @@
     "subtitleGroup": "字幕組",
     "conflictCount": "衝突連結數"
   },
+  "settings": {
+    "title": "設定",
+    "saved": "已儲存",
+    "downloader": {
+      "title": "下載器優先順序",
+      "description": "數值越高優先使用，當訂閱未指定下載器時依此順序派送",
+      "priority": "優先度"
+    },
+    "ai": {
+      "title": "AI 連線設定",
+      "description": "設定 OpenAI-compatible API 連線資訊",
+      "apiKeyPlaceholder": "輸入新 API Key（留空保持不變）",
+      "maxTokens": "單次生成 Token 上限",
+      "maxTokensHint": "控制每次 AI 生成的最大 token 數（預設 4096）",
+      "responseFormat": "Response Format 嚴格度",
+      "responseFormat_strict_label": "嚴格模式（strict: true）",
+      "responseFormat_strict_desc": "使用 JSON Schema + strict:true，AI 必須精確遵守 schema 結構",
+      "responseFormat_non_strict_label": "寬鬆模式（strict: false）",
+      "responseFormat_non_strict_desc": "使用 JSON Schema + strict:false，允許 AI 輸出額外欄位",
+      "responseFormat_inject_schema_label": "注入 Schema（不傳 response_format）",
+      "responseFormat_inject_schema_desc": "不傳 response_format 欄位，改將 JSON Schema 注入 system prompt 中要求 AI 遵守",
+      "testConnection": "測試連線",
+      "testSuccess": "連線成功",
+      "testFailure": "連線失敗: {{error}}"
+    },
+    "parserPrompt": {
+      "title": "Parser Prompt 設定",
+      "description": "AI 生成解析器時使用的 Prompt",
+      "fixedPrompt": "固定 Prompt",
+      "fixedPromptPlaceholder": "留空則使用系統預設值",
+      "customPrompt": "自訂 Prompt（追加在固定 Prompt 之後）",
+      "customPromptPlaceholder": "留空則不追加自訂說明",
+      "revertDefault": "Revert 預設值"
+    },
+    "filterPrompt": {
+      "title": "Filter Prompt 設定",
+      "description": "AI 生成過濾規則時使用的 Prompt",
+      "fixedPrompt": "固定 Prompt",
+      "fixedPromptPlaceholder": "留空則使用系統預設值",
+      "customPrompt": "自訂 Prompt（追加在固定 Prompt 之後）",
+      "customPromptPlaceholder": "留空則不追加自訂說明",
+      "revertDefault": "Revert 預設值"
+    }
+  },
+  "aiResult": {
+    "fixedPrompt": "固定 Prompt",
+    "customPrompt": "自訂 Prompt",
+    "promptPlaceholder": "留空則使用設定值",
+    "regenerate": "重新生成",
+    "applyLevel": "套用層級",
+    "levelGlobal": "全局",
+    "levelSubscription": "訂閱",
+    "levelAnimeWork": "動畫作品",
+    "selectSubscription": "選擇訂閱",
+    "selectAnimeWork": "選擇動畫作品",
+    "reject": "拒絕",
+    "confirm": "確認套用"
+  },
   "search": {
     "title": "搜尋網路資源",
     "placeholder": "輸入動畫名稱...",

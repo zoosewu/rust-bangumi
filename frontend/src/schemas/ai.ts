@@ -1,8 +1,12 @@
+export type ResponseFormatMode = "strict" | "non_strict" | "inject_schema"
+
 export interface AiSettings {
   id: number
   base_url: string
   api_key: string // already masked
   model_name: string
+  max_tokens: number
+  response_format_mode: ResponseFormatMode
   created_at: string
   updated_at: string
 }
