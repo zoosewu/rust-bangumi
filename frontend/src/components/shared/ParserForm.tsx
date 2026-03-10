@@ -122,7 +122,7 @@ function FieldSourceInput({
       <Label className="text-xs">{label}</Label>
       <div className="flex gap-2">
         <Select value={source ?? "none"} onValueChange={(v) => onSourceChange(v === "none" ? "" : v)}>
-          <SelectTrigger className="w-24">
+          <SelectTrigger className="w-24 shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -132,7 +132,7 @@ function FieldSourceInput({
           </SelectContent>
         </Select>
         <Input
-          className="font-mono text-sm"
+          className="font-mono text-sm flex-1 min-w-0"
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
           placeholder={source === "static" ? "Fixed value" : "Capture group (e.g. $1)"}
