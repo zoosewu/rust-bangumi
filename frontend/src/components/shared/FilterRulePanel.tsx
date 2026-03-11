@@ -113,7 +113,7 @@ function FilterRuleRow({
             <RegexInput
               value={rule.regex_pattern}
               onChange={(v) => onUpdate(idx, { regex_pattern: v })}
-              className="h-7 text-xs px-2"
+              inputClassName="h-7 text-xs px-2"
             />
           </div>
         ) : (
@@ -221,6 +221,15 @@ export function FilterRulePanel({
 
   const deleteTarget = deleteConfirmIdx !== null ? (rules[deleteConfirmIdx] ?? null) : null
 
+  // 編輯時自動選中該行，讓預覽即時更新
+  const handleUpdate = useCallback(
+    (idx: number, changes: { is_positive?: boolean; regex_pattern?: string }) => {
+      setSelectedIdx(idx)
+      onUpdate?.(idx, changes)
+    },
+    [onUpdate],
+  )
+
   return (
     <div className="space-y-4">
       {/* Rule list */}
@@ -233,7 +242,7 @@ export function FilterRulePanel({
               idx={idx}
               selected={selectedIdx === idx}
               onSelect={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
-              onUpdate={onUpdate}
+              onUpdate={onUpdate ? handleUpdate : undefined}
               requireDeleteConfirm={requireDeleteConfirm}
               onDeleteRequest={handleDeleteRequest}
               readOnly={readOnly}

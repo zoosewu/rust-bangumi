@@ -118,6 +118,7 @@ export default function SearchPage() {
         onOpenChange={setWizardOpen}
         initialUrl={wizardInitialUrl}
         initialName={wizardInitialName}
+        initialInterval="0"
       />
     </div>
   )

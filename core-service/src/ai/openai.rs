@@ -58,6 +58,20 @@ impl OpenAiClient {
 
         if !resp.status().is_success() {
             let text = resp.text().await.unwrap_or_default();
+            // 偵測 rate limit 錯誤，格式化為可識別前綴（含 retry 秒數）
+            if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&text) {
+                if err_json.pointer("/error/code").and_then(|v| v.as_str()) == Some("rate_limit_exceeded") {
+                    let msg = err_json.pointer("/error/message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Rate limit exceeded");
+                    let retry_secs = extract_retry_after_secs(msg);
+                    let prefix = match retry_secs {
+                        Some(s) => format!("[rate_limit_exceeded:{}]", s),
+                        None => "[rate_limit_exceeded]".to_string(),
+                    };
+                    return Err(AiError::ApiError(format!("{} {}", prefix, msg)));
+                }
+            }
             return Err(AiError::ApiError(text));
         }
 
@@ -134,4 +148,16 @@ impl AiClient for OpenAiClient {
             }
         }
     }
+}
+
+/// 從 rate limit 錯誤訊息中提取 retry-after 秒數
+/// 例："Please try again in 28.5675s." → Some(29)
+fn extract_retry_after_secs(msg: &str) -> Option<u32> {
+    let marker = "Please try again in ";
+    let start = msg.find(marker)? + marker.len();
+    let rest = &msg[start..];
+    let end = rest.find('s')?;
+    let num_str = rest[..end].trim();
+    let secs: f64 = num_str.parse().ok()?;
+    Some(secs.ceil() as u32)
 }

@@ -146,8 +146,8 @@ pub fn parse_search_results(html: &str, query: &str) -> Result<Vec<SearchResult>
 
     if has_episodes {
         results.push(SearchResult {
-            title: query.to_string(),
-            thumbnail_url: None,
+            title: format!("Extended: {}", query),
+            thumbnail_url: Some("https://mikanani.me/images/mikan-pic.png".to_string()),
             detail_key: format!("source:{}", query),
         });
     }
@@ -314,9 +314,12 @@ mod tests {
         let results = parse_search_results(REAL_SEARCH_HTML, "金牌").unwrap();
 
         // Third entry is the ONE aggregated source entry
-        assert_eq!(results[2].title, "金牌");
+        assert_eq!(results[2].title, "Extended: 金牌");
         assert_eq!(results[2].detail_key, "source:金牌");
-        assert_eq!(results[2].thumbnail_url, None);
+        assert_eq!(
+            results[2].thumbnail_url,
+            Some("https://mikanani.me/images/mikan-pic.png".to_string())
+        );
     }
 
     #[test]
@@ -370,9 +373,12 @@ mod tests {
         "#;
         let results = parse_search_results(html, "Show").unwrap();
         assert_eq!(results.len(), 1, "All episodes should collapse to ONE source entry");
-        assert_eq!(results[0].title, "Show");
+        assert_eq!(results[0].title, "Extended: Show");
         assert_eq!(results[0].detail_key, "source:Show");
-        assert_eq!(results[0].thumbnail_url, None);
+        assert_eq!(
+            results[0].thumbnail_url,
+            Some("https://mikanani.me/images/mikan-pic.png".to_string())
+        );
     }
 
     #[test]

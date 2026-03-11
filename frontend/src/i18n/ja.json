@@ -162,7 +162,7 @@
     "allParsed": "全アイテムの解析成功",
     "noConflicts": "競合なし",
     "detectingConflicts": "競合を検出中...",
-    "parseStats": "計 {{total}} 件、{{parsed}} 解析済み、{{failed}} 失敗",
+    "parseStats": "{{failed}} 件の解析に失敗",
     "autoSelect": "自動選択",
     "fetchIntervalMinutes": "取得間隔（分）"
   },
@@ -329,7 +329,8 @@
     "selectSubscription": "サブスクリプションを選択",
     "selectAnimeWork": "アニメ作品を選択",
     "reject": "拒否",
-    "confirm": "確認して適用"
+    "confirm": "確認して適用",
+    "rateLimitTitle": "AIのレート制限に達しました。再試行まで："
   },
   "search": {
     "title": "オンラインリソース検索",

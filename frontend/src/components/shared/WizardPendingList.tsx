@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
@@ -74,10 +74,14 @@ function RowHeader({
   expanded,
   result,
   onToggle,
+  selected,
+  onToggleSelect,
 }: {
   expanded: boolean
   result: PendingAiResult
   onToggle: () => void
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const statusCfg = STATUS_CONFIG[result.status] ?? { label: result.status, variant: "secondary" as const }
   return (
@@ -86,6 +90,15 @@ function RowHeader({
       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
       onClick={onToggle}
     >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={selected ?? false}
+          onChange={onToggleSelect}
+          onClick={(e) => e.stopPropagation()}
+          className="size-4 shrink-0 cursor-pointer accent-primary"
+        />
+      )}
       {expanded
         ? <ChevronDown className="size-4 text-muted-foreground shrink-0" />
         : <ChevronRight className="size-4 text-muted-foreground shrink-0" />}
@@ -108,9 +121,13 @@ function RowHeader({
 function ParserPendingRow({
   result,
   onAnyChange,
+  selected,
+  onToggleSelect,
 }: {
   result: PendingAiResult
   onAnyChange: () => void
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [localResult, setLocalResult] = useState(result)
@@ -185,6 +202,8 @@ function ParserPendingRow({
         expanded={expanded}
         result={localResult}
         onToggle={() => setExpanded((prev) => !prev)}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
       />
       {expanded && (
         <div className="border-t px-4 py-4 bg-muted/20">
@@ -217,9 +236,13 @@ function ParserPendingRow({
 function FilterPendingRow({
   result,
   onAnyChange,
+  selected,
+  onToggleSelect,
 }: {
   result: PendingAiResult
   onAnyChange: () => void
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [localResult, setLocalResult] = useState(result)
@@ -263,6 +286,15 @@ function FilterPendingRow({
     return () => { if (saveDebouncRef.current) clearTimeout(saveDebouncRef.current) }
   }, [localRules])
 
+  // confirm 前先強制 flush debounce，確保後端讀到最新的 generated_data
+  const flushSave = useCallback(async () => {
+    if (saveDebouncRef.current) {
+      clearTimeout(saveDebouncRef.current)
+      saveDebouncRef.current = null
+    }
+    await updateData({ rules: localRules })
+  }, [localRules, updateData])
+
   const handleUpdate = (idx: number, changes: { is_positive?: boolean; regex_pattern?: string }) => {
     setLocalRules((prev) => prev.map((r, i) => i === idx ? { ...r, ...changes } : r))
   }
@@ -295,6 +327,8 @@ function FilterPendingRow({
         expanded={expanded}
         result={localResult}
         onToggle={() => setExpanded((prev) => !prev)}
+        selected={selected}
+        onToggleSelect={onToggleSelect}
       />
       {expanded && (
         <div className="border-t px-4 py-4 bg-muted/20">
@@ -303,6 +337,7 @@ function FilterPendingRow({
             onConfirmed={handleDone}
             onRejected={handleDone}
             onRegenerated={handleRegenerated}
+            onBeforeConfirm={flushSave}
             defaultLevel={localResult.subscription_id != null ? "subscription" : "global"}
             defaultTargetId={localResult.subscription_id ?? undefined}
           >
@@ -329,13 +364,15 @@ function FilterPendingRow({
 interface WizardPendingRowProps {
   result: PendingAiResult
   onAnyChange: () => void
+  selected?: boolean
+  onToggleSelect?: () => void
 }
 
-function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
+function WizardPendingRow({ result, onAnyChange, selected, onToggleSelect }: WizardPendingRowProps) {
   if (result.result_type === "filter") {
-    return <FilterPendingRow result={result} onAnyChange={onAnyChange} />
+    return <FilterPendingRow result={result} onAnyChange={onAnyChange} selected={selected} onToggleSelect={onToggleSelect} />
   }
-  return <ParserPendingRow result={result} onAnyChange={onAnyChange} />
+  return <ParserPendingRow result={result} onAnyChange={onAnyChange} selected={selected} onToggleSelect={onToggleSelect} />
 }
 
 // --- WizardPendingList ---
@@ -343,9 +380,11 @@ function WizardPendingRow({ result, onAnyChange }: WizardPendingRowProps) {
 interface WizardPendingListProps {
   results: readonly PendingAiResult[]
   onAnyChange: () => void
+  selectedIds?: Set<number>
+  onToggleSelect?: (id: number) => void
 }
 
-export function WizardPendingList({ results, onAnyChange }: WizardPendingListProps) {
+export function WizardPendingList({ results, onAnyChange, selectedIds, onToggleSelect }: WizardPendingListProps) {
   if (results.length === 0) {
     return (
       <p className="text-center text-muted-foreground py-8">沒有待確認項目</p>
@@ -359,6 +398,10 @@ export function WizardPendingList({ results, onAnyChange }: WizardPendingListPro
           key={result.id}
           result={result}
           onAnyChange={onAnyChange}
+          selected={selectedIds?.has(result.id)}
+          onToggleSelect={result.status === "pending" && onToggleSelect
+            ? () => onToggleSelect(result.id)
+            : undefined}
         />
       ))}
     </div>

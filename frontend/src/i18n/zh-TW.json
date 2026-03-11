@@ -162,7 +162,7 @@
     "allParsed": "所有項目解析成功",
     "noConflicts": "無衝突",
     "detectingConflicts": "正在偵測衝突...",
-    "parseStats": "共 {{total}} 項、{{parsed}} 已解析、{{failed}} 解析失敗",
+    "parseStats": "{{failed}} 項解析失敗",
     "autoSelect": "自動選擇",
     "fetchIntervalMinutes": "抓取間隔（分鐘）"
   },
@@ -329,7 +329,8 @@
     "selectSubscription": "選擇訂閱",
     "selectAnimeWork": "選擇動畫作品",
     "reject": "拒絕",
-    "confirm": "確認套用"
+    "confirm": "確認套用",
+    "rateLimitTitle": "AI 請求頻率超限，請稍後再試："
   },
   "search": {
     "title": "搜尋網路資源",

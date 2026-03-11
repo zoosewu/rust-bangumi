@@ -162,7 +162,7 @@
     "allParsed": "All items parsed successfully",
     "noConflicts": "No conflicts",
     "detectingConflicts": "Detecting conflicts...",
-    "parseStats": "Total {{total}}, {{parsed}} parsed, {{failed}} failed",
+    "parseStats": "{{failed}} items failed to parse",
     "autoSelect": "Auto",
     "fetchIntervalMinutes": "Fetch Interval (minutes)"
   },
@@ -329,7 +329,8 @@
     "selectSubscription": "Select subscription",
     "selectAnimeWork": "Select anime work",
     "reject": "Reject",
-    "confirm": "Confirm & Apply"
+    "confirm": "Confirm & Apply",
+    "rateLimitTitle": "AI rate limit reached, retry in:"
   },
   "search": {
     "title": "Search Online Resources",

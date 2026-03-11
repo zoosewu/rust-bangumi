@@ -15,8 +15,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw } from "lucide-react"
+import { Loader2, RefreshCw, Clock } from "lucide-react"
 import type { PendingAiResult, ConfirmPendingRequest } from "@/schemas/ai"
+
+// --- Rate limit helpers ---
+
+function parseRateLimitError(errorMessage: string): { retrySecs: number | null } | null {
+  const match = errorMessage.match(/^\[rate_limit_exceeded(?::(\d+))?\]/)
+  if (!match) return null
+  return { retrySecs: match[1] ? parseInt(match[1], 10) : null }
+}
 import type { Subscription } from "@/schemas/subscription"
 import type { AnimeWork } from "@/schemas/anime"
 
@@ -25,6 +33,7 @@ interface AiResultPanelProps {
   onConfirmed?: () => void
   onRejected?: () => void
   onRegenerated?: (updated: PendingAiResult) => void
+  onBeforeConfirm?: () => Promise<void>
   children?: React.ReactNode
   previewSlot?: React.ReactNode
   defaultLevel?: "global" | "subscription" | "anime_work"
@@ -36,6 +45,7 @@ export function AiResultPanel({
   onConfirmed,
   onRejected,
   onRegenerated,
+  onBeforeConfirm,
   children,
   previewSlot,
   defaultLevel = "global",
@@ -181,11 +191,27 @@ export function AiResultPanel({
       </div>
 
       {/* 錯誤訊息 */}
-      {isFailed && result.error_message && (
-        <p className="text-sm text-destructive bg-destructive/10 rounded p-2">
-          {result.error_message}
-        </p>
-      )}
+      {isFailed && result.error_message && (() => {
+        const rateLimitInfo = parseRateLimitError(result.error_message)
+        if (rateLimitInfo) {
+          return (
+            <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 dark:text-amber-400 dark:bg-amber-950/30 dark:border-amber-800">
+              <Clock className="size-4 shrink-0" />
+              <span>
+                {t("aiResult.rateLimitTitle")}
+                {rateLimitInfo.retrySecs != null && (
+                  <span className="ml-1 font-mono font-medium">{rateLimitInfo.retrySecs}s</span>
+                )}
+              </span>
+            </div>
+          )
+        }
+        return (
+          <p className="text-sm text-destructive bg-destructive/10 rounded p-2">
+            {result.error_message}
+          </p>
+        )
+      })()}
 
       {/* 固定 Prompt / 自訂 Prompt（兩欄）+ 重新生成 */}
       <div className="space-y-2">
@@ -289,12 +315,10 @@ export function AiResultPanel({
           {isPending && (
             <Button
               size="sm"
-              onClick={() =>
-                confirm({
-                  level,
-                  target_id: targetId,
-                }).then(() => onConfirmed?.())
-              }
+              onClick={async () => {
+                await onBeforeConfirm?.()
+                confirm({ level, target_id: targetId }).then(() => onConfirmed?.())
+              }}
               disabled={confirming}
             >
               {confirming && <Loader2 className="mr-1 size-3 animate-spin" />}

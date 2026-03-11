@@ -160,17 +160,38 @@ pub async fn confirm_pending(
             });
         }
         "filter" => {
-            diesel::update(
+            // 刪除舊的 filter_rules，改從 generated_data（使用者可能已編輯）重建
+            diesel::delete(
                 filter_rules::table.filter(filter_rules::pending_result_id.eq(id)),
             )
-            .set((
-                filter_rules::pending_result_id.eq(None::<i32>),
-                filter_rules::target_type.eq(target_type),
-                filter_rules::target_id.eq(req.target_id),
-                filter_rules::updated_at.eq(now),
-            ))
             .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            let rules_data = pending
+                .generated_data
+                .as_ref()
+                .and_then(|d| d.get("rules"))
+                .and_then(|r| r.as_array())
+                .cloned()
+                .unwrap_or_default();
+
+            use crate::models::NewFilterRule;
+            for (i, rule) in rules_data.iter().enumerate() {
+                let new_rule = NewFilterRule {
+                    rule_order: rule.get("rule_order").and_then(|v| v.as_i64()).unwrap_or(i as i64 + 1) as i32,
+                    regex_pattern: rule.get("regex_pattern").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    is_positive: rule.get("is_positive").and_then(|v| v.as_bool()).unwrap_or(true),
+                    target_type,
+                    target_id: req.target_id,
+                    created_at: now,
+                    updated_at: now,
+                    pending_result_id: None,
+                };
+                diesel::insert_into(filter_rules::table)
+                    .values(&new_rule)
+                    .execute(&mut conn)
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            }
 
             // 觸發 filter recalc + conflict detection（背景非同步）
             let db = pool.clone();

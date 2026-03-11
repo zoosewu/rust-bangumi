@@ -226,11 +226,7 @@ pub async fn generate_filters_for_subscription_batch(
         }
 
         let now = Utc::now().naive_utc();
-        let source_title = format!(
-            "批次過濾：{} 個衝突組（iteration {}）",
-            remaining.len(),
-            iteration
-        );
+        let source_title = format!("批次過濾（iteration {}）", iteration);
 
         let pending_id = {
             let mut conn = pool.get().map_err(|e| e.to_string())?;

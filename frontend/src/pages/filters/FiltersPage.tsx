@@ -1,10 +1,9 @@
 import { useState, useCallback, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
-import { Plus } from "lucide-react"
+import { Plus, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { FilterAddForm } from "@/components/shared/FilterAddForm"
@@ -66,6 +65,8 @@ export default function FiltersPage() {
     refetch()
   }, [refetch])
 
+  const globalRuleCount = rules?.filter((r) => r.target_type === "global").length ?? 0
+
   const columns: Column<Record<string, unknown>>[] = [
     {
       key: "regex_pattern",
@@ -126,12 +127,23 @@ export default function FiltersPage() {
       <PageHeader
         title={t("filters.title")}
         actions={
-          <Button onClick={() => setAddOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={() => setAddOpen((v) => !v)}>
+            {addOpen ? <ChevronUp className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
             {t("filters.addFilter")}
           </Button>
         }
       />
+
+      {addOpen && (
+        <div className="rounded-md border p-4">
+          <FilterAddForm
+            targetType="global"
+            targetId={null}
+            currentRuleCount={globalRuleCount}
+            onSuccess={handleAddSuccess}
+          />
+        </div>
+      )}
 
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
@@ -150,20 +162,6 @@ export default function FiltersPage() {
           keyField="rule_id"
         />
       )}
-
-      {/* Add — FullScreenDialog with preview */}
-      <FullScreenDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        title={t("filters.addFilter")}
-      >
-        <FilterAddForm
-          targetType="global"
-          targetId={null}
-          currentRuleCount={rules?.filter((r) => r.target_type === "global").length ?? 0}
-          onSuccess={handleAddSuccess}
-        />
-      </FullScreenDialog>
 
       {/* Delete Confirm */}
       <DeleteFilterRuleDialog

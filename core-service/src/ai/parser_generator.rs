@@ -282,11 +282,12 @@ pub async fn generate_parsers_for_subscription_batch(
             return Ok(());
         }
 
-        // 去重標題（僅送唯一標題給 AI，降低 token 使用量）
+        // 去重標題，最多取 24 個（避免佔用過多 token）
         let unique_titles: Vec<String> = {
             let mut seen = std::collections::HashSet::new();
             unmatched.iter()
                 .filter(|item| seen.insert(item.title.clone()))
+                .take(24)
                 .map(|item| item.title.clone())
                 .collect()
         };
@@ -298,7 +299,7 @@ pub async fn generate_parsers_for_subscription_batch(
 
         // 建立 pending record（status=generating）
         let now = Utc::now().naive_utc();
-        let batch_source = format!("批次解析：{} 個標題（iteration {}）", unique_titles.len(), iteration + 1);
+        let batch_source = format!("批次解析（iteration {}）", iteration + 1);
         let pending_id = {
             let mut conn = pool.get().map_err(|e| e.to_string())?;
             diesel::insert_into(pending_ai_results::table)
@@ -389,8 +390,7 @@ pub async fn generate_parsers_for_subscription_batch(
             }
         }
 
-        // 驗證 regex 是否真的能匹配 AI 自己宣稱的 matched_titles
-        // 避免 AI 宣稱匹配但 regex 實際無法運作（如 CJK 數字誤用 \d+）
+        // 記錄 regex 與 AI 宣稱匹配數的吻合率（僅做日誌，不阻擋儲存）
         {
             let condition_str = data["condition_regex"].as_str().unwrap_or("");
             let parse_str = data["parse_regex"].as_str().unwrap_or("");
@@ -411,20 +411,16 @@ pub async fn generate_parsers_for_subscription_batch(
                 }).count();
 
                 let match_rate = actually_matched as f32 / claimed.len() as f32;
-                tracing::info!(
-                    "Regex 驗證 pending_id={}: AI 宣稱 {} 個匹配，實際 {} 個（{:.0}%）",
-                    pending_id, claimed.len(), actually_matched, match_rate * 100.0
-                );
-
                 if actually_matched == 0 {
-                    update_pending_failed(
-                        &pool, pending_id,
-                        &format!(
-                            "Regex 驗證失敗：AI 宣稱匹配 {} 個標題，但 condition_regex/parse_regex 實際一個都不匹配（可能有 CJK 數字或大小寫問題）",
-                            claimed.len()
-                        ),
-                    ).await.ok();
-                    continue; // 讓 AI 重試，不放棄剩餘 iteration
+                    tracing::warn!(
+                        "Regex validation pending_id={}: AI claimed {} matches but none verified (possible CJK digit or case mismatch). Saving anyway.",
+                        pending_id, claimed.len()
+                    );
+                } else {
+                    tracing::info!(
+                        "Regex validation pending_id={}: {}/{} claimed titles matched ({:.0}%)",
+                        pending_id, actually_matched, claimed.len(), match_rate * 100.0
+                    );
                 }
             }
         }

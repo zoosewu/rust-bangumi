@@ -1,7 +1,10 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { NavLink } from "react-router-dom"
 import { useTranslation } from "react-i18next"
+import { Effect } from "effect"
 import { cn } from "@/lib/utils"
+import { CoreApi } from "@/services/CoreApi"
+import { AppRuntime } from "@/runtime/AppRuntime"
 import {
   LayoutDashboard,
   Film,
@@ -19,13 +22,13 @@ import {
 } from "lucide-react"
 
 const mainNavItems = [
-  { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard" },
-  { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions" },
-  { to: "/search", icon: Search, labelKey: "sidebar.search" },
-  { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries" },
-  { to: "/raw-items", icon: RefreshCw, labelKey: "sidebar.rawItems" },
-  { to: "/pending", icon: Clock, labelKey: "sidebar.pending" },
-  { to: "/settings", icon: Settings, labelKey: "sidebar.settings" },
+  { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard", hasBadge: false },
+  { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions", hasBadge: false },
+  { to: "/search", icon: Search, labelKey: "sidebar.search", hasBadge: false },
+  { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries", hasBadge: false },
+  { to: "/raw-items", icon: RefreshCw, labelKey: "sidebar.rawItems", hasBadge: false },
+  { to: "/pending", icon: Clock, labelKey: "sidebar.pending", hasBadge: true },
+  { to: "/settings", icon: Settings, labelKey: "sidebar.settings", hasBadge: false },
 ]
 
 const otherNavItems = [
@@ -39,6 +42,19 @@ const STORAGE_KEY = "sidebar.others.expanded"
 
 export function Sidebar() {
   const { t } = useTranslation()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    const fetchCount = () => {
+      AppRuntime.runPromise(
+        Effect.flatMap(CoreApi, (api) => api.getPendingAiResults({ status: "pending" })),
+      ).then((items) => setPendingCount(items.length)).catch(() => {})
+    }
+    fetchCount()
+    const id = setInterval(fetchCount, 30000)
+    return () => clearInterval(id)
+  }, [])
+
   const [othersExpanded, setOthersExpanded] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) !== "false"
@@ -68,10 +84,15 @@ export function Sidebar() {
       <div className="p-4 font-bold text-lg border-b">{t("sidebar.title")}</div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {/* Main nav */}
-        {mainNavItems.map(({ to, icon: Icon, labelKey }) => (
+        {mainNavItems.map(({ to, icon: Icon, labelKey, hasBadge }) => (
           <NavLink key={to} to={to} end={to === "/"} className={navLinkClass}>
             <Icon className="h-4 w-4" />
-            {t(labelKey)}
+            <span className="flex-1">{t(labelKey)}</span>
+            {hasBadge && pendingCount > 0 && (
+              <span className="bg-destructive text-destructive-foreground text-xs font-medium rounded-full px-1.5 min-w-[1.25rem] text-center leading-5">
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </span>
+            )}
           </NavLink>
         ))}
 

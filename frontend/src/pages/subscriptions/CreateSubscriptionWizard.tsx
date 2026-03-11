@@ -260,11 +260,9 @@ export function CreateSubscriptionWizard({
   }
 
   // Step 2 computed values
-  const total = rawItems.length
-  const parsed = rawItems.filter((i) => i.status === "parsed" || i.status === "partial").length
   const failed = rawItems.filter((i) => i.status === "no_match" || i.status === "failed").length
-  // 過濾掉生成失敗的解析器，只顯示待確認或仍在生成中的項目
-  const displayParserPendings = parserPendings.filter((p) => p.status !== "failed")
+  // 顯示所有待確認項目（含失敗的，讓使用者可以重試）
+  const displayParserPendings = parserPendings
   const hasPendingParsers = displayParserPendings.some((p) => p.status === "pending")
   const step2NextEnabled = !step2Polling && !confirmingAll
 
@@ -425,9 +423,9 @@ export function CreateSubscriptionWizard({
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {step2Polling && <Loader2 className="size-4 animate-spin" />}
-            <span>{t("subscriptions.parseStats", { total, parsed, failed })}</span>
+            {failed > 0 && <span>{t("subscriptions.parseStats", { failed })}</span>}
           </div>
-          {!step2Polling && displayParserPendings.length === 0 ? (
+          {!step2Polling && displayParserPendings.length === 0 && failed === 0 ? (
             <div className="flex items-center gap-2 text-green-600 py-4">
               <CheckCircle2 className="size-5" />
               <span className="text-sm font-medium">{t("subscriptions.allParsed")}</span>
