@@ -57,7 +57,7 @@ export function Sidebar() {
 
   const [othersExpanded, setOthersExpanded] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) !== "false"
+      return localStorage.getItem(STORAGE_KEY) === "true"
     } catch {
       return true
     }
