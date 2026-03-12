@@ -133,8 +133,8 @@ function FilterRuleRow({
         )}
       </div>
 
-      {/* AI reasoning */}
-      {rule.reasoning && (
+      {/* AI reasoning (只在選中時顯示) */}
+      {selected && rule.reasoning && (
         <p className="px-3 pb-2 text-muted-foreground leading-relaxed">{rule.reasoning}</p>
       )}
     </div>

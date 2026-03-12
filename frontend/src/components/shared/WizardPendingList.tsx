@@ -350,7 +350,6 @@ function FilterPendingRow({
               onDelete={handleDelete}
               onUpdate={handleUpdate}
               requireDeleteConfirm={false}
-              alwaysShowPreview
             />
           </AiResultPanel>
         </div>
