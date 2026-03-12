@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import { Check, X, Plus, Minus, AlertTriangle } from "lucide-react"
+import { Check, X, Plus, Minus } from "lucide-react"
 import type { PreviewItem } from "@/schemas/common"
 
 interface PreviewPanel {
@@ -106,7 +106,7 @@ function ItemMeta({ item }: { item: MergedItem }) {
     parts.push(item.group_name)
   }
 
-  if (parts.length === 0 && !item.conflict_flag) return null
+  if (parts.length === 0) return null
 
   return (
     <span className="flex items-center gap-1.5 shrink-0 ml-auto pl-2">
@@ -115,12 +115,6 @@ function ItemMeta({ item }: { item: MergedItem }) {
           {p}
         </span>
       ))}
-      {item.conflict_flag && (
-        <span className="text-[10px] text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950/40 px-1.5 py-0.5 rounded font-sans flex items-center gap-0.5">
-          <AlertTriangle className="h-3 w-3" />
-          conflict
-        </span>
-      )}
     </span>
   )
 }

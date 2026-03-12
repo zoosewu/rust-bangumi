@@ -142,17 +142,6 @@ export function FilterAddForm({
         <p className="text-sm text-destructive">{preview.regex_error}</p>
       )}
 
-      {preview?.regex_valid && showBefore && (
-        <div className="flex gap-4 text-xs text-muted-foreground">
-          <span>
-            {t("filter.passed", "Passed")}: {showBefore.passed_items.length} → {preview.after.passed_items.length}
-          </span>
-          <span>
-            {t("filter.filtered", "Filtered")}: {showBefore.filtered_items.length} → {preview.after.filtered_items.length}
-          </span>
-        </div>
-      )}
-
       {showBefore && (
         <FilterPreviewPanel before={showBefore} after={showAfter} />
       )}
