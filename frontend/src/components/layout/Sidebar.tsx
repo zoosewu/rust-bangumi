@@ -23,8 +23,8 @@ import {
 
 const mainNavItems = [
   { to: "/", icon: LayoutDashboard, labelKey: "sidebar.dashboard", hasBadge: false },
-  { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions", hasBadge: false },
   { to: "/search", icon: Search, labelKey: "sidebar.search", hasBadge: false },
+  { to: "/subscriptions", icon: Rss, labelKey: "sidebar.subscriptions", hasBadge: false },
   { to: "/anime", icon: Film, labelKey: "sidebar.animeSeries", hasBadge: false },
   { to: "/raw-items", icon: RefreshCw, labelKey: "sidebar.rawItems", hasBadge: false },
   { to: "/pending", icon: Clock, labelKey: "sidebar.pending", hasBadge: true },
