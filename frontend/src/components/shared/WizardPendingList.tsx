@@ -244,7 +244,7 @@ function FilterPendingRow({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [localResult, setLocalResult] = useState(result)
   const [localRules, setLocalRules] = useState<FilterRuleDraft[]>(() =>
     parseFilterRules(result.generated_data).map((r) => ({
