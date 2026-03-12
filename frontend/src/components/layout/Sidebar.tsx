@@ -89,7 +89,7 @@ export function Sidebar() {
             <Icon className="h-4 w-4" />
             <span className="flex-1">{t(labelKey)}</span>
             {hasBadge && pendingCount > 0 && (
-              <span className="bg-destructive text-destructive-foreground text-xs font-medium rounded-full px-1.5 min-w-[1.25rem] text-center leading-5">
+              <span className="bg-primary/15 text-primary text-xs font-medium rounded-full px-1.5 min-w-[1.25rem] text-center leading-5">
                 {pendingCount > 99 ? "99+" : pendingCount}
               </span>
             )}
