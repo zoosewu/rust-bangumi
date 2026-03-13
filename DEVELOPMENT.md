@@ -1,6 +1,6 @@
 # 開發指南
 
-本文件說明如何在本地開發環境中設置和運行 Rust Bangumi 專案。
+本文件說明如何在本地開發環境中設置和運行 rustBangumi 專案。
 
 ## 目錄
 
@@ -11,6 +11,7 @@
 - [測試](#測試)
 - [編碼規範](#編碼規範)
 - [資料庫操作](#資料庫操作)
+- [Frontend 開發](#frontend-開發)
 - [常見問題](#常見問題)
 
 ---
@@ -22,7 +23,7 @@
 - **Rust 1.75+**
 - **Bun**（Frontend 開發）
 - **Docker & Docker Compose v2+**
-- **PostgreSQL client** (可選，用於 CLI 操作)
+- **diesel_cli**（資料庫遷移）
 
 ### 安裝 Rust
 
@@ -34,12 +35,11 @@ rustup update
 ### 安裝開發工具
 
 ```bash
-# Diesel CLI（資料庫遷移）
+# Diesel CLI（僅需 postgres feature）
 cargo install diesel_cli --no-default-features --features postgres
 
-# 開發輔助工具（可選）
-cargo install cargo-watch    # 檔案監視
-cargo install cargo-tarpaulin  # 測試覆蓋率
+# 選用：檔案監視與自動重新編譯
+cargo install cargo-watch
 ```
 
 ---
@@ -47,27 +47,30 @@ cargo install cargo-tarpaulin  # 測試覆蓋率
 ## 專案結構
 
 ```
-rust-bangumi/
+rustBangumi/
 ├── Cargo.toml                          # Workspace 配置
-├── shared/                             # 共享庫（API types、models）
+├── shared/                             # 共享型別（DownloaderClient trait 等）
 ├── core-service/                       # 核心服務（協調器）
-│   └── src/
-│       ├── main.rs
-│       ├── handlers/                   # HTTP 處理器
-│       ├── services/                   # 業務邏輯（FetchScheduler, DownloadScheduler）
-│       └── db/                         # 數據庫操作
+│   ├── src/
+│   │   ├── main.rs                     # Axum 路由、AppState
+│   │   ├── handlers/                   # HTTP 處理器（每功能一個模組）
+│   │   ├── services/                   # 業務邏輯（Scheduler、WebhookService 等）
+│   │   ├── models/                     # Diesel 模型
+│   │   └── db/                         # Repository 層
+│   └── migrations/                     # Diesel 遷移檔
 ├── fetchers/mikanani/                  # Mikanani RSS Fetcher
 ├── downloaders/qbittorrent/            # qBittorrent Downloader
-├── downloaders/pikpak/                 # PikPak Downloader（雲端離線抓取 + streaming）
-├── viewers/jellyfin/                   # Jellyfin Viewer（檔案同步 + NFO metadata）
-├── metadata/                           # Metadata Service（Bangumi.tv 元資料查詢）
-├── frontend/                           # React SPA 前端管理介面
+├── downloaders/pikpak/                 # PikPak Downloader（雲端離線 + streaming）
+├── viewers/jellyfin/                   # Jellyfin Viewer（檔案整理 + NFO metadata）
+├── metadata/                           # Metadata Service（bangumi.tv 查詢）
+├── frontend/                           # React SPA 管理介面
 │   ├── src/
 │   │   ├── pages/                      # 頁面元件
-│   │   ├── components/                 # UI 元件（Shadcn/UI + 共用元件）
-│   │   ├── services/                   # Effect-TS API 服務層
-│   │   ├── schemas/                    # Effect Schema 型別定義
-│   │   └── hooks/                      # React hooks
+│   │   ├── components/                 # 共用元件（Shadcn/UI）
+│   │   ├── services/CoreApi.ts         # Effect.js API 介面定義
+│   │   ├── layers/ApiLayer.ts          # Effect.js Layer（HTTP 實作）
+│   │   ├── schemas/                    # 型別定義
+│   │   └── runtime/AppRuntime.ts       # ManagedRuntime 初始化
 │   ├── Dockerfile                      # 多階段建構（Bun + Caddy）
 │   └── Caddyfile                       # 反向代理設定
 ├── cli/                                # CLI 工具
@@ -83,52 +86,33 @@ rust-bangumi/
 
 ### 1. 啟動基礎設施
 
-開發環境包含：PostgreSQL、Adminer、qBittorrent、Jellyfin
-
 ```bash
-# 啟動所有開發服務
 docker compose -f docker-compose.dev.yaml up -d
 
-# 檢查狀態
+# 確認服務已就緒
 docker compose -f docker-compose.dev.yaml ps
 ```
 
-**DOOD 環境（在容器內使用 Docker）：**
-
-如果你在容器內透過掛載 `/var/run/docker.sock` 使用 host Docker，需要設定 `HOST_PROJECT_PATH`：
-
-```bash
-# 設定 host 上的專案路徑
-export HOST_PROJECT_PATH=/path/to/rust-bangumi/on/host
-
-# 然後啟動服務
-docker compose -f docker-compose.dev.yaml up -d
-```
-
-**服務端點：**
+開發環境包含的服務：
 
 | 服務 | URL | 說明 |
 |------|-----|------|
 | PostgreSQL | `localhost:5432` | 資料庫（`bangumi` + `viewer_jellyfin`） |
 | Adminer | `http://localhost:8081` | 資料庫管理介面 |
 | qBittorrent | `http://localhost:8080` | BT 下載客戶端（admin/adminadmin） |
-| Jellyfin | `http://localhost:8096` | 媒體伺服器（首次需設定嚮導） |
-| Metadata Service | `http://localhost:8005` | Bangumi.tv 元資料查詢 |
+| Jellyfin | `http://localhost:8096` | 媒體伺服器（首次需完成設定嚮導） |
+
+> **DOOD 環境**（在容器內透過 `/var/run/docker.sock` 使用 host Docker）：需設定 `HOST_PROJECT_PATH` 環境變數指向 host 上的專案路徑。
 
 ### 2. 設置環境變數
 
 ```bash
-# 複製開發環境模板
 cp .env.dev .env
-
-# DOOD 環境需編輯 .env 設定 HOST_PROJECT_PATH
 ```
 
 `.env.dev` 關鍵變數：
-```env
-# DOOD 環境必填（host 上的專案絕對路徑）
-HOST_PROJECT_PATH=/path/to/rust-bangumi
 
+```env
 # Core 資料庫
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi
 
@@ -141,7 +125,7 @@ QBITTORRENT_URL=http://localhost:8080
 QBITTORRENT_USER=admin
 QBITTORRENT_PASSWORD=adminadmin
 
-# Viewer 目錄（本地開發用暫存目錄）
+# 本地開發用暫存目錄
 DOWNLOADS_DIR=/tmp/bangumi-downloads
 JELLYFIN_LIBRARY_DIR=/tmp/bangumi-media
 
@@ -151,158 +135,71 @@ RUST_LOG=debug
 ### 3. 執行資料庫遷移
 
 ```bash
-# Core 資料庫遷移
+cd core-service
 diesel migration run
-
-# Viewer 資料庫會在 viewer-jellyfin 啟動時自動遷移，無需手動操作
-# 但需先建立資料庫（docker-compose.dev.yaml 的 init script 會自動建立）
 ```
+
+Viewer 資料庫（`viewer_jellyfin`）的遷移內嵌於 binary，啟動時自動執行。
 
 ---
 
 ## 運行服務
 
-### 運行單一服務
+### 各服務啟動指令
 
 ```bash
 # Core Service (port 8000)
 cargo run -p core-service
 
-# Fetcher (port 8001)
+# Fetcher - Mikanani (port 8001)
 cargo run -p fetcher-mikanani
 
-# Downloader (port 8002)
+# Downloader - qBittorrent (port 8002)
 cargo run -p downloader-qbittorrent
 
-# Viewer (port 8003) - 需指定 Viewer 專用資料庫
+# Downloader - PikPak (port 8006)
+cargo run -p downloader-pikpak
+
+# Viewer - Jellyfin (port 8003)
 DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
   cargo run -p viewer-jellyfin
 
-# PikPak Downloader (port 8006) - SQLite 持久化至 PIKPAK_DB_PATH
-cargo run -p downloader-pikpak
-
-# Metadata Service (port 8005) - stateless，不需資料庫
+# Metadata Service (port 8005，stateless)
 CORE_SERVICE_URL=http://localhost:8000 \
 SERVICE_HOST=localhost \
 SERVICE_PORT=8005 \
   cargo run -p metadata-service
-
-# CLI
-cargo run -p bangumi-cli -- --help
 ```
 
 ### 監視模式（自動重新編譯）
 
 ```bash
-# 監視並自動重新運行
 cargo watch -x 'run -p core-service'
-
-# 監視並運行測試
-cargo watch -x 'test -p core-service'
-```
-
-### 同時運行多個服務
-
-開多個終端分別執行，或使用 `tmux`：
-
-```bash
-# 終端 1 - Core
-cargo run -p core-service
-
-# 終端 2 - Fetcher
-cargo run -p fetcher-mikanani
-
-# 終端 3 - Downloader
-cargo run -p downloader-qbittorrent
-
-# 終端 4 - PikPak Downloader
-cargo run -p downloader-pikpak
-
-# 終端 5 - Viewer
-DATABASE_URL=postgresql://bangumi:bangumi_dev_password@localhost:5432/viewer_jellyfin \
-  cargo run -p viewer-jellyfin
 ```
 
 ---
 
 ## 測試
 
-### 運行測試
-
 ```bash
-# 所有測試
+# 全部測試
 cargo test
 
 # 特定套件
 cargo test -p core-service
 cargo test -p downloader-qbittorrent
-cargo test -p downloader-pikpak
 cargo test -p viewer-jellyfin
 
-# 帶輸出
+# 顯示標準輸出
 cargo test -- --nocapture
 
-# 特定測試
-cargo test test_name
-
-# 集成測試
-cargo test --test integration_test
-```
-
-### 測試覆蓋率
-
-```bash
-cargo tarpaulin --out Html
-open tarpaulin-report.html
-```
-
-### 測試開發環境連線
-
-```bash
-# 測試 PostgreSQL
-psql postgresql://bangumi:bangumi_dev_password@localhost:5432/bangumi -c "SELECT 1"
-
-# 測試 qBittorrent
-curl -X POST http://localhost:8080/api/v2/auth/login \
-  -d "username=admin&password=adminadmin"
-
-# 測試 Core Service
-curl http://localhost:8000/health
-
-# 測試 Downloader (qBittorrent)
-curl http://localhost:8002/health
-
-# 測試 Downloader (PikPak)
-curl http://localhost:8006/health
-
-# 測試 Viewer
-curl http://localhost:8003/health
-
-# 測試 Jellyfin
-curl http://localhost:8096/health
-
-# 手動觸發 Viewer 同步（測試用）
-mkdir -p /tmp/bangumi-downloads
-echo "test" > /tmp/bangumi-downloads/test.mkv
-curl -X POST http://localhost:8003/sync \
-  -H "Content-Type: application/json" \
-  -d '{
-    "download_id": 1,
-    "series_id": 1,
-    "anime_title": "Test Anime",
-    "series_no": 1,
-    "episode_no": 1,
-    "subtitle_group": "TestGroup",
-    "file_path": "/tmp/bangumi-downloads/test.mkv",
-    "callback_url": "http://localhost:8000/sync-callback"
-  }'
+# 特定測試名稱
+cargo test <test_name>
 ```
 
 ---
 
 ## 編碼規範
-
-### Rust 風格
 
 ```bash
 # 格式化
@@ -311,86 +208,131 @@ cargo fmt
 # Lint 檢查
 cargo clippy
 
-# 檢查編譯
+# 確認編譯
 cargo check
 ```
 
-### 命名慣例
+### 函數式設計原則
 
-| 類型 | 風格 | 範例 |
-|------|------|------|
-| 模塊 | snake_case | `qbittorrent_client` |
-| 類型 | PascalCase | `TorrentInfo` |
-| 函數 | snake_case | `get_torrent_info` |
-| 常數 | SCREAMING_SNAKE_CASE | `MAX_RETRIES` |
+優先使用 `map`、`filter_map`、`and_then`、`or_else` 等組合器，避免過多 `match` 與可變狀態。詳見 [CLAUDE.md](CLAUDE.md) 的函數式設計原則章節。
 
 ### 錯誤處理
 
-使用 `anyhow` 和 `thiserror`：
+使用 `anyhow` 處理應用層錯誤，`thiserror` 定義領域錯誤型別：
 
 ```rust
 use anyhow::{anyhow, Result};
 
-async fn my_function() -> Result<String> {
-    let data = fetch_data()
-        .await
-        .map_err(|e| anyhow!("Failed to fetch: {}", e))?;
-    Ok(data)
+async fn fetch_data() -> Result<String> {
+    let resp = client.get(url).send().await
+        .map_err(|e| anyhow!("fetch failed: {}", e))?;
+    Ok(resp.text().await?)
 }
 ```
 
 ### 日誌
 
-使用 `tracing`：
-
 ```rust
-tracing::debug!("Debug message");
-tracing::info!("Info message");
-tracing::warn!("Warning");
-tracing::error!("Error: {}", e);
+tracing::debug!("parsing item: {:?}", item);
+tracing::info!(subscription_id, "fetch completed");
+tracing::warn!("downloader not registered");
+tracing::error!("database error: {}", e);
 ```
 
 ---
 
 ## 資料庫操作
 
-### 資料庫說明
-
 | 資料庫 | 用途 | 使用者 |
 |--------|------|--------|
-| `bangumi` | Core 主資料庫（動畫、訂閱、下載等） | Core Service |
-| `viewer_jellyfin` | Viewer 獨立資料庫（同步任務、bangumi.tv metadata 快取） | Viewer Jellyfin |
+| `bangumi` | Core 主資料庫（動畫、訂閱、下載、Webhook 等） | Core Service |
+| `viewer_jellyfin` | Viewer 資料庫（同步任務、bangumi.tv metadata 快取） | Viewer Jellyfin |
 
-### 創建遷移
-
-```bash
-diesel migration generate my_migration_name
-```
-
-### 執行遷移
+### 常用 Diesel 指令
 
 ```bash
-# 執行 Core 資料庫遷移
+# 建立新遷移（在 core-service 目錄執行）
+diesel migration generate <name>
+
+# 執行遷移
 diesel migration run
-
-# Viewer 資料庫遷移（內嵌於 binary，啟動時自動執行）
 
 # 回滾
 diesel migration revert
 
-# 重做（回滾後執行）
+# 回滾後重新執行（驗證 down.sql 正確性）
 diesel migration redo
 ```
 
-### 使用 Adminer
+### Adminer 連線
 
-1. 開啟 `http://localhost:8081`
-2. 選擇 PostgreSQL
-3. 輸入：
-   - Server: `postgres`（Docker 內）或 `localhost`（本地）
-   - Username: `bangumi`
-   - Password: `bangumi_dev_password`
-   - Database: `bangumi` 或 `viewer_jellyfin`
+開啟 `http://localhost:8081`，輸入：
+- Server: `postgres`
+- Username: `bangumi`
+- Password: `bangumi_dev_password`
+- Database: `bangumi` 或 `viewer_jellyfin`
+
+---
+
+## Frontend 開發
+
+### 技術棧
+
+| 項目 | 說明 |
+|------|------|
+| React 19 + TypeScript + Vite 7 | 主框架 |
+| Effect.js | API 呼叫、型別安全的錯誤處理、依賴注入 |
+| Shadcn/UI | Radix UI + Tailwind CSS 元件庫（New York 風格） |
+| i18next | 多語系支援（繁中 / 英文 / 日文） |
+| Caddy | 生產環境反向代理與靜態檔案服務 |
+
+### 安裝與啟動
+
+```bash
+cd frontend
+bun install
+bun run dev   # 開發伺服器 port 8004
+```
+
+開發伺服器的 API 代理（`vite.config.ts`）：
+
+| URL 前綴 | 代理至 |
+|----------|--------|
+| `/api/core/` | `http://localhost:8000` |
+| `/api/downloader/` | `http://localhost:8002` |
+| `/api/downloader-pikpak/` | `http://localhost:8006` |
+| `/api/viewer/` | `http://localhost:8003` |
+
+> 啟動前端開發伺服器前，請確認後端服務已啟動。
+
+### 建構
+
+```bash
+bun run build    # TypeScript 型別檢查 + 生產建構
+bun run preview  # 預覽建構結果
+```
+
+### 頁面一覽
+
+| 路由 | 頁面 | 功能 |
+|------|------|------|
+| `/` | Dashboard | 服務健康狀態、系統統計 |
+| `/search` | 搜尋資源 | 線上搜尋動畫 RSS 資源 |
+| `/subscriptions` | 訂閱管理 | RSS 訂閱 CRUD、篩選規則、建立精靈 |
+| `/anime` | 動畫系列 | 系列管理、集數、AnimeLink |
+| `/raw-items` | 最新更新 | 原始 RSS 項目（狀態篩選、分頁） |
+| `/pending` | 待確認 | AI 生成結果的人工審核佇列 |
+| `/settings` | 設定 | 下載器優先級、AI 設定、Prompt 設定、Webhook |
+| `/anime-works` | 動畫作品 | 動畫作品 CRUD |
+| `/subtitle-groups` | 字幕組 | 字幕組管理 |
+| `/parsers` | 解析器 | Title Parser CRUD + 即時解析預覽 |
+| `/filters` | 篩選器 | 全域 Filter 規則 + before/after 預覽 |
+
+### 新增 API 端點
+
+1. 在 `src/services/CoreApi.ts` 的 interface 中新增方法宣告
+2. 在 `src/layers/ApiLayer.ts` 中實作對應的 HTTP 呼叫
+3. 若有新型別，在 `src/schemas/` 下建立對應 interface
 
 ---
 
@@ -399,216 +341,38 @@ diesel migration redo
 ### Port 已被佔用
 
 ```bash
-# 找出佔用 port 的程式
-lsof -i :8000
-lsof -i :5432
-lsof -i :8080
-lsof -i :8096
-
-# 停止佔用的服務
+lsof -i :8000   # 同樣適用於 8001, 8002, 8003, 8004, 5432
 docker compose -f docker-compose.dev.yaml down
 ```
 
 ### 資料庫連接失敗
 
 ```bash
-# 確認 PostgreSQL 運行中
 docker compose -f docker-compose.dev.yaml ps postgres
-
-# 重啟 PostgreSQL
-docker compose -f docker-compose.dev.yaml restart postgres
-
-# 檢查日誌
 docker compose -f docker-compose.dev.yaml logs postgres
 ```
-
-### qBittorrent 無法連接
-
-```bash
-# 檢查服務狀態
-docker compose -f docker-compose.dev.yaml ps qbittorrent
-
-# 查看日誌
-docker compose -f docker-compose.dev.yaml logs qbittorrent
-
-# 測試 WebUI
-curl http://localhost:8080
-```
-
-如果出現認證錯誤，請確認使用 `admin` / `adminadmin` 登入。
-
-### Jellyfin 無法連接
-
-```bash
-# 檢查服務狀態
-docker compose -f docker-compose.dev.yaml ps jellyfin
-
-# 查看日誌
-docker compose -f docker-compose.dev.yaml logs jellyfin
-
-# 測試健康檢查
-curl http://localhost:8096/health
-```
-
-首次啟動需完成 Jellyfin 設定嚮導（http://localhost:8096）。
 
 ### 清理開發環境
 
 ```bash
-# 停止服務
+# 停止服務（保留資料）
 docker compose -f docker-compose.dev.yaml down
 
-# 停止並刪除資料
+# 停止並刪除所有資料
 docker compose -f docker-compose.dev.yaml down -v
 
-# 清理 Rust build
+# 清理 Rust 建構快取
 cargo clean
 ```
 
 ---
 
-## 開發流程
-
-### 建議的開發流程
-
-1. **創建 feature branch**
-   ```bash
-   git checkout -b feature/my-feature
-   ```
-
-2. **啟動開發環境**
-   ```bash
-   docker compose -f docker-compose.dev.yaml up -d
-   ```
-
-3. **開發與測試**
-   ```bash
-   cargo watch -x 'test -p my-package'
-   ```
-
-4. **格式化與檢查**
-   ```bash
-   cargo fmt
-   cargo clippy
-   cargo test
-   ```
-
-5. **提交**
-   ```bash
-   git add .
-   git commit -m "feat: add my feature"
-   ```
-
-### 使用 Git Worktree 隔離開發
-
-對於大型功能開發，建議使用 worktree：
-
-```bash
-# 創建 worktree
-git worktree add .worktrees/my-feature -b feature/my-feature
-
-# 進入 worktree
-cd .worktrees/my-feature
-
-# 完成後清理
-git worktree remove .worktrees/my-feature
-```
-
----
-
-## Frontend 開發
-
-### 技術棧
-
-- **React 19** + TypeScript + Vite 7
-- **Effect-TS** — 類型安全的 API 呼叫與錯誤處理
-- **Shadcn/UI** — Radix UI + Tailwind CSS 元件庫（New York 風格）
-- **Caddy** — 生產環境反向代理
-
-### 安裝與啟動
-
-```bash
-cd frontend
-
-# 安裝依賴
-bun install
-
-# 啟動開發伺服器（port 8004）
-bun run dev
-```
-
-開發伺服器會自動代理 API 請求：
-
-| URL 前綴 | 代理至 |
-|----------|--------|
-| `/api/core/` | `http://localhost:8000` |
-| `/api/downloader/` | `http://localhost:8002` |
-| `/api/viewer/` | `http://localhost:8003` |
-
-> 確保後端服務已啟動後再開啟前端開發伺服器。
-
-### 建構
-
-```bash
-cd frontend
-
-# TypeScript 檢查 + 建構生產版本
-bun run build
-
-# 預覽建構結果
-bun run preview
-```
-
-### 頁面一覽
-
-| 路由 | 頁面 | 功能 |
-|------|------|------|
-| `/` | Dashboard | 服務健康狀態、系統總覽 |
-| `/anime` | Anime 管理 | 新增/刪除動畫 |
-| `/anime/:id` | Anime 詳情 | 系列管理、Filter 規則 |
-| `/subscriptions` | 訂閱管理 | 瀏覽 RSS 訂閱 |
-| `/raw-items` | Raw Items | 原始 RSS 項目（含狀態篩選、分頁） |
-| `/downloads` | 下載管理 | 下載進度（自動 5 秒刷新） |
-| `/filters` | Filter 規則 | CRUD + 即時 before/after 預覽 |
-| `/parsers` | Title Parser | CRUD + 即時解析預覽 |
-| `/conflicts` | 衝突解決 | Fetcher 衝突解決 |
-
-### 前端架構
-
-```
-src/
-├── services/CoreApi.ts    # Effect.Context.Tag API 介面（17 個端點）
-├── schemas/               # Effect Schema 型別驗證
-├── hooks/                 # useEffectQuery / useEffectMutation
-├── layers/ApiLayer.ts     # Effect-TS Layer（HttpClient → CoreApi）
-├── runtime/AppRuntime.ts  # ManagedRuntime 初始化
-├── components/
-│   ├── ui/                # Shadcn/UI 元件（15 個）
-│   ├── layout/            # AppLayout, Sidebar, Header
-│   └── shared/            # DataTable, StatusBadge, ConfirmDialog, RegexInput
-└── pages/                 # 各功能頁面
-```
-
-### Docker 建構
-
-```bash
-# 單獨建構 Frontend 映像
-docker compose build frontend
-
-# 啟動 Frontend（依賴 core-service）
-docker compose up -d frontend
-```
-
-Frontend Docker 映像使用多階段建構：
-1. **Builder**: Bun Alpine — `bun install` + `bun run build`
-2. **Runtime**: Caddy Alpine — 提供靜態檔案 + 反向代理
-
----
-
 ## 相關文檔
 
-- [API 規格](docs/API-SPECIFICATIONS.md)
-- [架構設計](docs/plans/2025-01-21-rust-bangumi-architecture-design.md)
-- [CORS 設定](docs/CORS-CONFIGURATION.md)
-- [Viewer Jellyfin](viewers/jellyfin/README.md)
-- [Frontend 實作計劃](docs/plans/frontend-implementation-plan.md)
+| 文件 | 說明 |
+|------|------|
+| [docs/API-SPECIFICATIONS.md](docs/API-SPECIFICATIONS.md) | 完整 API 規格 |
+| [docs/api/openapi.yaml](docs/api/openapi.yaml) | OpenAPI 3.0 規格（v0.3.0） |
+| [docs/ARCHITECTURE_RSS_SUBSCRIPTIONS.md](docs/ARCHITECTURE_RSS_SUBSCRIPTIONS.md) | RSS 訂閱架構 |
+| [docs/CORS-CONFIGURATION.md](docs/CORS-CONFIGURATION.md) | CORS 設定說明 |
+| [viewers/jellyfin/README.md](viewers/jellyfin/README.md) | Viewer Jellyfin 詳細文件 |
