@@ -13,10 +13,10 @@ pub use repository::{
     DieselAnimeLinkRepository, DieselAnimeRepository, DieselAnimeWorkRepository,
     DieselConflictRepository, DieselFilterRuleRepository, DieselRawItemRepository,
     DieselSeasonRepository, DieselServiceModuleRepository, DieselSubscriptionRepository,
-    DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,
-    RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository, ServiceModuleRepository,
-    SubscriptionRepository, SubtitleGroupRepository, TitleParserRepository,
-    DieselWebhookRepository, WebhookRepository,
+    DieselSubtitleGroupRepository, DieselTitleParserRepository, DieselWebhookRepository,
+    FilterRuleRepository, RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository,
+    ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
+    TitleParserRepository, WebhookRepository,
 };
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
