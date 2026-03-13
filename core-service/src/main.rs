@@ -167,6 +167,17 @@ async fn main() -> anyhow::Result<()> {
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
         )
+        // Webhook 管理
+        .route(
+            "/webhooks",
+            get(handlers::webhooks::list_webhooks).post(handlers::webhooks::create_webhook),
+        )
+        .route(
+            "/webhooks/:id",
+            get(handlers::webhooks::get_webhook)
+                .put(handlers::webhooks::update_webhook)
+                .delete(handlers::webhooks::delete_webhook),
+        )
         // 下載記錄
         .route("/downloads", get(handlers::downloads::list_downloads))
         // 動畫連結

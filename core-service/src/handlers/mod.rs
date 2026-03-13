@@ -16,3 +16,4 @@ pub mod sync;
 pub mod covers;
 pub mod search;
 pub mod detail;
+pub mod webhooks;
