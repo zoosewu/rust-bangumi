@@ -9,6 +9,7 @@ pub mod registry;
 pub mod scheduler;
 pub mod sync_service;
 pub mod title_parser;
+pub mod webhook_service;
 
 pub use conflict_detection::{ConflictDetectionResult, ConflictDetectionService};
 pub use download_cancel::DownloadCancelService;
@@ -18,3 +19,4 @@ pub use registry::ServiceRegistry;
 pub use scheduler::{CleanupScheduler, FetchScheduler};
 pub use sync_service::SyncService;
 pub use title_parser::TitleParserService;
+pub use webhook_service::{WebhookContext, WebhookService};
