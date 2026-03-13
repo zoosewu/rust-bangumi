@@ -1,362 +1,174 @@
-# Rust Bangumi - 動畫 RSS 聚合與下載管理系統
+# rustBangumi
 
-使用 Rust + PostgreSQL 構建的微服務架構動畫 RSS 聚合、下載與媒體庫管理系統。
+動畫 RSS 自動追蹤、下載與媒體庫管理系統。訂閱動畫 RSS 來源後，系統會自動抓取、下載，並整理進 Jellyfin 媒體庫。
 
 ![](assets/subscription-preview.png)
 
 ![](assets/anime-preview.png)
 
+---
+
+## 功能介紹
+
+- **RSS 自動訂閱**：定期從 Mikanani 等來源抓取最新動畫資訊
+- **智慧解析**：自動識別標題、集數、字幕組、解析度等資訊
+- **自動下載**：支援 BT (qBittorrent) 與雲端離線 (PikPak) 兩種下載方式
+- **媒體庫整理**：下載完成後自動搬移至 Jellyfin，並從 bangumi.tv 取得封面、簡介等 metadata
+- **衝突管理**：同一集有多個字幕組來源時，透過介面手動選擇或設定篩選規則
+- **AI 輔助**：透過 AI 自動生成解析規則與篩選器
+
+---
 
 ## 系統架構
 
 ```
-                        ┌──────────────┐
-                        │   Frontend   │
-                        │ (React SPA)  │
-                        │    :8004     │
-                        └──────┬───────┘
-                               │ Caddy reverse proxy
-┌──────────┐     ┌─────────────┴┐     ┌───────────────────┐     ┌────────────────┐
-│  Fetcher │◄────│ Core Service │────►│    Downloader     │────►│    Viewer      │
-│ Mikanani │     │  (協調器)    │     │  (qBittorrent)    │     │  (Jellyfin)    │
-│  :8001   │     │    :8000     │     │      :8002        │     │    :8003       │
-└──────────┘     └──────┬───────┘     ├───────────────────┤     └────────────────┘
-                        │             │    Downloader     │
-                   ┌────┴────┐        │    (PikPak)       │
-                   │PostgreSQL│        │      :8006        │
-                   └─────────┘        └───────────────────┘
+使用者
+  │
+  ▼
+┌─────────────┐
+│  管理介面   │  ← 瀏覽器開啟，所有操作都在這裡完成
+│  (Frontend) │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────┐     ┌──────────┐
+│ Core Service │────►│ Fetcher  │  抓取 RSS 資訊
+│  (核心協調)  │     └──────────┘
+│              │     ┌──────────┐
+│              │────►│Downloader│  下載檔案
+│              │     └──────────┘
+│              │     ┌──────────┐
+│              │────►│  Viewer  │  整理至 Jellyfin
+└──────┬───────┘     └──────────┘
+       │
+       ▼
+  ┌──────────┐
+  │ 資料庫   │
+  └──────────┘
 ```
 
-系統由 5 個微服務 + Frontend + CLI 工具組成：
-
-| 服務 | 說明 | Port |
-|------|------|------|
-| **Frontend** | React SPA 管理介面，透過 Caddy 反向代理存取後端 API | 8004 |
-| Core Service | 主協調器，管理資料庫、調度抓取與下載、接收回呼 | 8000 |
-| Fetcher (Mikanani) | 從 Mikanani RSS 抓取動畫資訊，解析標題 | 8001 |
-| Downloader (qBittorrent) | 批次管理 BT 下載任務（magnet/torrent） | 8002 |
-| Downloader (PikPak) | 透過 PikPak 雲端離線抓取後 streaming 下載至本機 | 8006 |
-| Viewer (Jellyfin) | 將下載完成的檔案整理至 Jellyfin 媒體庫，產生 NFO metadata | 8003 |
-| CLI | 命令列工具，管理訂閱、動畫、下載等 | - |
-
-外部依賴：
-
-- **PostgreSQL** - 資料庫（Core 使用 `bangumi`，Viewer 使用 `viewer_jellyfin`）
-- **qBittorrent** - BT 下載客戶端（WebUI :8080）
-- **Jellyfin** - 媒體伺服器（WebUI :8096，可選）
-
-## 完整資料流
-
-```
-1. 使用者透過 Frontend 介面、CLI 或 API 新增 RSS 訂閱
-2. Core FetchScheduler 定期觸發 Fetcher 抓取 RSS
-3. Fetcher 回呼 Core 提交原始結果，Core 解析標題並存入資料庫
-4. Core DownloadScheduler 偵測新連結，派送至 Downloader 下載
-5. Downloader 定期回報進度，Core 更新下載狀態
-6. 下載完成後，Core 通知 Viewer 同步檔案至 Jellyfin 媒體庫
-7. Viewer 搬移檔案、從 bangumi.tv 取得 metadata、產生 NFO
-8. Viewer 回呼 Core 回報同步結果
-```
+---
 
 ## 快速部署
 
-### 前置條件
+### 前置需求
 
-- Docker & Docker Compose v2+
-- 至少 2GB RAM
+- 已安裝 [Docker](https://www.docker.com/get-started/) 與 Docker Compose
+- 建議至少 2GB 可用記憶體
 
-### 1. 設定環境變數
+### 步驟一：下載並設定
 
 ```bash
-# 複製生產環境模板
-cp .env.prod .env
+# 下載專案
+git clone <repo-url>
+cd rustBangumi
 
-# 編輯必要變數
-vim .env
+# 從範本建立設定檔
+cp .env.prod .env
 ```
 
-**必須設定的變數：**
+用文字編輯器開啟 `.env`，修改以下項目（其餘保持預設即可）：
 
 ```env
-POSTGRES_DB=bangumi
-POSTGRES_USER=bangumi
-POSTGRES_PASSWORD=<your-secure-password>
+POSTGRES_PASSWORD=設定一個安全的密碼
 ```
 
-### 2. 啟動服務
+### 步驟二：啟動服務
 
 ```bash
-# 啟動核心服務 + Frontend（不含外部依賴）
+# 啟動所有服務
 docker compose up -d
+```
 
-# 啟動含 qBittorrent 和 Jellyfin
+若要同時啟動 qBittorrent 與 Jellyfin：
+
+```bash
 docker compose -f docker-compose.yaml -f docker-compose.override.yaml up -d
 ```
 
-### 3. 驗證部署
+### 步驟三：開啟管理介面
+
+瀏覽器前往 **http://localhost:8004**，即可開始使用。
+
+---
+
+## 目錄掛載
+
+下載檔案與媒體庫的存放路徑在 `.env` 中設定：
+
+| 變數 | 說明 | 預設值 |
+|------|------|--------|
+| `DOWNLOADS_DIR` | 下載暫存目錄（Host 路徑） | `/downloads` |
+| `JELLYFIN_LIBRARY_DIR` | Jellyfin 媒體庫目錄（Host 路徑） | `/media/jellyfin` |
+
+請確認這兩個目錄已存在，且 Docker 有讀寫權限。
+
+---
+
+## 更新與維護
+
+### 更新至最新版本
 
 ```bash
-# 檢查服務狀態
-docker compose ps
-
-# 檢查健康狀態
-curl http://localhost:8000/health
-curl http://localhost:8001/health
-curl http://localhost:8002/health
-curl http://localhost:8003/health
-curl http://localhost:8006/health
-
-# 開啟 Frontend 管理介面
-open http://localhost:8004
-
-# 查看日誌
-docker compose logs -f core-service
-```
-
-## 服務端點
-
-### Core Service (8000)
-
-| Method | Endpoint | 說明 |
-|--------|----------|------|
-| GET | `/health` | 健康檢查 |
-| POST | `/services/register` | 註冊服務（Fetcher/Downloader/Viewer） |
-| GET | `/services` | 列出已註冊服務 |
-| GET | `/anime` | 列出動畫 |
-| POST | `/anime` | 建立動畫 |
-| GET | `/subscriptions` | 列出 RSS 訂閱 |
-| POST | `/subscriptions` | 新增 RSS 訂閱 |
-| GET | `/parsers` | 列出標題解析器 |
-| POST | `/parsers` | 建立標題解析器 |
-| GET | `/raw-items` | 列出原始 RSS 項目 |
-| POST | `/fetcher-results` | 接收結構化 Fetcher 結果 |
-| POST | `/raw-fetcher-results` | 接收原始 Fetcher 結果（自動解析） |
-| POST | `/sync-callback` | 接收 Viewer 同步回呼 |
-| GET | `/conflicts` | 列出待解決衝突 |
-| GET | `/downloads` | 列出下載記錄（`?status=X&limit=Y&offset=Z`） |
-| POST | `/filters/preview` | 預覽 Filter 規則匹配結果（即時比較 before/after） |
-| POST | `/parsers/preview` | 預覽 Parser 解析結果（含 priority-based 匹配比較） |
-
-> 完整 API 文件見 [docs/API-SPECIFICATIONS.md](docs/API-SPECIFICATIONS.md) 和 [docs/api/](docs/api/)
-
-### Frontend (8004)
-
-Frontend 透過 Caddy 反向代理存取後端 API：
-
-| URL 前綴 | 代理目標 | 說明 |
-|----------|----------|------|
-| `/api/core/*` | core-service:8000 | Core Service API |
-| `/api/downloader/*` | downloader-qbittorrent:8002 | Downloader (qBittorrent) API |
-| `/api/downloader-pikpak/*` | pikpak-downloader:8006 | Downloader (PikPak) API |
-| `/api/viewer/*` | viewer-jellyfin:8003 | Viewer API |
-| `/*` | 靜態檔案 | React SPA（fallback 至 index.html） |
-
-### Fetcher (8001)
-
-| Method | Endpoint | 說明 |
-|--------|----------|------|
-| GET | `/health` | 健康檢查 |
-| POST | `/fetch` | 觸發 RSS 抓取（非同步，回傳 202） |
-| POST | `/can-handle-subscription` | 檢查 URL 歸屬 |
-
-### Downloader - qBittorrent (8002)
-
-| Method | Endpoint | 說明 |
-|--------|----------|------|
-| GET | `/health` | 健康檢查 |
-| POST | `/downloads` | 批次新增下載任務（magnet/torrent） |
-| GET | `/downloads` | 查詢下載狀態（`?hashes=h1,h2`） |
-| POST | `/downloads/cancel` | 批次取消下載 |
-| POST | `/downloads/:hash/pause` | 暫停下載 |
-| POST | `/downloads/:hash/resume` | 恢復下載 |
-| DELETE | `/downloads/:hash` | 刪除下載（`?delete_files=true`） |
-
-### Downloader - PikPak (8006)
-
-| Method | Endpoint | 說明 |
-|--------|----------|------|
-| GET | `/health` | 健康檢查 |
-| POST | `/downloads` | 批次新增下載任務（magnet/HTTP URL） |
-| GET | `/downloads` | 查詢下載狀態（`?hashes=h1,h2`） |
-| POST | `/downloads/cancel` | 批次取消下載 |
-| POST | `/downloads/:hash/pause` | 暫停（no-op，回傳 200） |
-| POST | `/downloads/:hash/resume` | 恢復（no-op，回傳 200） |
-| DELETE | `/downloads/:hash` | 刪除下載 |
-| POST | `/config/credentials` | 設定 PikPak 帳號密碼（`{username, password}`） |
-
-### Viewer (8003)
-
-| Method | Endpoint | 說明 |
-|--------|----------|------|
-| GET | `/health` | 健康檢查 |
-| POST | `/sync` | 接收同步請求（非同步，回傳 202） |
-
-## 配置說明
-
-### 環境變數
-
-| 變數 | 預設值 | 說明 |
-|------|--------|------|
-| `POSTGRES_DB` | - | 資料庫名稱（必填） |
-| `POSTGRES_USER` | - | 資料庫使用者（必填） |
-| `POSTGRES_PASSWORD` | - | 資料庫密碼（必填） |
-| `CORE_PORT` | 8000 | Core Service port |
-| `FETCHER_PORT` | 8001 | Fetcher port |
-| `DOWNLOADER_PORT` | 8002 | Downloader port |
-| `VIEWER_PORT` | 8003 | Viewer port |
-| `FRONTEND_PORT` | 8004 | Frontend port |
-| `QBITTORRENT_URL` | http://qbittorrent:8080 | qBittorrent WebUI |
-| `PIKPAK_PORT` | 8006 | PikPak Downloader port |
-| `PIKPAK_EMAIL` | - | PikPak 帳號（留空則需啟動後手動設定） |
-| `PIKPAK_PASSWORD` | - | PikPak 密碼 |
-| `PIKPAK_DATA_DIR` | - | PikPak 資料目錄（SQLite DB bind mount 至 /data，必填） |
-| `DOWNLOADS_DIR` | /downloads | 下載檔案目錄 |
-| `JELLYFIN_LIBRARY_DIR` | /media/jellyfin | Jellyfin 媒體庫目錄 |
-| `RUST_LOG` | info | 日誌等級 |
-
-### Docker Compose 檔案
-
-| 檔案 | 用途 |
-|------|------|
-| `docker-compose.yaml` | 主要服務配置（Frontend, Core, Fetcher, Downloader, Viewer） |
-| `docker-compose.override.yaml` | 外部服務（qBittorrent + Jellyfin） |
-| `docker-compose.dev.yaml` | 開發環境（PostgreSQL, Adminer, qBittorrent, Jellyfin） |
-
-## CLI 工具
-
-```bash
-# 使用 Docker
-docker run --rm --network bangumi-network bangumi-cli --help
-
-# 訂閱 RSS
-docker run --rm --network bangumi-network bangumi-cli subscribe \
-  "https://mikanani.me/RSS/Classic" \
-  --fetcher mikanani
-
-# 列出動畫
-docker run --rm --network bangumi-network bangumi-cli list
-
-# 查看系統狀態
-docker run --rm --network bangumi-network bangumi-cli status
-```
-
-## 維運指南
-
-### 日誌查看
-
-```bash
-# 所有服務
-docker compose logs -f
-
-# 特定服務
-docker compose logs -f core-service
-docker compose logs -f downloader-qbittorrent
-docker compose logs -f pikpak-downloader
-docker compose logs -f viewer-jellyfin
-```
-
-### 資料庫備份
-
-```bash
-# 備份 Core 資料庫
-docker compose exec postgres pg_dump -U bangumi bangumi > backup-core.sql
-
-# 備份 Viewer 資料庫
-docker compose exec postgres pg_dump -U bangumi viewer_jellyfin > backup-viewer.sql
-
-# 還原
-docker compose exec -T postgres psql -U bangumi bangumi < backup-core.sql
-```
-
-### 更新服務
-
-```bash
-# 拉取最新代碼
 git pull
-
-# 重新構建並部署
 docker compose build --no-cache
 docker compose up -d
 ```
 
-### 清理
+### 查看服務狀態與日誌
 
 ```bash
-# 停止所有服務
+# 查看各服務是否正常運行
+docker compose ps
+
+# 即時查看日誌
+docker compose logs -f
+```
+
+### 資料備份
+
+```bash
+# 備份資料庫
+docker compose exec postgres pg_dump -U bangumi bangumi > backup.sql
+```
+
+### 停止服務
+
+```bash
+# 停止（保留資料）
 docker compose down
 
-# 停止並刪除所有資料（危險！）
+# 停止並清除所有資料（無法復原）
 docker compose down -v
 ```
 
-## 故障排除
+---
 
-### 服務無法啟動
+## PikPak 設定（選用）
 
-```bash
-# 檢查 port 是否被佔用
-lsof -i :8000
-lsof -i :5432
+若使用 PikPak 雲端離線下載，需在 `.env` 額外設定帳號：
 
-# 檢查容器日誌
-docker compose logs core-service
+```env
+PIKPAK_EMAIL=你的帳號
+PIKPAK_PASSWORD=你的密碼
+PIKPAK_DATA_DIR=/path/to/pikpak-data
 ```
 
-### 資料庫連接失敗
+---
 
-```bash
-# 確認 PostgreSQL 運行中
-docker compose exec postgres pg_isready
+## 常見問題
 
-# 測試連接
-docker compose exec postgres psql -U bangumi -d bangumi -c "SELECT 1"
-```
+**服務啟動失敗**
+→ 執行 `docker compose logs` 查看錯誤訊息，確認 port 8004 未被其他程式佔用。
 
-### Downloader 無法連接 qBittorrent
+**下載沒有進度**
+→ 確認 qBittorrent 正常運行（http://localhost:8080），並在管理介面的「設定」檢查下載器連線狀態。
 
-```bash
-# 確認 qBittorrent 運行中
-curl http://localhost:8080
+**Jellyfin 沒有出現新影片**
+→ 確認 `JELLYFIN_LIBRARY_DIR` 路徑正確，並在 Jellyfin 介面手動觸發媒體庫掃描。
 
-# 檢查認證設定
-docker compose logs qbittorrent
-```
+---
 
-### PikPak Downloader 無法連接
+## 開發者文件
 
-```bash
-# 確認服務健康
-curl http://localhost:8006/health
-
-# 手動設定 PikPak 帳號密碼
-curl -X POST http://localhost:8006/config/credentials \
-  -H "Content-Type: application/json" \
-  -d '{"username":"your@email.com","password":"yourpassword"}'
-
-# 查看日誌
-docker compose logs pikpak-downloader
-
-# 確認 SQLite 資料目錄已建立
-ls -lh ${PIKPAK_DATA_DIR:-./data/pikpak}/pikpak.db
-```
-
-### Viewer 同步失敗
-
-```bash
-# 確認 Viewer 健康
-curl http://localhost:8003/health
-
-# 確認已向 Core 註冊
-curl http://localhost:8000/services | jq '.[] | select(.service_type == "viewer")'
-
-# 檢查 Viewer 日誌
-docker compose logs viewer-jellyfin
-```
-
-## 開發
-
-開發環境設置請參考 [DEVELOPMENT.md](DEVELOPMENT.md)
-
-## 許可證
-
-MIT
+詳細的架構設計、API 規格與開發指南請參考 [docs/](docs/) 目錄。
