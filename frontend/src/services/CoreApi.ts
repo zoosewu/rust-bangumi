@@ -1,4 +1,5 @@
 import { Effect, Context } from "effect"
+import type { Webhook, CreateWebhookRequest, UpdateWebhookRequest } from "@/schemas/webhook"
 import type { AggregatedSearchResponse, DetailResponse } from "@/schemas/search"
 import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
@@ -120,5 +121,11 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly confirmPendingAiResult: (id: number, req: ConfirmPendingRequest) => Effect.Effect<void>
     readonly rejectPendingAiResult: (id: number) => Effect.Effect<void>
     readonly regeneratePendingAiResult: (id: number, req: RegenerateRequest) => Effect.Effect<PendingAiResult>
+    // Webhook
+    readonly getWebhooks: Effect.Effect<readonly Webhook[]>
+    readonly createWebhook: (req: CreateWebhookRequest) => Effect.Effect<Webhook>
+    readonly updateWebhook: (id: number, req: UpdateWebhookRequest) => Effect.Effect<Webhook>
+    readonly deleteWebhook: (id: number) => Effect.Effect<void>
+    readonly testWebhook: (req: { url: string; payload_template: string }) => Effect.Effect<{ ok: boolean; status_code?: number; error?: string; rendered_payload: string }>
   }
 >() {}

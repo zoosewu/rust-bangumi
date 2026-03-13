@@ -315,6 +315,26 @@
       "customPrompt": "Custom Prompt (appended after fixed prompt)",
       "customPromptPlaceholder": "Leave blank for no custom instructions",
       "revertDefault": "Revert to Default"
+    },
+    "webhook": {
+      "title": "Webhook Settings",
+      "description": "Fire webhooks when a download completes and notifies the Viewer. Supports dynamic template variables.",
+      "add": "Add",
+      "empty": "No webhooks yet. Click Add to create one.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Discord notification",
+      "payloadTemplate": "Payload Template",
+      "templateVars": "Variables: {{download_id}} {{anime_id}} {{anime_title}} {{episode_no}} {{series_no}} {{subtitle_group}} {{video_path}}",
+      "enabledLabel": "Enabled",
+      "active": "Active",
+      "inactive": "Inactive",
+      "created": "Webhook created",
+      "deleted": "Webhook deleted",
+      "nameUrlRequired": "Name and URL are required",
+      "test": "Test",
+      "testSuccess": "Test succeeded",
+      "testFailure": "Test failed",
+      "renderedPayload": "Rendered payload (sample data):"
     }
   },
   "aiResult": {

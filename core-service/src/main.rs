@@ -172,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
             "/webhooks",
             get(handlers::webhooks::list_webhooks).post(handlers::webhooks::create_webhook),
         )
+        .route("/webhooks/test", post(handlers::webhooks::test_webhook))
         .route(
             "/webhooks/:id",
             get(handlers::webhooks::get_webhook)

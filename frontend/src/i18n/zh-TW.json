@@ -315,6 +315,26 @@
       "customPrompt": "自訂 Prompt（追加在固定 Prompt 之後）",
       "customPromptPlaceholder": "留空則不追加自訂說明",
       "revertDefault": "Revert 預設值"
+    },
+    "webhook": {
+      "title": "Webhook 設定",
+      "description": "下載完成並通知 Viewer 時同時觸發 Webhook，支援動態模板變數",
+      "add": "新增",
+      "empty": "尚無 Webhook，點擊新增建立第一個",
+      "name": "名稱",
+      "namePlaceholder": "例如：Discord 通知",
+      "payloadTemplate": "Payload 模板",
+      "templateVars": "可用變數：{{download_id}} {{anime_id}} {{anime_title}} {{episode_no}} {{series_no}} {{subtitle_group}} {{video_path}}",
+      "enabledLabel": "啟用",
+      "active": "啟用",
+      "inactive": "停用",
+      "created": "Webhook 已建立",
+      "deleted": "Webhook 已刪除",
+      "nameUrlRequired": "名稱和 URL 不能為空",
+      "test": "測試",
+      "testSuccess": "測試成功",
+      "testFailure": "測試失敗",
+      "renderedPayload": "渲染後的 Payload（範例資料）："
     }
   },
   "aiResult": {

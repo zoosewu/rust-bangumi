@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Bangumi Core Service API
   description: Rust Bangumi 核心服務 API 規格
-  version: 0.2.0
+  version: 0.3.0
   contact:
     name: Bangumi Project
   license:
@@ -43,6 +43,20 @@ tags:
     description: 衝突解決
   - name: SyncCallback
     description: Viewer 同步回呼
+  - name: Downloads
+    description: 下載記錄管理
+  - name: Webhooks
+    description: Webhook 管理
+  - name: Dashboard
+    description: 儀表板概覽
+  - name: Search
+    description: 搜尋
+  - name: LinkConflicts
+    description: 動畫連結衝突管理
+  - name: AiSettings
+    description: AI 設定管理
+  - name: PendingAiResults
+    description: 待確認 AI 結果管理
 
 paths:
   # ============ Health ============
@@ -1217,6 +1231,690 @@ paths:
                   error:
                     type: string
 
+  # ============ Downloads ============
+  /downloads:
+    get:
+      tags: [Downloads]
+      summary: 列出下載記錄
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: 下載記錄列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DownloadRow'
+
+  # ============ Links (additional) ============
+  /links/conflicts:
+    get:
+      tags: [Links]
+      summary: 列出所有有衝突的動畫連結
+      responses:
+        '200':
+          description: 衝突連結列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConflictingLinkInfo'
+
+  # ============ Subscriptions (additional) ============
+  /subscriptions/{id}:
+    patch:
+      tags: [Subscriptions]
+      summary: 更新訂閱
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+        '404':
+          description: 訂閱不存在
+
+  /subscriptions/{id}/fetch:
+    post:
+      tags: [Subscriptions]
+      summary: 立即觸發訂閱的爬取
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 觸發成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: 訂閱不存在
+
+  /subscriptions/{id}/detect-conflicts:
+    post:
+      tags: [Subscriptions]
+      summary: 對訂閱的 raw items 進行衝突偵測並生成 AI 過濾規則
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 觸發成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  # ============ Filters (additional) ============
+  /filters/preview:
+    post:
+      tags: [Filters]
+      summary: 預覽過濾規則對指定標題的效果
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FilterPreviewRequest'
+      responses:
+        '200':
+          description: 預覽結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterPreviewResponse'
+
+  # ============ Services (additional) ============
+  /services/downloader-modules:
+    get:
+      tags: [Services]
+      summary: 列出所有 Downloader 服務模組
+      responses:
+        '200':
+          description: Downloader 模組列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceModuleInfo'
+
+  /services/{service_id}/update:
+    patch:
+      tags: [Services]
+      summary: 更新服務模組（啟用/停用）
+      parameters:
+        - name: service_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateServiceRequest'
+      responses:
+        '200':
+          description: 更新成功
+        '404':
+          description: 服務不存在
+
+  # ============ Parsers (additional) ============
+  /parsers/preview:
+    post:
+      tags: [Parsers]
+      summary: 預覽解析器對指定標題的解析結果
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParserPreviewRequest'
+      responses:
+        '200':
+          description: 解析預覽結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParserPreviewResponse'
+
+  # ============ RawItems (additional) ============
+  /raw-items/count:
+    get:
+      tags: [RawItems]
+      summary: 取得原始資料的統計數量（依狀態分組）
+      responses:
+        '200':
+          description: 統計結果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                example:
+                  pending: 10
+                  parsed: 50
+                  failed: 2
+
+  # ============ LinkConflicts ============
+  /link-conflicts:
+    get:
+      tags: [LinkConflicts]
+      summary: 列出所有未解決的動畫連結衝突
+      responses:
+        '200':
+          description: 連結衝突列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AnimeLinkConflictInfo'
+
+  /link-conflicts/{conflict_id}/resolve:
+    post:
+      tags: [LinkConflicts]
+      summary: 解決動畫連結衝突，選擇保留的連結
+      parameters:
+        - name: conflict_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveAnimeLinkConflictRequest'
+      responses:
+        '200':
+          description: 衝突解決成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  conflict_id:
+                    type: integer
+                  chosen_link_id:
+                    type: integer
+        '404':
+          description: 衝突不存在
+        '400':
+          description: 解決失敗
+
+  # ============ Webhooks ============
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: 列出所有 Webhook
+      responses:
+        '200':
+          description: Webhook 列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookResponse'
+    post:
+      tags: [Webhooks]
+      summary: 建立新的 Webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: 建立成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          description: 無效的請求（name 或 url 為空）
+        '500':
+          description: 資料庫錯誤
+
+  /webhooks/{id}:
+    get:
+      tags: [Webhooks]
+      summary: 取得單一 Webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Webhook 詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '404':
+          description: Webhook 不存在
+    put:
+      tags: [Webhooks]
+      summary: 更新 Webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '404':
+          description: Webhook 不存在
+    delete:
+      tags: [Webhooks]
+      summary: 刪除 Webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 刪除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+        '404':
+          description: Webhook 不存在
+
+  # ============ Dashboard ============
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: 取得儀表板統計概覽
+      responses:
+        '200':
+          description: 統計資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+
+  # ============ Search ============
+  /search:
+    get:
+      tags: [Search]
+      summary: 搜尋動畫（廣播至所有 Fetcher）
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 搜尋關鍵字
+      responses:
+        '200':
+          description: 搜尋結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AggregatedSearchResponse'
+
+  /detail:
+    post:
+      tags: [Search]
+      summary: 取得特定動畫的詳細資料（RSS 條目列表）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoreDetailRequest'
+      responses:
+        '200':
+          description: 詳細資料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+
+  # ============ AiSettings ============
+  /ai-settings:
+    get:
+      tags: [AiSettings]
+      summary: 取得 AI 設定（api_key 遮罩）
+      responses:
+        '200':
+          description: AI 設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiSettings'
+    put:
+      tags: [AiSettings]
+      summary: 更新 AI 設定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAiSettingsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: 無效的 response_format_mode
+
+  /ai-settings/test:
+    post:
+      tags: [AiSettings]
+      summary: 測試 AI 連線
+      responses:
+        '200':
+          description: 測試結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
+                    nullable: true
+
+  /ai-prompt-settings:
+    get:
+      tags: [AiSettings]
+      summary: 取得 AI Prompt 設定
+      responses:
+        '200':
+          description: Prompt 設定
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiPromptSettings'
+    put:
+      tags: [AiSettings]
+      summary: 更新 AI Prompt 設定
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAiPromptSettingsRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /ai-prompt-settings/revert-parser:
+    post:
+      tags: [AiSettings]
+      summary: 將解析器 Prompt 還原為預設值
+      responses:
+        '200':
+          description: 還原成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  value:
+                    type: string
+
+  /ai-prompt-settings/revert-filter:
+    post:
+      tags: [AiSettings]
+      summary: 將過濾器 Prompt 還原為預設值
+      responses:
+        '200':
+          description: 還原成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  value:
+                    type: string
+
+  # ============ PendingAiResults ============
+  /pending-ai-results:
+    get:
+      tags: [PendingAiResults]
+      summary: 列出待確認的 AI 結果
+      parameters:
+        - name: result_type
+          in: query
+          schema:
+            type: string
+            enum: [parser, filter]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [generating, pending, confirmed, rejected]
+        - name: subscription_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 待確認 AI 結果列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingAiResult'
+
+  /pending-ai-results/{id}:
+    get:
+      tags: [PendingAiResults]
+      summary: 取得單一待確認 AI 結果
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 待確認 AI 結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingAiResult'
+        '404':
+          description: 不存在
+    put:
+      tags: [PendingAiResults]
+      summary: 更新待確認 AI 結果（編輯 generated_data）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePendingAiResultRequest'
+      responses:
+        '200':
+          description: 更新後的結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingAiResult'
+
+  /pending-ai-results/{id}/confirm:
+    post:
+      tags: [PendingAiResults]
+      summary: 確認 AI 結果（套用 parser 或 filter 規則）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmPendingAiResultRequest'
+      responses:
+        '200':
+          description: 確認成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: 不存在
+
+  /pending-ai-results/{id}/reject:
+    post:
+      tags: [PendingAiResults]
+      summary: 拒絕 AI 結果（刪除相關 parser/filter）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 拒絕成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '404':
+          description: 不存在
+
+  /pending-ai-results/{id}/regenerate:
+    post:
+      tags: [PendingAiResults]
+      summary: 重新生成 AI 結果
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegeneratePendingAiResultRequest'
+      responses:
+        '200':
+          description: 重新生成的結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingAiResult'
+        '404':
+          description: 不存在
+
 components:
   schemas:
     # ============ Error ============
@@ -2174,4 +2872,570 @@ components:
         error_message:
           type: string
           description: 錯誤訊息
+          nullable: true
+
+    # ============ Downloads ============
+    DownloadRow:
+      type: object
+      properties:
+        download_id:
+          type: integer
+        link_id:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        downloader_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader]
+        progress:
+          type: number
+          format: float
+          nullable: true
+        downloaded_bytes:
+          type: integer
+          nullable: true
+        total_bytes:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        torrent_hash:
+          type: string
+          nullable: true
+        file_path:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ============ DownloadInfo (shared) ============
+    DownloadInfo:
+      type: object
+      properties:
+        download_id:
+          type: integer
+        status:
+          type: string
+        progress:
+          type: number
+          format: float
+          nullable: true
+        torrent_hash:
+          type: string
+          nullable: true
+
+    # ============ Webhooks ============
+    WebhookResponse:
+      type: object
+      properties:
+        webhook_id:
+          type: integer
+        name:
+          type: string
+        url:
+          type: string
+        payload_template:
+          type: string
+          description: |
+            支援的模板變數：{{download_id}}, {{anime_id}}, {{anime_title}},
+            {{episode_no}}, {{series_no}}, {{subtitle_group}}, {{video_path}}
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateWebhookRequest:
+      type: object
+      required:
+        - name
+        - url
+        - payload_template
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        payload_template:
+          type: string
+          example: '{"download_id": {{download_id}}, "anime_title": "{{anime_title}}", "episode_no": {{episode_no}}}'
+        is_active:
+          type: boolean
+          default: true
+
+    UpdateWebhookRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+          format: uri
+        payload_template:
+          type: string
+        is_active:
+          type: boolean
+
+    # ============ Links (additional) ============
+    ConflictingLinkInfo:
+      type: object
+      properties:
+        link_id:
+          type: integer
+        episode_no:
+          type: integer
+        group_name:
+          type: string
+        url:
+          type: string
+        conflicting_link_ids:
+          type: array
+          items:
+            type: integer
+        series_id:
+          type: integer
+        series_no:
+          type: integer
+        anime_work_id:
+          type: integer
+        anime_work_title:
+          type: string
+        subscription_id:
+          type: integer
+          nullable: true
+        subscription_name:
+          type: string
+          nullable: true
+
+    # ============ LinkConflicts ============
+    AnimeLinkConflictInfo:
+      type: object
+      properties:
+        conflict_id:
+          type: integer
+        series_id:
+          type: integer
+        group_id:
+          type: integer
+        episode_no:
+          type: integer
+        anime_title:
+          type: string
+        group_name:
+          type: string
+        resolution_status:
+          type: string
+          enum: [pending, resolved]
+        chosen_link_id:
+          type: integer
+          nullable: true
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnimeLinkConflictLink'
+        created_at:
+          type: string
+          format: date-time
+
+    AnimeLinkConflictLink:
+      type: object
+      properties:
+        link_id:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        url:
+          type: string
+        source_hash:
+          type: string
+          nullable: true
+        conflict_flag:
+          type: boolean
+        link_status:
+          type: string
+        download:
+          $ref: '#/components/schemas/DownloadInfo'
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ResolveAnimeLinkConflictRequest:
+      type: object
+      required:
+        - chosen_link_id
+      properties:
+        chosen_link_id:
+          type: integer
+          description: 選擇保留的連結 ID
+
+    # ============ Subscriptions (additional) ============
+    UpdateSubscriptionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        fetch_interval_minutes:
+          type: integer
+          nullable: true
+        is_active:
+          type: boolean
+          nullable: true
+        preferred_downloader_id:
+          type: integer
+          nullable: true
+
+    # ============ Filters (additional) ============
+    FilterPreviewRequest:
+      type: object
+      required:
+        - titles
+      properties:
+        titles:
+          type: array
+          items:
+            type: string
+        target_type:
+          type: string
+          enum: [global, subscription, anime_work]
+          default: global
+        target_id:
+          type: integer
+          nullable: true
+
+    FilterPreviewResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              passed:
+                type: boolean
+
+    # ============ Services (additional) ============
+    ServiceModuleInfo:
+      type: object
+      properties:
+        module_id:
+          type: integer
+        name:
+          type: string
+        module_type:
+          type: string
+        base_url:
+          type: string
+        is_enabled:
+          type: boolean
+        priority:
+          type: integer
+
+    UpdateServiceRequest:
+      type: object
+      properties:
+        is_enabled:
+          type: boolean
+        priority:
+          type: integer
+
+    # ============ Parsers (additional) ============
+    ParserPreviewRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+        parser_id:
+          type: integer
+          nullable: true
+
+    ParserPreviewResponse:
+      type: object
+      properties:
+        matched:
+          type: boolean
+        parser_id:
+          type: integer
+          nullable: true
+        parser_name:
+          type: string
+          nullable: true
+        anime_id:
+          type: integer
+          nullable: true
+        episode_no:
+          type: integer
+          nullable: true
+        group_id:
+          type: integer
+          nullable: true
+
+    # ============ Dashboard ============
+    DashboardStats:
+      type: object
+      properties:
+        total_anime:
+          type: integer
+          description: 有連結的動畫作品數
+        total_series:
+          type: integer
+          description: 有非過濾連結的動畫系列數
+        active_subscriptions:
+          type: integer
+        total_downloads:
+          type: integer
+        downloading:
+          type: integer
+        completed:
+          type: integer
+        failed:
+          type: integer
+        pending_raw_items:
+          type: integer
+        pending_conflicts:
+          type: integer
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceInfo'
+
+    ServiceInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        module_type:
+          type: string
+        is_healthy:
+          type: boolean
+
+    # ============ Search ============
+    AggregatedSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AggregatedSearchResult'
+
+    AggregatedSearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        thumbnail_url:
+          type: string
+          nullable: true
+        detail_key:
+          type: string
+          description: 用於呼叫 /detail 的 key
+        source:
+          type: string
+          description: 來源 Fetcher 名稱
+
+    CoreDetailRequest:
+      type: object
+      required:
+        - detail_key
+        - source
+      properties:
+        detail_key:
+          type: string
+        source:
+          type: string
+          description: Fetcher 名稱
+
+    DetailResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailItem'
+
+    DetailItem:
+      type: object
+      properties:
+        title:
+          type: string
+        download_url:
+          type: string
+        pub_date:
+          type: string
+          nullable: true
+
+    # ============ AiSettings ============
+    AiSettings:
+      type: object
+      properties:
+        base_url:
+          type: string
+          nullable: true
+        api_key:
+          type: string
+          description: 實際回傳時會以 ●●●●●●●● 遮罩
+        model_name:
+          type: string
+          nullable: true
+        max_tokens:
+          type: integer
+          nullable: true
+        response_format_mode:
+          type: string
+          enum: [strict, non_strict, inject_schema]
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateAiSettingsRequest:
+      type: object
+      properties:
+        base_url:
+          type: string
+          nullable: true
+        api_key:
+          type: string
+          nullable: true
+        model_name:
+          type: string
+          nullable: true
+        max_tokens:
+          type: integer
+          nullable: true
+        response_format_mode:
+          type: string
+          enum: [strict, non_strict, inject_schema]
+          nullable: true
+
+    AiPromptSettings:
+      type: object
+      properties:
+        fixed_parser_prompt:
+          type: string
+          nullable: true
+        fixed_filter_prompt:
+          type: string
+          nullable: true
+        custom_parser_prompt:
+          type: string
+          nullable: true
+        custom_filter_prompt:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateAiPromptSettingsRequest:
+      type: object
+      properties:
+        fixed_parser_prompt:
+          type: string
+          nullable: true
+        fixed_filter_prompt:
+          type: string
+          nullable: true
+        custom_parser_prompt:
+          type: string
+          nullable: true
+        custom_filter_prompt:
+          type: string
+          nullable: true
+
+    # ============ PendingAiResults ============
+    PendingAiResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        result_type:
+          type: string
+          enum: [parser, filter]
+        status:
+          type: string
+          enum: [generating, pending, confirmed, rejected]
+        source_title:
+          type: string
+        generated_data:
+          type: object
+          nullable: true
+          description: AI 生成的結果（parser 規則或 filter 規則陣列）
+        confirm_level:
+          type: string
+          nullable: true
+          enum: [global, subscription, anime_work]
+        confirm_target_id:
+          type: integer
+          nullable: true
+        subscription_id:
+          type: integer
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdatePendingAiResultRequest:
+      type: object
+      properties:
+        generated_data:
+          type: object
+          nullable: true
+        confirm_level:
+          type: string
+          enum: [global, subscription, anime_work]
+          nullable: true
+        confirm_target_id:
+          type: integer
+          nullable: true
+
+    ConfirmPendingAiResultRequest:
+      type: object
+      required:
+        - level
+      properties:
+        level:
+          type: string
+          enum: [global, subscription, anime_work]
+        target_id:
+          type: integer
+          nullable: true
+          description: subscription_id 或 anime_work_id（依 level 而定）
+
+    RegeneratePendingAiResultRequest:
+      type: object
+      properties:
+        custom_prompt:
+          type: string
+          nullable: true
+        fixed_prompt:
+          type: string
           nullable: true

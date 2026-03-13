@@ -315,6 +315,26 @@
       "customPrompt": "カスタムPrompt（固定Promptの後に追加）",
       "customPromptPlaceholder": "空欄でカスタム説明なし",
       "revertDefault": "デフォルトに戻す"
+    },
+    "webhook": {
+      "title": "Webhook設定",
+      "description": "ダウンロード完了時にViewerへ通知すると同時にWebhookを送信します。動的テンプレート変数をサポート。",
+      "add": "追加",
+      "empty": "Webhookがありません。追加ボタンで作成してください。",
+      "name": "名前",
+      "namePlaceholder": "例：Discord通知",
+      "payloadTemplate": "ペイロードテンプレート",
+      "templateVars": "使用可能な変数：{{download_id}} {{anime_id}} {{anime_title}} {{episode_no}} {{series_no}} {{subtitle_group}} {{video_path}}",
+      "enabledLabel": "有効",
+      "active": "有効",
+      "inactive": "無効",
+      "created": "Webhookを作成しました",
+      "deleted": "Webhookを削除しました",
+      "nameUrlRequired": "名前とURLは必須です",
+      "test": "テスト",
+      "testSuccess": "テスト成功",
+      "testFailure": "テスト失敗",
+      "renderedPayload": "レンダリング済みペイロード（サンプルデータ）："
     }
   },
   "aiResult": {

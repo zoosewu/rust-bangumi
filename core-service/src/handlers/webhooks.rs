@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::models::{NewWebhook, Webhook};
+use crate::services::webhook_service::{render_template, WebhookContext};
 use crate::state::AppState;
 use crate::db::WebhookRepository;
 
@@ -172,6 +173,78 @@ pub async fn update_webhook(
             Json(json!({"error": "database_error", "message": e.to_string()})),
         ),
     }
+}
+
+/// POST /webhooks/test — 以範例資料渲染模板並實際發送一次，回傳結果
+pub async fn test_webhook(
+    Json(payload): Json<TestWebhookRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    if payload.url.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"ok": false, "error": "url cannot be empty"})),
+        );
+    }
+
+    let sample_ctx = WebhookContext {
+        download_id: 1,
+        anime_id: 1,
+        anime_title: "測試動畫".to_string(),
+        episode_no: 1,
+        series_no: 1,
+        subtitle_group: "測試字幕組".to_string(),
+        video_path: "/downloads/test_ep01.mkv".to_string(),
+    };
+
+    let rendered = render_template(&payload.payload_template, &sample_ctx);
+
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"ok": false, "error": e.to_string(), "rendered_payload": rendered})),
+            )
+        }
+    };
+
+    match client
+        .post(&payload.url)
+        .header("Content-Type", "application/json")
+        .body(rendered.clone())
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let status_code = resp.status().as_u16();
+            let ok = resp.status().is_success();
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "ok": ok,
+                    "status_code": status_code,
+                    "rendered_payload": rendered,
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::OK,
+            Json(json!({
+                "ok": false,
+                "error": e.to_string(),
+                "rendered_payload": rendered,
+            })),
+        ),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestWebhookRequest {
+    pub url: String,
+    pub payload_template: String,
 }
 
 /// DELETE /webhooks/:id — 刪除 webhook

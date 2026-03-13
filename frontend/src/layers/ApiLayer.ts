@@ -2,6 +2,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as HttpClient from "@effect/platform/HttpClient"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import { CoreApi } from "@/services/CoreApi"
+import type { Webhook, CreateWebhookRequest, UpdateWebhookRequest } from "@/schemas/webhook"
 import {
   AggregatedSearchResponseSchema,
   DetailResponseSchema,
@@ -493,6 +494,63 @@ const makeCoreApi = Effect.gen(function* () {
         .pipe(
           Effect.flatMap((r) => r.json),
           Effect.map((r) => r as PendingAiResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    // Webhook
+    getWebhooks: client
+      .execute(HttpClientRequest.get("/api/core/webhooks"))
+      .pipe(
+        Effect.flatMap((r) => r.json),
+        Effect.map((r) => r as readonly Webhook[]),
+        Effect.scoped,
+        Effect.orDie,
+      ),
+
+    createWebhook: (req: CreateWebhookRequest) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/webhooks").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as Webhook),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    updateWebhook: (id: number, req: UpdateWebhookRequest) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/webhooks/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as Webhook),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    deleteWebhook: (id: number) =>
+      client
+        .execute(HttpClientRequest.del(`/api/core/webhooks/${id}`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    testWebhook: (req) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/webhooks/test").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as { ok: boolean; status_code?: number; error?: string; rendered_payload: string }),
           Effect.scoped,
           Effect.orDie,
         ),
