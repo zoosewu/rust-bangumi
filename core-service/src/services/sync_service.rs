@@ -3,17 +3,20 @@ use crate::models::{Anime, AnimeLink, Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{
     anime_links, anime_works, animes, downloads, service_modules, subtitle_groups,
 };
+use crate::services::webhook_service::{WebhookContext, WebhookService};
 use diesel::prelude::*;
 use shared::ViewerSyncRequest;
+use std::sync::Arc;
 
 pub struct SyncService {
     db_pool: DbPool,
     http_client: reqwest::Client,
     core_service_url: String,
+    webhook_service: Arc<WebhookService>,
 }
 
 impl SyncService {
-    pub fn new(db_pool: DbPool) -> Self {
+    pub fn new(db_pool: DbPool, webhook_service: Arc<WebhookService>) -> Self {
         let core_service_url = std::env::var("CORE_SERVICE_URL")
             .unwrap_or_else(|_| "http://core-service:8000".to_string());
         Self {
@@ -23,6 +26,7 @@ impl SyncService {
                 .build()
                 .unwrap(),
             core_service_url,
+            webhook_service,
         }
     }
 
@@ -108,6 +112,21 @@ impl SyncService {
             ))
             .execute(&mut conn)
             .map_err(|e| format!("Failed to update download status: {}", e))?;
+
+            // Fire webhooks fire-and-forget
+            let webhook_ctx = WebhookContext {
+                download_id: sync_request.download_id,
+                anime_id: sync_request.series_id,
+                anime_title: sync_request.anime_title.clone(),
+                episode_no: sync_request.episode_no,
+                series_no: sync_request.series_no,
+                subtitle_group: sync_request.subtitle_group.clone(),
+                video_path: sync_request.video_path.clone(),
+            };
+            let wh_service = self.webhook_service.clone();
+            tokio::spawn(async move {
+                wh_service.fire(webhook_ctx).await;
+            });
 
             Ok(true)
         } else {

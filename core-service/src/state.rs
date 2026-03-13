@@ -10,7 +10,7 @@ use crate::db::{
 };
 use crate::services::{
     ConflictDetectionService, DownloadCancelService, DownloadDispatchService, ServiceRegistry,
-    SyncService,
+    SyncService, WebhookService,
 };
 use std::sync::Arc;
 
@@ -57,13 +57,15 @@ pub struct AppState {
     pub sync_service: Arc<SyncService>,
     pub conflict_detection: Arc<ConflictDetectionService>,
     pub cancel_service: Arc<DownloadCancelService>,
+    pub webhook_service: Arc<WebhookService>,
 }
 
 impl AppState {
     pub fn new(db: DbPool, registry: ServiceRegistry) -> Self {
         let repos = Repositories::new(db.clone());
         let dispatch_service = DownloadDispatchService::new(db.clone());
-        let sync_service = SyncService::new(db.clone());
+        let webhook_service = Arc::new(WebhookService::new(db.clone()));
+        let sync_service = SyncService::new(db.clone(), webhook_service.clone());
         let conflict_detection = ConflictDetectionService::new(
             repos.anime_link.clone(),
             repos.anime_link_conflict.clone(),
@@ -78,6 +80,7 @@ impl AppState {
             sync_service: Arc::new(sync_service),
             conflict_detection: Arc::new(conflict_detection),
             cancel_service: Arc::new(cancel_service),
+            webhook_service,
         }
     }
 }
