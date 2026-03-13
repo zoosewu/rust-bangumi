@@ -765,6 +765,31 @@ pub struct NewPendingAiResult {
     pub confirm_target_id: Option<i32>,
 }
 
+// ============ Webhook 模型 ============
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
+#[diesel(table_name = crate::schema::webhooks)]
+#[diesel(primary_key(webhook_id))]
+pub struct Webhook {
+    pub webhook_id: i32,
+    pub name: String,
+    pub url: String,
+    pub payload_template: String,
+    pub is_active: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::schema::webhooks)]
+pub struct NewWebhook {
+    pub name: String,
+    pub url: String,
+    pub payload_template: String,
+    pub is_active: bool,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
