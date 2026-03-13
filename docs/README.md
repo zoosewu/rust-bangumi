@@ -55,13 +55,17 @@
 
 ## API 規格文件（OpenAPI 3.0）
 
-| 文件 | 服務 | 端點數 |
-|------|------|--------|
-| [openapi.yaml](./api/openapi.yaml) | Core Service | 45 |
-| [fetcher-openapi.yaml](./api/fetcher-openapi.yaml) | 通用 Fetcher | 3 |
-| [mikanani-fetcher-openapi.yaml](./api/mikanani-fetcher-openapi.yaml) | Mikanani Fetcher | 3 |
-| [downloader-openapi.yaml](./api/downloader-openapi.yaml) | qBittorrent Downloader | 7 |
-| [viewer-openapi.yaml](./api/viewer-openapi.yaml) | Jellyfin Viewer | 2 |
+| 文件 | 服務 | 版本 | 備註 |
+|------|------|------|------|
+| [openapi.yaml](./api/openapi.yaml) | Core Service | 0.4.0 | 主服務，含全部端點 |
+| [fetcher-openapi.yaml](./api/fetcher-openapi.yaml) | 通用 Fetcher | 0.3.0 | 新增 /search、/detail |
+| [mikanani-fetcher-openapi.yaml](./api/mikanani-fetcher-openapi.yaml) | Mikanani Fetcher | 0.3.0 | 新增 /search、/detail |
+| [downloader-openapi.yaml](./api/downloader-openapi.yaml) | qBittorrent Downloader | 0.2.0 | 新增 /config/credentials |
+| [pikpak-downloader-openapi.yaml](./api/pikpak-downloader-openapi.yaml) | PikPak Downloader | 0.1.0 | 新增檔案 |
+| [viewer-openapi.yaml](./api/viewer-openapi.yaml) | Jellyfin Viewer | 0.2.0 | 新增 /resync、/delete |
+| [metadata-openapi.yaml](./api/metadata-openapi.yaml) | Metadata Service | 0.1.0 | bangumi.tv 查詢 |
+
+所有規格文件均使用 **OpenAPI 3.0 server variables**，可在 Swagger UI / Bruno / Postman 中調整 `host` 與 `port` 變數。
 
 ## 規劃與報告
 

@@ -1,18 +1,23 @@
 openapi: 3.0.0
 info:
-  title: Bangumi Core Service API
-  description: Rust Bangumi 核心服務 API 規格
-  version: 0.3.0
+  title: rustBangumi Core Service API
+  description: rustBangumi 核心服務 API 規格
+  version: 0.4.0
   contact:
-    name: Bangumi Project
+    name: rustBangumi Project
   license:
     name: MIT
 
 servers:
-  - url: http://localhost:8000
-    description: 開發環境
-  - url: http://core-service:8000
-    description: 生產環境（Docker）
+  - url: 'http://{host}:{port}'
+    description: rustBangumi Core Service
+    variables:
+      host:
+        default: localhost
+        description: 主機名稱（Docker 環境請改為 core-service）
+      port:
+        default: '8000'
+        description: 服務端口
 
 tags:
   - name: Health

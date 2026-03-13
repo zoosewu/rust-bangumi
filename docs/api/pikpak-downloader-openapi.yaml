@@ -1,11 +1,13 @@
 openapi: 3.0.0
 info:
-  title: rustBangumi Downloader (qBittorrent) Service API
+  title: rustBangumi Downloader (PikPak) Service API
   description: |
-    qBittorrent Downloader 服務 API 規格。
-    支援 magnet link（優先）及 .torrent HTTP URL 兩種下載方式。
-    服務啟動時向 Core 註冊，廣告支援的 DownloadType（Magnet、Torrent）。
-  version: 0.2.0
+    PikPak 雲端離線 Downloader 服務 API 規格。
+    支援 magnet link 與 HTTP URL 的雲端離線下載，完成後自動 streaming 至本機。
+    服務啟動時向 Core 註冊，廣告支援的 DownloadType（Magnet）。
+
+    **注意**：pause 與 resume 端點為 no-op（PikPak 不支援暫停），固定回傳 200。
+  version: 0.1.0
   contact:
     name: rustBangumi Project
   license:
@@ -13,13 +15,13 @@ info:
 
 servers:
   - url: 'http://{host}:{port}'
-    description: rustBangumi qBittorrent Downloader
+    description: rustBangumi PikPak Downloader
     variables:
       host:
         default: localhost
-        description: 主機名稱（Docker 環境請改為 downloader-qbittorrent）
+        description: 主機名稱（Docker 環境請改為 pikpak-downloader）
       port:
-        default: '8002'
+        default: '8006'
         description: 服務端口
 
 tags:
@@ -28,7 +30,7 @@ tags:
   - name: Downloads
     description: 下載任務管理
   - name: Config
-    description: 服務設定
+    description: 服務設定（PikPak 帳號）
 
 paths:
   /health:
@@ -54,7 +56,7 @@ paths:
       tags:
         - Downloads
       summary: 批次新增下載任務
-      description: 批次新增 torrent 下載任務，每個項目可為 magnet link 或 .torrent HTTP URL
+      description: 透過 PikPak 雲端離線批次新增下載任務，支援 magnet link 或 HTTP URL
       operationId: batchAddDownloads
       requestBody:
         required: true
@@ -69,12 +71,6 @@ paths:
                   items:
                     - url: "magnet:?xt=urn:btih:abc123def456&dn=Example+Torrent"
                       save_path: "/downloads/bangumi/example"
-              torrentUrl:
-                summary: 使用 .torrent URL
-                value:
-                  items:
-                    - url: "https://mikanani.me/Download/20250101/abc123def456.torrent"
-                      save_path: "/downloads/bangumi/example"
       responses:
         '200':
           description: 批次新增結果
@@ -87,13 +83,12 @@ paths:
       tags:
         - Downloads
       summary: 查詢下載狀態
-      description: 根據 hash 列表批次查詢下載任務的當前狀態、進度與大小
       operationId: queryDownloadStatus
       parameters:
         - name: hashes
           in: query
           required: true
-          description: 以逗號分隔的 torrent hash 列表
+          description: 以逗號分隔的任務 hash 列表
           schema:
             type: string
           example: "abc123def456,789xyz000111"
@@ -129,7 +124,8 @@ paths:
     post:
       tags:
         - Downloads
-      summary: 暫停下載
+      summary: 暫停下載（no-op）
+      description: PikPak 不支援暫停，固定回傳 200
       operationId: pauseDownload
       parameters:
         - name: hash
@@ -140,13 +136,14 @@ paths:
           example: "abc123def456"
       responses:
         '200':
-          description: 已暫停
+          description: 已接受（no-op）
 
   /downloads/{hash}/resume:
     post:
       tags:
         - Downloads
-      summary: 恢復下載
+      summary: 恢復下載（no-op）
+      description: PikPak 不支援暫停/恢復，固定回傳 200
       operationId: resumeDownload
       parameters:
         - name: hash
@@ -157,7 +154,7 @@ paths:
           example: "abc123def456"
       responses:
         '200':
-          description: 已恢復
+          description: 已接受（no-op）
 
   /downloads/{hash}:
     delete:
@@ -175,7 +172,7 @@ paths:
         - name: delete_files
           in: query
           required: false
-          description: 是否同時刪除已下載的檔案（預設 false）
+          description: 是否同時刪除本機已下載的檔案（預設 false）
           schema:
             type: boolean
             default: false
@@ -187,8 +184,10 @@ paths:
     post:
       tags:
         - Config
-      summary: 設定 qBittorrent 登入憑證
-      description: 動態更新連接 qBittorrent WebUI 所需的帳號密碼
+      summary: 設定 PikPak 帳號密碼
+      description: |
+        動態更新 PikPak 登入帳號密碼。更新成功後自動重新登入並啟動輪詢。
+        也可透過環境變數 `PIKPAK_EMAIL` / `PIKPAK_PASSWORD` 在啟動時設定。
       operationId: setCredentials
       requestBody:
         required: true
@@ -197,13 +196,13 @@ paths:
             schema:
               $ref: '#/components/schemas/SetCredentialsRequest'
             examples:
-              default:
+              credentials:
                 value:
-                  username: "admin"
-                  password: "adminadmin"
+                  username: "your@email.com"
+                  password: "yourpassword"
       responses:
         '200':
-          description: 憑證已更新
+          description: 憑證已更新，重新登入中
           content:
             application/json:
               schema:
@@ -233,7 +232,7 @@ components:
       properties:
         url:
           type: string
-          description: Magnet link 或 .torrent HTTP URL
+          description: Magnet link 或 HTTP URL
           example: "magnet:?xt=urn:btih:abc123def456&dn=Example+Torrent"
         save_path:
           type: string
@@ -261,7 +260,7 @@ components:
         hash:
           type: string
           nullable: true
-          description: Torrent hash（成功時回傳）
+          description: 任務 hash（成功時回傳）
           example: "abc123def456"
         status:
           type: string
@@ -270,7 +269,6 @@ components:
         reason:
           type: string
           nullable: true
-          description: 失敗原因
           example: null
 
     StatusQueryResponse:
@@ -312,7 +310,7 @@ components:
         content_path:
           type: string
           nullable: true
-          description: 下載完成後的檔案路徑
+          description: 下載完成後的本機檔案路徑
           example: "/downloads/bangumi/example/episode01.mkv"
 
     BatchCancelRequest:
@@ -326,7 +324,6 @@ components:
             type: string
           example:
             - "abc123def456"
-            - "789xyz000111"
 
     BatchCancelResponse:
       type: object
@@ -359,10 +356,12 @@ components:
       properties:
         username:
           type: string
-          example: "admin"
+          description: PikPak 帳號（Email）
+          example: "your@email.com"
         password:
           type: string
-          example: "adminadmin"
+          description: PikPak 密碼
+          example: "yourpassword"
 
     ErrorResponse:
       type: object

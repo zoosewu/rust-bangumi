@@ -1,84 +1,154 @@
-openapi: "3.0.3"
+openapi: 3.0.0
 info:
-  title: Metadata Service API
+  title: rustBangumi Metadata Service API
   description: |
-    Bangumi.tv metadata provider. Stateless service — callers are responsible
-    for caching results. Registered with Core as module_type=metadata.
-  version: "0.1.0"
+    Bangumi.tv metadata 查詢服務。Stateless 服務，呼叫方需自行快取結果。
+    服務啟動時向 Core 以 module_type=metadata 註冊。
+  version: 0.1.0
+  contact:
+    name: rustBangumi Project
+  license:
+    name: MIT
 
 servers:
-  - url: "http://metadata:8005"
-    description: Docker (production)
-  - url: "http://localhost:8005"
-    description: Local development
+  - url: 'http://{host}:{port}'
+    description: rustBangumi Metadata Service
+    variables:
+      host:
+        default: localhost
+        description: 主機名稱（Docker 環境請改為 metadata）
+      port:
+        default: '8005'
+        description: 服務端口
+
+tags:
+  - name: Health
+    description: 服務健康檢查
+  - name: Enrich
+    description: Metadata 查詢（bangumi.tv）
 
 paths:
   /health:
     get:
-      summary: Health check
+      tags:
+        - Health
+      summary: 健康檢查
+      operationId: getHealth
       responses:
-        "200":
-          description: Service is healthy
+        '200':
+          description: 服務正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
 
   /enrich/anime:
     post:
-      summary: Fetch cover images and metadata for an anime by title
+      tags:
+        - Enrich
+      summary: 查詢動畫 metadata
+      description: 根據動畫標題從 bangumi.tv 取得封面圖片、簡介與首播日期
+      operationId: enrichAnime
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [title]
+              required:
+                - title
               properties:
                 title:
                   type: string
+                  description: 動畫標題
                   example: "進撃の巨人"
       responses:
-        "200":
-          description: Metadata result (empty cover_images if not found)
+        '200':
+          description: Metadata 查詢結果（找不到時 cover_images 為空陣列）
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnrichAnimeResponse"
+                $ref: '#/components/schemas/EnrichAnimeResponse'
+              examples:
+                found:
+                  summary: 找到結果
+                  value:
+                    bangumi_id: 101
+                    cover_images:
+                      - url: "https://lain.bgm.tv/pic/cover/l/xx.jpg"
+                        source: "bangumi"
+                    summary: "侦探コナンは..."
+                    air_date: "2013-04-06"
+                notFound:
+                  summary: 找不到
+                  value:
+                    bangumi_id: null
+                    cover_images: []
+                    summary: null
+                    air_date: null
 
   /enrich/episodes:
     post:
-      summary: Fetch episode metadata by bangumi_id and episode number
+      tags:
+        - Enrich
+      summary: 查詢集數 metadata
+      description: 根據 bangumi_id 與集數編號從 bangumi.tv 取得集數標題與簡介
+      operationId: enrichEpisodes
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [bangumi_id, episode_no]
+              required:
+                - bangumi_id
+                - episode_no
               properties:
                 bangumi_id:
                   type: integer
+                  description: bangumi.tv 的動畫 ID
                   example: 101
                 episode_no:
                   type: integer
+                  description: 集數編號
                   example: 5
       responses:
-        "200":
-          description: Episode metadata
+        '200':
+          description: 集數 metadata
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/EnrichEpisodesResponse"
-        "404":
-          description: Episode not found
+                $ref: '#/components/schemas/EnrichEpisodesResponse'
+              examples:
+                found:
+                  value:
+                    episode_no: 5
+                    title: "第5話"
+                    title_cn: "第5集"
+                    air_date: "2013-05-04"
+                    summary: "..."
+        '404':
+          description: 集數不存在
 
 components:
   schemas:
     CoverImageInfo:
       type: object
+      required:
+        - url
+        - source
       properties:
         url:
           type: string
+          format: uri
           example: "https://lain.bgm.tv/pic/cover/l/xx.jpg"
         source:
           type: string
+          description: 圖片來源
           example: "bangumi"
 
     EnrichAnimeResponse:
@@ -87,16 +157,20 @@ components:
         bangumi_id:
           type: integer
           nullable: true
+          description: bangumi.tv 動畫 ID
+          example: 101
         cover_images:
           type: array
           items:
-            $ref: "#/components/schemas/CoverImageInfo"
+            $ref: '#/components/schemas/CoverImageInfo'
         summary:
           type: string
           nullable: true
+          description: 動畫簡介
         air_date:
           type: string
           nullable: true
+          description: 首播日期（YYYY-MM-DD）
           example: "2013-04-06"
 
     EnrichEpisodesResponse:
@@ -104,15 +178,21 @@ components:
       properties:
         episode_no:
           type: integer
+          description: 集數編號
+          example: 5
         title:
           type: string
           nullable: true
+          description: 集數標題（日文）
         title_cn:
           type: string
           nullable: true
+          description: 集數標題（中文）
         air_date:
           type: string
           nullable: true
+          description: 播出日期（YYYY-MM-DD）
         summary:
           type: string
           nullable: true
+          description: 集數簡介

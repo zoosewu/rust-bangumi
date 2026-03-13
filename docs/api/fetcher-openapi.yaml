@@ -1,24 +1,31 @@
 openapi: 3.0.0
 info:
-  title: Bangumi Fetcher Service API
-  description: Fetcher 服務 API 規格 - 用於爬取和解析動畫 RSS 源
-  version: 0.2.0
+  title: rustBangumi Fetcher Service API
+  description: Fetcher 服務通用 API 規格 - 用於爬取和解析動畫 RSS 源
+  version: 0.3.0
   contact:
-    name: Bangumi Project
+    name: rustBangumi Project
   license:
     name: MIT
 
 servers:
-  - url: http://fetcher-mikanani:8001
-    description: Mikanani Fetcher (Docker)
-  - url: http://localhost:8001
-    description: Fetcher 本地開發
+  - url: 'http://{host}:{port}'
+    description: rustBangumi Fetcher Service
+    variables:
+      host:
+        default: localhost
+        description: 主機名稱（Docker 環境請改為服務名稱，例如 fetcher-mikanani）
+      port:
+        default: '8001'
+        description: 服務端口
 
 tags:
   - name: Health
     description: 服務健康檢查
   - name: Fetch
     description: RSS 爬取功能
+  - name: Search
+    description: 動畫搜尋功能
   - name: Ownership
     description: URL 歸屬檢查
 
@@ -73,12 +80,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FetchTriggerResponse'
-              examples:
-                accepted:
-                  summary: 任務已接受
-                  value:
-                    accepted: true
-                    message: "Fetch task accepted for subscription 123"
+        '400':
+          description: 請求格式錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /search:
+    post:
+      tags:
+        - Search
+      summary: 搜尋動畫
+      description: 根據關鍵字搜尋動畫，回傳可進一步查詢詳情的結果列表
+      operationId: searchAnime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              searchByTitle:
+                summary: 以標題搜尋
+                value:
+                  query: "葬送的芙莉蓮"
+      responses:
+        '200':
+          description: 搜尋結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: 請求格式錯誤
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /detail:
+    post:
+      tags:
+        - Search
+      summary: 取得動畫詳情
+      description: 根據 detail_key 取得動畫的字幕組列表與對應 RSS URL
+      operationId: getDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetailRequest'
+            examples:
+              byDetailKey:
+                summary: 以 detail_key 查詢
+                value:
+                  detail_key: "bangumi:3822"
+      responses:
+        '200':
+          description: 動畫詳情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
         '400':
           description: 請求格式錯誤
           content:
@@ -91,9 +156,7 @@ paths:
       tags:
         - Ownership
       summary: 檢查 URL 歸屬
-      description: |
-        檢查此 Fetcher 是否可以處理指定的訂閱 URL。
-        Core Service 使用此端點來路由訂閱到正確的 Fetcher。
+      description: 檢查此 Fetcher 是否可以處理指定的訂閱 URL
       operationId: canHandleSubscription
       requestBody:
         required: true
@@ -114,20 +177,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CanHandleResponse'
-              examples:
-                canHandle:
-                  value:
-                    can_handle: true
         '204':
           description: 無法處理此 URL
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CanHandleResponse'
-              examples:
-                cannotHandle:
-                  value:
-                    can_handle: false
 
 components:
   schemas:
@@ -161,12 +212,86 @@ components:
       properties:
         accepted:
           type: boolean
-          description: 任務是否被接受
           example: true
         message:
           type: string
-          description: 狀態訊息
           example: "Fetch task accepted for subscription 123"
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: 搜尋關鍵字
+          example: "葬送的芙莉蓮"
+
+    SearchResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+
+    SearchResult:
+      type: object
+      required:
+        - title
+        - detail_key
+      properties:
+        title:
+          type: string
+          description: 動畫標題
+          example: "葬送的芙莉蓮"
+        thumbnail_url:
+          type: string
+          nullable: true
+          description: 封面縮圖 URL
+          example: "https://mikanani.me/images/Bangumi/202309/xxx.jpg"
+        detail_key:
+          type: string
+          description: 用於查詢詳情的不透明 key（例如 bangumi:3822）
+          example: "bangumi:3822"
+
+    DetailRequest:
+      type: object
+      required:
+        - detail_key
+      properties:
+        detail_key:
+          type: string
+          description: 來自 SearchResult 的 detail_key
+          example: "bangumi:3822"
+
+    DetailResponse:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailItem'
+
+    DetailItem:
+      type: object
+      required:
+        - subgroup_name
+        - rss_url
+      properties:
+        subgroup_name:
+          type: string
+          description: 字幕組名稱
+          example: "喵萌奶茶屋"
+        rss_url:
+          type: string
+          format: uri
+          description: 此字幕組的 RSS URL
+          example: "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=583"
 
     CanHandleRequest:
       type: object
@@ -177,11 +302,9 @@ components:
         source_url:
           type: string
           format: uri
-          description: 訂閱來源 URL
           example: "https://mikanani.me/RSS/Bangumi?bangumiId=3215"
         source_type:
           type: string
-          description: 訂閱類型（例如 "rss"）
           example: "rss"
 
     CanHandleResponse:
@@ -191,46 +314,13 @@ components:
       properties:
         can_handle:
           type: boolean
-          description: 是否可以處理此訂閱
           example: true
 
     ErrorResponse:
       type: object
       required:
-        - status
         - error
       properties:
-        status:
-          type: string
-          enum: [error]
-          example: "error"
         error:
           type: string
-          description: 錯誤詳細信息
           example: "Invalid request format"
-
-  responses:
-    HealthCheck:
-      description: 服務健康檢查響應
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              status:
-                type: string
-                example: "ok"
-
-    FetchAccepted:
-      description: RSS 爬取任務已接受
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/FetchTriggerResponse'
-
-    BadRequest:
-      description: 請求格式錯誤
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
