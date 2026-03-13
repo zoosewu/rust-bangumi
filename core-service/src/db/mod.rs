@@ -16,6 +16,7 @@ pub use repository::{
     DieselSubtitleGroupRepository, DieselTitleParserRepository, FilterRuleRepository,
     RawItemFilter, RawItemRepository, RepositoryError, SeasonRepository, ServiceModuleRepository,
     SubscriptionRepository, SubtitleGroupRepository, TitleParserRepository,
+    DieselWebhookRepository, WebhookRepository,
 };
 
 pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;

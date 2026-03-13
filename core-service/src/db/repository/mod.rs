@@ -11,6 +11,7 @@ pub mod service_module;
 pub mod subscription;
 pub mod subtitle_group;
 pub mod title_parser;
+pub mod webhook;
 
 pub use anime::{AnimeRepository, CreateAnimeParams, DieselAnimeRepository};
 pub use anime_link::{AnimeLinkRepository, DieselAnimeLinkRepository};
@@ -25,3 +26,4 @@ pub use service_module::{DieselServiceModuleRepository, ServiceModuleRepository}
 pub use subscription::{DieselSubscriptionRepository, SubscriptionRepository};
 pub use subtitle_group::{DieselSubtitleGroupRepository, SubtitleGroupRepository};
 pub use title_parser::{DieselTitleParserRepository, TitleParserRepository};
+pub use webhook::{DieselWebhookRepository, WebhookRepository};
