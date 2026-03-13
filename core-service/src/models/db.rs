@@ -766,7 +766,7 @@ pub struct NewPendingAiResult {
 }
 
 // ============ Webhook 模型 ============
-#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable, serde::Serialize, serde::Deserialize)]
 #[diesel(table_name = crate::schema::webhooks)]
 #[diesel(primary_key(webhook_id))]
 pub struct Webhook {
@@ -779,7 +779,7 @@ pub struct Webhook {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Insertable)]
+#[derive(Debug, Insertable, serde::Deserialize)]
 #[diesel(table_name = crate::schema::webhooks)]
 pub struct NewWebhook {
     pub name: String,
