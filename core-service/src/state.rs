@@ -4,9 +4,9 @@ use crate::db::{
     DieselAnimeRepository, DieselAnimeWorkRepository, DieselConflictRepository,
     DieselFilterRuleRepository, DieselRawItemRepository, DieselSeasonRepository,
     DieselServiceModuleRepository, DieselSubscriptionRepository, DieselSubtitleGroupRepository,
-    DieselTitleParserRepository, FilterRuleRepository, RawItemRepository, SeasonRepository,
-    ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
-    TitleParserRepository,
+    DieselTitleParserRepository, DieselWebhookRepository, FilterRuleRepository, RawItemRepository,
+    SeasonRepository, ServiceModuleRepository, SubscriptionRepository, SubtitleGroupRepository,
+    TitleParserRepository, WebhookRepository,
 };
 use crate::services::{
     ConflictDetectionService, DownloadCancelService, DownloadDispatchService, ServiceRegistry,
@@ -27,6 +27,7 @@ pub struct Repositories {
     pub raw_item: Arc<dyn RawItemRepository>,
     pub conflict: Arc<dyn ConflictRepository>,
     pub anime_link_conflict: Arc<dyn AnimeLinkConflictRepository>,
+    pub webhook: Arc<dyn WebhookRepository>,
 }
 
 impl Repositories {
@@ -43,7 +44,8 @@ impl Repositories {
             title_parser: Arc::new(DieselTitleParserRepository::new(pool.clone())),
             raw_item: Arc::new(DieselRawItemRepository::new(pool.clone())),
             conflict: Arc::new(DieselConflictRepository::new(pool.clone())),
-            anime_link_conflict: Arc::new(DieselAnimeLinkConflictRepository::new(pool)),
+            anime_link_conflict: Arc::new(DieselAnimeLinkConflictRepository::new(pool.clone())),
+            webhook: Arc::new(DieselWebhookRepository::new(pool)),
         }
     }
 }
@@ -100,6 +102,7 @@ impl Repositories {
         raw_item: Arc<dyn RawItemRepository>,
         conflict: Arc<dyn ConflictRepository>,
         anime_link_conflict: Arc<dyn AnimeLinkConflictRepository>,
+        webhook: Arc<dyn WebhookRepository>,
     ) -> Self {
         Self {
             anime_work,
@@ -114,6 +117,7 @@ impl Repositories {
             raw_item,
             conflict,
             anime_link_conflict,
+            webhook,
         }
     }
 }

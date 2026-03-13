@@ -9,7 +9,7 @@ use serde_json::json;
 
 use crate::models::{NewWebhook, Webhook};
 use crate::state::AppState;
-use crate::db::{DieselWebhookRepository, WebhookRepository};
+use crate::db::WebhookRepository;
 
 // ─── Request / Response DTOs ──────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ impl From<Webhook> for WebhookResponse {
 pub async fn list_webhooks(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let repo = DieselWebhookRepository::new(state.db.clone());
+    let repo = &state.repos.webhook;
     match repo.find_all().await {
         Ok(webhooks) => {
             let response: Vec<WebhookResponse> = webhooks.into_iter().map(Into::into).collect();
@@ -101,7 +101,7 @@ pub async fn create_webhook(
         updated_at: now,
     };
 
-    let repo = DieselWebhookRepository::new(state.db.clone());
+    let repo = &state.repos.webhook;
     match repo.create(new_webhook).await {
         Ok(webhook) => {
             tracing::info!("Created webhook: {}", webhook.webhook_id);
@@ -119,7 +119,7 @@ pub async fn get_webhook(
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let repo = DieselWebhookRepository::new(state.db.clone());
+    let repo = &state.repos.webhook;
     match repo.find_by_id(id).await {
         Ok(Some(webhook)) => (StatusCode::OK, Json(json!(WebhookResponse::from(webhook)))),
         Ok(None) => (
@@ -139,7 +139,7 @@ pub async fn update_webhook(
     Path(id): Path<i32>,
     Json(payload): Json<UpdateWebhookRequest>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let repo = DieselWebhookRepository::new(state.db.clone());
+    let repo = &state.repos.webhook;
 
     let existing = match repo.find_by_id(id).await {
         Ok(Some(w)) => w,
@@ -179,7 +179,7 @@ pub async fn delete_webhook(
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let repo = DieselWebhookRepository::new(state.db.clone());
+    let repo = &state.repos.webhook;
     match repo.delete(id).await {
         Ok(true) => (StatusCode::OK, Json(json!({"deleted": true}))),
         Ok(false) => (
