@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background: warm cream, matching theme primary oklch(0.82 0.02 55) -->
+  <rect width="32" height="32" rx="6" fill="#D4C5A8"/>
+  <!--
+    Pointed-top regular hexagon, center (16,16), radius 12.
+    Vertices at angles 270°, 330°, 30°, 90°, 150°, 210°:
+      top:          (16,       16−12)    = (16.000,  4.000)
+      top-right:    (16+12·√3/2, 16−12/2) = (26.392, 10.000)
+      bottom-right: (16+12·√3/2, 16+12/2) = (26.392, 22.000)
+      bottom:       (16,       16+12)    = (16.000, 28.000)
+      bottom-left:  (16−12·√3/2, 16+12/2) = ( 5.608, 22.000)
+      top-left:     (16−12·√3/2, 16−12/2) = ( 5.608, 10.000)
+  -->
+  <polygon
+    points="16,4 26.39,10 26.39,22 16,28 5.61,22 5.61,10"
+    fill="none" stroke="#2B2218" stroke-width="2" stroke-linejoin="round"/>
+  <!--
+    Play triangle, right-pointing, visually centred in the hexagon.
+    Left edge: x=13, y=12→20 (height 8, vertical centre y=16 ✓)
+    Right apex: x=21, y=16
+    Centroid x = (13+13+21)/3 = 15.67 ≈ 16 ✓
+  -->
+  <polygon points="13,12 13,20 21,16" fill="#2B2218"/>
+</svg>

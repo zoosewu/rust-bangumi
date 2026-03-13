@@ -81,7 +81,10 @@ export function Sidebar() {
 
   return (
     <aside className="w-60 border-r bg-card h-screen sticky top-0 flex flex-col">
-      <div className="p-4 font-bold text-lg border-b">{t("sidebar.title")}</div>
+      <div className="px-4 py-3 border-b flex items-center gap-2.5">
+        <img src="/logo.svg" alt="rustBangumi" className="h-7 w-7 shrink-0" />
+        <span className="font-bold text-base tracking-tight">rustBangumi</span>
+      </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {/* Main nav */}
         {mainNavItems.map(({ to, icon: Icon, labelKey, hasBadge }) => (
