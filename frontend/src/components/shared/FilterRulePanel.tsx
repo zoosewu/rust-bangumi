@@ -194,12 +194,20 @@ export function FilterRulePanel({
     ).then(setRulePreview).catch(() => setRulePreview(null))
   }, [selectedRule?.regex_pattern, selectedRule?.is_positive, targetType, targetId])
 
+  const updateSelectedIdxAfterDelete = (deletedIdx: number) => {
+    if (selectedIdx === deletedIdx) {
+      setSelectedIdx(null)
+    } else if (selectedIdx !== null && selectedIdx > deletedIdx) {
+      setSelectedIdx(selectedIdx - 1)
+    }
+  }
+
   const handleDeleteRequest = (idx: number) => {
     if (requireDeleteConfirm) {
       setDeleteConfirmIdx(idx)
     } else {
       onDelete(idx)
-      if (selectedIdx === idx) setSelectedIdx(null)
+      updateSelectedIdxAfterDelete(idx)
     }
   }
 
@@ -208,7 +216,7 @@ export function FilterRulePanel({
     setDeleting(true)
     try {
       await onDelete(deleteConfirmIdx)
-      if (selectedIdx === deleteConfirmIdx) setSelectedIdx(null)
+      updateSelectedIdxAfterDelete(deleteConfirmIdx)
       setDeleteConfirmIdx(null)
       loadBaseline()
     } finally {

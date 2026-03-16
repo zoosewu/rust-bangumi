@@ -4,7 +4,7 @@ import { useMemo } from "react"
  * Recursively stringify a value to a flat string for searching.
  * Handles primitives, arrays, and plain objects.
  */
-function stringifyValue(val: unknown): string {
+export function stringifyValue(val: unknown): string {
   if (val === null || val === undefined) return ""
   if (typeof val === "string") return val
   if (typeof val === "number" || typeof val === "boolean") return String(val)

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import type { Effect } from "effect"
 import { AppRuntime } from "@/runtime/AppRuntime"
 
@@ -10,6 +10,13 @@ export function useEffectMutation<Args extends unknown[], A>(
   const [error, setError] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState(false)
   const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const mutate = useCallback(
     (...args: Args) => {

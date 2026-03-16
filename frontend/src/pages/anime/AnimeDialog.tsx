@@ -229,7 +229,10 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
           series={selectedSeries}
           open={!!selectedSeries}
           onOpenChange={(open) => {
-            if (!open) setSelectedSeries(null)
+            if (!open) {
+              setSelectedSeries(null)
+              refetchSeries()
+            }
           }}
         />
       )}

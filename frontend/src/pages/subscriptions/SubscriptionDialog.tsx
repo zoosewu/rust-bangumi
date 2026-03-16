@@ -35,6 +35,13 @@ interface SubscriptionDialogProps {
 export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscriptionChange }: SubscriptionDialogProps) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
+  // Track saved values locally so the UI reflects changes before the parent refetches
+  const [savedValues, setSavedValues] = useState({
+    name: subscription.name ?? "",
+    fetch_interval_minutes: subscription.fetch_interval_minutes,
+    is_active: subscription.is_active,
+    preferred_downloader_id: subscription.preferred_downloader_id ?? null,
+  })
   const [editForm, setEditForm] = useState({
     name: subscription.name ?? "",
     fetch_interval_minutes: subscription.fetch_interval_minutes,
@@ -67,6 +74,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
       preferred_downloader_id: editForm.preferred_downloader_id,
     }).then(() => {
       toast.success(t("common.saved", "Saved"))
+      setSavedValues({ ...editForm })
       setEditing(false)
       onSubscriptionChange?.()
     }).catch(() => {
@@ -74,10 +82,10 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
     })
   }
 
-  const preferredDownloaderName = subscription.preferred_downloader_id && downloaderModules
+  const preferredDownloaderName = savedValues.preferred_downloader_id && downloaderModules
     ? ((downloaderModules as ServiceModule[]).find(
-        (m) => m.module_id === subscription.preferred_downloader_id,
-      )?.name ?? `ID: ${subscription.preferred_downloader_id}`)
+        (m) => m.module_id === savedValues.preferred_downloader_id,
+      )?.name ?? `ID: ${savedValues.preferred_downloader_id}`)
     : "-"
 
   return (
@@ -98,12 +106,7 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
           editing={editing}
           saving={saving}
           onEdit={() => {
-            setEditForm({
-              name: subscription.name ?? "",
-              fetch_interval_minutes: subscription.fetch_interval_minutes,
-              is_active: subscription.is_active,
-              preferred_downloader_id: subscription.preferred_downloader_id ?? null,
-            })
+            setEditForm({ ...savedValues })
             setEditing(true)
           }}
           onSave={handleSave}
@@ -173,11 +176,11 @@ export function SubscriptionDialog({ subscription, open, onOpenChange, onSubscri
             </>
           ) : (
             <>
-              <InfoItem label={t("common.name")} value={subscription.name ?? "-"} />
-              <InfoItem label={t("subscriptions.interval", "Interval")} value={subscription.fetch_interval_minutes === 0 ? t("subscriptions.fetchOnce", "Once") : `${subscription.fetch_interval_minutes} min`} />
+              <InfoItem label={t("common.name")} value={savedValues.name || "-"} />
+              <InfoItem label={t("subscriptions.interval", "Interval")} value={savedValues.fetch_interval_minutes === 0 ? t("subscriptions.fetchOnce", "Once") : `${savedValues.fetch_interval_minutes} min`} />
               <InfoItem
                 label={t("common.status")}
-                value={subscription.is_active ? "Active" : "Inactive"}
+                value={savedValues.is_active ? "Active" : "Inactive"}
               />
               <InfoItem
                 label={t("subscriptions.preferredDownloader")}

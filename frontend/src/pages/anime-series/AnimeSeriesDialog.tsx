@@ -50,6 +50,18 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
   const [addingNewSeason, setAddingNewSeason] = useState(false)
   const [newSeasonYear, setNewSeasonYear] = useState(String(new Date().getFullYear()))
   const [newSeasonName, setNewSeasonName] = useState("")
+  // Local override for values saved but not yet reflected in parent's series prop
+  const [savedOverride, setSavedOverride] = useState<{
+    season: { year: number; season: string } | null
+    description: string | null
+    aired_date: string | null
+    end_date: string | null
+  } | null>(null)
+
+  const displaySeason = savedOverride?.season ?? series.season
+  const displayDescription = savedOverride !== null ? savedOverride.description : series.description
+  const displayAiredDate = savedOverride !== null ? savedOverride.aired_date : series.aired_date
+  const displayEndDate = savedOverride !== null ? savedOverride.end_date : series.end_date
 
   const { data: links, refetch: refetchLinks } = useEffectQuery(
     () =>
@@ -86,13 +98,23 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
   )
 
   const handleSave = () => {
+    const savedSeasonId = editForm.season_id ? Number(editForm.season_id) : null
     doUpdate({
-      season_id: editForm.season_id ? Number(editForm.season_id) : null,
+      season_id: savedSeasonId,
       description: editForm.description || null,
       aired_date: editForm.aired_date || null,
       end_date: editForm.end_date || null,
     }).then(() => {
       toast.success(t("common.saved", "Saved"))
+      const savedSeason = savedSeasonId
+        ? (seasons ?? []).find((s) => s.season_id === savedSeasonId)
+        : null
+      setSavedOverride({
+        season: savedSeason ? { year: savedSeason.year, season: savedSeason.season } : null,
+        description: editForm.description || null,
+        aired_date: editForm.aired_date || null,
+        end_date: editForm.end_date || null,
+      })
       setEditing(false)
     }).catch(() => {
       toast.error(t("common.saveFailed", "Save failed"))
@@ -132,9 +154,9 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
             onEdit={() => {
               setEditForm({
                 season_id: "",
-                description: series.description ?? "",
-                aired_date: series.aired_date?.slice(0, 10) ?? "",
-                end_date: series.end_date?.slice(0, 10) ?? "",
+                description: displayDescription ?? "",
+                aired_date: displayAiredDate?.slice(0, 10) ?? "",
+                end_date: displayEndDate?.slice(0, 10) ?? "",
               })
               setEditing(true)
             }}
@@ -191,7 +213,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
               ) : (
                 <InfoItem
                   label={t("animeSeries.season", "Aired Season")}
-                  value={`${series.season.year} ${series.season.season}`}
+                  value={`${displaySeason.year} ${displaySeason.season}`}
                 />
               )}
               <InfoItem
@@ -230,15 +252,15 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
                 </>
               ) : (
                 <>
-                  {series.aired_date && (
-                    <InfoItem label={t("animeSeries.airedDate", "Aired")} value={series.aired_date.slice(0, 10)} />
+                  {displayAiredDate && (
+                    <InfoItem label={t("animeSeries.airedDate", "Aired")} value={displayAiredDate.slice(0, 10)} />
                   )}
-                  {series.end_date && (
-                    <InfoItem label={t("animeSeries.endDate", "Ended")} value={series.end_date.slice(0, 10)} />
+                  {displayEndDate && (
+                    <InfoItem label={t("animeSeries.endDate", "Ended")} value={displayEndDate.slice(0, 10)} />
                   )}
-                  {series.description && (
+                  {displayDescription && (
                     <div className="col-span-full">
-                      <InfoItem label={t("animeSeries.description", "Description")} value={series.description} />
+                      <InfoItem label={t("animeSeries.description", "Description")} value={displayDescription} />
                     </div>
                   )}
                 </>
