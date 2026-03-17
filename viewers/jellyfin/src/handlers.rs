@@ -114,7 +114,7 @@ async fn process_sync(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .unwrap();
+        .expect("valid reqwest client config");
     let callback_url = req.callback_url.clone();
     let download_id = req.download_id;
     let result = shared::retry_with_backoff(
@@ -207,6 +207,7 @@ async fn fetch_and_generate_metadata(
     episode_no: i32,
     target_path: &std::path::Path,
     _force_nfo: bool,
+    // TODO: implement skip-if-exists guard when force_nfo is false
 ) -> anyhow::Result<()> {
     let bangumi_id = match bangumi_id {
         Some(id) => id,
@@ -345,7 +346,7 @@ async fn process_resync(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
-        .unwrap();
+        .expect("valid reqwest client config");
     let callback_url = req.callback_url.clone();
     let download_id = req.download_id;
     let result = shared::retry_with_backoff(
