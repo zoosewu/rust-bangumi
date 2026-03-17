@@ -6,7 +6,6 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-mod bangumi_client;
 mod db;
 mod file_organizer;
 mod handlers;

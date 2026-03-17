@@ -1,84 +1,36 @@
-use crate::bangumi_client::{EpisodeItem, SubjectDetail};
 use std::path::Path;
 use tokio::fs;
 
-/// Generate tvshow.nfo in the anime root directory
-pub async fn generate_tvshow_nfo(anime_dir: &Path, subject: &SubjectDetail, force: bool) -> anyhow::Result<()> {
-    let nfo_path = anime_dir.join("tvshow.nfo");
-
-    // Skip if already exists (unless forced, e.g. during resync)
-    if nfo_path.exists() && !force {
-        return Ok(());
-    }
-
-    let title = xml_escape(&subject.name);
-    let title_cn = subject
-        .name_cn
-        .as_deref()
-        .map(xml_escape)
-        .unwrap_or_default();
-    let plot = subject
-        .summary
-        .as_deref()
-        .map(xml_escape)
-        .unwrap_or_default();
-    let rating = subject
-        .rating
-        .as_ref()
-        .and_then(|r| r.score)
-        .map(|s| format!("{:.1}", s))
-        .unwrap_or_default();
-    let year = subject
-        .date
-        .as_deref()
-        .and_then(|d| d.split('-').next())
-        .unwrap_or("");
-
-    let nfo_content = format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
-<tvshow>
-    <title>{title_cn}</title>
-    <originaltitle>{title}</originaltitle>
-    <plot>{plot}</plot>
-    <rating>{rating}</rating>
-    <year>{year}</year>
-    <uniqueid type="bangumi">{bangumi_id}</uniqueid>
-</tvshow>
-"#,
-        title_cn = if title_cn.is_empty() {
-            &title
-        } else {
-            &title_cn
-        },
-        title = title,
-        plot = plot,
-        rating = rating,
-        year = year,
-        bangumi_id = subject.id,
-    );
-
-    fs::write(&nfo_path, nfo_content).await?;
-    tracing::info!("Generated tvshow.nfo at {}", nfo_path.display());
-    Ok(())
+/// NFO 生成所需的集數資料（與 bangumi_client 解耦）
+#[derive(Debug, Default)]
+pub struct EpisodeNfoData {
+    pub title: Option<String>,
+    pub title_cn: Option<String>,
+    pub air_date: Option<String>,
+    pub summary: Option<String>,
 }
 
 /// Generate episode NFO file next to the video file
 pub async fn generate_episode_nfo(
     video_path: &Path,
-    episode: &EpisodeItem,
+    episode: &EpisodeNfoData,
+    episode_no: i32,
     season: i32,
 ) -> anyhow::Result<()> {
     let nfo_path = video_path.with_extension("nfo");
 
-    let title = episode.name.as_deref().map(xml_escape).unwrap_or_default();
+    let title = episode.title.as_deref().map(xml_escape).unwrap_or_default();
     let title_cn = episode
-        .name_cn
+        .title_cn
         .as_deref()
         .map(xml_escape)
         .unwrap_or_default();
-    let aired = episode.airdate.as_deref().unwrap_or("");
-    let plot = episode.desc.as_deref().map(xml_escape).unwrap_or_default();
-    let ep_no = episode.ep.unwrap_or(episode.sort);
+    let aired = episode.air_date.as_deref().unwrap_or("");
+    let plot = episode
+        .summary
+        .as_deref()
+        .map(xml_escape)
+        .unwrap_or_default();
 
     let display_title = if !title_cn.is_empty() {
         &title_cn
@@ -96,15 +48,13 @@ pub async fn generate_episode_nfo(
     <episode>{episode}</episode>
     <aired>{aired}</aired>
     <plot>{plot}</plot>
-    <uniqueid type="bangumi">{bangumi_ep_id}</uniqueid>
 </episodedetails>
 "#,
         title = display_title,
         season = season,
-        episode = ep_no,
+        episode = episode_no,
         aired = aired,
         plot = plot,
-        bangumi_ep_id = episode.id,
     );
 
     fs::write(&nfo_path, nfo_content).await?;
@@ -123,6 +73,7 @@ fn xml_escape(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_xml_escape() {
@@ -132,27 +83,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_generate_episode_nfo_baseline() {
-        use tempfile::tempdir;
+    async fn test_generate_episode_nfo_basic() {
         let dir = tempdir().unwrap();
         let video_path = dir.path().join("Anime - S01E01.mkv");
 
-        let episode = crate::bangumi_client::EpisodeItem {
-            id: 0,
-            ep: Some(1),
-            sort: 1,
-            name: Some("First Episode".to_string()),
-            name_cn: Some("第一集".to_string()),
-            airdate: Some("2024-01-01".to_string()),
-            desc: Some("A great episode".to_string()),
+        let episode = EpisodeNfoData {
+            title: Some("First Episode".to_string()),
+            title_cn: Some("第一集".to_string()),
+            air_date: Some("2024-01-01".to_string()),
+            summary: Some("A great episode".to_string()),
         };
 
-        generate_episode_nfo(&video_path, &episode, 1).await.unwrap();
+        generate_episode_nfo(&video_path, &episode, 1, 1).await.unwrap();
 
-        let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
+        let nfo_path = video_path.with_extension("nfo");
+        assert!(nfo_path.exists());
+        let content = std::fs::read_to_string(&nfo_path).unwrap();
         assert!(content.contains("<title>第一集</title>"));
         assert!(content.contains("<season>1</season>"));
         assert!(content.contains("<episode>1</episode>"));
         assert!(content.contains("<aired>2024-01-01</aired>"));
+    }
+
+    #[tokio::test]
+    async fn test_generate_episode_nfo_no_cn_title() {
+        let dir = tempdir().unwrap();
+        let video_path = dir.path().join("Anime - S01E02.mkv");
+
+        let episode = EpisodeNfoData {
+            title: Some("Second Episode".to_string()),
+            title_cn: None,
+            air_date: None,
+            summary: None,
+        };
+
+        generate_episode_nfo(&video_path, &episode, 2, 1).await.unwrap();
+
+        let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
+        assert!(content.contains("<title>Second Episode</title>"));
+    }
+
+    #[tokio::test]
+    async fn test_generate_episode_nfo_xml_special_chars() {
+        let dir = tempdir().unwrap();
+        let video_path = dir.path().join("Anime - S01E03.mkv");
+
+        let episode = EpisodeNfoData {
+            title: Some("Ep & <Test>".to_string()),
+            title_cn: None,
+            air_date: None,
+            summary: None,
+        };
+
+        generate_episode_nfo(&video_path, &episode, 3, 1).await.unwrap();
+
+        let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
+        assert!(content.contains("Ep &amp; &lt;Test&gt;"));
     }
 }

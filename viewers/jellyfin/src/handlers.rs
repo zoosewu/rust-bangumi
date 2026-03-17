@@ -236,16 +236,13 @@ async fn fetch_and_generate_metadata(
     // Fetch episode info from Metadata Service
     match metadata.enrich_episodes(bangumi_id, episode_no).await {
         Ok(Some(ep_info)) => {
-            let episode_item = crate::bangumi_client::EpisodeItem {
-                id: 0, // no bangumi ep id from metadata service
-                ep: Some(episode_no),
-                sort: episode_no,
-                name: ep_info.title,
-                name_cn: ep_info.title_cn,
-                airdate: ep_info.air_date,
-                desc: ep_info.summary,
+            let episode_data = crate::nfo_generator::EpisodeNfoData {
+                title: ep_info.title,
+                title_cn: ep_info.title_cn,
+                air_date: ep_info.air_date,
+                summary: ep_info.summary,
             };
-            nfo_generator::generate_episode_nfo(target_path, &episode_item, series_no).await?;
+            nfo_generator::generate_episode_nfo(target_path, &episode_data, episode_no, series_no).await?;
         }
         Ok(None) => {
             tracing::warn!(
