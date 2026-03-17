@@ -1365,3 +1365,32 @@ fn find_scoped_raw_items(
         other => Err(format!("Unknown target_type: {}", other)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ReparseStats;
+
+    #[test]
+    fn test_reparse_stats_default() {
+        let stats = ReparseStats::default();
+        assert_eq!(stats.total, 0);
+        assert_eq!(stats.parsed, 0);
+        assert_eq!(stats.failed, 0);
+        assert_eq!(stats.no_match, 0);
+        assert_eq!(stats.resync_triggered, 0);
+    }
+
+    #[test]
+    fn test_reparse_stats_serializable() {
+        let stats = ReparseStats {
+            total: 10,
+            parsed: 7,
+            failed: 1,
+            no_match: 2,
+            resync_triggered: 0,
+        };
+        let json = serde_json::to_string(&stats).unwrap();
+        assert!(json.contains("\"total\":10"));
+        assert!(json.contains("\"parsed\":7"));
+    }
+}
