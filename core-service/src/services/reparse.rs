@@ -1,13 +1,13 @@
 //! Reparse 業務邏輯：重新解析 raw_anime_items 並 upsert anime_links
 
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
 use std::sync::Arc;
 
 use crate::db::DbPool;
-use crate::models::{AnimeLink, Download, NewAnimeLink, RawAnimeItem};
-use crate::schema::{anime_links, raw_anime_items};
+use crate::models::{Anime, AnimeLink, AnimeWork, Download, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason, NewSubtitleGroup, RawAnimeItem, Season, SubtitleGroup};
+use crate::schema::{anime_links, anime_works, animes, raw_anime_items, seasons, subtitle_groups};
 use crate::services::title_parser::{ParseStatus, ParsedResult, TitleParserService};
 use crate::services::{
     ConflictDetectionService, DownloadCancelService, DownloadDispatchService, SyncService,
@@ -151,7 +151,7 @@ pub async fn reparse_affected_items(
                             Some(parsed.parser_id),
                             None,
                         )
-                        .ok();
+                        .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
                         parsed_count += 1;
                         tracing::info!(
                             "reparse: {} -> {} EP{} ({})",
@@ -169,7 +169,7 @@ pub async fn reparse_affected_items(
                             Some(parsed.parser_id),
                             Some(&e),
                         )
-                        .ok();
+                        .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
                         failed_count += 1;
                         tracing::warn!("reparse: 建立/更新記錄失敗 {}: {}", item.title, e);
                     }
@@ -195,7 +195,7 @@ pub async fn reparse_affected_items(
                     None,
                     None,
                 )
-                .ok();
+                .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
                 no_match_count += 1;
             }
             Err(e) => {
@@ -206,7 +206,7 @@ pub async fn reparse_affected_items(
                     None,
                     Some(&e),
                 )
-                .ok();
+                .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
                 failed_count += 1;
                 tracing::warn!("reparse: 解析錯誤 {}: {}", item.title, e);
             }
@@ -242,7 +242,13 @@ pub async fn reparse_affected_items(
                     .execute(&mut del_conn)
                     .ok();
             }
-            for &(_, sid) in &unmatched_series_ids {
+            let unique_anime_ids: Vec<i32> = unmatched_series_ids
+                .iter()
+                .map(|&(_, sid)| sid)
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+            for &sid in &unique_anime_ids {
                 cleanup_empty_series(&mut del_conn, sid);
             }
         }
@@ -299,7 +305,10 @@ pub async fn reparse_affected_items(
             .filter(crate::schema::downloads::status.eq("synced"))
             .filter(crate::schema::downloads::file_path.is_not_null())
             .load::<Download>(&mut conn_for_resync)
-            .unwrap_or_default();
+            .unwrap_or_else(|e| {
+                tracing::error!("reparse: 載入 synced downloads 失敗: {}", e);
+                vec![]
+            });
 
         drop(conn_for_resync);
 
@@ -344,6 +353,122 @@ pub async fn reparse_affected_items(
     }
 }
 
+/// 建立或取得 anime work（依標題）
+fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<AnimeWork, String> {
+    match anime_works::table
+        .filter(anime_works::title.eq(title))
+        .first::<AnimeWork>(conn)
+    {
+        Ok(work) => Ok(work),
+        Err(diesel::NotFound) => {
+            let now = Utc::now().naive_utc();
+            let new_work = NewAnimeWork {
+                title: title.to_string(),
+                created_at: now,
+                updated_at: now,
+            };
+            diesel::insert_into(anime_works::table)
+                .values(&new_work)
+                .get_result::<AnimeWork>(conn)
+                .map_err(|e| format!("Failed to create anime work: {}", e))
+        }
+        Err(e) => Err(format!("Failed to query anime work: {}", e)),
+    }
+}
+
+/// 建立或取得 season（依 year + season_name）
+fn create_or_get_season(
+    conn: &mut PgConnection,
+    year: i32,
+    season_name: &str,
+) -> Result<Season, String> {
+    match seasons::table
+        .filter(seasons::year.eq(year))
+        .filter(seasons::season.eq(season_name))
+        .first::<Season>(conn)
+    {
+        Ok(season) => Ok(season),
+        Err(diesel::NotFound) => {
+            let now = Utc::now().naive_utc();
+            let new_season = NewSeason {
+                year,
+                season: season_name.to_string(),
+                created_at: now,
+            };
+            diesel::insert_into(seasons::table)
+                .values(&new_season)
+                .get_result::<Season>(conn)
+                .map_err(|e| format!("Failed to create season: {}", e))
+        }
+        Err(e) => Err(format!("Failed to query season: {}", e)),
+    }
+}
+
+/// 建立或取得 anime series（依 work_id + series_no + season_id）
+fn create_or_get_series(
+    conn: &mut PgConnection,
+    work_id: i32,
+    series_no: i32,
+    season_id: i32,
+    description: &str,
+) -> Result<Anime, String> {
+    match animes::table
+        .filter(animes::work_id.eq(work_id))
+        .filter(animes::series_no.eq(series_no))
+        .filter(animes::season_id.eq(season_id))
+        .first::<Anime>(conn)
+    {
+        Ok(anime) => Ok(anime),
+        Err(diesel::NotFound) => {
+            let now = Utc::now().naive_utc();
+            let new_anime = NewAnime {
+                work_id,
+                series_no,
+                season_id,
+                description: if description.is_empty() {
+                    None
+                } else {
+                    Some(description.to_string())
+                },
+                aired_date: None,
+                end_date: None,
+                created_at: now,
+                updated_at: now,
+            };
+            diesel::insert_into(animes::table)
+                .values(&new_anime)
+                .get_result::<Anime>(conn)
+                .map_err(|e| format!("Failed to create anime: {}", e))
+        }
+        Err(e) => Err(format!("Failed to query anime: {}", e)),
+    }
+}
+
+/// 建立或取得字幕組
+fn create_or_get_subtitle_group(
+    conn: &mut PgConnection,
+    group_name: &str,
+) -> Result<SubtitleGroup, String> {
+    match subtitle_groups::table
+        .filter(subtitle_groups::group_name.eq(group_name))
+        .first::<SubtitleGroup>(conn)
+    {
+        Ok(group) => Ok(group),
+        Err(diesel::NotFound) => {
+            let now = Utc::now().naive_utc();
+            let new_group = NewSubtitleGroup {
+                group_name: group_name.to_string(),
+                created_at: now,
+            };
+            diesel::insert_into(subtitle_groups::table)
+                .values(&new_group)
+                .get_result::<SubtitleGroup>(conn)
+                .map_err(|e| format!("Failed to create subtitle group: {}", e))
+        }
+        Err(e) => Err(format!("Failed to query subtitle group: {}", e)),
+    }
+}
+
 /// 建立或更新 anime_link。
 /// 如果此 raw_item 已有 anime_link → 更新欄位（保留 link_id 及 downloads）。
 /// 如果沒有 → 新建。
@@ -356,17 +481,15 @@ fn upsert_anime_link(
     use sha2::{Digest, Sha256};
 
     // 1. 建立或取得 anime / season / series / group
-    let anime =
-        crate::handlers::fetcher_results::create_or_get_anime(conn, &parsed.anime_title)?;
+    let anime = create_or_get_anime(conn, &parsed.anime_title)?;
     let year = parsed
         .year
         .as_ref()
         .and_then(|y| y.parse::<i32>().ok())
-        .unwrap_or(2025);
+        .unwrap_or_else(|| Utc::now().year());
     let season_name = parsed.season.as_deref().unwrap_or("unknown");
-    let season =
-        crate::handlers::fetcher_results::create_or_get_season(conn, year, season_name)?;
-    let series = crate::handlers::fetcher_results::create_or_get_series(
+    let season = create_or_get_season(conn, year, season_name)?;
+    let series = create_or_get_series(
         conn,
         anime.work_id,
         parsed.series_no,
@@ -374,8 +497,7 @@ fn upsert_anime_link(
         "",
     )?;
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
-    let group =
-        crate::handlers::fetcher_results::create_or_get_subtitle_group(conn, group_name)?;
+    let group = create_or_get_subtitle_group(conn, group_name)?;
 
     // 2. 查找既有的 anime_link
     let existing_link: Option<AnimeLink> = anime_links::table
@@ -485,7 +607,7 @@ fn upsert_anime_link(
 }
 
 /// 如果指定的 anime 底下已經沒有任何 anime_link，就刪除該 anime。
-pub(crate) fn cleanup_empty_series(conn: &mut diesel::PgConnection, anime_id: i32) {
+fn cleanup_empty_series(conn: &mut diesel::PgConnection, anime_id: i32) {
     use crate::schema::animes;
 
     let link_count: i64 = anime_links::table
