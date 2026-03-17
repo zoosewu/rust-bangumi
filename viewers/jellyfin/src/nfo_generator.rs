@@ -130,4 +130,29 @@ mod tests {
         assert_eq!(xml_escape("<tag>"), "&lt;tag&gt;");
         assert_eq!(xml_escape(r#"a"b'c"#), "a&quot;b&apos;c");
     }
+
+    #[tokio::test]
+    async fn test_generate_episode_nfo_baseline() {
+        use tempfile::tempdir;
+        let dir = tempdir().unwrap();
+        let video_path = dir.path().join("Anime - S01E01.mkv");
+
+        let episode = crate::bangumi_client::EpisodeItem {
+            id: 0,
+            ep: Some(1),
+            sort: 1,
+            name: Some("First Episode".to_string()),
+            name_cn: Some("第一集".to_string()),
+            airdate: Some("2024-01-01".to_string()),
+            desc: Some("A great episode".to_string()),
+        };
+
+        generate_episode_nfo(&video_path, &episode, 1).await.unwrap();
+
+        let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
+        assert!(content.contains("<title>第一集</title>"));
+        assert!(content.contains("<season>1</season>"));
+        assert!(content.contains("<episode>1</episode>"));
+        assert!(content.contains("<aired>2024-01-01</aired>"));
+    }
 }
