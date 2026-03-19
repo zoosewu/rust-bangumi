@@ -522,6 +522,16 @@ mod tests {
     }
 
     #[test]
+    fn write_openapi_spec_to_file() {
+        let doc = crate::openapi::ApiDoc::openapi();
+        let json = serde_json::to_string_pretty(&doc).expect("OpenAPI doc should serialize");
+        // 寫入到專案根目錄，供 openapi-typescript 使用
+        let out_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/api/openapi-generated.json");
+        std::fs::write(out_path, &json).expect("Should write openapi spec to file");
+        println!("Written OpenAPI spec to {}", out_path);
+    }
+
+    #[test]
     fn openapi_doc_contains_all_tags() {
         let doc = crate::openapi::ApiDoc::openapi();
         let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");

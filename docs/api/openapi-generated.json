@@ -1,0 +1,1637 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Bangumi Core API",
+    "description": "Core service API for Rust Bangumi — anime content management system",
+    "contact": {
+      "name": "Claude Code"
+    },
+    "license": {
+      "name": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/core/anime": {
+      "get": {
+        "tags": [
+          "Anime"
+        ],
+        "summary": "List all anime with enriched data (work_title, season, episode counts, subscriptions)",
+        "operationId": "list_all_anime",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnimeRichResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Anime"
+        ],
+        "summary": "Create a new anime (formerly anime series)",
+        "operationId": "create_anime",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/anime-works": {
+      "get": {
+        "tags": [
+          "AnimeWorks"
+        ],
+        "summary": "List all anime works",
+        "operationId": "list_anime_work",
+        "parameters": [
+          {
+            "name": "has_links",
+            "in": "query",
+            "description": "Filter to anime works that have at least one link",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeWorksListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "AnimeWorks"
+        ],
+        "summary": "Create a new anime work",
+        "operationId": "create_anime_work",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimeWorkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeWorkResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/anime-works/{work_id}": {
+      "get": {
+        "tags": [
+          "AnimeWorks"
+        ],
+        "summary": "Get anime work by ID",
+        "operationId": "get_anime_work",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "description": "Anime work ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeWorkResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "AnimeWorks"
+        ],
+        "summary": "Delete anime work by ID",
+        "operationId": "delete_anime_work",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "description": "Anime work ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/anime-works/{work_id}/anime": {
+      "get": {
+        "tags": [
+          "Anime"
+        ],
+        "summary": "List anime by work_id",
+        "description": "List anime by work_id (formerly list_anime_series by anime_id)",
+        "operationId": "list_anime",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "description": "Anime work ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/anime/{anime_id}": {
+      "get": {
+        "tags": [
+          "Anime"
+        ],
+        "summary": "Get anime by ID",
+        "description": "Get anime by ID (formerly anime series)",
+        "operationId": "get_anime",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "description": "Anime series ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Anime"
+        ],
+        "summary": "Update anime by ID (partial update: description, aired_date, end_date)",
+        "operationId": "update_anime",
+        "parameters": [
+          {
+            "name": "anime_id",
+            "in": "path",
+            "description": "Anime series ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/dashboard/stats": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get dashboard statistics",
+        "operationId": "get_dashboard_stats",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardStats"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/downloads": {
+      "get": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "List download records",
+        "operationId": "list_downloads",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by download status (pending, downloading, completed, failed)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of records to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of records to skip",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/filters": {
+      "get": {
+        "tags": [
+          "Filters"
+        ],
+        "summary": "Get filter rules. When target_type is omitted, returns all rules sorted global-first.",
+        "operationId": "get_filter_rules",
+        "parameters": [
+          {
+            "name": "target_type",
+            "in": "query",
+            "description": "Filter by target type (global, anime, group)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "query",
+            "description": "Filter by target ID",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FilterRuleResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Filters"
+        ],
+        "summary": "Create a new filter rule",
+        "operationId": "create_filter_rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilterRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterRuleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid target type or regex pattern"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/filters/{rule_id}": {
+      "delete": {
+        "tags": [
+          "Filters"
+        ],
+        "summary": "Delete a filter rule by rule_id",
+        "operationId": "delete_filter_rule",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "description": "Filter rule ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/links": {
+      "post": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Create a new anime link",
+        "operationId": "create_anime_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimeLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeLinkResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/links/conflicts": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "List all anime links with conflict_flag = true, enriched with series/anime/subscription info",
+        "operationId": "list_conflicting_links",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConflictingLinkResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/links/{series_id}": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Get anime links by series_id — returns ALL links (filtered + unfiltered) with group_name and download status",
+        "operationId": "get_anime_links",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "description": "Anime series ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnimeLinkRichResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/seasons": {
+      "get": {
+        "tags": [
+          "Seasons"
+        ],
+        "summary": "List all seasons",
+        "operationId": "list_seasons",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Seasons"
+        ],
+        "summary": "Create a new season",
+        "operationId": "create_season",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeasonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created or found existing season",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/subtitle-groups": {
+      "get": {
+        "tags": [
+          "SubtitleGroups"
+        ],
+        "summary": "List all subtitle groups",
+        "operationId": "list_subtitle_groups",
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "SubtitleGroups"
+        ],
+        "summary": "Create a new subtitle group",
+        "operationId": "create_subtitle_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubtitleGroupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubtitleGroupResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
+    "/api/core/subtitle-groups/{group_id}": {
+      "delete": {
+        "tags": [
+          "SubtitleGroups"
+        ],
+        "summary": "Delete subtitle group by ID",
+        "operationId": "delete_subtitle_group",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Subtitle group ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted successfully"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnimeLinkConflictInfo": {
+        "type": "object",
+        "required": [
+          "conflict_id",
+          "series_id",
+          "group_id",
+          "episode_no",
+          "anime_title",
+          "group_name",
+          "resolution_status",
+          "links",
+          "created_at"
+        ],
+        "properties": {
+          "anime_title": {
+            "type": "string"
+          },
+          "chosen_link_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "conflict_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "episode_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeLinkConflictLink"
+            }
+          },
+          "resolution_status": {
+            "type": "string"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "AnimeLinkConflictLink": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "url",
+          "source_hash",
+          "conflict_flag",
+          "link_status",
+          "created_at"
+        ],
+        "properties": {
+          "conflict_flag": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "download": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DownloadInfo"
+              }
+            ],
+            "nullable": true
+          },
+          "link_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "link_status": {
+            "type": "string"
+          },
+          "source_hash": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimeLinkRequest": {
+        "type": "object",
+        "required": [
+          "series_id",
+          "group_id",
+          "episode_no",
+          "url",
+          "source_hash"
+        ],
+        "properties": {
+          "episode_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_hash": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimeLinkResponse": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "series_id",
+          "group_id",
+          "episode_no",
+          "url",
+          "source_hash",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "episode_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "link_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_hash": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimeLinkRichResponse": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "series_id",
+          "group_id",
+          "group_name",
+          "episode_no",
+          "url",
+          "source_hash",
+          "filtered_flag",
+          "conflict_flag",
+          "conflicting_link_ids",
+          "created_at"
+        ],
+        "properties": {
+          "conflict_flag": {
+            "type": "boolean"
+          },
+          "conflicting_link_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "download": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DownloadInfo"
+              }
+            ],
+            "nullable": true
+          },
+          "episode_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "filtered_flag": {
+            "type": "boolean"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "link_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_hash": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimeRequest": {
+        "type": "object",
+        "required": [
+          "anime_id",
+          "series_no",
+          "season_id"
+        ],
+        "properties": {
+          "aired_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "anime_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "season_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_no": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "AnimeResponse": {
+        "type": "object",
+        "required": [
+          "series_id",
+          "anime_id",
+          "series_no",
+          "season_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "aired_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "anime_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "season_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnimeRichResponse": {
+        "type": "object",
+        "required": [
+          "series_id",
+          "anime_id",
+          "anime_title",
+          "series_no",
+          "season",
+          "episode_downloaded",
+          "episode_found",
+          "subscriptions",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "aired_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "anime_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anime_title": {
+            "type": "string"
+          },
+          "cover_image_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "episode_downloaded": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "episode_found": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "season": {
+            "$ref": "#/components/schemas/SeasonInfo"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionInfo"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnimeWorkRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "AnimeWorkResponse": {
+        "type": "object",
+        "required": [
+          "anime_id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "anime_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnimeWorksListResponse": {
+        "type": "object",
+        "description": "用於 list_anime_works 的包裝響應",
+        "required": [
+          "animes"
+        ],
+        "properties": {
+          "animes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeWorkResponse"
+            }
+          }
+        }
+      },
+      "ConflictingLinkResponse": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "episode_no",
+          "group_name",
+          "url",
+          "conflicting_link_ids",
+          "series_id",
+          "series_no",
+          "anime_work_id",
+          "anime_work_title"
+        ],
+        "properties": {
+          "anime_work_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "anime_work_title": {
+            "type": "string"
+          },
+          "conflicting_link_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "episode_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_name": {
+            "type": "string"
+          },
+          "link_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_no": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "subscription_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "subscription_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "DashboardStats": {
+        "type": "object",
+        "required": [
+          "total_anime",
+          "total_series",
+          "active_subscriptions",
+          "total_downloads",
+          "downloading",
+          "completed",
+          "failed",
+          "pending_raw_items",
+          "pending_conflicts",
+          "services"
+        ],
+        "properties": {
+          "active_subscriptions": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "downloading": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pending_conflicts": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pending_raw_items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceInfo"
+            }
+          },
+          "total_anime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_downloads": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_series": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DownloadInfo": {
+        "type": "object",
+        "required": [
+          "download_id",
+          "status"
+        ],
+        "properties": {
+          "download_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "progress": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "torrent_hash": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "FilterRuleRequest": {
+        "type": "object",
+        "required": [
+          "target_type",
+          "rule_order",
+          "is_positive",
+          "regex_pattern"
+        ],
+        "properties": {
+          "is_positive": {
+            "type": "boolean"
+          },
+          "regex_pattern": {
+            "type": "string"
+          },
+          "rule_order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "target_type": {
+            "type": "string"
+          }
+        }
+      },
+      "FilterRuleResponse": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "target_type",
+          "rule_order",
+          "is_positive",
+          "regex_pattern",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_positive": {
+            "type": "boolean"
+          },
+          "regex_pattern": {
+            "type": "string"
+          },
+          "rule_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rule_order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "target_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ResolveAnimeLinkConflictRequest": {
+        "type": "object",
+        "required": [
+          "chosen_link_id"
+        ],
+        "properties": {
+          "chosen_link_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SeasonInfo": {
+        "type": "object",
+        "required": [
+          "year",
+          "season"
+        ],
+        "properties": {
+          "season": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SeasonRequest": {
+        "type": "object",
+        "required": [
+          "year",
+          "season"
+        ],
+        "properties": {
+          "season": {
+            "type": "string"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SeasonResponse": {
+        "type": "object",
+        "required": [
+          "season_id",
+          "year",
+          "season",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "season": {
+            "type": "string"
+          },
+          "season_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ServiceInfo": {
+        "type": "object",
+        "required": [
+          "name",
+          "module_type",
+          "is_healthy"
+        ],
+        "properties": {
+          "is_healthy": {
+            "type": "boolean"
+          },
+          "module_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "SubscriptionInfo": {
+        "type": "object",
+        "required": [
+          "subscription_id"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "subscription_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SubtitleGroupRequest": {
+        "type": "object",
+        "required": [
+          "group_name"
+        ],
+        "properties": {
+          "group_name": {
+            "type": "string"
+          }
+        }
+      },
+      "SubtitleGroupResponse": {
+        "type": "object",
+        "required": [
+          "group_id",
+          "group_name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_name": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateAnimeRequest": {
+        "type": "object",
+        "properties": {
+          "aired_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "season_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "AnimeWorks",
+      "description": "Anime work (franchise) management"
+    },
+    {
+      "name": "Seasons",
+      "description": "Season management"
+    },
+    {
+      "name": "Anime",
+      "description": "Anime series management"
+    },
+    {
+      "name": "SubtitleGroups",
+      "description": "Subtitle group management"
+    },
+    {
+      "name": "Filters",
+      "description": "Filter rule management"
+    },
+    {
+      "name": "Links",
+      "description": "Anime link management"
+    },
+    {
+      "name": "Downloads",
+      "description": "Download record management"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Dashboard statistics"
+    }
+  ]
+}
