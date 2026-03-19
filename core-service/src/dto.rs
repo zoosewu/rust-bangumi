@@ -1,88 +1,107 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // ============ Anime DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct AnimeWorkRequest {
     pub title: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnimeWorkResponse {
     pub anime_id: i32,
     pub title: String,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
+/// 用於 list_anime_works 的包裝響應
+#[derive(Debug, Serialize, Clone, ToSchema)]
+pub struct AnimeWorksListResponse {
+    pub animes: Vec<AnimeWorkResponse>,
+}
+
 // ============ Season DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct SeasonRequest {
     pub year: i32,
     pub season: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct SeasonResponse {
     pub season_id: i32,
     pub year: i32,
     pub season: String,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
 // ============ AnimeSeries DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct AnimeRequest {
     pub anime_id: i32,
     pub series_no: i32,
     pub season_id: i32,
     pub description: Option<String>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub aired_date: Option<NaiveDate>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub end_date: Option<NaiveDate>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnimeResponse {
     pub series_id: i32,
     pub anime_id: i32,
     pub series_no: i32,
     pub season_id: i32,
     pub description: Option<String>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub aired_date: Option<NaiveDate>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub end_date: Option<NaiveDate>,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct UpdateAnimeRequest {
     pub season_id: Option<i32>,
     pub description: Option<String>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub aired_date: Option<NaiveDate>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub end_date: Option<NaiveDate>,
 }
 
 // ============ SubtitleGroup DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct SubtitleGroupRequest {
     pub group_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct SubtitleGroupResponse {
     pub group_id: i32,
     pub group_name: String,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
 // ============ FilterRule DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct FilterRuleRequest {
     pub target_type: String,
     pub target_id: Option<i32>,
@@ -91,7 +110,7 @@ pub struct FilterRuleRequest {
     pub regex_pattern: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct FilterRuleResponse {
     pub rule_id: i32,
     pub target_type: String,
@@ -100,26 +119,28 @@ pub struct FilterRuleResponse {
     pub rule_order: i32,
     pub is_positive: bool,
     pub regex_pattern: String,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
 }
 
 // ============ AnimeSeriesRich DTO (for list_all_anime_series) ============
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct SeasonInfo {
     pub year: i32,
     pub season: String,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct SubscriptionInfo {
     pub subscription_id: i32,
     pub name: Option<String>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct AnimeRichResponse {
     pub series_id: i32,
     pub anime_id: i32,
@@ -130,17 +151,21 @@ pub struct AnimeRichResponse {
     pub episode_found: i64,
     pub subscriptions: Vec<SubscriptionInfo>,
     pub description: Option<String>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub aired_date: Option<NaiveDate>,
+    #[schema(value_type = Option<String>, format = Date)]
     pub end_date: Option<NaiveDate>,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
     pub cover_image_url: Option<String>,
 }
 
 // ============ AnimeLinkRich DTO (for get_anime_links) ============
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct DownloadInfo {
     pub download_id: i32,
     pub status: String,
@@ -148,7 +173,7 @@ pub struct DownloadInfo {
     pub torrent_hash: Option<String>,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct AnimeLinkRichResponse {
     pub link_id: i32,
     pub series_id: i32,
@@ -162,12 +187,13 @@ pub struct AnimeLinkRichResponse {
     pub conflict_flag: bool,
     pub conflicting_link_ids: Vec<i32>,
     pub download: Option<DownloadInfo>,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
 // ============ ConflictingLink DTO (for list_conflicting_links) ============
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct ConflictingLinkResponse {
     pub link_id: i32,
     pub episode_no: i32,
@@ -183,14 +209,14 @@ pub struct ConflictingLinkResponse {
 }
 
 // ============ DashboardStats DTO ============
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct ServiceInfo {
     pub name: String,
     pub module_type: String,
     pub is_healthy: bool,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct DashboardStats {
     pub total_anime: i64,
     pub total_series: i64,
@@ -205,7 +231,7 @@ pub struct DashboardStats {
 }
 
 // ============ AnimeLink DTO ============
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct AnimeLinkRequest {
     pub series_id: i32,
     pub group_id: i32,
@@ -215,7 +241,7 @@ pub struct AnimeLinkRequest {
     pub source_hash: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct AnimeLinkResponse {
     pub link_id: i32,
     pub series_id: i32,
@@ -224,13 +250,14 @@ pub struct AnimeLinkResponse {
     pub title: Option<String>,
     pub url: String,
     pub source_hash: String,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
 // ============ AnimeLinkConflict DTOs ============
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct AnimeLinkConflictLink {
     pub link_id: i32,
     pub title: Option<String>,
@@ -239,11 +266,12 @@ pub struct AnimeLinkConflictLink {
     pub conflict_flag: bool,
     pub link_status: String,
     pub download: Option<DownloadInfo>,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct AnimeLinkConflictInfo {
     pub conflict_id: i32,
     pub series_id: i32,
@@ -254,11 +282,12 @@ pub struct AnimeLinkConflictInfo {
     pub resolution_status: String,
     pub chosen_link_id: Option<i32>,
     pub links: Vec<AnimeLinkConflictLink>,
+    #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveAnimeLinkConflictRequest {
     pub chosen_link_id: i32,
 }
