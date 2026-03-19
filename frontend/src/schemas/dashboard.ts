@@ -1,4 +1,8 @@
 import { Schema } from "effect"
+import type { components } from "../generated/api"
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type AssertExtends<_G, _S extends _G> = true
 
 export const ServiceStatus = Schema.Struct({
   name: Schema.String,
@@ -19,3 +23,5 @@ export const DashboardStats = Schema.Struct({
   services: Schema.Array(ServiceStatus),
 })
 export type DashboardStats = typeof DashboardStats.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckDashboardStats = AssertExtends<components["schemas"]["DashboardStats"], DashboardStats>
