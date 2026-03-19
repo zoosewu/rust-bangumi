@@ -15,6 +15,16 @@ use crate::schema::{anime_links, anime_works, animes, downloads, raw_anime_items
 use crate::state::AppState;
 
 /// Create a new anime link
+#[utoipa::path(
+    post,
+    path = "/api/core/links",
+    tag = "Links",
+    request_body = AnimeLinkRequest,
+    responses(
+        (status = 201, description = "Created successfully", body = AnimeLinkResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_anime_link(
     State(state): State<AppState>,
     Json(payload): Json<AnimeLinkRequest>,
@@ -76,8 +86,17 @@ pub async fn create_anime_link(
     }
 }
 
-/// Get anime links by series_id — returns ALL links (filtered + unfiltered)
-/// with group_name and download status
+/// Get anime links by series_id — returns ALL links (filtered + unfiltered) with group_name and download status
+#[utoipa::path(
+    get,
+    path = "/api/core/links/{series_id}",
+    tag = "Links",
+    params(("series_id" = i32, Path, description = "Anime series ID")),
+    responses(
+        (status = 200, description = "Success", body = Vec<AnimeLinkRichResponse>),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn get_anime_links(
     State(state): State<AppState>,
     Path(series_id): Path<i32>,
@@ -171,6 +190,15 @@ pub async fn get_anime_links(
 }
 
 /// List all anime links with conflict_flag = true, enriched with series/anime/subscription info
+#[utoipa::path(
+    get,
+    path = "/api/core/links/conflicts",
+    tag = "Links",
+    responses(
+        (status = 200, description = "Success", body = Vec<ConflictingLinkResponse>),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_conflicting_links(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<serde_json::Value>) {

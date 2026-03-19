@@ -14,6 +14,7 @@ mod db;
 mod dto;
 mod handlers;
 mod models;
+mod openapi;
 mod schema;
 mod serde_utils;
 mod services;
@@ -330,6 +331,8 @@ async fn main() -> anyhow::Result<()> {
         )
         // 健康檢查
         .route("/health", get(health_check))
+        // OpenAPI spec
+        .route("/openapi.json", get(openapi_json))
         // 應用狀態
         .with_state(app_state);
 
@@ -362,6 +365,15 @@ async fn health_check() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "status": "ok",
         "service": "core-service"
+    }))
+}
+
+async fn openapi_json() -> Json<serde_json::Value> {
+    use utoipa::OpenApi;
+    let doc = openapi::ApiDoc::openapi();
+    Json(serde_json::to_value(doc).unwrap_or_else(|e| {
+        tracing::error!("Failed to serialize OpenAPI doc: {}", e);
+        serde_json::json!({ "error": "serialization_failed" })
     }))
 }
 

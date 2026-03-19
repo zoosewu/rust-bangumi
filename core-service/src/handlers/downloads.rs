@@ -12,10 +12,13 @@ use crate::models::Download;
 use crate::schema::{anime_links, downloads};
 use crate::state::AppState;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub struct ListDownloadsQuery {
+    /// Filter by download status (pending, downloading, completed, failed)
     pub status: Option<String>,
+    /// Maximum number of records to return
     pub limit: Option<i64>,
+    /// Number of records to skip
     pub offset: Option<i64>,
 }
 
@@ -36,7 +39,17 @@ pub struct DownloadRow {
     pub updated_at: String,
 }
 
-/// GET /downloads
+/// List download records
+#[utoipa::path(
+    get,
+    path = "/api/core/downloads",
+    tag = "Downloads",
+    params(ListDownloadsQuery),
+    responses(
+        (status = 200, description = "Success"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_downloads(
     State(state): State<AppState>,
     Query(params): Query<ListDownloadsQuery>,

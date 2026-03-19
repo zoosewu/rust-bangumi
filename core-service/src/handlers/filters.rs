@@ -15,6 +15,17 @@ use crate::services::filter_recalc;
 use crate::state::AppState;
 
 /// Create a new filter rule
+#[utoipa::path(
+    post,
+    path = "/api/core/filters",
+    tag = "Filters",
+    request_body = FilterRuleRequest,
+    responses(
+        (status = 201, description = "Created successfully", body = FilterRuleResponse),
+        (status = 400, description = "Invalid target type or regex pattern"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_filter_rule(
     State(state): State<AppState>,
     Json(payload): Json<FilterRuleRequest>,
@@ -161,6 +172,19 @@ pub async fn create_filter_rule(
 }
 
 /// Get filter rules. When target_type is omitted, returns all rules sorted global-first.
+#[utoipa::path(
+    get,
+    path = "/api/core/filters",
+    tag = "Filters",
+    params(
+        ("target_type" = Option<String>, Query, description = "Filter by target type (global, anime, group)"),
+        ("target_id" = Option<i32>, Query, description = "Filter by target ID")
+    ),
+    responses(
+        (status = 200, description = "Success", body = Vec<FilterRuleResponse>),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn get_filter_rules(
     State(state): State<AppState>,
     Query(params): Query<std::collections::HashMap<String, String>>,
@@ -286,6 +310,17 @@ pub async fn get_filter_rules(
 }
 
 /// Delete a filter rule by rule_id
+#[utoipa::path(
+    delete,
+    path = "/api/core/filters/{rule_id}",
+    tag = "Filters",
+    params(("rule_id" = i32, Path, description = "Filter rule ID")),
+    responses(
+        (status = 200, description = "Deleted successfully"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn delete_filter_rule(
     State(state): State<AppState>,
     Path(rule_id): Path<i32>,

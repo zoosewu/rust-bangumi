@@ -1,0 +1,81 @@
+use utoipa::OpenApi;
+
+use crate::dto::{
+    AnimeLinkConflictInfo, AnimeLinkConflictLink, AnimeLinkRequest, AnimeLinkResponse,
+    AnimeLinkRichResponse, AnimeRichResponse, AnimeRequest, AnimeResponse, AnimeWorkRequest,
+    AnimeWorkResponse, AnimeWorksListResponse, ConflictingLinkResponse, DashboardStats,
+    DownloadInfo, FilterRuleRequest, FilterRuleResponse, ResolveAnimeLinkConflictRequest,
+    SeasonInfo, SeasonRequest, SeasonResponse, ServiceInfo, SubtitleGroupRequest,
+    SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+};
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::handlers::anime::create_anime_work,
+        crate::handlers::anime::list_anime_work,
+        crate::handlers::anime::get_anime_work,
+        crate::handlers::anime::delete_anime_work,
+        crate::handlers::anime::create_season,
+        crate::handlers::anime::list_seasons,
+        crate::handlers::anime::list_all_anime,
+        crate::handlers::anime::create_anime,
+        crate::handlers::anime::get_anime,
+        crate::handlers::anime::update_anime,
+        crate::handlers::anime::list_anime,
+        crate::handlers::anime::create_subtitle_group,
+        crate::handlers::anime::list_subtitle_groups,
+        crate::handlers::anime::delete_subtitle_group,
+        crate::handlers::filters::create_filter_rule,
+        crate::handlers::filters::get_filter_rules,
+        crate::handlers::filters::delete_filter_rule,
+        crate::handlers::links::create_anime_link,
+        crate::handlers::links::get_anime_links,
+        crate::handlers::links::list_conflicting_links,
+        crate::handlers::downloads::list_downloads,
+        crate::handlers::dashboard::get_dashboard_stats,
+    ),
+    components(schemas(
+        AnimeWorkRequest,
+        AnimeWorkResponse,
+        AnimeWorksListResponse,
+        SeasonRequest,
+        SeasonResponse,
+        AnimeRequest,
+        AnimeResponse,
+        UpdateAnimeRequest,
+        SubtitleGroupRequest,
+        SubtitleGroupResponse,
+        FilterRuleRequest,
+        FilterRuleResponse,
+        SeasonInfo,
+        SubscriptionInfo,
+        AnimeRichResponse,
+        DownloadInfo,
+        AnimeLinkRichResponse,
+        ConflictingLinkResponse,
+        DashboardStats,
+        ServiceInfo,
+        AnimeLinkRequest,
+        AnimeLinkResponse,
+        AnimeLinkConflictLink,
+        AnimeLinkConflictInfo,
+        ResolveAnimeLinkConflictRequest,
+    )),
+    tags(
+        (name = "AnimeWorks", description = "Anime work (franchise) management"),
+        (name = "Seasons", description = "Season management"),
+        (name = "Anime", description = "Anime series management"),
+        (name = "SubtitleGroups", description = "Subtitle group management"),
+        (name = "Filters", description = "Filter rule management"),
+        (name = "Links", description = "Anime link management"),
+        (name = "Downloads", description = "Download record management"),
+        (name = "Dashboard", description = "Dashboard statistics"),
+    ),
+    info(
+        title = "Bangumi Core API",
+        version = "0.1.0",
+        description = "Core service API for Rust Bangumi — anime content management system"
+    )
+)]
+pub struct ApiDoc;

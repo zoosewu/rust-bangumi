@@ -10,9 +10,9 @@ use diesel::dsl::{count_distinct, exists};
 
 use crate::db::CreateAnimeParams;
 use crate::dto::{
-    AnimeWorkRequest, AnimeWorkResponse, AnimeRequest, AnimeResponse, AnimeRichResponse,
-    DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse, SubtitleGroupRequest,
-    SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+    AnimeWorkRequest, AnimeWorkResponse, AnimeWorksListResponse, AnimeRequest, AnimeResponse,
+    AnimeRichResponse, DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse,
+    SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
 };
 use crate::models::{Anime, AnimeWork, Download, Season};
 use crate::schema::{anime_cover_images, anime_links, animes, anime_works, downloads, raw_anime_items, seasons, subscriptions};
@@ -21,6 +21,16 @@ use crate::state::AppState;
 // ============ AnimeWork Handlers ============
 
 /// Create a new anime work
+#[utoipa::path(
+    post,
+    path = "/api/core/anime-works",
+    tag = "AnimeWorks",
+    request_body = AnimeWorkRequest,
+    responses(
+        (status = 201, description = "Created successfully", body = AnimeWorkResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_anime_work(
     State(state): State<AppState>,
     Json(payload): Json<AnimeWorkRequest>,
@@ -56,12 +66,23 @@ pub async fn create_anime_work(
     }
 }
 
-/// List all anime works
-#[derive(Debug, serde::Deserialize, Default)]
+#[derive(Debug, serde::Deserialize, Default, utoipa::IntoParams)]
 pub struct AnimeWorksQuery {
+    /// Filter to anime works that have at least one link
     pub has_links: Option<bool>,
 }
 
+/// List all anime works
+#[utoipa::path(
+    get,
+    path = "/api/core/anime-works",
+    tag = "AnimeWorks",
+    params(AnimeWorksQuery),
+    responses(
+        (status = 200, description = "Success", body = AnimeWorksListResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_anime_work(
     State(state): State<AppState>,
     Query(query): Query<AnimeWorksQuery>,
@@ -149,6 +170,17 @@ pub async fn list_anime_work(
 }
 
 /// Get anime work by ID
+#[utoipa::path(
+    get,
+    path = "/api/core/anime-works/{work_id}",
+    tag = "AnimeWorks",
+    params(("work_id" = i32, Path, description = "Anime work ID")),
+    responses(
+        (status = 200, description = "Success", body = AnimeWorkResponse),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn get_anime_work(
     State(state): State<AppState>,
     Path(work_id): Path<i32>,
@@ -188,6 +220,17 @@ pub async fn get_anime_work(
 }
 
 /// Delete anime work by ID
+#[utoipa::path(
+    delete,
+    path = "/api/core/anime-works/{work_id}",
+    tag = "AnimeWorks",
+    params(("work_id" = i32, Path, description = "Anime work ID")),
+    responses(
+        (status = 200, description = "Deleted successfully"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn delete_anime_work(
     State(state): State<AppState>,
     Path(work_id): Path<i32>,
@@ -223,6 +266,16 @@ pub async fn delete_anime_work(
 // ============ Season Handlers ============
 
 /// Create a new season
+#[utoipa::path(
+    post,
+    path = "/api/core/seasons",
+    tag = "Seasons",
+    request_body = SeasonRequest,
+    responses(
+        (status = 201, description = "Created or found existing season", body = SeasonResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_season(
     State(state): State<AppState>,
     Json(payload): Json<SeasonRequest>,
@@ -257,6 +310,15 @@ pub async fn create_season(
 }
 
 /// List all seasons
+#[utoipa::path(
+    get,
+    path = "/api/core/seasons",
+    tag = "Seasons",
+    responses(
+        (status = 200, description = "Success"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_seasons(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     match state.repos.season.find_all().await {
         Ok(season_list) => {
@@ -295,6 +357,15 @@ pub struct ExcludeEmptyParams {
 }
 
 /// List all anime with enriched data (work_title, season, episode counts, subscriptions)
+#[utoipa::path(
+    get,
+    path = "/api/core/anime",
+    tag = "Anime",
+    responses(
+        (status = 200, description = "Success", body = Vec<AnimeRichResponse>),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_all_anime(
     State(state): State<AppState>,
     Query(params): Query<ExcludeEmptyParams>,
@@ -443,6 +514,16 @@ pub async fn list_all_anime(
 }
 
 /// Create a new anime (formerly anime series)
+#[utoipa::path(
+    post,
+    path = "/api/core/anime",
+    tag = "Anime",
+    request_body = AnimeRequest,
+    responses(
+        (status = 201, description = "Created successfully", body = AnimeResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_anime(
     State(state): State<AppState>,
     Json(payload): Json<AnimeRequest>,
@@ -485,6 +566,18 @@ pub async fn create_anime(
     }
 }
 
+/// Get anime by ID
+#[utoipa::path(
+    get,
+    path = "/api/core/anime/{anime_id}",
+    tag = "Anime",
+    params(("anime_id" = i32, Path, description = "Anime series ID")),
+    responses(
+        (status = 200, description = "Success", body = AnimeResponse),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 /// Get anime by ID (formerly anime series)
 pub async fn get_anime(
     State(state): State<AppState>,
@@ -530,6 +623,18 @@ pub async fn get_anime(
 }
 
 /// Update anime by ID (partial update: description, aired_date, end_date)
+#[utoipa::path(
+    put,
+    path = "/api/core/anime/{anime_id}",
+    tag = "Anime",
+    params(("anime_id" = i32, Path, description = "Anime series ID")),
+    request_body = UpdateAnimeRequest,
+    responses(
+        (status = 200, description = "Updated successfully", body = AnimeResponse),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn update_anime(
     State(state): State<AppState>,
     Path(anime_id): Path<i32>,
@@ -600,6 +705,17 @@ pub async fn update_anime(
     }
 }
 
+/// List anime by work_id
+#[utoipa::path(
+    get,
+    path = "/api/core/anime-works/{work_id}/anime",
+    tag = "Anime",
+    params(("work_id" = i32, Path, description = "Anime work ID")),
+    responses(
+        (status = 200, description = "Success"),
+        (status = 500, description = "Database error")
+    )
+)]
 /// List anime by work_id (formerly list_anime_series by anime_id)
 pub async fn list_anime(
     State(state): State<AppState>,
@@ -645,6 +761,16 @@ pub async fn list_anime(
 // ============ SubtitleGroup Handlers ============
 
 /// Create a new subtitle group
+#[utoipa::path(
+    post,
+    path = "/api/core/subtitle-groups",
+    tag = "SubtitleGroups",
+    request_body = SubtitleGroupRequest,
+    responses(
+        (status = 201, description = "Created successfully", body = SubtitleGroupResponse),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn create_subtitle_group(
     State(state): State<AppState>,
     Json(payload): Json<SubtitleGroupRequest>,
@@ -673,6 +799,15 @@ pub async fn create_subtitle_group(
 }
 
 /// List all subtitle groups
+#[utoipa::path(
+    get,
+    path = "/api/core/subtitle-groups",
+    tag = "SubtitleGroups",
+    responses(
+        (status = 200, description = "Success"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn list_subtitle_groups(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
@@ -704,6 +839,17 @@ pub async fn list_subtitle_groups(
 }
 
 /// Delete subtitle group by ID
+#[utoipa::path(
+    delete,
+    path = "/api/core/subtitle-groups/{group_id}",
+    tag = "SubtitleGroups",
+    params(("group_id" = i32, Path, description = "Subtitle group ID")),
+    responses(
+        (status = 200, description = "Deleted successfully"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn delete_subtitle_group(
     State(state): State<AppState>,
     Path(group_id): Path<i32>,

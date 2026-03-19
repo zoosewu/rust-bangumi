@@ -11,7 +11,16 @@ use crate::schema::{
 };
 use crate::state::AppState;
 
-/// GET /dashboard/stats
+/// Get dashboard statistics
+#[utoipa::path(
+    get,
+    path = "/api/core/dashboard/stats",
+    tag = "Dashboard",
+    responses(
+        (status = 200, description = "Success", body = DashboardStats),
+        (status = 500, description = "Database error")
+    )
+)]
 pub async fn get_dashboard_stats(
     State(state): State<AppState>,
 ) -> (StatusCode, Json<serde_json::Value>) {
