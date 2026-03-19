@@ -1,4 +1,10 @@
 import { Schema } from "effect"
+import type { components } from "../generated/api"
+
+// compile-time 型別對齊 helper
+// 若 Effect Schema 的 .Type 與後端生成的 interface 不相容，tsc 編譯失敗
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type AssertExtends<_G, _S extends _G> = true
 
 export const AnimeWork = Schema.Struct({
   anime_id: Schema.Number,
@@ -7,6 +13,8 @@ export const AnimeWork = Schema.Struct({
   updated_at: Schema.String,
 })
 export type AnimeWork = typeof AnimeWork.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckAnimeWork = AssertExtends<components["schemas"]["AnimeWorkResponse"], AnimeWork>
 
 export const Anime = Schema.Struct({
   series_id: Schema.Number,
@@ -20,6 +28,8 @@ export const Anime = Schema.Struct({
   updated_at: Schema.String,
 })
 export type Anime = typeof Anime.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckAnime = AssertExtends<components["schemas"]["AnimeResponse"], Anime>
 
 export const Season = Schema.Struct({
   season_id: Schema.Number,
@@ -28,6 +38,8 @@ export const Season = Schema.Struct({
   created_at: Schema.String,
 })
 export type Season = typeof Season.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckSeason = AssertExtends<components["schemas"]["SeasonResponse"], Season>
 
 export const SubtitleGroup = Schema.Struct({
   group_id: Schema.Number,
@@ -35,6 +47,8 @@ export const SubtitleGroup = Schema.Struct({
   created_at: Schema.String,
 })
 export type SubtitleGroup = typeof SubtitleGroup.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckSubtitleGroup = AssertExtends<components["schemas"]["SubtitleGroupResponse"], SubtitleGroup>
 
 export const AnimeLink = Schema.Struct({
   link_id: Schema.Number,
@@ -47,6 +61,8 @@ export const AnimeLink = Schema.Struct({
   created_at: Schema.String,
 })
 export type AnimeLink = typeof AnimeLink.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckAnimeLink = AssertExtends<components["schemas"]["AnimeLinkResponse"], AnimeLink>
 
 export const SeasonInfo = Schema.Struct({
   year: Schema.Number,
@@ -75,6 +91,8 @@ export const AnimeRich = Schema.Struct({
   cover_image_url: Schema.NullOr(Schema.String),
 })
 export type AnimeRich = typeof AnimeRich.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckAnimeRich = AssertExtends<components["schemas"]["AnimeRichResponse"], AnimeRich>
 
 export const DownloadInfo = Schema.Struct({
   download_id: Schema.Number,
@@ -99,6 +117,8 @@ export const AnimeLinkRich = Schema.Struct({
   created_at: Schema.String,
 })
 export type AnimeLinkRich = typeof AnimeLinkRich.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckAnimeLinkRich = AssertExtends<components["schemas"]["AnimeLinkRichResponse"], AnimeLinkRich>
 
 export const AnimeCoverImage = Schema.Struct({
   cover_id: Schema.Number,
@@ -125,3 +145,5 @@ export const ConflictingLink = Schema.Struct({
   subscription_name: Schema.NullOr(Schema.String),
 })
 export type ConflictingLink = typeof ConflictingLink.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckConflictingLink = AssertExtends<components["schemas"]["ConflictingLinkResponse"], ConflictingLink>

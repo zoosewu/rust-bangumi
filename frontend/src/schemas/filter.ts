@@ -1,5 +1,9 @@
 import { Schema } from "effect"
+import type { components } from "../generated/api"
 import { PreviewItem } from "./common"
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type AssertExtends<_G, _S extends _G> = true
 
 export const FilterRule = Schema.Struct({
   rule_id: Schema.Number,
@@ -13,6 +17,8 @@ export const FilterRule = Schema.Struct({
   updated_at: Schema.String,
 })
 export type FilterRule = typeof FilterRule.Type
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _CheckFilterRule = AssertExtends<components["schemas"]["FilterRuleResponse"], FilterRule>
 
 export const FilterPreviewPanel = Schema.Struct({
   passed_items: Schema.Array(PreviewItem),
