@@ -37,6 +37,8 @@ tokio-cron-scheduler.workspace = true
 regex.workspace = true
 sha2 = "0.10"
 async-trait.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

@@ -68,3 +68,7 @@ tokio-cron-scheduler = "0.9"
 futures = "0.3"
 strum = { version = "0.26", features = ["derive"] }
 async-trait = "0.1"
+
+# OpenAPI generation
+utoipa = { version = "4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-axum = { version = "0.1" }
