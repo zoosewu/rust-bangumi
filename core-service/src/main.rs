@@ -483,6 +483,54 @@ async fn load_existing_services(app_state: &state::AppState) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use utoipa::OpenApi;
+
+    #[test]
+    fn openapi_doc_generates_without_panic() {
+        let doc = crate::openapi::ApiDoc::openapi();
+        let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");
+        assert!(json.contains("\"openapi\""), "Should contain openapi version field");
+        assert!(json.contains("\"paths\""), "Should contain paths field");
+        assert!(
+            json.contains("/api/core/anime-works"),
+            "Should contain anime-works path"
+        );
+    }
+
+    #[test]
+    fn openapi_doc_contains_key_schemas() {
+        let doc = crate::openapi::ApiDoc::openapi();
+        let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");
+        assert!(
+            json.contains("AnimeWorkResponse"),
+            "Should contain AnimeWorkResponse schema"
+        );
+        assert!(
+            json.contains("AnimeWorkRequest"),
+            "Should contain AnimeWorkRequest schema"
+        );
+        assert!(
+            json.contains("DashboardStats"),
+            "Should contain DashboardStats schema"
+        );
+        assert!(
+            json.contains("FilterRuleResponse"),
+            "Should contain FilterRuleResponse schema"
+        );
+    }
+
+    #[test]
+    fn openapi_doc_contains_all_tags() {
+        let doc = crate::openapi::ApiDoc::openapi();
+        let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");
+        for tag in &["AnimeWorks", "Seasons", "Anime", "SubtitleGroups", "Filters", "Links", "Downloads", "Dashboard"] {
+            assert!(json.contains(tag), "Should contain tag: {}", tag);
+        }
+    }
+}
+
 /// Extract host from URL (e.g., "http://localhost:8001" -> "localhost")
 fn extract_host(url: &str) -> String {
     url.split("://")
