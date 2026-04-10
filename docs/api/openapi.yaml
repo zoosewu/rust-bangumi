@@ -1246,7 +1246,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader]
+            enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader, batch_unmatched, batch_failed]
         - name: limit
           in: query
           schema:
@@ -2707,6 +2707,15 @@ components:
           type: string
           description: 年份值
           nullable: true
+        episode_end_source:
+          type: string
+          description: 合輯集數結束值來源類型（用於標題如 `[01-13 合集]` 的批次種子）
+          enum: [regex, static]
+          nullable: true
+        episode_end_value:
+          type: string
+          description: 合輯集數結束值（regex 時為 group 名稱或 `$N`，static 時為固定值）
+          nullable: true
 
     ParserResponse:
       type: object
@@ -2764,6 +2773,14 @@ components:
         year_value:
           type: string
           nullable: true
+        episode_end_source:
+          type: string
+          nullable: true
+          description: 合輯集數結束值來源類型
+        episode_end_value:
+          type: string
+          nullable: true
+          description: 合輯集數結束值
         created_at:
           type: string
           format: date-time
@@ -2894,7 +2911,13 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader]
+          enum: [pending, downloading, completed, syncing, synced, failed, sync_failed, no_downloader, batch_unmatched, batch_failed]
+          description: |
+            下載狀態：
+            - `pending` → `downloading` → `completed` → `syncing` → `synced` 為正常流程
+            - `failed` / `sync_failed` / `no_downloader` 為錯誤終態
+            - `batch_unmatched` 合輯匹配暫未成功，將由 DownloadScheduler 重試
+            - `batch_failed` 合輯匹配超過重試上限的終態
         progress:
           type: number
           format: float
