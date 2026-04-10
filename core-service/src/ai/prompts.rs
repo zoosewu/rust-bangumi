@@ -102,8 +102,9 @@ All backslashes must be doubled in JSON: `\[` in regex → `\\[` in JSON string.
 ## Strategy
 
 1. Identify the **exact anime title** from the input titles.
-2. Generate ONE parser that matches **only that specific anime** — lock every fixed structural element.
-3. Titles with an incompatible format go into `unmatched_titles` for a future retry.
+2. Detect if the title is a **batch/collection release** (e.g. `[01-13 合集]`, `Batch`, `Fin`) — if so, extract the episode range into `episode_no` + `episode_end` (see Batch Torrents section).
+3. Generate ONE parser that matches **only that specific anime** — lock every fixed structural element.
+4. Titles with an incompatible format go into `unmatched_titles` for a future retry.
 
 ## JSON Format
 
@@ -115,7 +116,7 @@ Return a **single JSON object**:
 - **priority** (number): Always `9999`
 - **anime_title_source** / **anime_title_value**: Always `"static"` / exact base title. NEVER use `"regex"` to extract the title dynamically.
 - **episode_no_source** / **episode_no_value**: `"regex"`→`"$N"` | `"static"`→`"12"` — **integer required**
-- **episode_end_source** / **episode_end_value**: same as above, or `null` — integer; only for batch torrents
+- **episode_end_source** / **episode_end_value**: same as above, or `null` — integer; for batch/collection torrents containing multiple episodes (see Batch Torrents section below)
 - **series_no_source** / **series_no_value**: same, or `null` — integer ≥ 1
 - **subtitle_group_source** / **subtitle_group_value**: `"regex"`→`"$N"` | `"static"`→name | `null`
 - **resolution_source** / **resolution_value**: same, or `null` — value includes `p` suffix (e.g. `"1080p"`); use `(\\d+[Pp])` in parse_regex to match both `1080p` and `1080P`
@@ -141,7 +142,43 @@ Strip season numbers and identifiers — `anime_title` must be the base work tit
 - "Overlord IV" → `"Overlord"`, series_no `"static"`/`"4"` (Roman → integer)
 - "進擊の巨人 The Final Season" → `"進擊の巨人"`, series_no `null`
 
-## Example
+## Batch Torrents (合輯)
+
+Some titles are batch/collection releases containing multiple episodes in a single torrent. Recognize these patterns:
+- `[01-13 合集]`, `[01-13]`, `[01~13]` — episode range in brackets
+- `Batch`, `Complete`, `Fin` — batch/final markers
+- `合集`, `全集` — Chinese batch markers
+
+For batch titles, set **both** `episode_no` (start) and `episode_end` (end):
+- `episode_no_source`/`episode_no_value`: the **first** episode number
+- `episode_end_source`/`episode_end_value`: the **last** episode number
+
+For single-episode titles, set `episode_end_source` and `episode_end_value` to `null`.
+
+### Batch Example
+
+Title: `[LoliHouse] Jigokuraku [01-13 合集][WebRip 1080p HEVC-10bit AAC][Fin]`
+
+```json
+{
+  "name": "LoliHouse - Jigokuraku (Batch)",
+  "condition_regex": "^\\[LoliHouse\\]\\s*Jigokuraku\\s*\\[\\d+-\\d+",
+  "parse_regex": "^\\[LoliHouse\\]\\s*Jigokuraku\\s*\\[(\\d+)-(\\d+)\\s*合集\\]\\[.*?(\\d+[Pp])",
+  "priority": 9999,
+  "anime_title_source": "static", "anime_title_value": "Jigokuraku",
+  "episode_no_source": "regex", "episode_no_value": "$1",
+  "episode_end_source": "regex", "episode_end_value": "$2",
+  "series_no_source": null, "series_no_value": null,
+  "subtitle_group_source": "static", "subtitle_group_value": "LoliHouse",
+  "resolution_source": "regex", "resolution_value": "$3",
+  "season_source": null, "season_value": null,
+  "year_source": null, "year_value": null,
+  "matched_titles": ["[LoliHouse] Jigokuraku [01-13 合集][WebRip 1080p HEVC-10bit AAC][Fin]"],
+  "unmatched_titles": []
+}
+```
+
+## Single-Episode Example
 
 ```json
 {

@@ -3,6 +3,7 @@
 use chrono::{Datelike, Utc};
 use diesel::prelude::*;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::db::DbPool;
@@ -23,8 +24,12 @@ pub struct ReparseStats {
 }
 
 struct UpsertResult {
-    link_id: i32,
-    is_new: bool,
+    new_link_ids: Vec<i32>,
+    updated_link_ids: Vec<i32>,
+    /// Links removed because they are outside the new episode range (need cancel + delete by caller)
+    removed_link_ids: Vec<i32>,
+    /// Anime IDs from removed links, for cleanup_empty_series
+    removed_anime_ids: Vec<i32>,
     metadata_changed: bool,
 }
 
@@ -135,15 +140,25 @@ pub async fn reparse_affected_items(
             Ok(Some(parsed)) => {
                 match upsert_anime_link(&mut conn, item, &parsed) {
                     Ok(result) => {
-                        if result.is_new {
-                            new_link_ids.push(result.link_id);
-                        } else {
-                            updated_link_ids.push(result.link_id);
+                        new_link_ids.extend(&result.new_link_ids);
+                        updated_link_ids.extend(&result.updated_link_ids);
+
+                        // Collect removed links for cancel + delete
+                        if !result.removed_link_ids.is_empty() {
+                            unmatched_link_ids.extend(&result.removed_link_ids);
+                            for &aid in &result.removed_anime_ids {
+                                unmatched_series_ids.push((item.item_id, aid));
+                            }
                         }
+
                         if result.metadata_changed {
-                            resync_link_ids.push(result.link_id);
+                            resync_link_ids.extend(&result.updated_link_ids);
                         }
-                        let is_new = result.is_new;
+                        let ep_desc = match parsed.episode_end {
+                            Some(end) if end > parsed.episode_no =>
+                                format!("EP{}-{}", parsed.episode_no, end),
+                            _ => format!("EP{}", parsed.episode_no),
+                        };
                         TitleParserService::update_raw_item_status(
                             &mut conn,
                             item.item_id,
@@ -154,11 +169,13 @@ pub async fn reparse_affected_items(
                         .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
                         parsed_count += 1;
                         tracing::info!(
-                            "reparse: {} -> {} EP{} ({})",
+                            "reparse: {} -> {} {} (new={}, updated={}, removed={})",
                             item.title,
                             parsed.anime_title,
-                            parsed.episode_no,
-                            if is_new { "new" } else { "updated" }
+                            ep_desc,
+                            result.new_link_ids.len(),
+                            result.updated_link_ids.len(),
+                            result.removed_link_ids.len(),
                         );
                     }
                     Err(e) => {
@@ -176,15 +193,13 @@ pub async fn reparse_affected_items(
                 }
             }
             Ok(None) => {
-                // 無匹配：收集舊 link 資訊，稍後統一取消下載再刪除
-                let old_link: Option<(i32, i32)> = anime_links::table
+                // 無匹配：收集此 raw_item 的所有 links（含合輯展開的多筆）
+                let old_links: Vec<(i32, i32)> = anime_links::table
                     .filter(anime_links::raw_item_id.eq(item.item_id))
                     .select((anime_links::link_id, anime_links::anime_id))
-                    .first::<(i32, i32)>(&mut conn)
-                    .optional()
-                    .ok()
-                    .flatten();
-                if let Some((lid, sid)) = old_link {
+                    .load::<(i32, i32)>(&mut conn)
+                    .unwrap_or_default();
+                for (lid, sid) in old_links {
                     unmatched_link_ids.push(lid);
                     unmatched_series_ids.push((item.item_id, sid));
                 }
@@ -469,10 +484,16 @@ fn create_or_get_subtitle_group(
     }
 }
 
-/// 建立或更新 anime_link。
-/// 如果此 raw_item 已有 anime_link → 更新欄位（保留 link_id 及 downloads）。
-/// 如果沒有 → 新建。
-/// 回傳 (link_id, is_new)。
+/// 建立或更新 anime_links，支援合輯展開/收合。
+///
+/// 根據 parsed.episode_end 決定 episode 範圍：
+/// - 無 episode_end → 單集
+/// - 有 episode_end → 合輯（ep_start..=ep_end）
+///
+/// 對此 raw_item 的既有 links：
+/// - episode_no 在新範圍內 → 更新 metadata（保留 link_id 及 downloads）
+/// - episode_no 不在新範圍內 → 標記移除（由 caller cancel + delete）
+/// - 新範圍中缺少的 episode → 新建 link
 fn upsert_anime_link(
     conn: &mut diesel::PgConnection,
     raw_item: &RawAnimeItem,
@@ -499,111 +520,159 @@ fn upsert_anime_link(
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
     let group = create_or_get_subtitle_group(conn, group_name)?;
 
-    // 2. 查找既有的 anime_link
-    let existing_link: Option<AnimeLink> = anime_links::table
+    // 2. 計算 base hash 和 episode 範圍
+    let mut hasher = Sha256::new();
+    hasher.update(raw_item.download_url.as_bytes());
+    let base_hash = format!("{:x}", hasher.finalize());
+
+    let ep_start = parsed.episode_no;
+    let ep_end = match parsed.episode_end {
+        Some(end) if end >= ep_start && (end - ep_start) <= 200 => end,
+        Some(bad) => {
+            tracing::warn!(
+                "reparse: episode_end ({}) invalid relative to episode_no ({}), treating as single",
+                bad, ep_start
+            );
+            ep_start
+        }
+        None => ep_start,
+    };
+    let is_batch = ep_end > ep_start;
+    let desired_eps: HashSet<i32> = (ep_start..=ep_end).collect();
+
+    // 3. 取得此 raw_item 的所有既有 links
+    let existing_links: Vec<AnimeLink> = anime_links::table
         .filter(anime_links::raw_item_id.eq(raw_item.item_id))
-        .first(conn)
-        .optional()
-        .map_err(|e| format!("Failed to query existing link: {}", e))?;
+        .load(conn)
+        .map_err(|e| format!("Failed to query existing links: {}", e))?;
 
-    if let Some(link) = existing_link {
-        let old_series_id = link.anime_id;
-        let old_group_id = link.group_id;
-        let old_episode_no = link.episode_no;
+    // 4. 分類：在範圍內 vs 範圍外
+    let mut reusable: std::collections::HashMap<i32, AnimeLink> = std::collections::HashMap::new();
+    let mut orphans: Vec<AnimeLink> = Vec::new();
+    for link in existing_links {
+        if desired_eps.contains(&link.episode_no) && !reusable.contains_key(&link.episode_no) {
+            reusable.insert(link.episode_no, link);
+        } else {
+            orphans.push(link);
+        }
+    }
 
-        // 3a. 更新既有 link（保留 link_id → downloads 不受影響）
-        diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))
+    let mut result = UpsertResult {
+        new_link_ids: vec![],
+        updated_link_ids: vec![],
+        removed_link_ids: orphans.iter().map(|l| l.link_id).collect(),
+        removed_anime_ids: orphans
+            .iter()
+            .map(|l| l.anime_id)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect(),
+        metadata_changed: false,
+    };
+
+    // 5. 處理每個目標 episode
+    let now = Utc::now().naive_utc();
+    let detected_type =
+        crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
+
+    for ep in ep_start..=ep_end {
+        let source_hash = if is_batch {
+            format!("{}#ep{}", base_hash, ep)
+        } else {
+            base_hash.clone()
+        };
+
+        if let Some(existing) = reusable.get(&ep) {
+            // 更新既有 link（保留 link_id → downloads 不受影響）
+            let old_anime_id = existing.anime_id;
+            let old_group_id = existing.group_id;
+
+            diesel::update(
+                anime_links::table.filter(anime_links::link_id.eq(existing.link_id)),
+            )
             .set((
                 anime_links::anime_id.eq(series.anime_id),
                 anime_links::group_id.eq(group.group_id),
-                anime_links::episode_no.eq(parsed.episode_no),
+                anime_links::episode_no.eq(ep),
                 anime_links::title.eq(Some(&raw_item.title)),
+                anime_links::source_hash.eq(&source_hash),
+                anime_links::url.eq(&raw_item.download_url),
             ))
             .execute(conn)
-            .map_err(|e| format!("Failed to update anime link: {}", e))?;
+            .map_err(|e| format!("Failed to update anime link ep {}: {}", ep, e))?;
 
-        // anime 變更時，清理已無 link 的舊 anime
-        if old_series_id != series.anime_id {
-            cleanup_empty_series(conn, old_series_id);
-        }
-
-        // 重算 filtered_flag
-        let updated_link: AnimeLink = anime_links::table
-            .filter(anime_links::link_id.eq(link.link_id))
-            .first(conn)
-            .map_err(|e| format!("Failed to reload link: {}", e))?;
-        if let Ok(flag) =
-            crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &updated_link)
-        {
-            if flag != updated_link.filtered_flag {
-                diesel::update(
-                    anime_links::table.filter(anime_links::link_id.eq(link.link_id)),
-                )
-                .set(anime_links::filtered_flag.eq(flag))
-                .execute(conn)
-                .ok();
+            // 重算 filtered_flag
+            let updated_link: AnimeLink = anime_links::table
+                .filter(anime_links::link_id.eq(existing.link_id))
+                .first(conn)
+                .map_err(|e| format!("Failed to reload link: {}", e))?;
+            if let Ok(flag) = crate::services::filter_recalc::compute_filtered_flag_for_link(
+                conn,
+                &updated_link,
+            ) {
+                if flag != updated_link.filtered_flag {
+                    diesel::update(
+                        anime_links::table.filter(anime_links::link_id.eq(existing.link_id)),
+                    )
+                    .set(anime_links::filtered_flag.eq(flag))
+                    .execute(conn)
+                    .ok();
+                }
             }
-        }
 
-        let metadata_changed = old_series_id != series.anime_id
-            || old_group_id != group.group_id
-            || old_episode_no != parsed.episode_no;
-
-        Ok(UpsertResult {
-            link_id: link.link_id,
-            is_new: false,
-            metadata_changed,
-        })
-    } else {
-        // 3b. 新建 link
-        let mut hasher = Sha256::new();
-        hasher.update(raw_item.download_url.as_bytes());
-        let source_hash = format!("{:x}", hasher.finalize());
-
-        let now = Utc::now().naive_utc();
-        let detected_type =
-            crate::services::download_type_detector::detect_download_type(&raw_item.download_url);
-
-        let new_link = NewAnimeLink {
-            anime_id: series.anime_id,
-            group_id: group.group_id,
-            episode_no: parsed.episode_no,
-            title: Some(raw_item.title.clone()),
-            url: raw_item.download_url.clone(),
-            source_hash,
-            filtered_flag: false,
-            created_at: now,
-            raw_item_id: Some(raw_item.item_id),
-            download_type: detected_type.map(|dt| dt.to_string()),
-            conflict_flag: false,
-            link_status: "active".to_string(),
-        };
-
-        let created_link: AnimeLink = diesel::insert_into(anime_links::table)
-            .values(&new_link)
-            .get_result(conn)
-            .map_err(|e| format!("Failed to create anime link: {}", e))?;
-
-        // 計算 filtered_flag
-        if let Ok(flag) =
-            crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link)
-        {
-            if flag != created_link.filtered_flag {
-                diesel::update(
-                    anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)),
-                )
-                .set(anime_links::filtered_flag.eq(flag))
-                .execute(conn)
-                .ok();
+            if old_anime_id != series.anime_id || old_group_id != group.group_id {
+                result.metadata_changed = true;
             }
-        }
 
-        Ok(UpsertResult {
-            link_id: created_link.link_id,
-            is_new: true,
-            metadata_changed: false,
-        })
+            result.updated_link_ids.push(existing.link_id);
+        } else {
+            // 新建 link
+            let new_link = NewAnimeLink {
+                anime_id: series.anime_id,
+                group_id: group.group_id,
+                episode_no: ep,
+                title: Some(raw_item.title.clone()),
+                url: raw_item.download_url.clone(),
+                source_hash,
+                filtered_flag: false,
+                created_at: now,
+                raw_item_id: Some(raw_item.item_id),
+                download_type: detected_type.as_ref().map(|dt| dt.to_string()),
+                conflict_flag: false,
+                link_status: "active".to_string(),
+            };
+
+            let created_link: AnimeLink = diesel::insert_into(anime_links::table)
+                .values(&new_link)
+                .get_result(conn)
+                .map_err(|e| format!("Failed to create anime link ep {}: {}", ep, e))?;
+
+            if let Ok(flag) = crate::services::filter_recalc::compute_filtered_flag_for_link(
+                conn,
+                &created_link,
+            ) {
+                if flag != created_link.filtered_flag {
+                    diesel::update(
+                        anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)),
+                    )
+                    .set(anime_links::filtered_flag.eq(flag))
+                    .execute(conn)
+                    .ok();
+                }
+            }
+
+            result.new_link_ids.push(created_link.link_id);
+        }
     }
+
+    // 6. 清理 orphan links 所屬但已無其他 link 的 anime（只在 anime 變更時）
+    for &old_aid in &result.removed_anime_ids {
+        if old_aid != series.anime_id {
+            cleanup_empty_series(conn, old_aid);
+        }
+    }
+
+    Ok(result)
 }
 
 /// 如果指定的 anime 底下已經沒有任何 anime_link，就刪除該 anime。

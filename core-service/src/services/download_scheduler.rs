@@ -349,8 +349,13 @@ impl DownloadScheduler {
     /// The torrent is already downloaded; re-scan the folder and attempt
     /// to match again. On success, the record transitions to "completed"
     /// and will be picked up by trigger_sync_for_completed.
+    ///
+    /// Uses `sync_retry_count` to track retry attempts. After
+    /// `BATCH_MATCH_MAX_RETRIES` failed attempts, transitions to "batch_failed".
     fn retry_batch_unmatched(&self, conn: &mut PgConnection) {
         use std::collections::HashMap;
+
+        const BATCH_MATCH_MAX_RETRIES: i32 = 10;
 
         let unmatched: Vec<Download> = match downloads::table
             .filter(downloads::status.eq("batch_unmatched"))
@@ -387,6 +392,11 @@ impl DownloadScheduler {
             let files = collect_files_recursive(std::path::Path::new(folder));
             if files.is_empty() {
                 tracing::warn!("retry_batch_unmatched: no files found in {}", folder);
+                // Increment retry count even when folder is empty
+                let now = chrono::Utc::now().naive_utc();
+                for dl in group {
+                    Self::increment_batch_retry(conn, dl, BATCH_MATCH_MAX_RETRIES, now);
+                }
                 continue;
             }
 
@@ -438,8 +448,52 @@ impl DownloadScheduler {
                             dl.download_id, e
                         ),
                     }
+                } else {
+                    // Still unmatched — increment retry count or transition to batch_failed
+                    Self::increment_batch_retry(conn, dl, BATCH_MATCH_MAX_RETRIES, now);
                 }
             }
+        }
+    }
+
+    /// Increment retry count for a batch_unmatched download.
+    /// If retries exceed the max, transition to "batch_failed" terminal state.
+    fn increment_batch_retry(
+        conn: &mut PgConnection,
+        dl: &Download,
+        max_retries: i32,
+        now: chrono::NaiveDateTime,
+    ) {
+        let new_count = dl.sync_retry_count + 1;
+        if new_count >= max_retries {
+            diesel::update(
+                downloads::table.filter(downloads::download_id.eq(dl.download_id)),
+            )
+            .set((
+                downloads::status.eq("batch_failed"),
+                downloads::sync_retry_count.eq(new_count),
+                downloads::error_message.eq(Some(format!(
+                    "Batch file matching failed after {} retries",
+                    new_count
+                ))),
+                downloads::updated_at.eq(now),
+            ))
+            .execute(conn)
+            .ok();
+            tracing::warn!(
+                "retry_batch_unmatched: download_id={} exceeded max retries ({}), marking as batch_failed",
+                dl.download_id, max_retries
+            );
+        } else {
+            diesel::update(
+                downloads::table.filter(downloads::download_id.eq(dl.download_id)),
+            )
+            .set((
+                downloads::sync_retry_count.eq(new_count),
+                downloads::updated_at.eq(now),
+            ))
+            .execute(conn)
+            .ok();
         }
     }
 
