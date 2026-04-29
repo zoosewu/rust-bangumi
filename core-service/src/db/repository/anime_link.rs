@@ -362,36 +362,69 @@ pub mod mock {
 
         async fn find_active_links_for_episode(
             &self,
-            _anime_id: i32,
-            _group_id: i32,
-            _episode_no: i32,
+            anime_id: i32,
+            group_id: i32,
+            episode_no: i32,
         ) -> Result<Vec<AnimeLink>, RepositoryError> {
-            Ok(vec![])
+            let links = self.links.lock().unwrap();
+            Ok(links
+                .iter()
+                .filter(|l| {
+                    l.anime_id == anime_id
+                        && l.group_id == group_id
+                        && l.episode_no == episode_no
+                        && l.link_status == "active"
+                        && !l.filtered_flag
+                })
+                .cloned()
+                .collect())
         }
 
         async fn set_conflict_flags(
             &self,
-            _link_ids: &[i32],
-            _flag: bool,
+            link_ids: &[i32],
+            flag: bool,
         ) -> Result<(), RepositoryError> {
+            let mut links = self.links.lock().unwrap();
+            for l in links.iter_mut() {
+                if link_ids.contains(&l.link_id) {
+                    l.conflict_flag = flag;
+                }
+            }
             Ok(())
         }
 
         async fn set_link_status(
             &self,
-            _link_ids: &[i32],
-            _status: &str,
+            link_ids: &[i32],
+            status: &str,
         ) -> Result<(), RepositoryError> {
+            let mut links = self.links.lock().unwrap();
+            for l in links.iter_mut() {
+                if link_ids.contains(&l.link_id) {
+                    l.link_status = status.to_string();
+                }
+            }
             Ok(())
         }
 
         async fn find_resolved_links_for_episode(
             &self,
-            _anime_id: i32,
-            _group_id: i32,
-            _episode_no: i32,
+            anime_id: i32,
+            group_id: i32,
+            episode_no: i32,
         ) -> Result<Vec<AnimeLink>, RepositoryError> {
-            Ok(vec![])
+            let links = self.links.lock().unwrap();
+            Ok(links
+                .iter()
+                .filter(|l| {
+                    l.anime_id == anime_id
+                        && l.group_id == group_id
+                        && l.episode_no == episode_no
+                        && l.link_status == "resolved"
+                })
+                .cloned()
+                .collect())
         }
 
         async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError> {

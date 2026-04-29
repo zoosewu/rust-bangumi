@@ -273,6 +273,10 @@ async fn main() -> anyhow::Result<()> {
             "/link-conflicts/:conflict_id/resolve",
             post(handlers::anime_link_conflicts::resolve_link_conflict),
         )
+        .route(
+            "/link-conflicts/resolve-by-raw-item",
+            post(handlers::anime_link_conflicts::resolve_link_conflicts_by_raw_item),
+        )
         // Viewer 同步回呼
         .route("/sync-callback", post(handlers::sync::sync_callback))
         // Dashboard 概覽

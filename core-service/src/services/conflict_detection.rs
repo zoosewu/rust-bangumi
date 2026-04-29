@@ -206,6 +206,72 @@ impl ConflictDetectionService {
         })
     }
 
+    /// Bulk-resolve all unresolved conflicts under a given (anime_id, group_id) by
+    /// preferring links from the chosen `raw_item_id`. For each conflict that has a
+    /// candidate link with the matching raw_item_id, that link is chosen; others
+    /// in the same conflict become `link_status='resolved'`. Conflicts with no
+    /// candidate from `chosen_raw_item_id` are skipped.
+    ///
+    /// Returns: (resolved_conflict_ids, skipped_conflict_ids, chosen_link_ids,
+    /// unchosen_link_ids).
+    pub async fn resolve_conflicts_by_raw_item(
+        &self,
+        anime_id: i32,
+        group_id: i32,
+        chosen_raw_item_id: i32,
+    ) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), String> {
+        let unresolved = self
+            .conflict_repo
+            .find_unresolved()
+            .await
+            .map_err(|e| format!("Failed to find unresolved conflicts: {}", e))?;
+
+        let mut resolved_ids: Vec<i32> = Vec::new();
+        let mut skipped_ids: Vec<i32> = Vec::new();
+        let mut chosen_links: Vec<i32> = Vec::new();
+        let mut unchosen_links: Vec<i32> = Vec::new();
+
+        for conflict in unresolved
+            .into_iter()
+            .filter(|c| c.anime_id == anime_id && c.group_id == group_id)
+        {
+            let links = self
+                .link_repo
+                .find_active_links_for_episode(
+                    conflict.anime_id,
+                    conflict.group_id,
+                    conflict.episode_no,
+                )
+                .await
+                .map_err(|e| format!("Failed to find links: {}", e))?;
+
+            let chosen = links
+                .iter()
+                .find(|l| l.raw_item_id == Some(chosen_raw_item_id))
+                .map(|l| l.link_id);
+
+            match chosen {
+                Some(chosen_link_id) => {
+                    self.resolve_conflict(conflict.conflict_id, chosen_link_id)
+                        .await?;
+                    resolved_ids.push(conflict.conflict_id);
+                    chosen_links.push(chosen_link_id);
+                    unchosen_links.extend(
+                        links
+                            .iter()
+                            .filter(|l| l.link_id != chosen_link_id)
+                            .map(|l| l.link_id),
+                    );
+                }
+                None => {
+                    skipped_ids.push(conflict.conflict_id);
+                }
+            }
+        }
+
+        Ok((resolved_ids, skipped_ids, chosen_links, unchosen_links))
+    }
+
     /// Resolve a conflict: set chosen link as active (conflict_flag=false),
     /// mark others as resolved (link_status='resolved').
     pub async fn resolve_conflict(
@@ -278,5 +344,124 @@ impl ConflictDetectionService {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::repository::anime_link::mock::MockAnimeLinkRepository;
+    use crate::db::repository::anime_link_conflict::mock::MockAnimeLinkConflictRepository;
+    use crate::models::AnimeLink;
+    use chrono::Utc;
+    use diesel::r2d2::{self, ConnectionManager};
+    use diesel::PgConnection;
+
+    fn fake_pool() -> Arc<DbPool> {
+        let manager = ConnectionManager::<PgConnection>::new("postgres://invalid/none");
+        let pool = r2d2::Pool::builder()
+            .max_size(1)
+            .min_idle(Some(0))
+            .test_on_check_out(false)
+            .build_unchecked(manager);
+        Arc::new(pool)
+    }
+
+    fn link(link_id: i32, episode_no: i32, raw_item_id: Option<i32>) -> AnimeLink {
+        AnimeLink {
+            link_id,
+            anime_id: 1,
+            group_id: 1,
+            episode_no,
+            title: Some(format!("ep{}", episode_no)),
+            url: format!("magnet:?xt=urn:btih:{}", link_id),
+            source_hash: format!("hash{}", link_id),
+            filtered_flag: false,
+            created_at: Utc::now().naive_utc(),
+            raw_item_id,
+            download_type: Some("magnet".to_string()),
+            conflict_flag: true,
+            link_status: "active".to_string(),
+        }
+    }
+
+    /// Batch raw_item 100 covers ep1+ep2; single raw_item 200 covers ep1.
+    /// 衝突在 ep1。 Resolve by chosen_raw_item_id=100 → conflict 1 解決；
+    /// chosen=link 1 (batch ep1)，link 3 (single ep1) 變 resolved。
+    /// Ep2 沒有衝突（無第二個來源），故 conflict 表只有一筆，回應的 dispatched 為 [1]。
+    #[tokio::test]
+    async fn resolve_by_raw_item_picks_batch_link() {
+        let link_repo = Arc::new(MockAnimeLinkRepository::with_data(vec![
+            link(1, 1, Some(100)), // batch ep1
+            link(2, 2, Some(100)), // batch ep2 (no conflict)
+            link(3, 1, Some(200)), // single ep1
+        ]));
+        let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
+        // create one conflict for ep1
+        conflict_repo.upsert(1, 1, 1).await.unwrap();
+
+        // Make ep2's link not in conflict
+        link_repo.set_conflict_flags(&[2], false).await.unwrap();
+
+        let svc =
+            ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
+
+        let (resolved, skipped, chosen, unchosen) =
+            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+
+        assert_eq!(resolved.len(), 1, "ep1 conflict should be resolved");
+        assert!(skipped.is_empty(), "no conflict should be skipped");
+        assert_eq!(chosen, vec![1], "should choose batch ep1 link");
+        assert_eq!(unchosen, vec![3], "single ep1 link should be unchosen");
+    }
+
+    /// 當 chosen_raw_item 在某衝突無候選 link 時，該衝突應被 skip。
+    #[tokio::test]
+    async fn resolve_by_raw_item_skips_unmatched_conflicts() {
+        let link_repo = Arc::new(MockAnimeLinkRepository::with_data(vec![
+            link(1, 1, Some(100)),
+            link(2, 1, Some(200)),
+            // ep3 衝突不含 raw_item 100
+            link(3, 3, Some(300)),
+            link(4, 3, Some(400)),
+        ]));
+        let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
+        conflict_repo.upsert(1, 1, 1).await.unwrap();
+        let c3 = conflict_repo.upsert(1, 1, 3).await.unwrap();
+
+        let svc =
+            ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
+
+        let (resolved, skipped, chosen, _) =
+            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(skipped, vec![c3.conflict_id]);
+        assert_eq!(chosen, vec![1]);
+    }
+
+    /// 不同 (anime_id, group_id) 的衝突不應被影響。
+    #[tokio::test]
+    async fn resolve_by_raw_item_scoped_to_anime_group() {
+        let link_repo = Arc::new(MockAnimeLinkRepository::with_data(vec![
+            link(1, 1, Some(100)),
+            link(2, 1, Some(200)),
+        ]));
+        let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
+        // 不同 anime_id 的衝突
+        let other = conflict_repo.upsert(99, 99, 1).await.unwrap();
+
+        let svc =
+            ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
+
+        let (resolved, skipped, _, _) =
+            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+
+        assert!(resolved.is_empty());
+        assert!(skipped.is_empty());
+
+        // verify the unrelated conflict still unresolved
+        let still = conflict_repo.find_by_id(other.conflict_id).await.unwrap();
+        assert_eq!(still.unwrap().resolution_status, "unresolved");
     }
 }

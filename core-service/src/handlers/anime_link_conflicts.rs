@@ -3,15 +3,16 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use std::collections::HashSet;
 use diesel::prelude::*;
 use serde_json::json;
 
 use crate::dto::{
     AnimeLinkConflictInfo, AnimeLinkConflictLink, DownloadInfo,
-    ResolveAnimeLinkConflictRequest,
+    ResolveAnimeLinkConflictRequest, ResolveByRawItemRequest, ResolveByRawItemResponse,
 };
 use crate::models::{AnimeLink, Download};
-use crate::schema::{anime_links, animes, anime_works, downloads, subtitle_groups};
+use crate::schema::{anime_links, animes, anime_works, downloads, raw_anime_items, subtitle_groups};
 use crate::state::AppState;
 
 /// GET /link-conflicts - List all unresolved anime link conflicts
@@ -83,6 +84,26 @@ pub async fn list_link_conflicts(
                         torrent_hash: d.torrent_hash,
                     });
 
+                let raw_item_title: Option<String> = link.raw_item_id.and_then(|rid| {
+                    raw_anime_items::table
+                        .filter(raw_anime_items::item_id.eq(rid))
+                        .select(raw_anime_items::title)
+                        .first::<String>(&mut conn)
+                        .ok()
+                });
+
+                let sibling_episodes: Vec<i32> = link
+                    .raw_item_id
+                    .map(|rid| {
+                        anime_links::table
+                            .filter(anime_links::raw_item_id.eq(rid))
+                            .filter(anime_links::link_id.ne(link.link_id))
+                            .select(anime_links::episode_no)
+                            .load::<i32>(&mut conn)
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or_default();
+
                 AnimeLinkConflictLink {
                     link_id: link.link_id,
                     title: link.title.clone(),
@@ -92,6 +113,9 @@ pub async fn list_link_conflicts(
                     link_status: link.link_status.clone(),
                     download: download_info,
                     created_at: link.created_at,
+                    raw_item_id: link.raw_item_id,
+                    raw_item_title,
+                    sibling_episodes,
                 }
             })
             .collect();
@@ -222,4 +246,77 @@ pub async fn resolve_link_conflict(
             "chosen_link_id": payload.chosen_link_id
         })),
     )
+}
+
+/// POST /link-conflicts/resolve-by-raw-item
+///
+/// 對 (anime_id, group_id) 下所有未解決的衝突，自動以指定 raw_item 為偏好來源。
+/// 每個衝突若有候選 link 來自該 raw_item，便採用之；否則該衝突保持未解決。
+/// 被選中的 link 會被派送下載；未選中的 link 對應的下載會被取消。
+pub async fn resolve_link_conflicts_by_raw_item(
+    State(state): State<AppState>,
+    Json(payload): Json<ResolveByRawItemRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let result = match state
+        .conflict_detection
+        .resolve_conflicts_by_raw_item(
+            payload.anime_id,
+            payload.group_id,
+            payload.chosen_raw_item_id,
+        )
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("resolve_conflicts_by_raw_item failed: {}", e);
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "resolve_failed", "message": e })),
+            );
+        }
+    };
+    let (resolved_conflicts, skipped_conflicts, chosen_links, unchosen_links) = result;
+
+    // Cancel downloads for unchosen links
+    if !unchosen_links.is_empty() {
+        if let Err(e) = state
+            .cancel_service
+            .cancel_downloads_for_links(&unchosen_links)
+            .await
+        {
+            tracing::warn!("Failed to cancel unchosen downloads: {}", e);
+        }
+    }
+
+    // Dispatch chosen links (dedup)
+    let dispatched_link_ids: Vec<i32> = chosen_links
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    if !dispatched_link_ids.is_empty() {
+        match state
+            .dispatch_service
+            .dispatch_new_links(dispatched_link_ids.clone())
+            .await
+        {
+            Ok(r) => tracing::info!(
+                "resolve-by-raw-item dispatched {} links: dispatched={}, no_downloader={}, failed={}",
+                dispatched_link_ids.len(),
+                r.dispatched,
+                r.no_downloader,
+                r.failed
+            ),
+            Err(e) => tracing::warn!("Failed to dispatch chosen links: {}", e),
+        }
+    }
+
+    let response = ResolveByRawItemResponse {
+        resolved_conflicts,
+        skipped_conflicts,
+        dispatched_link_ids,
+    };
+
+    (StatusCode::OK, Json(serde_json::to_value(&response).unwrap_or(json!({}))))
 }

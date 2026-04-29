@@ -1503,6 +1503,31 @@ paths:
         '400':
           description: 解決失敗
 
+  /link-conflicts/resolve-by-raw-item:
+    post:
+      tags: [LinkConflicts]
+      summary: 以 raw_item 為單位批次解決衝突
+      description: |
+        對 (anime_id, group_id) 下所有未解決的衝突，自動以指定的 raw_item_id 為偏好來源。
+        每個衝突若有候選 link 來自該 raw_item，便採用之；否則該衝突保持未解決並回報於
+        `skipped_conflicts`。被選中的 link 派送下載；其他 link 對應的下載被取消。
+        適用於使用者希望「整批採用某個 raw_item（例如 [01-02] 合集）」的情境。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveByRawItemRequest'
+      responses:
+        '200':
+          description: 批次解決成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveByRawItemResponse'
+        '400':
+          description: 解決失敗
+
   # ============ Webhooks ============
   /webhooks:
     get:
@@ -3100,6 +3125,19 @@ components:
         created_at:
           type: string
           format: date-time
+        raw_item_id:
+          type: integer
+          nullable: true
+          description: 此 link 來源 raw_item ID
+        raw_item_title:
+          type: string
+          nullable: true
+          description: 此 link 來源 raw_item 的標題
+        sibling_episodes:
+          type: array
+          items:
+            type: integer
+          description: 同 raw_item 下其他 episode_no（batch 來源才會非空）
 
     ResolveAnimeLinkConflictRequest:
       type: object
@@ -3109,6 +3147,40 @@ components:
         chosen_link_id:
           type: integer
           description: 選擇保留的連結 ID
+
+    ResolveByRawItemRequest:
+      type: object
+      required:
+        - anime_id
+        - group_id
+        - chosen_raw_item_id
+      properties:
+        anime_id:
+          type: integer
+        group_id:
+          type: integer
+        chosen_raw_item_id:
+          type: integer
+          description: 偏好採用的 raw_item ID
+
+    ResolveByRawItemResponse:
+      type: object
+      properties:
+        resolved_conflicts:
+          type: array
+          items:
+            type: integer
+          description: 被自動解決的 conflict_id 列表
+        skipped_conflicts:
+          type: array
+          items:
+            type: integer
+          description: 因為缺少對應 link 而未解決的 conflict_id 列表
+        dispatched_link_ids:
+          type: array
+          items:
+            type: integer
+          description: 被派送下載的 link_id 列表
 
     # ============ Subscriptions (additional) ============
     UpdateSubscriptionRequest:

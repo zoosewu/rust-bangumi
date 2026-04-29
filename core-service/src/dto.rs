@@ -269,6 +269,13 @@ pub struct AnimeLinkConflictLink {
     #[schema(value_type = String, format = DateTime)]
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
+    /// 此 link 來源的 raw_item_id（若有）
+    pub raw_item_id: Option<i32>,
+    /// 此 link 來源 raw_item 的標題（若有）
+    pub raw_item_title: Option<String>,
+    /// 同一 raw_item 下其他 episode_no（不含當前 conflict 的 episode），
+    /// 用於前端提示「此來源同時涵蓋哪些其他集數」（batch raw_item 才會非空）
+    pub sibling_episodes: Vec<i32>,
 }
 
 #[derive(Debug, Serialize, Clone, ToSchema)]
@@ -290,6 +297,20 @@ pub struct AnimeLinkConflictInfo {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveAnimeLinkConflictRequest {
     pub chosen_link_id: i32,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ResolveByRawItemRequest {
+    pub anime_id: i32,
+    pub group_id: i32,
+    pub chosen_raw_item_id: i32,
+}
+
+#[derive(Debug, Serialize, Clone, ToSchema)]
+pub struct ResolveByRawItemResponse {
+    pub resolved_conflicts: Vec<i32>,
+    pub skipped_conflicts: Vec<i32>,
+    pub dispatched_link_ids: Vec<i32>,
 }
 
 #[cfg(test)]

@@ -814,7 +814,8 @@
           "source_hash",
           "conflict_flag",
           "link_status",
-          "created_at"
+          "created_at",
+          "sibling_episodes"
         ],
         "properties": {
           "conflict_flag": {
@@ -838,6 +839,25 @@
           },
           "link_status": {
             "type": "string"
+          },
+          "raw_item_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "此 link 來源的 raw_item_id（若有）",
+            "nullable": true
+          },
+          "raw_item_title": {
+            "type": "string",
+            "description": "此 link 來源 raw_item 的標題（若有）",
+            "nullable": true
+          },
+          "sibling_episodes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "同一 raw_item 下其他 episode_no（不含當前 conflict 的 episode），\n用於前端提示「此來源同時涵蓋哪些其他集數」（batch raw_item 才會非空）"
           },
           "source_hash": {
             "type": "string"
@@ -1446,6 +1466,59 @@
           "chosen_link_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ResolveByRawItemRequest": {
+        "type": "object",
+        "required": [
+          "anime_id",
+          "group_id",
+          "chosen_raw_item_id"
+        ],
+        "properties": {
+          "anime_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "chosen_raw_item_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "group_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ResolveByRawItemResponse": {
+        "type": "object",
+        "required": [
+          "resolved_conflicts",
+          "skipped_conflicts",
+          "dispatched_link_ids"
+        ],
+        "properties": {
+          "dispatched_link_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "resolved_conflicts": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_conflicts": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         }
       },

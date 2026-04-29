@@ -5,8 +5,8 @@ use crate::dto::{
     AnimeLinkRichResponse, AnimeRichResponse, AnimeRequest, AnimeResponse, AnimeWorkRequest,
     AnimeWorkResponse, AnimeWorksListResponse, ConflictingLinkResponse, DashboardStats,
     DownloadInfo, FilterRuleRequest, FilterRuleResponse, ResolveAnimeLinkConflictRequest,
-    SeasonInfo, SeasonRequest, SeasonResponse, ServiceInfo, SubtitleGroupRequest,
-    SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+    ResolveByRawItemRequest, ResolveByRawItemResponse, SeasonInfo, SeasonRequest, SeasonResponse,
+    ServiceInfo, SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
 };
 
 #[derive(OpenApi)]
@@ -61,6 +61,8 @@ use crate::dto::{
         AnimeLinkConflictLink,
         AnimeLinkConflictInfo,
         ResolveAnimeLinkConflictRequest,
+        ResolveByRawItemRequest,
+        ResolveByRawItemResponse,
     )),
     tags(
         (name = "AnimeWorks", description = "Anime work (franchise) management"),

@@ -4,7 +4,7 @@ use crate::schema::{anime_links, downloader_capabilities, downloads, raw_anime_i
 use chrono::Utc;
 use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Group a slice of links by URL, preserving insertion order.
 /// Each unique URL maps to all links sharing that URL.
@@ -60,6 +60,50 @@ impl DownloadDispatchService {
             .filter(anime_links::conflict_flag.eq(false))
             .load::<AnimeLink>(&mut conn)
             .map_err(|e| format!("Failed to load anime links: {}", e))?;
+
+        if links.is_empty() {
+            return Ok(DispatchResult {
+                dispatched: 0,
+                no_downloader: 0,
+                failed: 0,
+            });
+        }
+
+        // Batch-level conflict propagation:
+        // 同一個 raw_item 通常對應一個 torrent (e.g. [01-02] batch). 任何兄弟 link
+        // 仍在 conflict_flag=true 時，整批暫不派送，避免下載被衝突的 episode 檔案。
+        let raw_ids_with_conflicts: HashSet<i32> = anime_links::table
+            .filter(anime_links::conflict_flag.eq(true))
+            .filter(anime_links::link_status.eq("active"))
+            .filter(anime_links::raw_item_id.is_not_null())
+            .select(anime_links::raw_item_id.assume_not_null())
+            .distinct()
+            .load::<i32>(&mut conn)
+            .map_err(|e| format!("Failed to query conflicting raw_item_ids: {}", e))?
+            .into_iter()
+            .collect();
+
+        let links: Vec<AnimeLink> = if raw_ids_with_conflicts.is_empty() {
+            links
+        } else {
+            let before = links.len();
+            let filtered: Vec<AnimeLink> = links
+                .into_iter()
+                .filter(|l| {
+                    l.raw_item_id
+                        .map(|r| !raw_ids_with_conflicts.contains(&r))
+                        .unwrap_or(true)
+                })
+                .collect();
+            let skipped = before - filtered.len();
+            if skipped > 0 {
+                tracing::info!(
+                    "dispatch: skipping {} links from raw_items with sibling conflicts",
+                    skipped
+                );
+            }
+            filtered
+        };
 
         if links.is_empty() {
             return Ok(DispatchResult {
