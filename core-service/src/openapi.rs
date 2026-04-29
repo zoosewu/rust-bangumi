@@ -5,8 +5,9 @@ use crate::dto::{
     AnimeLinkRichResponse, AnimeRichResponse, AnimeRequest, AnimeResponse, AnimeWorkRequest,
     AnimeWorkResponse, AnimeWorksListResponse, ConflictingLinkResponse, DashboardStats,
     DownloadInfo, FilterRuleRequest, FilterRuleResponse, ResolveAnimeLinkConflictRequest,
-    ResolveByRawItemRequest, ResolveByRawItemResponse, SeasonInfo, SeasonRequest, SeasonResponse,
-    ServiceInfo, SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+    ResolveByRawItemRequest, ResolveByRawItemResponse, RetryBulkRequest, RetryOneResponse,
+    RetryResultResponse, SeasonInfo, SeasonRequest, SeasonResponse, ServiceInfo,
+    SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
 };
 
 #[derive(OpenApi)]
@@ -33,6 +34,8 @@ use crate::dto::{
         crate::handlers::links::get_anime_links,
         crate::handlers::links::list_conflicting_links,
         crate::handlers::downloads::list_downloads,
+        crate::handlers::downloads::retry_one,
+        crate::handlers::downloads::retry_bulk,
         crate::handlers::dashboard::get_dashboard_stats,
     ),
     components(schemas(
@@ -63,6 +66,9 @@ use crate::dto::{
         ResolveAnimeLinkConflictRequest,
         ResolveByRawItemRequest,
         ResolveByRawItemResponse,
+        RetryBulkRequest,
+        RetryOneResponse,
+        RetryResultResponse,
     )),
     tags(
         (name = "AnimeWorks", description = "Anime work (franchise) management"),

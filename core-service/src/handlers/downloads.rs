@@ -128,6 +128,20 @@ fn into_response(r: RetryResult) -> RetryResultResponse {
 }
 
 /// POST /downloads/:download_id/retry — manually retry a single download.
+#[utoipa::path(
+    post,
+    path = "/api/core/downloads/{download_id}/retry",
+    tag = "Downloads",
+    params(
+        ("download_id" = i32, Path, description = "Download ID to retry")
+    ),
+    responses(
+        (status = 200, description = "Success", body = RetryOneResponse),
+        (status = 404, description = "Download not found"),
+        (status = 409, description = "Download status not retryable"),
+        (status = 500, description = "Dispatch failed")
+    )
+)]
 pub async fn retry_one(
     State(state): State<AppState>,
     Path(download_id): Path<i32>,
@@ -250,6 +264,16 @@ pub async fn retry_one(
 }
 
 /// POST /downloads/retry — bulk retry, optional filters in the body.
+#[utoipa::path(
+    post,
+    path = "/api/core/downloads/retry",
+    tag = "Downloads",
+    request_body = RetryBulkRequest,
+    responses(
+        (status = 200, description = "Success", body = RetryResultResponse),
+        (status = 500, description = "Dispatch failed")
+    )
+)]
 pub async fn retry_bulk(
     State(state): State<AppState>,
     Json(payload): Json<RetryBulkRequest>,

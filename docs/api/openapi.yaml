@@ -1267,6 +1267,59 @@ paths:
                 items:
                   $ref: '#/components/schemas/DownloadRow'
 
+  /downloads/{download_id}/retry:
+    post:
+      tags: [Downloads]
+      summary: 手動重試單筆下載
+      description: |
+        對指定 download_id 重試。會沿用 dispatch_new_links 流程，每次重試 INSERT
+        新的 download row，保留歷史。可重試 status：failed、downloader_error、
+        no_downloader、cancelled。
+      parameters:
+        - name: download_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 派送成功（status 為 dispatched 或 no_downloader）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryOneResponse'
+        '404':
+          description: download 不存在
+        '409':
+          description: download 狀態不可重試 / link 被 filter / conflict 擋住
+        '500':
+          description: dispatch 失敗
+
+  /downloads/retry:
+    post:
+      tags: [Downloads]
+      summary: 批次重試下載
+      description: |
+        批次重試符合 retryable status 的下載。可選的 download_ids / status /
+        downloader_type 篩選欄位以 AND 結合，並一律加上 RETRYABLE_STATUSES gate。
+        Response 同時報 download 級（downloads_matched / not_retryable）與
+        link 級（unique_links / dispatched / no_downloader / conflict_or_filtered / failed）統計。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryBulkRequest'
+      responses:
+        '200':
+          description: 處理成功（即使 0 筆命中也會回 200）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetryResultResponse'
+        '500':
+          description: dispatch 失敗
+
   # ============ Links (additional) ============
   /links/conflicts:
     get:
@@ -2984,6 +3037,67 @@ components:
         torrent_hash:
           type: string
           nullable: true
+
+    # ============ Manual Download Retry ============
+    RetryBulkRequest:
+      type: object
+      properties:
+        download_ids:
+          type: array
+          items:
+            type: integer
+          nullable: true
+        status:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: 限定 status 子集（仍受 RETRYABLE_STATUSES 約束）
+        downloader_type:
+          type: string
+          nullable: true
+
+    RetryOneResponse:
+      type: object
+      required: [download_id, link_id, status]
+      properties:
+        download_id:
+          type: integer
+        link_id:
+          type: integer
+        status:
+          type: string
+          enum: [dispatched, no_downloader]
+
+    RetryResultResponse:
+      type: object
+      required:
+        - downloads_matched
+        - not_retryable
+        - unique_links
+        - dispatched
+        - no_downloader
+        - conflict_or_filtered
+        - failed
+      properties:
+        downloads_matched:
+          type: integer
+          description: 篩選命中的 download 筆數
+        not_retryable:
+          type: integer
+          description: 命中後被擋掉的（status 不在 retryable）
+        unique_links:
+          type: integer
+          description: dedup 後送進 dispatch 的 link 數
+        dispatched:
+          type: integer
+        no_downloader:
+          type: integer
+        conflict_or_filtered:
+          type: integer
+          description: 被 conflict / filter / resolved / 批次傳播擋掉
+        failed:
+          type: integer
 
     # ============ Webhooks ============
     WebhookResponse:
