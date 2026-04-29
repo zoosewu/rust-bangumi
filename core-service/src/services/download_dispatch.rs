@@ -30,6 +30,17 @@ fn group_links_by_url<'a>(links: &[&'a AnimeLink]) -> Vec<(String, Vec<&'a Anime
     groups
 }
 
+/// Split a slice of downloads into (retryable references, count of non-retryable).
+/// Pure function — no DB / IO.
+pub fn partition_retryable(downloads: &[Download]) -> (Vec<&Download>, usize) {
+    let retryable: Vec<&Download> = downloads
+        .iter()
+        .filter(|d| RETRYABLE_STATUSES.contains(&d.status.as_str()))
+        .collect();
+    let not_retryable = downloads.len() - retryable.len();
+    (retryable, not_retryable)
+}
+
 pub struct DownloadDispatchService {
     db_pool: DbPool,
     http_client: reqwest::Client,
@@ -527,7 +538,7 @@ impl DownloadDispatchService {
 #[cfg(test)]
 mod tests {
     use super::group_links_by_url;
-    use crate::models::AnimeLink;
+    use crate::models::{AnimeLink, Download};
     use chrono::Utc;
 
     fn make_link(id: i32, url: &str) -> AnimeLink {
@@ -546,6 +557,28 @@ mod tests {
             download_type: Some("magnet".to_string()),
             conflict_flag: false,
             link_status: "active".to_string(),
+        }
+    }
+
+    fn make_download(download_id: i32, link_id: i32, status: &str) -> Download {
+        let now = Utc::now().naive_utc();
+        Download {
+            download_id,
+            link_id,
+            downloader_type: "magnet".to_string(),
+            status: status.to_string(),
+            progress: None,
+            downloaded_bytes: None,
+            total_bytes: None,
+            error_message: None,
+            created_at: now,
+            updated_at: now,
+            module_id: None,
+            torrent_hash: None,
+            file_path: None,
+            sync_retry_count: 0,
+            video_file: None,
+            subtitle_files: None,
         }
     }
 
@@ -574,5 +607,39 @@ mod tests {
         let groups = group_links_by_url(&refs);
         assert_eq!(groups[0].0, "magnet:?xt=urn:btih:AAA");
         assert_eq!(groups[1].0, "magnet:?xt=urn:btih:BBB");
+    }
+
+    #[test]
+    fn partition_retryable_keeps_retryable_statuses() {
+        let downloads = vec![
+            make_download(1, 10, "failed"),
+            make_download(2, 20, "cancelled"),
+            make_download(3, 30, "no_downloader"),
+            make_download(4, 40, "downloader_error"),
+        ];
+        let (retryable, not_retryable) = super::partition_retryable(&downloads);
+        assert_eq!(retryable.len(), 4);
+        assert_eq!(not_retryable, 0);
+    }
+
+    #[test]
+    fn partition_retryable_excludes_active_statuses() {
+        let downloads = vec![
+            make_download(1, 10, "downloading"),
+            make_download(2, 20, "completed"),
+            make_download(3, 30, "syncing"),
+            make_download(4, 40, "failed"),
+        ];
+        let (retryable, not_retryable) = super::partition_retryable(&downloads);
+        assert_eq!(retryable.len(), 1);
+        assert_eq!(retryable[0].download_id, 4);
+        assert_eq!(not_retryable, 3);
+    }
+
+    #[test]
+    fn partition_retryable_handles_empty_input() {
+        let (retryable, not_retryable) = super::partition_retryable(&[]);
+        assert!(retryable.is_empty());
+        assert_eq!(not_retryable, 0);
     }
 }
