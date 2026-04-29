@@ -52,6 +52,17 @@ pub struct DispatchResult {
     pub failed: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct RetryResult {
+    pub downloads_matched: usize,
+    pub not_retryable: usize,
+    pub unique_links: usize,
+    pub dispatched: usize,
+    pub no_downloader: usize,
+    pub conflict_or_filtered: usize,
+    pub failed: usize,
+}
+
 impl DownloadDispatchService {
     pub fn new(db_pool: DbPool) -> Self {
         Self {
@@ -418,6 +429,100 @@ impl DownloadDispatchService {
         );
 
         Ok(result.dispatched)
+    }
+
+    /// Manually retry the given downloads.
+    ///
+    /// Loads each download, keeps only those in `RETRYABLE_STATUSES`, dedups
+    /// link_ids, and calls `dispatch_new_links`. The existing dispatch logic
+    /// inserts a NEW download row per accepted link, preserving history.
+    ///
+    /// Counts in `RetryResult`:
+    /// - `downloads_matched`: downloads found by id (input length minus missing)
+    /// - `not_retryable`: matched downloads whose status is not retryable
+    /// - `unique_links`: deduplicated link_ids fed into dispatch
+    /// - `dispatched / no_downloader / failed`: forwarded from `DispatchResult`
+    /// - `conflict_or_filtered`: `unique_links - dispatched - no_downloader - failed`
+    ///   (links dropped by dispatch's conflict / filter / link_status / batch-conflict gates)
+    pub async fn manual_retry(
+        &self,
+        download_ids: Vec<i32>,
+    ) -> Result<RetryResult, String> {
+        if download_ids.is_empty() {
+            return Ok(RetryResult {
+                downloads_matched: 0,
+                not_retryable: 0,
+                unique_links: 0,
+                dispatched: 0,
+                no_downloader: 0,
+                conflict_or_filtered: 0,
+                failed: 0,
+            });
+        }
+
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+        let matched: Vec<Download> = downloads::table
+            .filter(downloads::download_id.eq_any(&download_ids))
+            .load::<Download>(&mut conn)
+            .map_err(|e| format!("Failed to load downloads: {}", e))?;
+
+        let downloads_matched = matched.len();
+        let (retryable, not_retryable) = partition_retryable(&matched);
+
+        let mut seen: HashSet<i32> = HashSet::new();
+        let unique_link_ids: Vec<i32> = retryable
+            .iter()
+            .filter_map(|d| if seen.insert(d.link_id) { Some(d.link_id) } else { None })
+            .collect();
+        let unique_links = unique_link_ids.len();
+
+        if unique_link_ids.is_empty() {
+            return Ok(RetryResult {
+                downloads_matched,
+                not_retryable,
+                unique_links: 0,
+                dispatched: 0,
+                no_downloader: 0,
+                conflict_or_filtered: 0,
+                failed: 0,
+            });
+        }
+
+        // Drop the connection before awaiting an async call that may need its own conn.
+        drop(conn);
+
+        let dispatch_result = self.dispatch_new_links(unique_link_ids).await?;
+
+        let DispatchResult {
+            dispatched,
+            no_downloader,
+            failed,
+        } = dispatch_result;
+
+        let accounted = dispatched + no_downloader + failed;
+        let conflict_or_filtered = unique_links.saturating_sub(accounted);
+
+        tracing::info!(
+            "manual_retry: matched={}, not_retryable={}, unique_links={}, dispatched={}, no_downloader={}, conflict_or_filtered={}, failed={}",
+            downloads_matched,
+            not_retryable,
+            unique_links,
+            dispatched,
+            no_downloader,
+            conflict_or_filtered,
+            failed
+        );
+
+        Ok(RetryResult {
+            downloads_matched,
+            not_retryable,
+            unique_links,
+            dispatched,
+            no_downloader,
+            conflict_or_filtered,
+            failed,
+        })
     }
 
     /// Retry dispatching links whose downloads ended in `failed` or `downloader_error`.
