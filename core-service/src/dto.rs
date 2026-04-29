@@ -313,6 +313,40 @@ pub struct ResolveByRawItemResponse {
     pub dispatched_link_ids: Vec<i32>,
 }
 
+// ============ Manual Download Retry DTOs ============
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RetryBulkRequest {
+    /// 指定要重試的 download_ids；不傳則涵蓋所有 retryable downloads
+    #[serde(default)]
+    pub download_ids: Option<Vec<i32>>,
+    /// 額外限定 status 子集（仍會卡在 RETRYABLE_STATUSES 之內）
+    #[serde(default)]
+    pub status: Option<Vec<String>>,
+    /// 額外限定 downloader_type
+    #[serde(default)]
+    pub downloader_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone, ToSchema)]
+pub struct RetryResultResponse {
+    pub downloads_matched: usize,
+    pub not_retryable: usize,
+    pub unique_links: usize,
+    pub dispatched: usize,
+    pub no_downloader: usize,
+    pub conflict_or_filtered: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Serialize, Clone, ToSchema)]
+pub struct RetryOneResponse {
+    pub download_id: i32,
+    pub link_id: i32,
+    /// "dispatched" | "no_downloader"
+    pub status: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
