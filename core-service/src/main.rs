@@ -182,6 +182,11 @@ async fn main() -> anyhow::Result<()> {
         )
         // 下載記錄
         .route("/downloads", get(handlers::downloads::list_downloads))
+        .route("/downloads/retry", post(handlers::downloads::retry_bulk))
+        .route(
+            "/downloads/:download_id/retry",
+            post(handlers::downloads::retry_one),
+        )
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
         .route("/links/conflicts", get(handlers::links::list_conflicting_links))
