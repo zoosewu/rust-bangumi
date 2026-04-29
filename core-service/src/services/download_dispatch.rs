@@ -6,6 +6,16 @@ use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
 use std::collections::{HashMap, HashSet};
 
+/// Download statuses that allow re-dispatching the link.
+/// `dispatch_new_links` treats other statuses as "active" and skips the link.
+/// Manual retry uses the same set as the input gate.
+pub const RETRYABLE_STATUSES: &[&str] = &[
+    "cancelled",
+    "failed",
+    "no_downloader",
+    "downloader_error",
+];
+
 /// Group a slice of links by URL, preserving insertion order.
 /// Each unique URL maps to all links sharing that URL.
 fn group_links_by_url<'a>(links: &[&'a AnimeLink]) -> Vec<(String, Vec<&'a AnimeLink>)> {
@@ -115,11 +125,10 @@ impl DownloadDispatchService {
 
         // Skip links that already have a non-terminal download.
         // Only these terminal-failure statuses allow re-dispatch:
-        let redispatchable = &["cancelled", "failed", "no_downloader"];
         let candidate_link_ids: Vec<i32> = links.iter().map(|l| l.link_id).collect();
         let links_with_active_downloads: Vec<i32> = downloads::table
             .filter(downloads::link_id.eq_any(&candidate_link_ids))
-            .filter(downloads::status.ne_all(redispatchable))
+            .filter(downloads::status.ne_all(RETRYABLE_STATUSES))
             .select(downloads::link_id)
             .distinct()
             .load::<i32>(&mut conn)
