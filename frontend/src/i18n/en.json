@@ -46,6 +46,7 @@
     "order": "Order",
     "pattern": "Pattern",
     "actions": "Actions",
+    "error": "Error",
     "allStatuses": "All Statuses",
     "none": "None",
     "search": "Search",
@@ -174,7 +175,11 @@
     "created": "Created",
     "download": "Download",
     "filterStatus": "Filter Status",
-    "conflict": "Conflict"
+    "conflict": "Conflict",
+    "retry": "Retry",
+    "retrySuccess": "Download re-dispatched",
+    "retryNoDownloader": "Queued, but no downloader available",
+    "retryFailed": "Retry failed"
   },
   "downloads": {
     "title": "Downloads",
@@ -182,7 +187,13 @@
     "progress": "Progress",
     "size": "Size",
     "downloaderType": "Type",
-    "updated": "Updated"
+    "updated": "Updated",
+    "retry": "Retry",
+    "retryAllFailed": "Retry all failed",
+    "retrySuccess": "Download re-dispatched",
+    "retryNoDownloader": "Queued, but no downloader available",
+    "retryFailed": "Retry failed",
+    "bulkRetrySummary": "Dispatched {{dispatched}} / {{matched}} downloads"
   },
   "filter": {
     "addRule": "Add",

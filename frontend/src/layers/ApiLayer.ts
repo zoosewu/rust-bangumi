@@ -12,7 +12,7 @@ import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { ServiceModule } from "@/schemas/service-module"
-import { RawAnimeItem, DownloadRow } from "@/schemas/download"
+import { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
 import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
 
@@ -149,6 +149,12 @@ const makeCoreApi = Effect.gen(function* () {
         Schema.Array(DownloadRow),
       )
     },
+
+    retryDownload: (downloadId) =>
+      postJson(`/api/core/downloads/${downloadId}/retry`, {}, RetryOneResponse),
+
+    retryBulkDownloads: (req) =>
+      postJson("/api/core/downloads/retry", req, RetryResultResponse),
 
     getHealth: fetchJson(
       HttpClientRequest.get("/api/core/health"),

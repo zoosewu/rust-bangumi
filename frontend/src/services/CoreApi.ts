@@ -6,7 +6,7 @@ import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
 import type { ServiceModule } from "@/schemas/service-module"
-import type { RawAnimeItem, DownloadRow } from "@/schemas/download"
+import type { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse, RetryBulkRequest } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
 import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
 
@@ -53,6 +53,8 @@ export class CoreApi extends Context.Tag("CoreApi")<
       limit?: number
       offset?: number
     }) => Effect.Effect<readonly DownloadRow[]>
+    readonly retryDownload: (downloadId: number) => Effect.Effect<RetryOneResponse>
+    readonly retryBulkDownloads: (req: RetryBulkRequest) => Effect.Effect<RetryResultResponse>
     readonly getHealth: Effect.Effect<{ status: string; service: string }>
     readonly getSubtitleGroups: Effect.Effect<readonly SubtitleGroup[]>
     readonly createSubtitleGroup: (name: string) => Effect.Effect<SubtitleGroup>

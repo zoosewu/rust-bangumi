@@ -46,6 +46,7 @@
     "order": "順序",
     "pattern": "パターン",
     "actions": "操作",
+    "error": "エラー",
     "allStatuses": "全ステータス",
     "none": "なし",
     "search": "検索",
@@ -174,7 +175,11 @@
     "created": "作成日時",
     "download": "ダウンロード",
     "filterStatus": "フィルター状態",
-    "conflict": "コンフリクト"
+    "conflict": "コンフリクト",
+    "retry": "再試行",
+    "retrySuccess": "ダウンロードを再送信しました",
+    "retryNoDownloader": "タスクは作成されましたが、利用可能なダウンローダーがありません",
+    "retryFailed": "再試行に失敗"
   },
   "downloads": {
     "title": "ダウンロード",
@@ -182,7 +187,13 @@
     "progress": "進捗",
     "size": "サイズ",
     "downloaderType": "タイプ",
-    "updated": "更新日時"
+    "updated": "更新日時",
+    "retry": "再試行",
+    "retryAllFailed": "失敗をすべて再試行",
+    "retrySuccess": "ダウンロードを再送信しました",
+    "retryNoDownloader": "タスクは作成されましたが、利用可能なダウンローダーがありません",
+    "retryFailed": "再試行に失敗",
+    "bulkRetrySummary": "{{dispatched}} / {{matched}} 件を再送信"
   },
   "filter": {
     "addRule": "追加",

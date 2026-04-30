@@ -2898,6 +2898,29 @@ components:
           nullable: true
         created_at:
           type: string
+        download:
+          $ref: '#/components/schemas/RawItemDownloadInfo'
+          nullable: true
+        filter_passed:
+          type: boolean
+          nullable: true
+        conflict_flag:
+          type: boolean
+
+    RawItemDownloadInfo:
+      type: object
+      required:
+        - download_id
+        - status
+      properties:
+        download_id:
+          type: integer
+        status:
+          type: string
+        progress:
+          type: number
+          format: float
+          nullable: true
 
     ReparseResponse:
       type: object

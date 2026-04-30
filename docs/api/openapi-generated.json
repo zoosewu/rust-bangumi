@@ -400,6 +400,82 @@
         }
       }
     },
+    "/api/core/downloads/retry": {
+      "post": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "POST /downloads/retry — bulk retry, optional filters in the body.",
+        "operationId": "retry_bulk",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryResultResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Dispatch failed"
+          }
+        }
+      }
+    },
+    "/api/core/downloads/{download_id}/retry": {
+      "post": {
+        "tags": [
+          "Downloads"
+        ],
+        "summary": "POST /downloads/:download_id/retry — manually retry a single download.",
+        "operationId": "retry_one",
+        "parameters": [
+          {
+            "name": "download_id",
+            "in": "path",
+            "description": "Download ID to retry",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryOneResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Download not found"
+          },
+          "409": {
+            "description": "Download status not retryable"
+          },
+          "500": {
+            "description": "Dispatch failed"
+          }
+        }
+      }
+    },
     "/api/core/filters": {
       "get": {
         "tags": [
@@ -1519,6 +1595,97 @@
               "type": "integer",
               "format": "int32"
             }
+          }
+        }
+      },
+      "RetryBulkRequest": {
+        "type": "object",
+        "properties": {
+          "download_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "指定要重試的 download_ids；不傳則涵蓋所有 retryable downloads",
+            "nullable": true
+          },
+          "downloader_type": {
+            "type": "string",
+            "description": "額外限定 downloader_type",
+            "nullable": true
+          },
+          "status": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "額外限定 status 子集（仍會卡在 RETRYABLE_STATUSES 之內）",
+            "nullable": true
+          }
+        }
+      },
+      "RetryOneResponse": {
+        "type": "object",
+        "required": [
+          "download_id",
+          "link_id",
+          "status"
+        ],
+        "properties": {
+          "download_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "link_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string",
+            "description": "\"dispatched\" | \"no_downloader\""
+          }
+        }
+      },
+      "RetryResultResponse": {
+        "type": "object",
+        "required": [
+          "downloads_matched",
+          "not_retryable",
+          "unique_links",
+          "dispatched",
+          "no_downloader",
+          "conflict_or_filtered",
+          "failed"
+        ],
+        "properties": {
+          "conflict_or_filtered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "dispatched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "downloads_matched": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "no_downloader": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "not_retryable": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unique_links": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },

@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
+import { toast } from "sonner"
+import { RotateCw } from "lucide-react"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
+import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
@@ -24,6 +27,7 @@ import { formatDateTime } from "@/lib/datetime"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
+const RETRYABLE_DOWNLOAD = new Set(["failed", "downloader_error", "no_downloader", "cancelled"])
 
 export default function RawItemsPage() {
   const { t } = useTranslation()
@@ -32,6 +36,7 @@ export default function RawItemsPage() {
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
   const [rawSearch, setRawSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -52,8 +57,29 @@ export default function RawItemsPage() {
           search: debouncedSearch || undefined,
         })
       }),
-    [status, offset, debouncedSearch],
+    [status, offset, debouncedSearch, refreshKey],
   )
+
+  const retryOne = useEffectMutation((id: number) =>
+    Effect.gen(function* () {
+      const api = yield* CoreApi
+      return yield* api.retryDownload(id)
+    }),
+  )
+
+  const handleRetry = async (downloadId: number) => {
+    try {
+      const r = await retryOne.mutate(downloadId)
+      if (r.status === "dispatched") {
+        toast.success(t("rawItems.retrySuccess"))
+      } else {
+        toast.warning(t("rawItems.retryNoDownloader"))
+      }
+      setRefreshKey((k) => k + 1)
+    } catch {
+      toast.error(t("rawItems.retryFailed"))
+    }
+  }
 
   const { data: subscriptions } = useEffectQuery(
     () =>
@@ -118,9 +144,29 @@ export default function RawItemsPage() {
       key: "download",
       header: t("rawItems.download"),
       render: (item) => {
-        const dl = item.download as { status: string; progress: number | null } | null | undefined
+        const dl = item.download as { download_id: number; status: string; progress: number | null } | null | undefined
         if (!dl) return "-"
-        return <DownloadBadge status={dl.status} progress={dl.progress} />
+        const canRetry = RETRYABLE_DOWNLOAD.has(dl.status)
+        return (
+          <div className="flex items-center gap-2">
+            <DownloadBadge status={dl.status} progress={dl.progress} />
+            {canRetry && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2"
+                disabled={retryOne.isLoading}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleRetry(dl.download_id)
+                }}
+              >
+                <RotateCw className="h-3 w-3 mr-1" />
+                {t("rawItems.retry")}
+              </Button>
+            )}
+          </div>
+        )
       },
     },
     {

@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 
 export const RawItemDownloadInfo = Schema.Struct({
+  download_id: Schema.Number,
   status: Schema.String,
   progress: Schema.NullOr(Schema.Number),
 })
@@ -22,6 +23,30 @@ export const RawAnimeItem = Schema.Struct({
   conflict_flag: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 })
 export type RawAnimeItem = typeof RawAnimeItem.Type
+
+export const RetryOneResponse = Schema.Struct({
+  download_id: Schema.Number,
+  link_id: Schema.Number,
+  status: Schema.String,
+})
+export type RetryOneResponse = typeof RetryOneResponse.Type
+
+export const RetryResultResponse = Schema.Struct({
+  downloads_matched: Schema.Number,
+  not_retryable: Schema.Number,
+  unique_links: Schema.Number,
+  dispatched: Schema.Number,
+  no_downloader: Schema.Number,
+  conflict_or_filtered: Schema.Number,
+  failed: Schema.Number,
+})
+export type RetryResultResponse = typeof RetryResultResponse.Type
+
+export interface RetryBulkRequest {
+  download_ids?: readonly number[]
+  status?: string
+  downloader_type?: string
+}
 
 export const DownloadRow = Schema.Struct({
   download_id: Schema.Number,

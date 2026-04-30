@@ -29,6 +29,7 @@ pub struct ListRawItemsQuery {
 
 #[derive(Debug, Serialize)]
 pub struct RawItemDownloadInfo {
+    pub download_id: i32,
     pub status: String,
     pub progress: Option<f32>,
 }
@@ -78,29 +79,31 @@ fn load_download_info(
     conn: &mut diesel::PgConnection,
     item_ids: &[i32],
 ) -> Result<HashMap<i32, RawItemDownloadInfo>, diesel::result::Error> {
-    let rows: Vec<(Option<i32>, String, Option<f32>)> = anime_links::table
+    let rows: Vec<(Option<i32>, i32, String, Option<f32>)> = anime_links::table
         .inner_join(downloads::table.on(downloads::link_id.eq(anime_links::link_id)))
         .filter(anime_links::raw_item_id.eq_any(item_ids))
         .select((
             anime_links::raw_item_id,
+            downloads::download_id,
             downloads::status,
             downloads::progress,
         ))
         .load(conn)?;
 
     let mut map = HashMap::new();
-    for (raw_item_id, status, progress) in rows {
+    for (raw_item_id, download_id, status, progress) in rows {
         if let Some(rid) = raw_item_id {
             // If multiple downloads exist for same item, prefer non-pending / latest
             map.entry(rid)
                 .and_modify(|existing: &mut RawItemDownloadInfo| {
                     // Keep the "most progressed" status
                     if status_priority(&status) > status_priority(&existing.status) {
+                        existing.download_id = download_id;
                         existing.status = status.clone();
                         existing.progress = progress;
                     }
                 })
-                .or_insert(RawItemDownloadInfo { status, progress });
+                .or_insert(RawItemDownloadInfo { download_id, status, progress });
         }
     }
     Ok(map)
@@ -189,6 +192,7 @@ pub async fn list_raw_items(
             .into_iter()
             .map(|item| {
                 let dl = dl_map.get(&item.item_id).map(|d| RawItemDownloadInfo {
+                    download_id: d.download_id,
                     status: d.status.clone(),
                     progress: d.progress,
                 });
@@ -217,6 +221,7 @@ pub async fn get_raw_item(
     let dl_map = load_download_info(&mut conn, &[item_id])
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let dl = dl_map.get(&item_id).map(|d| RawItemDownloadInfo {
+        download_id: d.download_id,
         status: d.status.clone(),
         progress: d.progress,
     });

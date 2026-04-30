@@ -46,6 +46,7 @@
     "order": "順序",
     "pattern": "模式",
     "actions": "操作",
+    "error": "錯誤",
     "allStatuses": "所有狀態",
     "none": "無",
     "search": "搜尋",
@@ -174,7 +175,11 @@
     "created": "建立時間",
     "download": "下載",
     "filterStatus": "篩選狀態",
-    "conflict": "衝突"
+    "conflict": "衝突",
+    "retry": "重試",
+    "retrySuccess": "已重新派送下載",
+    "retryNoDownloader": "已建立任務，但無可用下載器",
+    "retryFailed": "重試失敗"
   },
   "downloads": {
     "title": "下載",
@@ -182,7 +187,13 @@
     "progress": "進度",
     "size": "大小",
     "downloaderType": "類型",
-    "updated": "更新時間"
+    "updated": "更新時間",
+    "retry": "重試",
+    "retryAllFailed": "重試所有失敗",
+    "retrySuccess": "已重新派送下載",
+    "retryNoDownloader": "已建立任務，但無可用下載器",
+    "retryFailed": "重試失敗",
+    "bulkRetrySummary": "已派送 {{dispatched}} / {{matched}} 筆下載"
   },
   "filter": {
     "addRule": "新增",
