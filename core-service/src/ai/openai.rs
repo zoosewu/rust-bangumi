@@ -57,11 +57,16 @@ impl OpenAiClient {
             .await?;
 
         if !resp.status().is_success() {
+            let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
-            // 偵測 rate limit 錯誤，格式化為可識別前綴（含 retry 秒數）
+
+            // 偵測 OpenAI 風格 rate limit JSON
             if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&text) {
-                if err_json.pointer("/error/code").and_then(|v| v.as_str()) == Some("rate_limit_exceeded") {
-                    let msg = err_json.pointer("/error/message")
+                if err_json.pointer("/error/code").and_then(|v| v.as_str())
+                    == Some("rate_limit_exceeded")
+                {
+                    let msg = err_json
+                        .pointer("/error/message")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Rate limit exceeded");
                     let retry_secs = extract_retry_after_secs(msg);
@@ -69,10 +74,17 @@ impl OpenAiClient {
                         Some(s) => format!("[rate_limit_exceeded:{}]", s),
                         None => "[rate_limit_exceeded]".to_string(),
                     };
-                    return Err(AiError::ApiError(format!("{} {}", prefix, msg)));
+                    return Err(AiError::ProviderUnavailable(format!("{} {}", prefix, msg)));
                 }
             }
-            return Err(AiError::ApiError(text));
+
+            // HTTP 狀態碼分類：5xx 與 429 → ProviderUnavailable（可 fallback）
+            // 4xx 其餘（400/401/403/404 等）→ ApiError（不 fallback）
+            return if status.is_server_error() || status.as_u16() == 429 {
+                Err(AiError::ProviderUnavailable(format!("HTTP {}: {}", status, text)))
+            } else {
+                Err(AiError::ApiError(format!("HTTP {}: {}", status, text)))
+            };
         }
 
         let chat: ChatResponse = resp.json().await?;
@@ -160,4 +172,20 @@ fn extract_retry_after_secs(msg: &str) -> Option<u32> {
     let num_str = rest[..end].trim();
     let secs: f64 = num_str.parse().ok()?;
     Some(secs.ceil() as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_retry_seconds() {
+        let msg = "Rate limit. Please try again in 28.5675s. Try later.";
+        assert_eq!(extract_retry_after_secs(msg), Some(29));
+    }
+
+    #[test]
+    fn no_retry_marker_returns_none() {
+        assert_eq!(extract_retry_after_secs("nothing here"), None);
+    }
 }
