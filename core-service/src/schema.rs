@@ -27,15 +27,19 @@ diesel::table! {
 }
 
 diesel::table! {
-    ai_settings (id) {
+    ai_providers (id) {
         id -> Int4,
+        name -> Text,
+        provider_kind -> Text,
         base_url -> Text,
         api_key -> Text,
         model_name -> Text,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
         max_tokens -> Int4,
         response_format_mode -> Text,
+        is_enabled -> Bool,
+        priority -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -378,4 +382,4 @@ diesel::joinable!(subscriptions -> service_modules (preferred_downloader_id));
 diesel::joinable!(title_parsers -> pending_ai_results (pending_result_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    ai_prompt_settings,ai_settings,anime_cover_images,anime_link_conflicts,anime_links,anime_works,animes,cron_logs,downloader_capabilities,downloads,filter_rules,pending_ai_results,raw_anime_items,seasons,service_modules,subscription_conflicts,subscriptions,subtitle_groups,title_parsers,webhooks,);
+    ai_prompt_settings,ai_providers,anime_cover_images,anime_link_conflicts,anime_links,anime_works,animes,cron_logs,downloader_capabilities,downloads,filter_rules,pending_ai_results,raw_anime_items,seasons,service_modules,subscription_conflicts,subscriptions,subtitle_groups,title_parsers,webhooks,);
