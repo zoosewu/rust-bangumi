@@ -1,3 +1,4 @@
+pub mod chain;
 pub mod client;
 pub mod factory;
 pub mod filter_generator;
@@ -5,6 +6,7 @@ pub mod openai;
 pub mod parser_generator;
 pub mod prompts;
 
+pub use chain::{build_ai_chain, AiProviderChain, AttemptRecord};
 pub use client::{AiClient, AiError};
 pub use openai::OpenAiClient;
 
