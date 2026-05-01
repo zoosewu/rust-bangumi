@@ -680,30 +680,52 @@ pub struct NewAnimeCoverImage {
     pub created_at: chrono::NaiveDateTime,
 }
 
-// ============ AiSettings ============
+// ============ AiProvider ============
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[diesel(table_name = crate::schema::ai_settings)]
-pub struct AiSettings {
+#[diesel(table_name = crate::schema::ai_providers)]
+pub struct AiProvider {
     pub id: i32,
+    pub name: String,
+    pub provider_kind: String,
     pub base_url: String,
     pub api_key: String,
     pub model_name: String,
+    pub max_tokens: i32,
+    pub response_format_mode: String,
+    pub is_enabled: bool,
+    pub priority: i32,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: NaiveDateTime,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
-    pub max_tokens: i32,
-    pub response_format_mode: String,
 }
 
-#[derive(AsChangeset, Debug, serde::Deserialize)]
-#[diesel(table_name = crate::schema::ai_settings)]
-pub struct UpdateAiSettings {
+#[derive(Insertable, Debug)]
+#[diesel(table_name = crate::schema::ai_providers)]
+pub struct NewAiProvider {
+    pub name: String,
+    pub provider_kind: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub model_name: String,
+    pub max_tokens: i32,
+    pub response_format_mode: String,
+    pub is_enabled: bool,
+    pub priority: i32,
+}
+
+#[derive(AsChangeset, Debug)]
+#[diesel(table_name = crate::schema::ai_providers)]
+pub struct UpdateAiProvider {
+    pub name: Option<String>,
+    pub provider_kind: Option<String>,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub model_name: Option<String>,
     pub max_tokens: Option<i32>,
     pub response_format_mode: Option<String>,
+    pub is_enabled: Option<bool>,
+    pub priority: Option<i32>,
     pub updated_at: NaiveDateTime,
 }
 
