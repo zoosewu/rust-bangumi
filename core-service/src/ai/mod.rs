@@ -1,4 +1,5 @@
 pub mod client;
+pub mod factory;
 pub mod filter_generator;
 pub mod openai;
 pub mod parser_generator;
