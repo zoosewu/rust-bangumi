@@ -5,27 +5,11 @@ use std::sync::Arc;
 
 use crate::db::DbPool;
 use crate::models::{NewPendingAiResult, NewTitleParser, PendingAiResult, RawAnimeItem};
-use crate::schema::{ai_prompt_settings, ai_settings, pending_ai_results, raw_anime_items, title_parsers};
+use crate::schema::{ai_prompt_settings, pending_ai_results, raw_anime_items, title_parsers};
 use crate::services::title_parser::ParseStatus;
-use super::client::AiClient;
+use crate::ai::{build_ai_chain, AttemptRecord};
 use super::client::AiError;
-use super::openai::OpenAiClient;
 use super::prompts::*;
-
-/// 從 DB 取得 AiClient，如果未設定則回傳 None
-pub fn build_ai_client(conn: &mut PgConnection) -> Result<Option<OpenAiClient>, String> {
-    let settings = ai_settings::table
-        .first::<crate::models::AiSettings>(conn)
-        .optional()
-        .map_err(|e| e.to_string())?;
-
-    match settings {
-        Some(s) if !s.api_key.is_empty() && !s.base_url.is_empty() => {
-            Ok(Some(OpenAiClient::new(&s.base_url, &s.api_key, &s.model_name, s.max_tokens, &s.response_format_mode)))
-        }
-        _ => Ok(None),
-    }
-}
 
 /// 為單一動畫標題生成 parser（背景非同步觸發）
 pub async fn generate_parser_for_title(
@@ -88,24 +72,45 @@ pub async fn generate_parser_for_title(
 
     let pending_id = pending.id;
 
-    // 建立 AI client 並呼叫
-    let client_result = {
+    // 建立 AI provider chain 並呼叫（依序嘗試 enabled providers，遇 retryable 故障自動 fallback）
+    let chain_result = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
-        build_ai_client(&mut conn)
+        build_ai_chain(&mut conn)
     };
 
-    let ai_result = match client_result {
-        Ok(Some(client)) => {
+    let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
+        Ok(Some(chain)) => {
             let system = build_system_prompt(Some(&fixed_prompt));
             let user = build_parser_user_prompt(&source_title, custom_prompt.as_deref());
-            client.chat_completion_structured(&system, &user, &parser_schema()).await
+            match chain.chat_completion_structured(&system, &user, &parser_schema()).await {
+                Ok((resp, attempts)) => {
+                    if !attempts.is_empty() {
+                        tracing::info!(
+                            pending_id,
+                            attempts = ?attempts,
+                            "AI parser fell back through providers before success"
+                        );
+                    }
+                    Ok((resp, attempts))
+                }
+                Err((e, attempts)) => {
+                    if !attempts.is_empty() {
+                        tracing::warn!(
+                            pending_id,
+                            attempts = ?attempts,
+                            "AI parser fallback chain exhausted"
+                        );
+                    }
+                    Err(e)
+                }
+            }
         }
         Ok(None) => Err(AiError::NotConfigured),
         Err(e) => Err(AiError::ApiError(e)),
     };
 
     match ai_result {
-        Ok(json_str) => {
+        Ok((json_str, _attempts)) => {
             let extracted = super::extract_json(&json_str);
             tracing::debug!("AI 原始回應 pending_id={}: {:?}", pending_id, json_str);
             if extracted.is_empty() {
@@ -324,10 +329,10 @@ pub async fn generate_parsers_for_subscription_batch(
                 .map_err(|e| e.to_string())?
         };
 
-        // 建立 AI client
-        let client_opt = {
+        // 建立 AI provider chain
+        let chain_opt = {
             let mut conn = pool.get().map_err(|e| e.to_string())?;
-            match build_ai_client(&mut conn) {
+            match build_ai_chain(&mut conn) {
                 Ok(c) => c,
                 Err(e) => {
                     update_pending_failed(&pool, pending_id, &e).await.ok();
@@ -335,7 +340,7 @@ pub async fn generate_parsers_for_subscription_batch(
                 }
             }
         };
-        let client = match client_opt {
+        let chain = match chain_opt {
             Some(c) => c,
             None => {
                 update_pending_failed(&pool, pending_id, "AI 未設定").await.ok();
@@ -346,9 +351,25 @@ pub async fn generate_parsers_for_subscription_batch(
         // 呼叫 AI
         let system = build_system_prompt(Some(&fixed_prompt));
         let user = build_parser_batch_user_prompt(&unique_titles, custom_prompt.as_deref());
-        let json_str = match client.chat_completion_structured(&system, &user, &parser_schema()).await {
-            Ok(s) => s,
-            Err(e) => {
+        let json_str = match chain.chat_completion_structured(&system, &user, &parser_schema()).await {
+            Ok((s, attempts)) => {
+                if !attempts.is_empty() {
+                    tracing::info!(
+                        pending_id,
+                        attempts = ?attempts,
+                        "AI parser batch fell back through providers before success"
+                    );
+                }
+                s
+            }
+            Err((e, attempts)) => {
+                if !attempts.is_empty() {
+                    tracing::warn!(
+                        pending_id,
+                        attempts = ?attempts,
+                        "AI parser batch fallback chain exhausted"
+                    );
+                }
                 update_pending_failed(&pool, pending_id, &e.to_string()).await.ok();
                 return Err(e.to_string());
             }
