@@ -6,8 +6,8 @@ use std::sync::Arc;
 use crate::db::DbPool;
 use crate::models::{AiPromptSettings, FilterTargetType, NewFilterRule, NewPendingAiResult, PendingAiResult};
 use crate::schema::{ai_prompt_settings, filter_rules, pending_ai_results};
-use super::client::{AiClient, AiError};
-use super::parser_generator::build_ai_client;
+use super::client::AiError;
+use crate::ai::{build_ai_chain, AttemptRecord};
 use super::prompts::*;
 
 pub async fn generate_filter_for_conflict(
@@ -59,23 +59,44 @@ pub async fn generate_filter_for_conflict(
 
     let pending_id = pending.id;
 
-    let client_result = {
+    let chain_result = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
-        build_ai_client(&mut conn)
+        build_ai_chain(&mut conn)
     };
 
-    let ai_result = match client_result {
-        Ok(Some(client)) => {
+    let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
+        Ok(Some(chain)) => {
             let system = build_system_prompt(Some(&fixed_prompt));
             let user = build_filter_user_prompt(&conflict_titles, custom_prompt.as_deref());
-            client.chat_completion_structured(&system, &user, &filter_schema()).await
+            match chain.chat_completion_structured(&system, &user, &filter_schema()).await {
+                Ok((resp, attempts)) => {
+                    if !attempts.is_empty() {
+                        tracing::info!(
+                            pending_id,
+                            attempts = ?attempts,
+                            "AI filter fell back through providers before success"
+                        );
+                    }
+                    Ok((resp, attempts))
+                }
+                Err((e, attempts)) => {
+                    if !attempts.is_empty() {
+                        tracing::warn!(
+                            pending_id,
+                            attempts = ?attempts,
+                            "AI filter fallback chain exhausted"
+                        );
+                    }
+                    Err(e)
+                }
+            }
         }
         Ok(None) => Err(AiError::NotConfigured),
         Err(e) => Err(AiError::ApiError(e)),
     };
 
     match ai_result {
-        Ok(json_str) => {
+        Ok((json_str, _attempts)) => {
             let extracted = super::extract_json(&json_str);
             tracing::debug!("AI 原始回應 pending_id={}: {:?}", pending_id, json_str);
             if extracted.is_empty() {
@@ -256,19 +277,42 @@ pub async fn generate_filters_for_subscription_batch(
         let system = build_system_prompt(Some(&fixed_prompt));
         let user = build_filter_batch_user_prompt(&all_groups, custom_prompt.as_deref());
 
-        let client_result = {
+        let chain_result = {
             let mut conn = pool.get().map_err(|e| e.to_string())?;
-            build_ai_client(&mut conn)
+            build_ai_chain(&mut conn)
         };
 
-        let ai_result = match client_result {
-            Ok(Some(client)) => client.chat_completion_structured(&system, &user, &filter_schema()).await,
+        let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
+            Ok(Some(chain)) => {
+                match chain.chat_completion_structured(&system, &user, &filter_schema()).await {
+                    Ok((resp, attempts)) => {
+                        if !attempts.is_empty() {
+                            tracing::info!(
+                                pending_id,
+                                attempts = ?attempts,
+                                "AI filter batch fell back through providers before success"
+                            );
+                        }
+                        Ok((resp, attempts))
+                    }
+                    Err((e, attempts)) => {
+                        if !attempts.is_empty() {
+                            tracing::warn!(
+                                pending_id,
+                                attempts = ?attempts,
+                                "AI filter batch fallback chain exhausted"
+                            );
+                        }
+                        Err(e)
+                    }
+                }
+            }
             Ok(None) => Err(AiError::NotConfigured),
             Err(e) => Err(AiError::ApiError(e)),
         };
 
         let json_str = match ai_result {
-            Ok(s) => s,
+            Ok((s, _attempts)) => s,
             Err(e) => {
                 let _ = update_filter_pending_failed(&pool, pending_id, &e.to_string()).await;
                 break;
