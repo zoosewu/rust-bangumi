@@ -178,19 +178,19 @@ pub struct AiProvider {
 
 #[derive(Insertable, Debug)]
 #[diesel(table_name = crate::schema::ai_providers)]
-pub struct NewAiProvider<'a> {
-    pub name: &'a str,
-    pub provider_kind: &'a str,
-    pub base_url: &'a str,
-    pub api_key: &'a str,
-    pub model_name: &'a str,
+pub struct NewAiProvider {
+    pub name: String,
+    pub provider_kind: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub model_name: String,
     pub max_tokens: i32,
-    pub response_format_mode: &'a str,
+    pub response_format_mode: String,
     pub is_enabled: bool,
     pub priority: i32,
 }
 
-#[derive(AsChangeset, Debug, Default)]
+#[derive(AsChangeset, Debug)]
 #[diesel(table_name = crate::schema::ai_providers)]
 pub struct UpdateAiProvider {
     pub name: Option<String>,
@@ -264,7 +264,11 @@ pub enum AiError {
 impl AiError {
     /// 是否應該 fallback 到下一個 provider
     pub fn is_retryable(&self) -> bool {
-        matches!(self, AiError::Http(_) | AiError::ProviderUnavailable(_))
+        match self {
+            AiError::ProviderUnavailable(_) => true,
+            AiError::Http(e) => e.is_timeout() || e.is_connect() || e.is_request(),
+            _ => false,
+        }
     }
 }
 
@@ -472,8 +476,10 @@ mod tests {
 
     #[test]
     fn unknown_kind_errors() {
-        let err = build_provider(&provider("anthropic")).unwrap_err();
-        assert!(err.contains("anthropic"));
+        match build_provider(&provider("anthropic")) {
+            Err(e) => assert!(e.contains("anthropic")),
+            Ok(_) => panic!("expected error for unknown provider_kind"),
+        }
     }
 }
 ```
@@ -1005,13 +1011,13 @@ pub async fn create_ai_provider(
     let priority = next_priority.map(|v| v + 1).unwrap_or(0);
 
     let new_p = NewAiProvider {
-        name: &req.name,
-        provider_kind: &req.provider_kind,
-        base_url: &req.base_url,
-        api_key: &req.api_key,
-        model_name: &req.model_name,
+        name: req.name,
+        provider_kind: req.provider_kind,
+        base_url: req.base_url,
+        api_key: req.api_key,
+        model_name: req.model_name,
         max_tokens: req.max_tokens,
-        response_format_mode: &req.response_format_mode,
+        response_format_mode: req.response_format_mode,
         is_enabled: req.is_enabled,
         priority,
     };
