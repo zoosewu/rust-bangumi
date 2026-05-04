@@ -4,69 +4,9 @@ use diesel::prelude::*;
 use serde::Deserialize;
 
 use crate::ai::prompts::{DEFAULT_FIXED_FILTER_PROMPT, DEFAULT_FIXED_PARSER_PROMPT};
-use crate::models::{AiPromptSettings, AiSettings, UpdateAiSettings};
-use crate::schema::{ai_prompt_settings, ai_settings};
+use crate::models::AiPromptSettings;
+use crate::schema::ai_prompt_settings;
 use crate::state::AppState;
-
-// GET /ai-settings
-pub async fn get_ai_settings(
-    State(state): State<AppState>,
-) -> Result<Json<AiSettings>, (StatusCode, String)> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let settings = ai_settings::table
-        .first::<AiSettings>(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    // 遮罩 api_key
-    Ok(Json(AiSettings {
-        api_key: "•".repeat(8),
-        ..settings
-    }))
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateAiSettingsRequest {
-    pub base_url: Option<String>,
-    pub api_key: Option<String>,
-    pub model_name: Option<String>,
-    pub max_tokens: Option<i32>,
-    pub response_format_mode: Option<String>,
-}
-
-// PUT /ai-settings
-pub async fn update_ai_settings(
-    State(state): State<AppState>,
-    Json(req): Json<UpdateAiSettingsRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    // 驗證 response_format_mode
-    if let Some(ref mode) = req.response_format_mode {
-        if !matches!(mode.as_str(), "strict" | "non_strict" | "inject_schema") {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("invalid response_format_mode: {mode}"),
-            ));
-        }
-    }
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let now = Utc::now().naive_utc();
-    diesel::update(ai_settings::table)
-        .set(UpdateAiSettings {
-            base_url: req.base_url,
-            api_key: req.api_key,
-            model_name: req.model_name,
-            max_tokens: req.max_tokens,
-            response_format_mode: req.response_format_mode,
-            updated_at: now,
-        })
-        .execute(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(serde_json::json!({ "ok": true })))
-}
 
 // GET /ai-prompt-settings
 pub async fn get_ai_prompt_settings(
@@ -155,28 +95,3 @@ pub async fn revert_filter_prompt(
     ))
 }
 
-// POST /ai-settings/test
-pub async fn test_ai_connection(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let mut conn = state
-        .db
-        .get()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    match crate::ai::parser_generator::build_ai_client(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?
-    {
-        Some(client) => {
-            use crate::ai::client::AiClient;
-            match client.chat_completion("", "Reply with a simple json: {\"ok\": true}").await {
-                Ok(_) => Ok(Json(serde_json::json!({ "ok": true }))),
-                Err(e) => Ok(Json(
-                    serde_json::json!({ "ok": false, "error": e.to_string() }),
-                )),
-            }
-        }
-        None => Ok(Json(
-            serde_json::json!({ "ok": false, "error": "AI 未設定" }),
-        )),
-    }
-}
