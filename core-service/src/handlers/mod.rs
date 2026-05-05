@@ -1,3 +1,4 @@
+pub mod ai_providers;
 pub mod ai_settings;
 pub mod anime;
 pub mod anime_link_conflicts;
