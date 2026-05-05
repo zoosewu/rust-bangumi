@@ -14,7 +14,16 @@ import { Subscription } from "@/schemas/subscription"
 import { ServiceModule } from "@/schemas/service-module"
 import { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
-import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
+import type {
+  AiProvider,
+  CreateAiProviderRequest,
+  UpdateAiProviderRequest,
+  TestAiProviderResult,
+  AiPromptSettings,
+  PendingAiResult,
+  ConfirmPendingRequest,
+  RegenerateRequest,
+} from "@/schemas/ai"
 
 const makeCoreApi = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient
@@ -355,37 +364,71 @@ const makeCoreApi = Effect.gen(function* () {
         DetailResponseSchema,
       ),
 
-    // AI 設定
-    getAiSettings: client
-      .execute(HttpClientRequest.get("/api/core/ai-settings"))
+    // AI Providers（多 provider + fallback chain）
+    listAiProviders: client
+      .execute(HttpClientRequest.get("/api/core/ai-providers"))
       .pipe(
         Effect.flatMap((r) => r.json),
-        Effect.map((r) => r as AiSettings),
+        Effect.map((r) => r as readonly AiProvider[]),
         Effect.scoped,
         Effect.orDie,
       ),
 
-    updateAiSettings: (req) =>
+    createAiProvider: (req: CreateAiProviderRequest) =>
       client
         .execute(
-          HttpClientRequest.put("/api/core/ai-settings").pipe(
+          HttpClientRequest.post("/api/core/ai-providers").pipe(
             HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as AiProvider),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    updateAiProvider: (id: number, req: UpdateAiProviderRequest) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/ai-providers/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as AiProvider),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    deleteAiProvider: (id: number) =>
+      client
+        .execute(HttpClientRequest.del(`/api/core/ai-providers/${id}`))
+        .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
+
+    reorderAiProviders: (ordered_ids: readonly number[]) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/ai-providers/reorder").pipe(
+            HttpClientRequest.bodyUnsafeJson({ ordered_ids }),
           ),
         )
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
-    testAiConnection: client
-      .execute(
-        HttpClientRequest.post("/api/core/ai-settings/test").pipe(
-          HttpClientRequest.bodyUnsafeJson({}),
+    testAiProvider: (id: number) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/ai-providers/${id}/test`).pipe(
+            HttpClientRequest.bodyUnsafeJson({}),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as TestAiProviderResult),
+          Effect.scoped,
+          Effect.orDie,
         ),
-      )
-      .pipe(
-        Effect.flatMap((r) => r.json),
-        Effect.map((r) => r as { ok: boolean; error?: string }),
-        Effect.scoped,
-        Effect.orDie,
-      ),
 
     getAiPromptSettings: client
       .execute(HttpClientRequest.get("/api/core/ai-prompt-settings"))

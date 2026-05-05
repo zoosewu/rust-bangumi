@@ -8,7 +8,16 @@ import type { Subscription } from "@/schemas/subscription"
 import type { ServiceModule } from "@/schemas/service-module"
 import type { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse, RetryBulkRequest } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
-import type { AiSettings, AiPromptSettings, PendingAiResult, ConfirmPendingRequest, RegenerateRequest } from "@/schemas/ai"
+import type {
+  AiProvider,
+  CreateAiProviderRequest,
+  UpdateAiProviderRequest,
+  TestAiProviderResult,
+  AiPromptSettings,
+  PendingAiResult,
+  ConfirmPendingRequest,
+  RegenerateRequest,
+} from "@/schemas/ai"
 
 export class CoreApi extends Context.Tag("CoreApi")<
   CoreApi,
@@ -104,10 +113,13 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getAnimeWorksFiltered: (params?: { hasLinks?: boolean }) => Effect.Effect<readonly AnimeWork[]>
     readonly search: (query: string) => Effect.Effect<AggregatedSearchResponse>
     readonly getDetail: (detail_key: string, source: string) => Effect.Effect<DetailResponse>
-    // AI 設定
-    readonly getAiSettings: Effect.Effect<AiSettings>
-    readonly updateAiSettings: (req: Partial<Pick<AiSettings, "base_url" | "api_key" | "model_name" | "max_tokens" | "response_format_mode">>) => Effect.Effect<void>
-    readonly testAiConnection: Effect.Effect<{ ok: boolean; error?: string }>
+    // AI Providers（多 provider + fallback chain）
+    readonly listAiProviders: Effect.Effect<readonly AiProvider[]>
+    readonly createAiProvider: (req: CreateAiProviderRequest) => Effect.Effect<AiProvider>
+    readonly updateAiProvider: (id: number, req: UpdateAiProviderRequest) => Effect.Effect<AiProvider>
+    readonly deleteAiProvider: (id: number) => Effect.Effect<void>
+    readonly reorderAiProviders: (ordered_ids: readonly number[]) => Effect.Effect<void>
+    readonly testAiProvider: (id: number) => Effect.Effect<TestAiProviderResult>
     readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
     readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>
     readonly revertParserPrompt: Effect.Effect<{ value: string }>
