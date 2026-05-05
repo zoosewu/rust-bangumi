@@ -58,8 +58,10 @@ tags:
     description: 搜尋
   - name: LinkConflicts
     description: 動畫連結衝突管理
+  - name: AiProviders
+    description: AI Provider 管理（多 provider + fallback chain）
   - name: AiSettings
-    description: AI 設定管理
+    description: AI Prompt 設定管理
   - name: PendingAiResults
     description: 待確認 AI 結果管理
 
@@ -1732,30 +1734,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/DetailResponse'
 
-  # ============ AiSettings ============
-  /ai-settings:
+  # ============ AiProviders ============
+  /ai-providers:
     get:
-      tags: [AiSettings]
-      summary: 取得 AI 設定（api_key 遮罩）
+      tags: [AiProviders]
+      summary: 列出所有 AI providers（依 priority 升冪；api_key 遮罩）
       responses:
         '200':
-          description: AI 設定
+          description: provider 列表
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AiSettings'
-    put:
-      tags: [AiSettings]
-      summary: 更新 AI 設定
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiProvider'
+    post:
+      tags: [AiProviders]
+      summary: 新增 AI provider（priority 由後端自動指派為 max+1）
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateAiSettingsRequest'
+              $ref: '#/components/schemas/CreateAiProviderRequest'
+      responses:
+        '200':
+          description: 新增成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProvider'
+        '400':
+          description: 驗證失敗（未知 provider_kind 或 response_format_mode）
+
+  /ai-providers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags: [AiProviders]
+      summary: 取得單一 provider（api_key 遮罩）
+      responses:
+        '200':
+          description: provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProvider'
+        '404':
+          description: 不存在
+    put:
+      tags: [AiProviders]
+      summary: 更新 provider（api_key 為空字串時保留舊值）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAiProviderRequest'
       responses:
         '200':
           description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiProvider'
+        '400':
+          description: 驗證失敗
+        '404':
+          description: 不存在
+    delete:
+      tags: [AiProviders]
+      summary: 刪除 provider
+      responses:
+        '200':
+          description: 刪除成功
           content:
             application/json:
               schema:
@@ -1763,13 +1819,46 @@ paths:
                 properties:
                   ok:
                     type: boolean
-        '400':
-          description: 無效的 response_format_mode
+        '404':
+          description: 不存在
 
-  /ai-settings/test:
+  /ai-providers/reorder:
     post:
-      tags: [AiSettings]
-      summary: 測試 AI 連線
+      tags: [AiProviders]
+      summary: 批次調整 provider 順序（依 ordered_ids 寫回 priority = 0,1,2...）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ordered_ids]
+              properties:
+                ordered_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: 排序成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /ai-providers/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    post:
+      tags: [AiProviders]
+      summary: 對指定 provider 做最小化連線測試
       responses:
         '200':
           description: 測試結果
@@ -1783,6 +1872,8 @@ paths:
                   error:
                     type: string
                     nullable: true
+        '404':
+          description: 不存在
 
   /ai-prompt-settings:
     get:
@@ -3519,49 +3610,102 @@ components:
           type: string
           nullable: true
 
-    # ============ AiSettings ============
-    AiSettings:
+    # ============ AiProviders ============
+    AiProvider:
       type: object
+      required:
+        - id
+        - name
+        - provider_kind
+        - base_url
+        - api_key
+        - model_name
+        - max_tokens
+        - response_format_mode
+        - is_enabled
+        - priority
+        - created_at
+        - updated_at
       properties:
+        id:
+          type: integer
+        name:
+          type: string
+        provider_kind:
+          type: string
+          enum: [openai_compatible]
         base_url:
           type: string
-          nullable: true
         api_key:
           type: string
-          description: 實際回傳時會以 ●●●●●●●● 遮罩
+          description: 實際回傳時為遮罩（••••••••）
         model_name:
           type: string
-          nullable: true
         max_tokens:
           type: integer
-          nullable: true
         response_format_mode:
           type: string
           enum: [strict, non_strict, inject_schema]
-          nullable: true
+        is_enabled:
+          type: boolean
+        priority:
+          type: integer
+          description: 數字小者優先；新增時由後端指派
+        created_at:
+          type: string
+          format: date-time
         updated_at:
           type: string
           format: date-time
 
-    UpdateAiSettingsRequest:
+    CreateAiProviderRequest:
       type: object
+      required: [name, provider_kind]
       properties:
+        name:
+          type: string
+        provider_kind:
+          type: string
+          enum: [openai_compatible]
         base_url:
           type: string
-          nullable: true
         api_key:
           type: string
-          nullable: true
         model_name:
           type: string
-          nullable: true
         max_tokens:
           type: integer
-          nullable: true
+          default: 4096
         response_format_mode:
           type: string
           enum: [strict, non_strict, inject_schema]
-          nullable: true
+          default: non_strict
+        is_enabled:
+          type: boolean
+          default: true
+
+    UpdateAiProviderRequest:
+      type: object
+      description: 部分更新；api_key 為空字串視為「保留舊值」
+      properties:
+        name:
+          type: string
+        provider_kind:
+          type: string
+          enum: [openai_compatible]
+        base_url:
+          type: string
+        api_key:
+          type: string
+        model_name:
+          type: string
+        max_tokens:
+          type: integer
+        response_format_mode:
+          type: string
+          enum: [strict, non_strict, inject_schema]
+        is_enabled:
+          type: boolean
 
     AiPromptSettings:
       type: object
