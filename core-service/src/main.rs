@@ -292,15 +292,25 @@ async fn main() -> anyhow::Result<()> {
         // 搜尋
         .route("/search", get(handlers::search::search))
         .route("/detail", post(handlers::detail::detail))
-        // AI 設定
+        // AI Providers（多 provider 與 fallback chain）
         .route(
-            "/ai-settings",
-            get(handlers::ai_settings::get_ai_settings)
-                .put(handlers::ai_settings::update_ai_settings),
+            "/ai-providers/reorder",
+            post(handlers::ai_providers::reorder_ai_providers),
         )
         .route(
-            "/ai-settings/test",
-            post(handlers::ai_settings::test_ai_connection),
+            "/ai-providers/:id/test",
+            post(handlers::ai_providers::test_ai_provider),
+        )
+        .route(
+            "/ai-providers",
+            get(handlers::ai_providers::list_ai_providers)
+                .post(handlers::ai_providers::create_ai_provider),
+        )
+        .route(
+            "/ai-providers/:id",
+            get(handlers::ai_providers::get_ai_provider)
+                .put(handlers::ai_providers::update_ai_provider)
+                .delete(handlers::ai_providers::delete_ai_provider),
         )
         // AI Prompt 設定
         .route(
