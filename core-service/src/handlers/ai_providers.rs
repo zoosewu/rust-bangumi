@@ -258,3 +258,69 @@ pub async fn test_ai_provider(
         Err(e) => Ok(Json(TestResponse { ok: false, error: Some(e.to_string()) })),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDateTime;
+
+    fn provider() -> AiProvider {
+        AiProvider {
+            id: 1,
+            name: "test".into(),
+            provider_kind: "openai_compatible".into(),
+            base_url: "https://example.com".into(),
+            api_key: "secret-key-do-not-leak".into(),
+            model_name: "m".into(),
+            max_tokens: 4096,
+            response_format_mode: "non_strict".into(),
+            is_enabled: true,
+            priority: 0,
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+        }
+    }
+
+    #[test]
+    fn mask_replaces_api_key() {
+        let masked = mask(provider());
+        assert_eq!(masked.api_key, MASKED_API_KEY);
+    }
+
+    #[test]
+    fn mask_preserves_other_fields() {
+        let p = provider();
+        let masked = mask(p.clone());
+        assert_eq!(masked.id, p.id);
+        assert_eq!(masked.name, p.name);
+        assert_eq!(masked.base_url, p.base_url);
+        assert_eq!(masked.model_name, p.model_name);
+        assert_eq!(masked.is_enabled, p.is_enabled);
+    }
+
+    #[test]
+    fn validate_kind_accepts_known() {
+        assert!(validate_kind("openai_compatible").is_ok());
+    }
+
+    #[test]
+    fn validate_kind_rejects_unknown() {
+        let err = validate_kind("anthropic").unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("anthropic"));
+    }
+
+    #[test]
+    fn validate_mode_accepts_all_known() {
+        for m in ["strict", "non_strict", "inject_schema"] {
+            assert!(validate_mode(m).is_ok(), "mode {} should be valid", m);
+        }
+    }
+
+    #[test]
+    fn validate_mode_rejects_unknown() {
+        let err = validate_mode("garbage").unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("garbage"));
+    }
+}
