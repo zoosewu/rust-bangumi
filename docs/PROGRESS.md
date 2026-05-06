@@ -110,6 +110,17 @@ RSS 訂閱 → Fetcher 抓取 → Core 解析標題 → 自動下載派送 → V
 - 環境變數驅動的 CORS 設定
 - 支援多來源、萬用字元
 
+### 多 AI Provider 與 Fallback Chain（2026-05-06）
+- DB：`ai_settings`（單列）→ `ai_providers`（多列），migration 自動搬遷既有設定
+- Backend：`AiProviderChain` 集中 fallback 邏輯，`AiError::ProviderUnavailable` 區分可重試錯誤
+- 觸發條件：HTTP 5xx / 429 / 網路 timeout / connect / request 錯誤 → fallback；4xx auth/bad → 立即失敗
+- Provider 工廠：`provider_kind` 字串分派（目前僅 `openai_compatible`，預留 Anthropic / Gemini）
+- API：`/ai-providers` CRUD + `/ai-providers/reorder` + `/ai-providers/{id}/test`，api_key 自動遮罩
+- Frontend：列表 + 編輯 dialog + dnd-kit 拖曳排序，每筆 provider 有獨立測試按鈕
+- 測試：14 個 AI 模組 unit tests + 6 個 handler unit tests 全通過
+- 設計：`docs/superpowers/specs/2026-04-30-multi-ai-providers-design.md`
+- 實作：`docs/superpowers/plans/2026-04-30-multi-ai-providers.md`
+
 ---
 
 ## 待完成的工作
