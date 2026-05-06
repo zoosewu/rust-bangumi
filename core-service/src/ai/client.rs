@@ -9,7 +9,7 @@ pub enum AiError {
     #[error("AI returned invalid JSON: {0}")]
     InvalidJson(String),
 
-    #[error("AI settings not configured")]
+    #[error("AI provider not configured")]
     NotConfigured,
 
     /// Provider 端故障：HTTP 5xx、網路錯誤、timeout、rate limit。可 fallback。

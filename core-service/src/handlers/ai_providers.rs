@@ -16,21 +16,57 @@ const ALLOWED_FORMAT_MODES: &[&str] = &["strict", "non_strict", "inject_schema"]
 const MASKED_API_KEY: &str = "••••••••";
 
 fn mask(p: AiProvider) -> AiProvider {
-    AiProvider { api_key: MASKED_API_KEY.into(), ..p }
+    AiProvider {
+        api_key: MASKED_API_KEY.into(),
+        ..p
+    }
 }
 
 fn validate_kind(kind: &str) -> Result<(), (StatusCode, String)> {
     if !ALLOWED_KINDS.contains(&kind) {
-        return Err((StatusCode::BAD_REQUEST, format!("invalid provider_kind: {kind}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("invalid provider_kind: {kind}"),
+        ));
     }
     Ok(())
 }
 
 fn validate_mode(mode: &str) -> Result<(), (StatusCode, String)> {
     if !ALLOWED_FORMAT_MODES.contains(&mode) {
-        return Err((StatusCode::BAD_REQUEST, format!("invalid response_format_mode: {mode}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("invalid response_format_mode: {mode}"),
+        ));
     }
     Ok(())
+}
+
+fn validate_required_config(base_url: &str, model_name: &str) -> Result<(), (StatusCode, String)> {
+    if base_url.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Base URL is required".into()));
+    }
+    if model_name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Model name is required".into()));
+    }
+    Ok(())
+}
+
+fn load_provider_api_key(
+    conn: &mut PgConnection,
+    id: Option<i32>,
+) -> Result<Option<String>, (StatusCode, String)> {
+    match id {
+        Some(id) => ai_providers::table
+            .find(id)
+            .select(ai_providers::api_key)
+            .first::<String>(conn)
+            .optional()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .ok_or((StatusCode::NOT_FOUND, format!("provider {id} not found")))
+            .map(Some),
+        None => Ok(None),
+    }
 }
 
 pub async fn list_ai_providers(
@@ -83,9 +119,15 @@ pub struct CreateAiProviderRequest {
     pub is_enabled: bool,
 }
 
-fn default_max_tokens() -> i32 { 4096 }
-fn default_format_mode() -> String { "non_strict".into() }
-fn default_true() -> bool { true }
+fn default_max_tokens() -> i32 {
+    4096
+}
+fn default_format_mode() -> String {
+    "non_strict".into()
+}
+fn default_true() -> bool {
+    true
+}
 
 pub async fn create_ai_provider(
     State(state): State<AppState>,
@@ -232,6 +274,26 @@ pub struct TestResponse {
     pub error: Option<String>,
 }
 
+async fn run_provider_test(
+    provider: AiProvider,
+) -> Result<Json<TestResponse>, (StatusCode, String)> {
+    validate_required_config(&provider.base_url, &provider.model_name)?;
+    let client =
+        crate::ai::factory::build_provider(&provider).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    let result = client.chat_completion("", "Reply with OK.").await;
+    match result {
+        Ok(_) => Ok(Json(TestResponse {
+            ok: true,
+            error: None,
+        })),
+        Err(e) => Ok(Json(TestResponse {
+            ok: false,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
 pub async fn test_ai_provider(
     State(state): State<AppState>,
     Path(id): Path<i32>,
@@ -247,16 +309,67 @@ pub async fn test_ai_provider(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, format!("provider {id} not found")))?;
 
-    let client = crate::ai::factory::build_provider(&provider)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+    run_provider_test(provider).await
+}
 
-    let result = client
-        .chat_completion("", "Reply with json: {\"ok\": true}")
-        .await;
-    match result {
-        Ok(_) => Ok(Json(TestResponse { ok: true, error: None })),
-        Err(e) => Ok(Json(TestResponse { ok: false, error: Some(e.to_string()) })),
-    }
+#[derive(Debug, Deserialize)]
+pub struct TestAiProviderRequest {
+    pub existing_provider_id: Option<i32>,
+    pub provider_kind: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub model_name: String,
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: i32,
+    #[serde(default = "default_format_mode")]
+    pub response_format_mode: String,
+}
+
+fn provider_from_test_request(
+    req: TestAiProviderRequest,
+    fallback_api_key: Option<String>,
+) -> Result<AiProvider, (StatusCode, String)> {
+    validate_kind(&req.provider_kind)?;
+    validate_mode(&req.response_format_mode)?;
+    let api_key = if req.api_key.trim().is_empty() {
+        fallback_api_key.unwrap_or_default()
+    } else {
+        req.api_key
+    };
+    validate_required_config(&req.base_url, &req.model_name)?;
+
+    Ok(AiProvider {
+        id: 0,
+        name: "test".into(),
+        provider_kind: req.provider_kind,
+        base_url: req.base_url,
+        api_key,
+        model_name: req.model_name,
+        max_tokens: req.max_tokens,
+        response_format_mode: req.response_format_mode,
+        is_enabled: true,
+        priority: 0,
+        created_at: Utc::now().naive_utc(),
+        updated_at: Utc::now().naive_utc(),
+    })
+}
+
+pub async fn test_ai_provider_config(
+    State(state): State<AppState>,
+    Json(req): Json<TestAiProviderRequest>,
+) -> Result<Json<TestResponse>, (StatusCode, String)> {
+    let fallback_api_key = {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        load_provider_api_key(&mut conn, req.existing_provider_id)?
+    };
+    let provider = provider_from_test_request(req, fallback_api_key)?;
+    run_provider_test(provider).await
 }
 
 #[cfg(test)]
@@ -322,5 +435,37 @@ mod tests {
         let err = validate_mode("garbage").unwrap_err();
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.contains("garbage"));
+    }
+
+    #[test]
+    fn test_request_allows_empty_api_key() {
+        let req = TestAiProviderRequest {
+            existing_provider_id: None,
+            provider_kind: "openai_compatible".into(),
+            base_url: "https://api.example.test/v1".into(),
+            api_key: "".into(),
+            model_name: "gpt-test".into(),
+            max_tokens: 4096,
+            response_format_mode: "non_strict".into(),
+        };
+
+        let p = provider_from_test_request(req, None).unwrap();
+        assert_eq!(p.api_key, "");
+    }
+
+    #[test]
+    fn test_request_can_reuse_existing_api_key() {
+        let req = TestAiProviderRequest {
+            existing_provider_id: Some(1),
+            provider_kind: "openai_compatible".into(),
+            base_url: "https://api.example.test/v1".into(),
+            api_key: "".into(),
+            model_name: "gpt-test".into(),
+            max_tokens: 4096,
+            response_format_mode: "non_strict".into(),
+        };
+
+        let p = provider_from_test_request(req, Some("saved-key".into())).unwrap();
+        assert_eq!(p.api_key, "saved-key");
     }
 }

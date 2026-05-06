@@ -1849,6 +1849,29 @@ paths:
                   ok:
                     type: boolean
 
+  /ai-providers/test:
+    post:
+      tags: [AiProviders]
+      summary: 使用未儲存的 provider 設定做最小化連線測試
+      description: 編輯既有 provider 時可傳 existing_provider_id；若 api_key 留空，後端會沿用該 provider 已儲存的 API key。API key 仍可為空，適用於不需要 Authorization header 的 local LLM。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestAiProviderRequest'
+      responses:
+        '200':
+          description: 測試結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestAiProviderResponse'
+        '400':
+          description: 設定不完整或驗證失敗
+        '404':
+          description: existing_provider_id 不存在
+
   /ai-providers/{id}/test:
     parameters:
       - name: id
@@ -1865,13 +1888,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  error:
-                    type: string
-                    nullable: true
+                $ref: '#/components/schemas/TestAiProviderResponse'
         '404':
           description: 不存在
 
@@ -3638,6 +3655,7 @@ components:
           type: string
         api_key:
           type: string
+          description: Optional；留空時不送 Authorization header，適用於 local LLM。
           description: 實際回傳時為遮罩（••••••••）
         model_name:
           type: string
@@ -3671,6 +3689,7 @@ components:
           type: string
         api_key:
           type: string
+          description: Optional；留空時不送 Authorization header，適用於 local LLM。
         model_name:
           type: string
         max_tokens:
@@ -3697,6 +3716,7 @@ components:
           type: string
         api_key:
           type: string
+          description: Optional；空字串視為保留舊值；若既有值也是空，請求將不送 Authorization header。
         model_name:
           type: string
         max_tokens:
@@ -3706,6 +3726,25 @@ components:
           enum: [strict, non_strict, inject_schema]
         is_enabled:
           type: boolean
+
+    TestAiProviderRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateAiProviderRequest'
+        - type: object
+          properties:
+            existing_provider_id:
+              type: integer
+              description: 編輯模式可傳既有 provider id；api_key 留空時沿用該 provider 已儲存的 key，既有 key 也允許為空。
+
+    TestAiProviderResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
 
     AiPromptSettings:
       type: object

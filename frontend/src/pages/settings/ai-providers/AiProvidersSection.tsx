@@ -46,6 +46,9 @@ export function AiProvidersSection() {
   const { mutate: doTest } = useEffectMutation((id: number) =>
     Effect.flatMap(CoreApi, (api) => api.testAiProvider(id)),
   )
+  const { mutate: doTestConfig } = useEffectMutation((req: CreateAiProviderRequest) =>
+    Effect.flatMap(CoreApi, (api) => api.testAiProviderConfig(req)),
+  )
 
   const list = providers ?? []
 
@@ -95,6 +98,10 @@ export function AiProvidersSection() {
           <AiProviderEditDialog
             provider={editing}
             onClose={() => setEditing(undefined)}
+            onTestConfig={async (req) => {
+              const r = await doTestConfig(req)
+              return r ?? { ok: false, error: "no response" }
+            }}
             onSubmit={async (req) => {
               if (editing) {
                 await doUpdate({ id: editing.id, req })

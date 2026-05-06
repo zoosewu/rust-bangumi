@@ -48,7 +48,21 @@ impl AiProviderChain {
         let mut attempts: Vec<AttemptRecord> = Vec::new();
         for entry in &self.entries {
             match op(entry.client.as_ref()).await {
-                Ok(resp) => return Ok((resp, attempts)),
+                Ok(resp) if !resp.trim().is_empty() => return Ok((resp, attempts)),
+                Ok(_) => {
+                    let e = AiError::ProviderUnavailable("empty response".into());
+                    tracing::warn!(
+                        provider_id = entry.id,
+                        provider = %entry.name,
+                        error = %e,
+                        "AI provider returned empty response, falling back"
+                    );
+                    attempts.push(AttemptRecord {
+                        provider_id: entry.id,
+                        provider_name: entry.name.clone(),
+                        error: e.to_string(),
+                    });
+                }
                 Err(e) if e.is_retryable() => {
                     tracing::warn!(
                         provider_id = entry.id,
@@ -109,7 +123,7 @@ pub fn build_ai_chain(conn: &mut PgConnection) -> Result<Option<AiProviderChain>
 
     let entries: Vec<ChainEntry> = providers
         .into_iter()
-        .filter(|p| !p.api_key.is_empty() && !p.base_url.is_empty())
+        .filter(|p| !p.base_url.is_empty() && !p.model_name.is_empty())
         .map(|p| {
             build_provider(&p).map(|client| ChainEntry {
                 id: p.id,
@@ -191,7 +205,11 @@ mod tests {
     #[tokio::test]
     async fn falls_back_on_retryable() {
         let chain = AiProviderChain::new(vec![
-            entry(1, "a", vec![Err(AiError::ProviderUnavailable("503".into()))]),
+            entry(
+                1,
+                "a",
+                vec![Err(AiError::ProviderUnavailable("503".into()))],
+            ),
             entry(2, "b", vec![Ok("ok".into())]),
         ]);
         let (resp, attempts) = chain.chat_completion("s", "u").await.unwrap();
@@ -201,10 +219,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn falls_back_on_empty_response() {
+        let chain = AiProviderChain::new(vec![
+            entry(1, "a", vec![Ok("".into())]),
+            entry(2, "b", vec![Ok("{\"ok\":true}".into())]),
+        ]);
+
+        let (resp, attempts) = chain
+            .chat_completion_structured("s", "u", &serde_json::json!({}))
+            .await
+            .unwrap();
+
+        assert_eq!(resp, "{\"ok\":true}");
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].provider_name, "a");
+        assert!(attempts[0].error.contains("empty response"));
+    }
+
+    #[tokio::test]
     async fn all_retryable_fail() {
         let chain = AiProviderChain::new(vec![
-            entry(1, "a", vec![Err(AiError::ProviderUnavailable("503".into()))]),
-            entry(2, "b", vec![Err(AiError::ProviderUnavailable("502".into()))]),
+            entry(
+                1,
+                "a",
+                vec![Err(AiError::ProviderUnavailable("503".into()))],
+            ),
+            entry(
+                2,
+                "b",
+                vec![Err(AiError::ProviderUnavailable("502".into()))],
+            ),
         ]);
         let (err, attempts) = unwrap_err_chain(chain.chat_completion("s", "u").await);
         assert!(matches!(err, AiError::ProviderUnavailable(_)));

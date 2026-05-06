@@ -109,7 +109,10 @@ async fn main() -> anyhow::Result<()> {
         // AnimeWork 管理
         .route("/anime-works", post(handlers::anime::create_anime_work))
         .route("/anime-works", get(handlers::anime::list_anime_work))
-        .route("/anime-works/:work_id", get(handlers::anime::get_anime_work))
+        .route(
+            "/anime-works/:work_id",
+            get(handlers::anime::get_anime_work),
+        )
         .route(
             "/anime-works/:work_id",
             axum::routing::delete(handlers::anime::delete_anime_work),
@@ -127,18 +130,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/seasons", post(handlers::anime::create_season))
         .route("/seasons", get(handlers::anime::list_seasons))
         // Anime 管理（原 anime_series）
-        .route(
-            "/anime",
-            get(handlers::anime::list_all_anime),
-        )
-        .route(
-            "/anime",
-            post(handlers::anime::create_anime),
-        )
+        .route("/anime", get(handlers::anime::list_all_anime))
+        .route("/anime", post(handlers::anime::create_anime))
         .route(
             "/anime/:anime_id",
-            get(handlers::anime::get_anime)
-                .put(handlers::anime::update_anime),
+            get(handlers::anime::get_anime).put(handlers::anime::update_anime),
         )
         .route(
             "/anime-works/:work_id/anime",
@@ -160,10 +156,7 @@ async fn main() -> anyhow::Result<()> {
         // 過濾規則
         .route("/filters", post(handlers::filters::create_filter_rule))
         .route("/filters", get(handlers::filters::get_filter_rules))
-        .route(
-            "/filters/preview",
-            post(handlers::filters::preview_filter),
-        )
+        .route("/filters/preview", post(handlers::filters::preview_filter))
         .route(
             "/filters/:rule_id",
             delete(handlers::filters::delete_filter_rule),
@@ -189,7 +182,10 @@ async fn main() -> anyhow::Result<()> {
         )
         // 動畫連結
         .route("/links", post(handlers::links::create_anime_link))
-        .route("/links/conflicts", get(handlers::links::list_conflicting_links))
+        .route(
+            "/links/conflicts",
+            get(handlers::links::list_conflicting_links),
+        )
         .route("/links/:series_id", get(handlers::links::get_anime_links))
         // 訂閱管理
         .route(
@@ -235,10 +231,7 @@ async fn main() -> anyhow::Result<()> {
             "/parsers",
             get(handlers::parsers::list_parsers).post(handlers::parsers::create_parser),
         )
-        .route(
-            "/parsers/preview",
-            post(handlers::parsers::preview_parser),
-        )
+        .route("/parsers/preview", post(handlers::parsers::preview_parser))
         .route(
             "/parsers/:parser_id",
             get(handlers::parsers::get_parser)
@@ -247,7 +240,10 @@ async fn main() -> anyhow::Result<()> {
         )
         // 原始資料管理
         .route("/raw-items", get(handlers::raw_items::list_raw_items))
-        .route("/raw-items/count", get(handlers::raw_items::count_raw_items))
+        .route(
+            "/raw-items/count",
+            get(handlers::raw_items::count_raw_items),
+        )
         .route(
             "/raw-items/:item_id",
             get(handlers::raw_items::get_raw_item),
@@ -296,6 +292,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/ai-providers/reorder",
             post(handlers::ai_providers::reorder_ai_providers),
+        )
+        .route(
+            "/ai-providers/test",
+            post(handlers::ai_providers::test_ai_provider_config),
         )
         .route(
             "/ai-providers/:id/test",
@@ -510,7 +510,10 @@ mod tests {
     fn openapi_doc_generates_without_panic() {
         let doc = crate::openapi::ApiDoc::openapi();
         let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");
-        assert!(json.contains("\"openapi\""), "Should contain openapi version field");
+        assert!(
+            json.contains("\"openapi\""),
+            "Should contain openapi version field"
+        );
         assert!(json.contains("\"paths\""), "Should contain paths field");
         assert!(
             json.contains("/api/core/anime-works"),
@@ -545,7 +548,10 @@ mod tests {
         let doc = crate::openapi::ApiDoc::openapi();
         let json = serde_json::to_string_pretty(&doc).expect("OpenAPI doc should serialize");
         // 寫入到專案根目錄，供 openapi-typescript 使用
-        let out_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../docs/api/openapi-generated.json");
+        let out_path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../docs/api/openapi-generated.json"
+        );
         std::fs::write(out_path, &json).expect("Should write openapi spec to file");
         println!("Written OpenAPI spec to {}", out_path);
     }
@@ -554,7 +560,16 @@ mod tests {
     fn openapi_doc_contains_all_tags() {
         let doc = crate::openapi::ApiDoc::openapi();
         let json = serde_json::to_string(&doc).expect("OpenAPI doc should serialize to JSON");
-        for tag in &["AnimeWorks", "Seasons", "Anime", "SubtitleGroups", "Filters", "Links", "Downloads", "Dashboard"] {
+        for tag in &[
+            "AnimeWorks",
+            "Seasons",
+            "Anime",
+            "SubtitleGroups",
+            "Filters",
+            "Links",
+            "Downloads",
+            "Dashboard",
+        ] {
             assert!(json.contains(tag), "Should contain tag: {}", tag);
         }
     }

@@ -17,6 +17,7 @@ export interface AiProvider {
 }
 
 export interface CreateAiProviderRequest {
+  existing_provider_id?: number
   name: string
   provider_kind: AiProviderKind
   base_url?: string
@@ -42,6 +43,8 @@ export interface TestAiProviderResult {
   ok: boolean
   error?: string
 }
+
+export type TestAiProviderConfigRequest = CreateAiProviderRequest
 
 export interface AiPromptSettings {
   id: number

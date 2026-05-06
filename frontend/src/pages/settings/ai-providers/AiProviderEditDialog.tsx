@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -23,6 +24,7 @@ import type {
   CreateAiProviderRequest,
   ResponseFormatMode,
   UpdateAiProviderRequest,
+  TestAiProviderResult,
 } from "@/schemas/ai"
 
 const KINDS: AiProviderKind[] = ["openai_compatible"]
@@ -33,9 +35,15 @@ export interface AiProviderEditDialogProps {
   provider: AiProvider | null
   onClose: () => void
   onSubmit: (req: CreateAiProviderRequest | UpdateAiProviderRequest) => Promise<void>
+  onTestConfig: (req: CreateAiProviderRequest) => Promise<TestAiProviderResult>
 }
 
-export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProviderEditDialogProps) {
+export function AiProviderEditDialog({
+  provider,
+  onClose,
+  onSubmit,
+  onTestConfig,
+}: AiProviderEditDialogProps) {
   const isEdit = provider !== null
   const [name, setName] = useState("")
   const [kind, setKind] = useState<AiProviderKind>("openai_compatible")
@@ -46,6 +54,8 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
   const [mode, setMode] = useState<ResponseFormatMode>("non_strict")
   const [enabled, setEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestAiProviderResult | null>(null)
 
   useEffect(() => {
     if (provider) {
@@ -67,7 +77,36 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
       setMode("non_strict")
       setEnabled(true)
     }
+    setTestResult(null)
   }, [provider])
+
+  const buildTestRequest = (): CreateAiProviderRequest => ({
+    existing_provider_id: provider?.id,
+    name,
+    provider_kind: kind,
+    base_url: baseUrl,
+    api_key: apiKey,
+    model_name: modelName,
+    max_tokens: Number(maxTokens) || 4096,
+    response_format_mode: mode,
+    is_enabled: enabled,
+  })
+
+  const handleTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await onTestConfig(buildTestRequest())
+      setTestResult(result)
+    } catch (e) {
+      setTestResult({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const handleSubmit = async () => {
     setSaving(true)
@@ -102,7 +141,12 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose()
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "編輯 Provider" : "新增 Provider"}</DialogTitle>
@@ -124,7 +168,9 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
               </SelectTrigger>
               <SelectContent>
                 {KINDS.map((k) => (
-                  <SelectItem key={k} value={k}>{k}</SelectItem>
+                  <SelectItem key={k} value={k}>
+                    {k}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -167,13 +213,18 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
           </div>
           <div className="space-y-1">
             <Label>Response Format</Label>
-            <Select value={mode} onValueChange={(v) => setMode(v as ResponseFormatMode)}>
+            <Select
+              value={mode}
+              onValueChange={(v) => setMode(v as ResponseFormatMode)}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {MODES.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -182,10 +233,33 @@ export function AiProviderEditDialog({ provider, onClose, onSubmit }: AiProvider
             <Switch checked={enabled} onCheckedChange={setEnabled} />
             <Label>啟用</Label>
           </div>
+          {testResult && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                testResult.ok
+                  ? "border-green-500/40 bg-green-500/5 text-green-700"
+                  : "border-destructive/40 bg-destructive/5 text-destructive"
+              }`}
+            >
+              {testResult.ok ? "✓ 測試成功" : `✗ ${testResult.error ?? "測試失敗"}`}
+            </div>
+          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>取消</Button>
-          <Button onClick={handleSubmit} disabled={saving || !name}>儲存</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving || testing}>
+            取消
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleTest}
+            disabled={saving || testing || !baseUrl || !modelName}
+          >
+            {testing ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+            測試
+          </Button>
+          <Button onClick={handleSubmit} disabled={saving || testing || !name}>
+            儲存
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

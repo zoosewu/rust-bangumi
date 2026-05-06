@@ -1,7 +1,7 @@
+use super::client::{AiClient, AiError};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use super::client::{AiClient, AiError};
 
 pub struct OpenAiClient {
     http: reqwest::Client,
@@ -14,7 +14,13 @@ pub struct OpenAiClient {
 }
 
 impl OpenAiClient {
-    pub fn new(base_url: &str, api_key: &str, model: &str, max_tokens: i32, response_format_mode: &str) -> Self {
+    pub fn new(
+        base_url: &str,
+        api_key: &str,
+        model: &str,
+        max_tokens: i32,
+        response_format_mode: &str,
+    ) -> Self {
         Self {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
@@ -37,10 +43,11 @@ impl OpenAiClient {
         json!(messages)
     }
 
-    async fn do_request(&self, messages: Value, response_format: Option<Value>) -> Result<String, AiError> {
-        if self.api_key.is_empty() {
-            return Err(AiError::NotConfigured);
-        }
+    async fn do_request(
+        &self,
+        messages: Value,
+        response_format: Option<Value>,
+    ) -> Result<String, AiError> {
         let mut body = json!({
             "model": self.model,
             "messages": messages,
@@ -49,12 +56,14 @@ impl OpenAiClient {
         if let Some(fmt) = response_format {
             body["response_format"] = fmt;
         }
-        let resp = self.http
+        let mut request = self
+            .http
             .post(format!("{}/chat/completions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?;
+            .json(&body);
+        if let Some(token) = bearer_token(Some(&self.api_key)) {
+            request = request.bearer_auth(token);
+        }
+        let resp = request.send().await?;
 
         if !resp.status().is_success() {
             let status = resp.status();
@@ -81,7 +90,10 @@ impl OpenAiClient {
             // HTTP 狀態碼分類：5xx 與 429 → ProviderUnavailable（可 fallback）
             // 4xx 其餘（400/401/403/404 等）→ ApiError（不 fallback）
             return if status.is_server_error() || status.as_u16() == 429 {
-                Err(AiError::ProviderUnavailable(format!("HTTP {}: {}", status, text)))
+                Err(AiError::ProviderUnavailable(format!(
+                    "HTTP {}: {}",
+                    status, text
+                )))
             } else {
                 Err(AiError::ApiError(format!("HTTP {}: {}", status, text)))
             };
@@ -91,9 +103,20 @@ impl OpenAiClient {
         chat.choices
             .into_iter()
             .next()
-            .map(|c| c.message.content)
+            .map(|c| c.message.content_text())
             .ok_or_else(|| AiError::ApiError("Empty choices".into()))
     }
+}
+
+fn bearer_token(api_key: Option<&str>) -> Option<&str> {
+    api_key.and_then(|key| {
+        let trimmed = key.trim();
+        (!trimmed.is_empty()).then_some(trimmed)
+    })
+}
+
+fn chat_completion_response_format(_response_format_mode: &str) -> Option<Value> {
+    None
 }
 
 #[derive(Deserialize)]
@@ -109,6 +132,17 @@ struct Choice {
 #[derive(Deserialize)]
 struct AssistantMessage {
     content: String,
+    #[serde(default)]
+    reasoning_content: Option<String>,
+}
+
+impl AssistantMessage {
+    fn content_text(self) -> String {
+        if !self.content.trim().is_empty() {
+            return self.content;
+        }
+        self.reasoning_content.unwrap_or_default()
+    }
 }
 
 #[async_trait]
@@ -119,11 +153,7 @@ impl AiClient for OpenAiClient {
         user_prompt: &str,
     ) -> Result<String, AiError> {
         let messages = Self::build_messages(system_prompt, user_prompt);
-        let response_format = if self.response_format_mode == "inject_schema" {
-            None
-        } else {
-            Some(json!({"type": "json_object"}))
-        };
+        let response_format = chat_completion_response_format(&self.response_format_mode);
         self.do_request(messages, response_format).await
     }
 
@@ -136,8 +166,8 @@ impl AiClient for OpenAiClient {
         match self.response_format_mode.as_str() {
             "inject_schema" => {
                 // 將 JSON Schema 注入 system prompt，不傳 response_format
-                let schema_text = serde_json::to_string_pretty(schema)
-                    .unwrap_or_else(|_| schema.to_string());
+                let schema_text =
+                    serde_json::to_string_pretty(schema).unwrap_or_else(|_| schema.to_string());
                 let augmented_system = format!(
                     "{}\n\n## Output JSON Schema\nYou MUST output valid JSON matching this schema exactly:\n```json\n{}\n```",
                     system_prompt, schema_text
@@ -187,5 +217,48 @@ mod tests {
     #[test]
     fn no_retry_marker_returns_none() {
         assert_eq!(extract_retry_after_secs("nothing here"), None);
+    }
+
+    #[test]
+    fn empty_api_key_does_not_create_authorization_header() {
+        assert_eq!(bearer_token(None), None);
+        assert_eq!(bearer_token(Some("")), None);
+        assert_eq!(bearer_token(Some("  ")), None);
+    }
+
+    #[test]
+    fn non_empty_api_key_creates_authorization_header() {
+        assert_eq!(bearer_token(Some("local-key")), Some("local-key"));
+    }
+
+    #[test]
+    fn plain_chat_completion_does_not_force_json_response_format() {
+        assert_eq!(chat_completion_response_format("strict"), None);
+        assert_eq!(chat_completion_response_format("non_strict"), None);
+        assert_eq!(chat_completion_response_format("inject_schema"), None);
+    }
+
+    #[test]
+    fn extracts_reasoning_content_when_content_is_empty() {
+        let response = json!({
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "reasoning_content": "{\"ok\":true}"
+                    }
+                }
+            ]
+        });
+        let chat: ChatResponse = serde_json::from_value(response).unwrap();
+        let content = chat
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content_text())
+            .unwrap();
+
+        assert_eq!(content, "{\"ok\":true}");
     }
 }

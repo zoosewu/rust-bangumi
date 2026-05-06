@@ -17,6 +17,7 @@ import { DashboardStats } from "@/schemas/dashboard"
 import type {
   AiProvider,
   CreateAiProviderRequest,
+  TestAiProviderConfigRequest,
   UpdateAiProviderRequest,
   TestAiProviderResult,
   AiPromptSettings,
@@ -421,6 +422,20 @@ const makeCoreApi = Effect.gen(function* () {
         .execute(
           HttpClientRequest.post(`/api/core/ai-providers/${id}/test`).pipe(
             HttpClientRequest.bodyUnsafeJson({}),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as TestAiProviderResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    testAiProviderConfig: (req: TestAiProviderConfigRequest) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/ai-providers/test").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
           ),
         )
         .pipe(

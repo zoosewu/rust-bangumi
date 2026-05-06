@@ -120,6 +120,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly deleteAiProvider: (id: number) => Effect.Effect<void>
     readonly reorderAiProviders: (ordered_ids: readonly number[]) => Effect.Effect<void>
     readonly testAiProvider: (id: number) => Effect.Effect<TestAiProviderResult>
+    readonly testAiProviderConfig: (req: CreateAiProviderRequest) => Effect.Effect<TestAiProviderResult>
     readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
     readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>
     readonly revertParserPrompt: Effect.Effect<{ value: string }>
