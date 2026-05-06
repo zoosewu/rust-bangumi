@@ -1,10 +1,9 @@
 import { Schema } from "effect"
 import type { components } from "../generated/api"
+import type { AssertExtends } from "./assert"
 
 // compile-time 型別對齊 helper
 // 若 Effect Schema 的 .Type 與後端生成的 interface 不相容，tsc 編譯失敗
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type AssertExtends<_G, _S extends _G> = true
 
 export const AnimeWork = Schema.Struct({
   anime_id: Schema.Number,
