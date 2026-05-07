@@ -319,11 +319,10 @@ pub(crate) fn create_or_get_series(
     season_id: i32,
     description: &str,
 ) -> Result<Anime, String> {
-    // Try to find existing anime
+    // The database unique key is (work_id, series_no); season is editable metadata.
     match animes::table
         .filter(animes::work_id.eq(work_id))
         .filter(animes::series_no.eq(series_no))
-        .filter(animes::season_id.eq(season_id))
         .first::<Anime>(conn)
     {
         Ok(anime) => {

@@ -166,6 +166,16 @@ pub fn create_anime(
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;
 
+    if let Some(existing) = animes::table
+        .filter(animes::work_id.eq(work_id))
+        .filter(animes::series_no.eq(series_no))
+        .first::<Anime>(&mut conn)
+        .optional()
+        .map_err(|e| format!("Failed to query anime: {}", e))?
+    {
+        return Ok(existing);
+    }
+
     let now = Utc::now().naive_utc();
     let new_anime = NewAnime {
         work_id,

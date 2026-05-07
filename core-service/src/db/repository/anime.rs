@@ -85,6 +85,15 @@ impl AnimeRepository for DieselAnimeRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
+            if let Some(existing) = animes::table
+                .filter(animes::work_id.eq(params.work_id))
+                .filter(animes::series_no.eq(params.series_no))
+                .first::<Anime>(&mut conn)
+                .optional()?
+            {
+                return Ok(existing);
+            }
+
             let now = Utc::now().naive_utc();
             let new_anime = NewAnime {
                 work_id: params.work_id,
@@ -130,7 +139,6 @@ impl AnimeRepository for DieselAnimeRepository {
             match animes::table
                 .filter(animes::work_id.eq(work_id))
                 .filter(animes::series_no.eq(series_no))
-                .filter(animes::season_id.eq(season_id))
                 .first::<Anime>(&mut conn)
             {
                 Ok(s) => Ok(s),
@@ -291,7 +299,7 @@ pub mod mock {
             {
                 let series = self.series.lock().unwrap();
                 if let Some(s) = series.iter().find(|s| {
-                    s.work_id == work_id && s.series_no == series_no && s.season_id == season_id
+                    s.work_id == work_id && s.series_no == series_no
                 }) {
                     return Ok(s.clone());
                 }
@@ -409,6 +417,31 @@ mod tests {
 
         let work2_animes = repo.find_by_work_id(2).await.unwrap();
         assert_eq!(work2_animes.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_find_or_create_uses_work_and_series_unique_key() {
+        let existing = Anime {
+            anime_id: 1,
+            work_id: 10,
+            series_no: 2,
+            season_id: 100,
+            description: Some("Existing".to_string()),
+            aired_date: None,
+            end_date: None,
+            created_at: Utc::now().naive_utc(),
+            updated_at: Utc::now().naive_utc(),
+        };
+        let repo = MockAnimeRepository::with_data(vec![existing]);
+
+        let found = repo
+            .find_or_create(10, 2, 200, Some("New description".to_string()))
+            .await
+            .unwrap();
+
+        assert_eq!(found.anime_id, 1);
+        assert_eq!(found.season_id, 100);
+        assert_eq!(repo.find_by_work_id(10).await.unwrap().len(), 1);
     }
 
     #[tokio::test]

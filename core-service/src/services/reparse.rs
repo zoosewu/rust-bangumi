@@ -419,7 +419,7 @@ fn create_or_get_season(
     }
 }
 
-/// 建立或取得 anime series（依 work_id + series_no + season_id）
+/// 建立或取得 anime series（依 work_id + series_no）
 fn create_or_get_series(
     conn: &mut PgConnection,
     work_id: i32,
@@ -427,10 +427,10 @@ fn create_or_get_series(
     season_id: i32,
     description: &str,
 ) -> Result<Anime, String> {
+    // The database unique key is (work_id, series_no); season is editable metadata.
     match animes::table
         .filter(animes::work_id.eq(work_id))
         .filter(animes::series_no.eq(series_no))
-        .filter(animes::season_id.eq(season_id))
         .first::<Anime>(conn)
     {
         Ok(anime) => Ok(anime),
