@@ -17,13 +17,14 @@ services:
     container_name: bangumi-qbittorrent
     environment:
       WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+      TORRENTING_PORT: ${QBITTORRENT_DHT_PORT:-16881}
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       TZ: ${TZ:-Asia/Taipei}
     ports:
       - "${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}"
-      - "${QBITTORRENT_DHT_PORT:-6881}:${QBITTORRENT_DHT_PORT:-6881}"
-      - "${QBITTORRENT_DHT_PORT:-6881}:${QBITTORRENT_DHT_PORT:-6881}/udp"
+      - "${QBITTORRENT_DHT_PORT:-16881}:${QBITTORRENT_DHT_PORT:-16881}"
+      - "${QBITTORRENT_DHT_PORT:-16881}:${QBITTORRENT_DHT_PORT:-16881}/udp"
     volumes:
       - ${QBITTORRENT_CONFIG_DIR:?QBITTORRENT_CONFIG_DIR is required}:/config
       - ${DOWNLOADS_DIR:?DOWNLOADS_DIR is required}:/downloads
@@ -91,4 +92,3 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-
