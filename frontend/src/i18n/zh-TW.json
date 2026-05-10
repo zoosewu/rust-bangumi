@@ -175,6 +175,7 @@
     "created": "建立時間",
     "download": "下載",
     "filterStatus": "篩選狀態",
+    "filtered": "已篩選",
     "conflict": "衝突",
     "retry": "重試",
     "retrySuccess": "已重新派送下載",

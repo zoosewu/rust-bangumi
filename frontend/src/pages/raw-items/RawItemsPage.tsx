@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { TitleCell } from "@/components/shared/TitleCell"
 import { formatDateTime } from "@/lib/datetime"
+import { getRawItemStatusKind } from "./rawItemStatus"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
@@ -124,20 +125,20 @@ export default function RawItemsPage() {
       cellClassName: "w-20",
       render: (item) => {
         const dl = item.download as { download_id: number; status: string; progress: number | null } | null | undefined
-        if (!dl || !RETRYABLE_DOWNLOAD.has(dl.status)) return "-"
+        if (!dl || !RETRYABLE_DOWNLOAD.has(dl.status)) return null
         return (
           <Button
             variant="outline"
-            size="sm"
-            className="h-6 px-2"
+            size="icon"
+            className="h-6 w-6"
             disabled={retryOne.isLoading}
+            title={t("rawItems.retry")}
             onClick={(e) => {
               e.stopPropagation()
               handleRetry(dl.download_id)
             }}
           >
-            <RotateCw className="h-3 w-3 mr-1" />
-            {t("rawItems.retry")}
+            <RotateCw className="h-3 w-3" />
           </Button>
         )
       },
@@ -161,17 +162,28 @@ export default function RawItemsPage() {
     {
       key: "status",
       header: t("common.status"),
-      render: (item) => (
-        <div className="flex items-center gap-1.5">
-          {Boolean(item.conflict_flag) ? (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
-              {t("rawItems.conflict")}
-            </Badge>
-          ) : (
-            <StatusBadge status={String(item.status)} />
-          )}
-        </div>
-      ),
+      render: (item) => {
+        const statusKind = getRawItemStatusKind({
+          filter_passed: item.filter_passed as boolean | null | undefined,
+          conflict_flag: Boolean(item.conflict_flag),
+          status: String(item.status),
+        })
+        return (
+          <div className="flex items-center gap-1.5">
+            {statusKind === "filtered" ? (
+              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300 border-slate-200 dark:border-slate-800">
+                {t("rawItems.filtered")}
+              </Badge>
+            ) : statusKind === "conflict" ? (
+              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
+                {t("rawItems.conflict")}
+              </Badge>
+            ) : (
+              <StatusBadge status={statusKind} />
+            )}
+          </div>
+        )
+      },
     },
     {
       key: "subscription_id",

@@ -16,6 +16,10 @@ use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
 
+#[cfg(test)]
+#[path = "raw_items_filter_status_test.rs"]
+mod raw_items_filter_status_test;
+
 // ============ DTOs ============
 
 #[derive(Debug, Deserialize)]
@@ -133,6 +137,36 @@ fn load_conflict_flags(
     Ok(rows.into_iter().flatten().collect())
 }
 
+fn collect_filter_passed(rows: Vec<(Option<i32>, bool)>) -> HashMap<i32, Option<bool>> {
+    let mut map = HashMap::new();
+    for (raw_item_id, filtered_flag) in rows {
+        if let Some(rid) = raw_item_id {
+            map.entry(rid)
+                .and_modify(|existing: &mut Option<bool>| {
+                    if filtered_flag {
+                        *existing = Some(false);
+                    }
+                })
+                .or_insert(Some(!filtered_flag));
+        }
+    }
+    map
+}
+
+/// Batch-load filter status for a set of raw_item_ids.
+/// `filter_passed=false` means at least one link was filtered out.
+fn load_filter_passed(
+    conn: &mut diesel::PgConnection,
+    item_ids: &[i32],
+) -> Result<HashMap<i32, Option<bool>>, diesel::result::Error> {
+    let rows: Vec<(Option<i32>, bool)> = anime_links::table
+        .filter(anime_links::raw_item_id.eq_any(item_ids))
+        .select((anime_links::raw_item_id, anime_links::filtered_flag))
+        .load(conn)?;
+
+    Ok(collect_filter_passed(rows))
+}
+
 fn status_priority(status: &str) -> u8 {
     match status {
         "completed" => 4,
@@ -195,6 +229,8 @@ pub async fn list_raw_items(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let conflict_set = load_conflict_flags(&mut conn, &item_ids)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let filter_map = load_filter_passed(&mut conn, &item_ids)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(
         items
@@ -206,7 +242,8 @@ pub async fn list_raw_items(
                     progress: d.progress,
                 });
                 let conflict_flag = conflict_set.contains(&item.item_id);
-                RawItemResponse::from_item(item, dl, None, conflict_flag)
+                let filter_passed = filter_map.get(&item.item_id).copied().flatten();
+                RawItemResponse::from_item(item, dl, filter_passed, conflict_flag)
             })
             .collect(),
     ))

@@ -175,6 +175,7 @@
     "created": "Created",
     "download": "Download",
     "filterStatus": "Filter Status",
+    "filtered": "Filtered",
     "conflict": "Conflict",
     "retry": "Retry",
     "retrySuccess": "Download re-dispatched",

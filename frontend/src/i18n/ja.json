@@ -175,6 +175,7 @@
     "created": "作成日時",
     "download": "ダウンロード",
     "filterStatus": "フィルター状態",
+    "filtered": "フィルター済み",
     "conflict": "コンフリクト",
     "retry": "再試行",
     "retrySuccess": "ダウンロードを再送信しました",
