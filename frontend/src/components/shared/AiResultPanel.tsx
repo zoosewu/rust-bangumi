@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge, type TagBadgeTone } from "@/components/shared/TagBadge"
 import { Loader2, RefreshCw, Clock } from "lucide-react"
 import type { PendingAiResult, ConfirmPendingRequest } from "@/schemas/ai"
 
@@ -141,14 +141,22 @@ export function AiResultPanel({
       ),
   )
 
-  const statusVariant = (
+  const statusTone: TagBadgeTone = (
     {
-      generating: "secondary",
-      pending: "default",
-      confirmed: "outline",
-      failed: "destructive",
+      generating: "info",
+      pending: "warning",
+      confirmed: "success",
+      failed: "danger",
     } as const
-  )[result.status] ?? "default"
+  )[result.status] ?? "neutral"
+  const statusLabel = (
+    {
+      generating: t("tags.ai.generating"),
+      pending: t("tags.ai.pending"),
+      confirmed: t("tags.ai.confirmed"),
+      failed: t("tags.ai.failed"),
+    } as const
+  )[result.status] ?? result.status
 
   const isPending = result.status === "pending"
   const isFailed = result.status === "failed"
@@ -184,10 +192,10 @@ export function AiResultPanel({
             {new Date(result.created_at).toLocaleString()}
           </p>
         </div>
-        <Badge variant={statusVariant}>
+        <TagBadge tone={statusTone}>
           {isGenerating && <Loader2 className="mr-1 size-3 animate-spin" />}
-          {result.status}
-        </Badge>
+          {statusLabel}
+        </TagBadge>
       </div>
 
       {/* 錯誤訊息 */}

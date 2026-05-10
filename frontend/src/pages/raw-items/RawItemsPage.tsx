@@ -9,7 +9,6 @@ import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { Badge } from "@/components/ui/badge"
 import { DownloadBadge } from "@/components/shared/DownloadBadge"
 import { Button } from "@/components/ui/button"
 import {
@@ -170,17 +169,7 @@ export default function RawItemsPage() {
         })
         return (
           <div className="flex items-center gap-1.5">
-            {statusKind === "filtered" ? (
-              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300 border-slate-200 dark:border-slate-800">
-                {t("rawItems.filtered")}
-              </Badge>
-            ) : statusKind === "conflict" ? (
-              <Badge variant="outline" className="text-xs px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border-amber-200 dark:border-amber-800">
-                {t("rawItems.conflict")}
-              </Badge>
-            ) : (
-              <StatusBadge status={statusKind} />
-            )}
+            <StatusBadge status={statusKind} />
           </div>
         )
       },

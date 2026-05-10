@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import {
   Select,
   SelectContent,
@@ -600,20 +600,20 @@ export function ParserPreviewSection({ preview }: { preview: ParserPreviewRespon
                     <div className="flex items-start gap-2">
                       <span className="shrink-0 mt-0.5">
                         {result.is_newly_matched && (
-                          <Badge variant="default" className="text-xs">
-                            {t("parsers.newlyMatched", "new")}
-                          </Badge>
+                          <TagBadge tone="success">
+                            {t("parsers.newlyMatched")}
+                          </TagBadge>
                         )}
                         {result.is_override && (
-                          <Badge variant="secondary" className="text-xs">
+                          <TagBadge tone="warning">
                             <AlertTriangle className="h-3 w-3 mr-1" />
-                            {t("parsers.override", "override")}
-                          </Badge>
+                            {t("parsers.override")}
+                          </TagBadge>
                         )}
                         {!result.is_newly_matched && !result.is_override && (
-                          <Badge variant="outline" className="text-xs text-muted-foreground">
-                            {result.after_matched_by ? t("parsers.existing", "existing") : t("parsers.unmatched", "—")}
-                          </Badge>
+                          <TagBadge tone="muted">
+                            {result.after_matched_by ? t("parsers.existing") : t("parsers.unmatched")}
+                          </TagBadge>
                         )}
                       </span>
                       <span className="font-mono break-all">{result.title}</span>

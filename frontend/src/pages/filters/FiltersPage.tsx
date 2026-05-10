@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { Plus, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { FilterAddForm } from "@/components/shared/FilterAddForm"
 import { DeleteFilterRuleDialog } from "@/components/shared/DeleteFilterRuleDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -79,9 +79,9 @@ export default function FiltersPage() {
       key: "is_positive",
       header: t("common.type"),
       render: (item) => (
-        <Badge variant={(item.is_positive as boolean) ? "default" : "destructive"}>
-          {(item.is_positive as boolean) ? "include" : "exclude"}
-        </Badge>
+        <TagBadge tone={(item.is_positive as boolean) ? "success" : "danger"}>
+          {(item.is_positive as boolean) ? t("tags.filter.include") : t("tags.filter.exclude")}
+        </TagBadge>
       ),
     },
     {

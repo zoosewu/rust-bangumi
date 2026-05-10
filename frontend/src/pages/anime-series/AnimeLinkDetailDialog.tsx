@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { CopyButton } from "@/components/shared/CopyButton"
 import type { AnimeLinkRich } from "@/schemas/anime"
 
@@ -48,9 +48,9 @@ export function AnimeLinkDetailDialog({
                 <span className="text-muted-foreground">Ep{link.episode_no}</span>
                 <span className="font-semibold">{link.group_name}</span>
                 {link.conflict_flag && (
-                  <Badge variant="destructive" className="text-xs">
-                    {t("animeLink.conflict", "Conflict")}
-                  </Badge>
+                  <TagBadge tone="warning">
+                    {t("tags.status.conflict")}
+                  </TagBadge>
                 )}
               </div>
               <p className="opacity-70 truncate">{link.title ?? "-"}</p>

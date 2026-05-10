@@ -12,7 +12,7 @@ import { InfoSection } from "@/components/shared/InfoSection"
 import { InfoItem } from "@/components/shared/InfoItem"
 import { DownloadBadge } from "@/components/shared/DownloadBadge"
 import { CopyButton } from "@/components/shared/CopyButton"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -407,6 +407,7 @@ function LinkRow({
   onGroupClick: (g: { id: number; name: string }) => void
   onConflictClick: (link: AnimeLinkRich) => void
 }) {
+  const { t } = useTranslation()
   const dl = link.download
   return (
     <div
@@ -442,12 +443,11 @@ function LinkRow({
         {passed && dl ? (
           <DownloadBadge status={dl.status} progress={dl.progress} />
         ) : passed ? (
-          <Badge variant="outline" className="text-xs">pending</Badge>
+          <TagBadge tone="warning">{t("tags.download.pending")}</TagBadge>
         ) : (
-          <span className="text-xs opacity-60">filtered</span>
+          <TagBadge tone="muted">{t("tags.status.eliminated")}</TagBadge>
         )}
       </span>
     </div>
   )
 }
-

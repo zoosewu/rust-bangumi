@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Trash2, Plus, ChevronUp, Pencil } from "lucide-react"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
@@ -199,7 +199,7 @@ export function ParserEditor({
               key={parser.parser_id}
               className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
             >
-              <Badge variant="secondary">P{parser.priority}</Badge>
+              <TagBadge tone="info">{t("tags.parser.priority", { priority: parser.priority })}</TagBadge>
               <span className="font-medium">{parser.name}</span>
               <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
                 {parser.condition_regex}

@@ -31,7 +31,6 @@ function mergeItems(
   before: FilterPreviewPanelProps["before"],
   after?: FilterPreviewPanelProps["after"],
 ): MergedItem[] {
-  const beforePassedSet = new Set(before.passed_items.map((i) => i.item_id))
   const afterPassedSet = after
     ? new Set(after.passed_items.map((i) => i.item_id))
     : null

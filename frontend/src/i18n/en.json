@@ -53,6 +53,45 @@
     "searchPlaceholder": "Search...",
     "noResults": "No results"
   },
+  "tags": {
+    "status": {
+      "pending": "Pending",
+      "parsed": "Parsed",
+      "noMatch": "No match",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "eliminated": "Eliminated",
+      "conflict": "Conflict"
+    },
+    "download": {
+      "completed": "Completed",
+      "downloading": "Downloading",
+      "failed": "Failed",
+      "downloaderError": "Downloader error",
+      "noDownloader": "No downloader",
+      "cancelled": "Cancelled",
+      "pending": "Pending"
+    },
+    "filter": {
+      "include": "Include",
+      "exclude": "Exclude",
+      "passed": "Passed",
+      "eliminated": "Eliminated",
+      "newlyPassed": "Newly passed",
+      "newlyEliminated": "Newly eliminated"
+    },
+    "ai": {
+      "generating": "Generating",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "failed": "Failed",
+      "parser": "Parser",
+      "filter": "Filter"
+    },
+    "parser": {
+      "priority": "P{{priority}}"
+    }
+  },
   "dashboard": {
     "title": "Dashboard",
     "services": "Services",
@@ -175,7 +214,7 @@
     "created": "Created",
     "download": "Download",
     "filterStatus": "Filter Status",
-    "filtered": "Filtered",
+    "filtered": "Eliminated",
     "conflict": "Conflict",
     "retry": "Retry",
     "retrySuccess": "Download re-dispatched",
@@ -200,7 +239,7 @@
     "addRule": "Add",
     "regexPlaceholder": "Enter regex pattern...",
     "passed": "Passed",
-    "filtered": "Filtered",
+    "filtered": "Eliminated",
     "confirmRemove": "Remove filter rule?"
   },
   "parser": {
@@ -230,7 +269,7 @@
     "before": "Before (without this filter)",
     "after": "After (with this filter)",
     "passed": "Passed",
-    "filtered": "Filtered",
+    "filtered": "Eliminated",
     "addFilter": "Add Filter",
     "noRules": "No filter rules found."
   },

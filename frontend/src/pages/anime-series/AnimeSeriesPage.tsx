@@ -6,7 +6,7 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { TitleCell } from "@/components/shared/TitleCell"
@@ -61,9 +61,9 @@ export default function AnimePage() {
       render: (item) => {
         const s = item.season as { year: number; season: string }
         return (
-          <Badge variant="outline">
+          <TagBadge>
             {s.year} {s.season}
-          </Badge>
+          </TagBadge>
         )
       },
     },
@@ -85,9 +85,9 @@ export default function AnimePage() {
         return (
           <div className="flex flex-wrap gap-1">
             {subs.map((sub) => (
-              <Badge key={sub.subscription_id} variant="secondary" className="text-xs">
+              <TagBadge key={sub.subscription_id} tone="info">
                 {sub.name ?? `#${sub.subscription_id}`}
-              </Badge>
+              </TagBadge>
             ))}
           </div>
         )

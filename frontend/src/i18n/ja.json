@@ -53,6 +53,45 @@
     "searchPlaceholder": "検索...",
     "noResults": "結果なし"
   },
+  "tags": {
+    "status": {
+      "pending": "保留中",
+      "parsed": "解析済み",
+      "noMatch": "一致なし",
+      "failed": "失敗",
+      "skipped": "スキップ済み",
+      "eliminated": "除外済み",
+      "conflict": "コンフリクト"
+    },
+    "download": {
+      "completed": "完了",
+      "downloading": "ダウンロード中",
+      "failed": "失敗",
+      "downloaderError": "ダウンローダーエラー",
+      "noDownloader": "ダウンローダーなし",
+      "cancelled": "キャンセル済み",
+      "pending": "待機中"
+    },
+    "filter": {
+      "include": "含む",
+      "exclude": "除外",
+      "passed": "通過",
+      "eliminated": "除外済み",
+      "newlyPassed": "新規通過",
+      "newlyEliminated": "新規除外"
+    },
+    "ai": {
+      "generating": "生成中",
+      "pending": "確認待ち",
+      "confirmed": "確認済み",
+      "failed": "失敗",
+      "parser": "解析",
+      "filter": "フィルター"
+    },
+    "parser": {
+      "priority": "P{{priority}}"
+    }
+  },
   "dashboard": {
     "title": "ダッシュボード",
     "services": "サービス",
@@ -175,7 +214,7 @@
     "created": "作成日時",
     "download": "ダウンロード",
     "filterStatus": "フィルター状態",
-    "filtered": "フィルター済み",
+    "filtered": "除外済み",
     "conflict": "コンフリクト",
     "retry": "再試行",
     "retrySuccess": "ダウンロードを再送信しました",
@@ -200,7 +239,7 @@
     "addRule": "追加",
     "regexPlaceholder": "正規表現パターンを入力...",
     "passed": "通過",
-    "filtered": "フィルター済み",
+    "filtered": "除外済み",
     "confirmRemove": "フィルタールールを削除しますか？"
   },
   "parser": {
@@ -230,7 +269,7 @@
     "before": "変更前（このフィルターなし）",
     "after": "変更後（このフィルターあり）",
     "passed": "通過",
-    "filtered": "フィルター済み",
+    "filtered": "除外済み",
     "addFilter": "フィルターを追加",
     "noRules": "フィルタールールがありません。"
   },

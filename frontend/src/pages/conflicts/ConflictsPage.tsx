@@ -5,11 +5,11 @@ import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { AlertTriangle } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { useTableSearch } from "@/hooks/useTableSearch"
+import { TagBadge } from "@/components/shared/TagBadge"
 
 export default function ConflictsPage() {
   const { t } = useTranslation()
@@ -31,7 +31,7 @@ export default function ConflictsPage() {
       <PageHeader
         title={t("conflicts.title")}
         badge={conflicts && conflicts.length > 0 ? (
-          <Badge variant="destructive">{conflicts.length}</Badge>
+          <TagBadge tone="danger">{conflicts.length}</TagBadge>
         ) : undefined}
       />
 
@@ -113,9 +113,9 @@ export default function ConflictsPage() {
                     {c.group_name}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Badge variant="outline" className="text-amber-600 border-amber-300">
+                    <TagBadge tone="warning">
                       {c.conflicting_link_ids.length + 1}
-                    </Badge>
+                    </TagBadge>
                   </td>
                 </tr>
               ))}

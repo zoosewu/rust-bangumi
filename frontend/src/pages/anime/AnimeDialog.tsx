@@ -12,7 +12,7 @@ import { FilterRuleEditor } from "@/components/shared/FilterRuleEditor"
 import { ParserEditor } from "@/components/shared/ParserEditor"
 import { InfoSection } from "@/components/shared/InfoSection"
 import { InfoItem } from "@/components/shared/InfoItem"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnimeDialog as AnimeSeriesDialog } from "@/pages/anime-series/AnimeSeriesDialog"
 import type { AnimeWork, AnimeRich } from "@/schemas/anime"
@@ -141,18 +141,18 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
                     className="w-full flex items-center gap-3 px-3 py-2 text-sm text-left hover:bg-accent transition-colors"
                     onClick={() => setSelectedSeries(s)}
                   >
-                    <Badge variant="outline">
+                    <TagBadge>
                       S{s.series_no} - {s.season.year} {s.season.season}
-                    </Badge>
+                    </TagBadge>
                     <span className="tabular-nums">
                       {s.episode_downloaded} / {s.episode_found} eps
                     </span>
                     {s.subscriptions.length > 0 && (
                       <div className="flex gap-1 ml-auto">
                         {s.subscriptions.map((sub) => (
-                          <Badge key={sub.subscription_id} variant="secondary" className="text-xs">
+                          <TagBadge key={sub.subscription_id} tone="info">
                             {sub.name ?? `#${sub.subscription_id}`}
-                          </Badge>
+                          </TagBadge>
                         ))}
                       </div>
                     )}

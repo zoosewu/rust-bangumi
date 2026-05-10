@@ -5,7 +5,7 @@ import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { SearchBar } from "@/components/shared/SearchBar"
 import { PageHeader } from "@/components/shared/PageHeader"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import type { SearchResult } from "@/schemas/search"
 import { DetailDialog } from "./DetailDialog"
 import { CreateSubscriptionWizard } from "@/pages/subscriptions/CreateSubscriptionWizard"
@@ -94,9 +94,9 @@ export default function SearchPage() {
                 )}
               </div>
               <p className="text-sm font-medium line-clamp-2 w-full">{result.title}</p>
-              <Badge variant="outline" className="text-xs self-start">
+              <TagBadge className="self-start">
                 {result.source}
-              </Badge>
+              </TagBadge>
             </button>
           ))}
         </div>

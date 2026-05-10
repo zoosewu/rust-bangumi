@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { AppRuntime } from "@/runtime/AppRuntime"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
 import { AiResultPanel } from "@/components/shared/AiResultPanel"
 import { FilterRulePanel, type FilterRuleDraft } from "./FilterRulePanel"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge, type TagBadgeTone } from "@/components/shared/TagBadge"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import {
   type ParserFormState,
@@ -61,11 +62,11 @@ function parseFilterRules(data: Record<string, unknown> | null): GeneratedFilter
 
 // --- StatusBadge (local) ---
 
-const STATUS_CONFIG: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
-  generating: { label: "生成中", variant: "secondary" },
-  pending: { label: "待確認", variant: "default" },
-  confirmed: { label: "已確認", variant: "outline" },
-  failed: { label: "失敗", variant: "destructive" },
+const STATUS_CONFIG: Record<string, { labelKey: string; tone: TagBadgeTone }> = {
+  generating: { labelKey: "tags.ai.generating", tone: "info" },
+  pending: { labelKey: "tags.ai.pending", tone: "warning" },
+  confirmed: { labelKey: "tags.ai.confirmed", tone: "success" },
+  failed: { labelKey: "tags.ai.failed", tone: "danger" },
 }
 
 // --- RowHeader ---
@@ -83,7 +84,8 @@ function RowHeader({
   selected?: boolean
   onToggleSelect?: () => void
 }) {
-  const statusCfg = STATUS_CONFIG[result.status] ?? { label: result.status, variant: "secondary" as const }
+  const { t } = useTranslation()
+  const statusCfg = STATUS_CONFIG[result.status]
   return (
     <button
       type="button"
@@ -102,16 +104,16 @@ function RowHeader({
       {expanded
         ? <ChevronDown className="size-4 text-muted-foreground shrink-0" />
         : <ChevronRight className="size-4 text-muted-foreground shrink-0" />}
-      <span className="text-xs px-2 py-0.5 rounded bg-muted font-mono uppercase">
-        {result.result_type}
-      </span>
+      <TagBadge tone="info" className="uppercase">
+        {result.result_type === "filter" ? t("tags.ai.filter") : t("tags.ai.parser")}
+      </TagBadge>
       <span className="flex-1 text-sm">{result.source_title}</span>
       <span className="text-xs text-muted-foreground">
         {new Date(result.created_at).toLocaleDateString()}
       </span>
-      <Badge variant={statusCfg.variant} className="text-xs shrink-0">
-        {statusCfg.label}
-      </Badge>
+      <TagBadge tone={statusCfg?.tone ?? "neutral"} className="shrink-0">
+        {statusCfg ? t(statusCfg.labelKey) : result.status}
+      </TagBadge>
     </button>
   )
 }

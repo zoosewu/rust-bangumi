@@ -2,7 +2,7 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Loader2, Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import type { AiProvider, TestAiProviderResult } from "@/schemas/ai"
@@ -54,11 +54,11 @@ export function AiProviderRow({ provider, index, onEdit, onDelete, onToggle, onT
       >
         <GripVertical className="size-4" />
       </button>
-      <Badge variant="outline">#{index + 1}</Badge>
+      <TagBadge>#{index + 1}</TagBadge>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{provider.name}</span>
-          <Badge>{provider.provider_kind}</Badge>
+          <TagBadge tone="info">{provider.provider_kind}</TagBadge>
         </div>
         <div className="text-xs text-muted-foreground truncate">
           {provider.model_name || "(未設定 model)"}

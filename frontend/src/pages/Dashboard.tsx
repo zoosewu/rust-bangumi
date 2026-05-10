@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { PageHeader } from "@/components/shared/PageHeader"
 import {
   Film,
@@ -47,9 +47,9 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold text-muted-foreground">{t("dashboard.services", "Services")}</h2>
               <div className="flex flex-wrap gap-2">
                 {stats.services.map((svc) => (
-                  <Badge
+                  <TagBadge
                     key={svc.name}
-                    variant={svc.is_healthy ? "default" : "destructive"}
+                    tone={svc.is_healthy ? "success" : "danger"}
                     className="gap-1"
                   >
                     {svc.is_healthy ? (
@@ -58,7 +58,7 @@ export default function Dashboard() {
                       <XCircle className="h-3 w-3" />
                     )}
                     {svc.name} ({svc.module_type})
-                  </Badge>
+                  </TagBadge>
                 ))}
               </div>
             </div>

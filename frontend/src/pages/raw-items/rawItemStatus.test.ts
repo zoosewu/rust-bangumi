@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest"
 import { getRawItemStatusKind } from "./rawItemStatus"
 
 describe("getRawItemStatusKind", () => {
-  it("prioritizes filtered status over conflicts and parser status", () => {
+  it("prioritizes eliminated status over conflicts and parser status", () => {
     expect(getRawItemStatusKind({
       filter_passed: false,
       conflict_flag: true,
       status: "parsed",
-    })).toBe("filtered")
+    })).toBe("eliminated")
   })
 
   it("shows conflict when item is not filtered", () => {

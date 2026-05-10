@@ -9,7 +9,7 @@ import { AutoResizeTextarea } from "@/components/shared/AutoResizeTextarea"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Switch } from "@/components/ui/switch"
 import {
   Card,
@@ -18,13 +18,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, RotateCcw, Plus, Pencil, Trash2, X, Check } from "lucide-react"
 import { toast } from "sonner"
@@ -119,9 +112,9 @@ function DownloaderPrioritySection() {
       <CardContent className="space-y-3">
         {sorted.map((m: ServiceModule, idx: number) => (
           <div key={m.module_id} className="flex items-center gap-3">
-            <Badge variant="outline" className="text-xs w-5 justify-center shrink-0">
+            <TagBadge className="w-5 justify-center shrink-0">
               {idx + 1}
-            </Badge>
+            </TagBadge>
             <span className="text-sm flex-1 truncate">{m.name}</span>
             <span className="text-xs text-muted-foreground shrink-0">{t("settings.downloader.priority")}</span>
             <Input

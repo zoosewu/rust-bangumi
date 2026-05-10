@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
+import { useTranslation } from "react-i18next"
 import { Effect } from "effect"
-import { Badge } from "@/components/ui/badge"
+import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Trash2, ChevronDown, ChevronRight, Plus, ChevronUp } from "lucide-react"
@@ -51,7 +52,6 @@ function FilterRuleRow({
   selected,
   onSelect,
   onUpdate,
-  requireDeleteConfirm,
   onDeleteRequest,
   readOnly,
 }: {
@@ -60,10 +60,10 @@ function FilterRuleRow({
   selected: boolean
   onSelect: () => void
   onUpdate?: (idx: number, changes: { is_positive?: boolean; regex_pattern?: string }) => void
-  requireDeleteConfirm: boolean
   onDeleteRequest: (idx: number) => void
   readOnly: boolean
 }) {
+  const { t } = useTranslation()
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onDeleteRequest(idx)
@@ -93,16 +93,16 @@ function FilterRuleRow({
               className="scale-75"
             />
             <span className={`text-[10px] font-medium w-12 ${rule.is_positive ? "text-emerald-600" : "text-destructive"}`}>
-              {rule.is_positive ? "Include" : "Exclude"}
+              {rule.is_positive ? t("tags.filter.include") : t("tags.filter.exclude")}
             </span>
           </div>
         ) : (
-          <Badge
-            variant={rule.is_positive ? "default" : "destructive"}
+          <TagBadge
+            tone={rule.is_positive ? "success" : "danger"}
             className="text-[10px] px-1.5 shrink-0"
           >
-            {rule.is_positive ? "include" : "exclude"}
-          </Badge>
+            {rule.is_positive ? t("tags.filter.include") : t("tags.filter.exclude")}
+          </TagBadge>
         )}
 
         {/* Regex pattern (editable or read-only) */}
@@ -248,7 +248,6 @@ export function FilterRulePanel({
               selected={selectedIdx === idx}
               onSelect={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
               onUpdate={onUpdate ? handleUpdate : undefined}
-              requireDeleteConfirm={requireDeleteConfirm}
               onDeleteRequest={handleDeleteRequest}
               readOnly={readOnly}
             />

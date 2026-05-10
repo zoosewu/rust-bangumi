@@ -53,6 +53,45 @@
     "searchPlaceholder": "搜尋...",
     "noResults": "無結果"
   },
+  "tags": {
+    "status": {
+      "pending": "待處理",
+      "parsed": "已解析",
+      "noMatch": "無匹配",
+      "failed": "失敗",
+      "skipped": "已略過",
+      "eliminated": "已淘汰",
+      "conflict": "衝突"
+    },
+    "download": {
+      "completed": "已完成",
+      "downloading": "下載中",
+      "failed": "失敗",
+      "downloaderError": "下載器錯誤",
+      "noDownloader": "無下載器",
+      "cancelled": "已取消",
+      "pending": "待下載"
+    },
+    "filter": {
+      "include": "包含",
+      "exclude": "排除",
+      "passed": "通過",
+      "eliminated": "已淘汰",
+      "newlyPassed": "新增通過",
+      "newlyEliminated": "新增淘汰"
+    },
+    "ai": {
+      "generating": "生成中",
+      "pending": "待確認",
+      "confirmed": "已確認",
+      "failed": "失敗",
+      "parser": "解析",
+      "filter": "篩選"
+    },
+    "parser": {
+      "priority": "P{{priority}}"
+    }
+  },
   "dashboard": {
     "title": "儀表板",
     "services": "服務",
@@ -175,7 +214,7 @@
     "created": "建立時間",
     "download": "下載",
     "filterStatus": "篩選狀態",
-    "filtered": "已篩選",
+    "filtered": "已淘汰",
     "conflict": "衝突",
     "retry": "重試",
     "retrySuccess": "已重新派送下載",
@@ -200,7 +239,7 @@
     "addRule": "新增",
     "regexPlaceholder": "輸入正規表達式...",
     "passed": "通過",
-    "filtered": "已篩選",
+    "filtered": "已淘汰",
     "confirmRemove": "移除篩選規則？"
   },
   "parser": {
@@ -230,7 +269,7 @@
     "before": "變更前（不含此篩選）",
     "after": "變更後（含此篩選）",
     "passed": "通過",
-    "filtered": "已篩選",
+    "filtered": "已淘汰",
     "addFilter": "新增篩選器",
     "noRules": "目前沒有篩選規則。"
   },
