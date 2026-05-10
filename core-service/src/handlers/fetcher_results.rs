@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::models::{
-    Anime, AnimeLink, AnimeWork, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason,
-    NewSubtitleGroup, RawAnimeItem, Season, Subscription, SubtitleGroup,
+    Anime, AnimeLink, AnimeWork, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason, NewSubtitleGroup,
+    RawAnimeItem, Season, Subscription, SubtitleGroup,
 };
-use crate::schema::{anime_links, animes, anime_works, seasons, subscriptions, subtitle_groups};
+use crate::schema::{anime_links, anime_works, animes, seasons, subscriptions, subtitle_groups};
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
@@ -197,8 +197,15 @@ pub async fn receive_fetcher_results(
                 match state.conflict_detection.detect_and_mark_conflicts().await {
                     Ok(result) => {
                         if !result.auto_dispatch_link_ids.is_empty() {
-                            if let Err(e) = state.dispatch_service.dispatch_new_links(result.auto_dispatch_link_ids).await {
-                                tracing::warn!("Auto-dispatch after conflict detection failed: {}", e);
+                            if let Err(e) = state
+                                .dispatch_service
+                                .dispatch_new_links(result.auto_dispatch_link_ids)
+                                .await
+                            {
+                                tracing::warn!(
+                                    "Auto-dispatch after conflict detection failed: {}",
+                                    e
+                                );
                             }
                         }
                     }
@@ -249,7 +256,10 @@ pub async fn receive_fetcher_results(
 // ============ Helper Functions ============
 
 /// Create or get an anime work by title
-pub(crate) fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<AnimeWork, String> {
+pub(crate) fn create_or_get_anime(
+    conn: &mut PgConnection,
+    title: &str,
+) -> Result<AnimeWork, String> {
     // Try to find existing anime work
     match anime_works::table
         .filter(anime_works::title.eq(title))
@@ -588,11 +598,17 @@ pub async fn receive_raw_fetcher_results(
                 let pool_clone = pool.clone();
                 let sub_id = payload.subscription_id;
                 tokio::spawn(async move {
-                    if let Err(e) = crate::ai::parser_generator::generate_parsers_for_subscription_batch(
-                        pool_clone,
-                        sub_id,
-                    ).await {
-                        tracing::warn!("Batch parser generation failed for subscription={}: {}", sub_id, e);
+                    if let Err(e) =
+                        crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+                            pool_clone, sub_id,
+                        )
+                        .await
+                    {
+                        tracing::warn!(
+                            "Batch parser generation failed for subscription={}: {}",
+                            sub_id,
+                            e
+                        );
                     }
                 });
             }
@@ -600,13 +616,14 @@ pub async fn receive_raw_fetcher_results(
             // 批次派發新建的下載連結
             if !new_link_ids.is_empty() {
                 // Trigger conflict detection before dispatch
-                let auto_dispatch_ids = match state.conflict_detection.detect_and_mark_conflicts().await {
-                    Ok(result) => result.auto_dispatch_link_ids,
-                    Err(e) => {
-                        tracing::warn!("Conflict detection failed: {}", e);
-                        vec![]
-                    }
-                };
+                let auto_dispatch_ids =
+                    match state.conflict_detection.detect_and_mark_conflicts().await {
+                        Ok(result) => result.auto_dispatch_link_ids,
+                        Err(e) => {
+                            tracing::warn!("Conflict detection failed: {}", e);
+                            vec![]
+                        }
+                    };
 
                 // Merge auto-dispatch IDs (from conflict auto-resolution) into new link IDs
                 new_link_ids.extend(auto_dispatch_ids);
@@ -754,13 +771,19 @@ pub(crate) fn process_parsed_result(
         // Compute and update filtered_flag based on current filter rules
         match crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link) {
             Ok(flag) if flag != created_link.filtered_flag => {
-                diesel::update(anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)))
-                    .set(anime_links::filtered_flag.eq(flag))
-                    .execute(conn)
-                    .map_err(|e| format!("Failed to update filtered_flag: {}", e))?;
+                diesel::update(
+                    anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)),
+                )
+                .set(anime_links::filtered_flag.eq(flag))
+                .execute(conn)
+                .map_err(|e| format!("Failed to update filtered_flag: {}", e))?;
             }
             Err(e) => {
-                tracing::warn!("Failed to compute filtered_flag for link {}: {}", created_link.link_id, e);
+                tracing::warn!(
+                    "Failed to compute filtered_flag for link {}: {}",
+                    created_link.link_id,
+                    e
+                );
             }
             _ => {}
         }

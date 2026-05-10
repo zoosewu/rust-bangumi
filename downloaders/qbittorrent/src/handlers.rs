@@ -3,8 +3,8 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use shared::DownloaderClient;
 use serde::Deserialize;
+use shared::DownloaderClient;
 use shared::{
     BatchCancelRequest, BatchCancelResponse, BatchDownloadRequest, BatchDownloadResponse,
     StatusQueryResponse,
@@ -172,7 +172,9 @@ pub async fn set_credentials<C: DownloaderClient + 'static>(
     match client.login(&req.username, &req.password).await {
         Ok(_) => {
             tracing::info!("qBittorrent 帳密已更新");
-            Ok(Json(serde_json::json!({"message": "Credentials updated successfully"})))
+            Ok(Json(
+                serde_json::json!({"message": "Credentials updated successfully"}),
+            ))
         }
         Err(e) => {
             tracing::error!("設定 qBittorrent 帳密失敗: {}", e);

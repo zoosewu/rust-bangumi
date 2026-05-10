@@ -3,13 +3,13 @@ use diesel::prelude::*;
 use serde_json::Value;
 use std::sync::Arc;
 
+use super::client::AiError;
+use super::prompts::*;
+use crate::ai::{build_ai_chain, AttemptRecord};
 use crate::db::DbPool;
 use crate::models::{NewPendingAiResult, NewTitleParser, PendingAiResult, RawAnimeItem};
 use crate::schema::{ai_prompt_settings, pending_ai_results, raw_anime_items, title_parsers};
 use crate::services::title_parser::ParseStatus;
-use crate::ai::{build_ai_chain, AttemptRecord};
-use super::client::AiError;
-use super::prompts::*;
 
 /// 為單一動畫標題生成 parser（背景非同步觸發）
 pub async fn generate_parser_for_title(
@@ -29,7 +29,13 @@ pub async fn generate_parser_for_title(
             .optional()
             .map_err(|e| e.to_string())?;
         let fixed = non_empty(temp_fixed_prompt)
-            .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_parser_prompt.clone())))
+            .or_else(|| {
+                non_empty(
+                    prompt_settings
+                        .as_ref()
+                        .and_then(|p| p.fixed_parser_prompt.clone()),
+                )
+            })
             .unwrap_or_else(|| DEFAULT_FIXED_PARSER_PROMPT.to_string());
         let custom = non_empty(temp_custom_prompt)
             .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_parser_prompt)));
@@ -82,7 +88,10 @@ pub async fn generate_parser_for_title(
         Ok(Some(chain)) => {
             let system = build_system_prompt(Some(&fixed_prompt));
             let user = build_parser_user_prompt(&source_title, custom_prompt.as_deref());
-            match chain.chat_completion_structured(&system, &user, &parser_schema()).await {
+            match chain
+                .chat_completion_structured(&system, &user, &parser_schema())
+                .await
+            {
                 Ok((resp, attempts)) => {
                     if !attempts.is_empty() {
                         tracing::info!(
@@ -114,12 +123,8 @@ pub async fn generate_parser_for_title(
             let extracted = super::extract_json(&json_str);
             tracing::debug!("AI 原始回應 pending_id={}: {:?}", pending_id, json_str);
             if extracted.is_empty() {
-                return update_pending_failed(
-                    &pool,
-                    pending_id,
-                    "AI 回應為空或無法提取 JSON",
-                )
-                .await;
+                return update_pending_failed(&pool, pending_id, "AI 回應為空或無法提取 JSON")
+                    .await;
             }
             match serde_json::from_str::<Value>(extracted) {
                 Ok(mut data) => {
@@ -130,7 +135,8 @@ pub async fn generate_parser_for_title(
                     }
                     // 修正雙重轉義的 regex 欄位
                     for field in &["condition_regex", "parse_regex"] {
-                        if let Some(fixed) = data.get(*field)
+                        if let Some(fixed) = data
+                            .get(*field)
                             .and_then(|v| v.as_str())
                             .map(super::fix_regex_escaping)
                         {
@@ -151,7 +157,11 @@ pub async fn generate_parser_for_title(
                     update_pending_failed(
                         &pool,
                         pending_id,
-                        &format!("JSON 解析失敗: {}（原始回應長度: {} 字元）", e, json_str.len()),
+                        &format!(
+                            "JSON 解析失敗: {}（原始回應長度: {} 字元）",
+                            e,
+                            json_str.len()
+                        ),
                     )
                     .await
                 }
@@ -283,14 +293,19 @@ pub async fn generate_parsers_for_subscription_batch(
         };
 
         if unmatched.is_empty() {
-            tracing::info!("subscription={} 批次解析完成（iteration={}）", subscription_id, iteration);
+            tracing::info!(
+                "subscription={} 批次解析完成（iteration={}）",
+                subscription_id,
+                iteration
+            );
             return Ok(());
         }
 
         // 去重標題，最多取 24 個（避免佔用過多 token）
         let unique_titles: Vec<String> = {
             let mut seen = std::collections::HashSet::new();
-            unmatched.iter()
+            unmatched
+                .iter()
                 .filter(|item| seen.insert(item.title.clone()))
                 .take(24)
                 .map(|item| item.title.clone())
@@ -299,7 +314,9 @@ pub async fn generate_parsers_for_subscription_batch(
 
         tracing::info!(
             "subscription={} 批次解析 iteration={}: {} 個唯一標題",
-            subscription_id, iteration, unique_titles.len()
+            subscription_id,
+            iteration,
+            unique_titles.len()
         );
 
         // 建立 pending record（status=generating）
@@ -343,7 +360,9 @@ pub async fn generate_parsers_for_subscription_batch(
         let chain = match chain_opt {
             Some(c) => c,
             None => {
-                update_pending_failed(&pool, pending_id, "AI 未設定").await.ok();
+                update_pending_failed(&pool, pending_id, "AI 未設定")
+                    .await
+                    .ok();
                 return Ok(());
             }
         };
@@ -351,7 +370,10 @@ pub async fn generate_parsers_for_subscription_batch(
         // 呼叫 AI
         let system = build_system_prompt(Some(&fixed_prompt));
         let user = build_parser_batch_user_prompt(&unique_titles, custom_prompt.as_deref());
-        let json_str = match chain.chat_completion_structured(&system, &user, &parser_schema()).await {
+        let json_str = match chain
+            .chat_completion_structured(&system, &user, &parser_schema())
+            .await
+        {
             Ok((s, attempts)) => {
                 if !attempts.is_empty() {
                     tracing::info!(
@@ -370,7 +392,9 @@ pub async fn generate_parsers_for_subscription_batch(
                         "AI parser batch fallback chain exhausted"
                     );
                 }
-                update_pending_failed(&pool, pending_id, &e.to_string()).await.ok();
+                update_pending_failed(&pool, pending_id, &e.to_string())
+                    .await
+                    .ok();
                 return Err(e.to_string());
             }
         };
@@ -380,30 +404,51 @@ pub async fn generate_parsers_for_subscription_batch(
         // 解析 AI 回應
         let extracted = super::extract_json(&json_str);
         if extracted.is_empty() {
-            update_pending_failed(&pool, pending_id, "AI 回應為空或無法提取 JSON").await.ok();
+            update_pending_failed(&pool, pending_id, "AI 回應為空或無法提取 JSON")
+                .await
+                .ok();
             break;
         }
         let sanitized = super::sanitize_ai_json(extracted);
         let mut data: Value = match serde_json::from_str(&sanitized) {
             Ok(v) => v,
             Err(e) => {
-                tracing::warn!("Batch JSON 解析失敗 pending_id={}: {}\nraw: {:?}", pending_id, e, json_str);
+                tracing::warn!(
+                    "Batch JSON 解析失敗 pending_id={}: {}\nraw: {:?}",
+                    pending_id,
+                    e,
+                    json_str
+                );
                 update_pending_failed(
-                    &pool, pending_id,
-                    &format!("JSON 解析失敗: {}（原始回應長度: {} 字元）", e, json_str.len()),
-                ).await.ok();
+                    &pool,
+                    pending_id,
+                    &format!(
+                        "JSON 解析失敗: {}（原始回應長度: {} 字元）",
+                        e,
+                        json_str.len()
+                    ),
+                )
+                .await
+                .ok();
                 continue;
             }
         };
 
         if data.get("condition_regex").is_none() || data.get("parse_regex").is_none() {
-            update_pending_failed(&pool, pending_id, "AI JSON 缺少 condition_regex/parse_regex").await.ok();
+            update_pending_failed(
+                &pool,
+                pending_id,
+                "AI JSON 缺少 condition_regex/parse_regex",
+            )
+            .await
+            .ok();
             continue;
         }
 
         // 修正雙重轉義的 regex 欄位（結構化輸出時部分模型會把 \[ 輸出成 \\[）
         for field in &["condition_regex", "parse_regex"] {
-            if let Some(fixed) = data.get(*field)
+            if let Some(fixed) = data
+                .get(*field)
                 .and_then(|v| v.as_str())
                 .map(super::fix_regex_escaping)
             {
@@ -421,15 +466,18 @@ pub async fn generate_parsers_for_subscription_batch(
                 .unwrap_or_default();
 
             if !claimed.is_empty() {
-                let actually_matched = claimed.iter().filter(|title| {
-                    let ok_cond = regex::Regex::new(condition_str)
-                        .map(|re| re.is_match(title))
-                        .unwrap_or(false);
-                    let ok_parse = regex::Regex::new(parse_str)
-                        .map(|re| re.is_match(title))
-                        .unwrap_or(false);
-                    ok_cond && ok_parse
-                }).count();
+                let actually_matched = claimed
+                    .iter()
+                    .filter(|title| {
+                        let ok_cond = regex::Regex::new(condition_str)
+                            .map(|re| re.is_match(title))
+                            .unwrap_or(false);
+                        let ok_parse = regex::Regex::new(parse_str)
+                            .map(|re| re.is_match(title))
+                            .unwrap_or(false);
+                        ok_cond && ok_parse
+                    })
+                    .count();
 
                 let match_rate = actually_matched as f32 / claimed.len() as f32;
                 if actually_matched == 0 {
@@ -440,7 +488,10 @@ pub async fn generate_parsers_for_subscription_batch(
                 } else {
                     tracing::info!(
                         "Regex validation pending_id={}: {}/{} claimed titles matched ({:.0}%)",
-                        pending_id, actually_matched, claimed.len(), match_rate * 100.0
+                        pending_id,
+                        actually_matched,
+                        claimed.len(),
+                        match_rate * 100.0
                     );
                 }
             }
@@ -454,7 +505,11 @@ pub async fn generate_parsers_for_subscription_batch(
                 break;
             }
         };
-        tracing::info!("批次 parser_id={} 已建立，subscription={}", parser_id, subscription_id);
+        tracing::info!(
+            "批次 parser_id={} 已建立，subscription={}",
+            parser_id,
+            subscription_id
+        );
         update_pending_success(&pool, pending_id, data).await.ok();
 
         // 解析器已建立為待確認狀態，等使用者確認後才套用到 raw items

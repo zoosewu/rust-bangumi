@@ -10,7 +10,9 @@ use diesel::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::models::{FilterTargetType, NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser};
+use crate::models::{
+    FilterTargetType, NewTitleParser, ParserSourceType, RawAnimeItem, TitleParser,
+};
 use crate::schema::{raw_anime_items, title_parsers};
 use crate::services::ReparseStats;
 use crate::services::TitleParserService;
@@ -285,8 +287,14 @@ pub async fn create_parser(
     }; // conn 在此 drop，釋放連線給 reparse 使用
 
     // 同步重新解析所有 raw_anime_items
-    let stats =
-        crate::services::reparse::reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
+    let stats = crate::services::reparse::reparse_all_items(
+        state.db.clone(),
+        state.dispatch_service.clone(),
+        state.sync_service.clone(),
+        state.conflict_detection.clone(),
+        state.cancel_service.clone(),
+    )
+    .await;
 
     Ok((
         StatusCode::CREATED,
@@ -317,65 +325,69 @@ pub async fn update_parser(
 
         let now = Utc::now().naive_utc();
 
-        diesel::update(
-            title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)),
-        )
-        .set((
-            title_parsers::name.eq(&req.name),
-            title_parsers::description.eq(&req.description),
-            title_parsers::priority.eq(req.priority),
-            title_parsers::is_enabled.eq(req.is_enabled.unwrap_or(true)),
-            title_parsers::condition_regex.eq(&req.condition_regex),
-            title_parsers::parse_regex.eq(&req.parse_regex),
-            title_parsers::anime_title_source.eq(parse_source_type(&req.anime_title_source)?),
-            title_parsers::anime_title_value.eq(&req.anime_title_value),
-            title_parsers::episode_no_source.eq(parse_source_type(&req.episode_no_source)?),
-            title_parsers::episode_no_value.eq(&req.episode_no_value),
-            title_parsers::series_no_source.eq(req
-                .series_no_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::series_no_value.eq(&req.series_no_value),
-            title_parsers::subtitle_group_source.eq(req
-                .subtitle_group_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::subtitle_group_value.eq(&req.subtitle_group_value),
-            title_parsers::resolution_source.eq(req
-                .resolution_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::resolution_value.eq(&req.resolution_value),
-            title_parsers::season_source.eq(req
-                .season_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::season_value.eq(&req.season_value),
-            title_parsers::year_source.eq(req
-                .year_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::year_value.eq(&req.year_value),
-            title_parsers::episode_end_source.eq(req
-                .episode_end_source
-                .as_ref()
-                .map(|s| parse_source_type(s))
-                .transpose()?),
-            title_parsers::episode_end_value.eq(&req.episode_end_value),
-            title_parsers::updated_at.eq(now),
-        ))
-        .get_result::<TitleParser>(&mut conn)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        diesel::update(title_parsers::table.filter(title_parsers::parser_id.eq(parser_id)))
+            .set((
+                title_parsers::name.eq(&req.name),
+                title_parsers::description.eq(&req.description),
+                title_parsers::priority.eq(req.priority),
+                title_parsers::is_enabled.eq(req.is_enabled.unwrap_or(true)),
+                title_parsers::condition_regex.eq(&req.condition_regex),
+                title_parsers::parse_regex.eq(&req.parse_regex),
+                title_parsers::anime_title_source.eq(parse_source_type(&req.anime_title_source)?),
+                title_parsers::anime_title_value.eq(&req.anime_title_value),
+                title_parsers::episode_no_source.eq(parse_source_type(&req.episode_no_source)?),
+                title_parsers::episode_no_value.eq(&req.episode_no_value),
+                title_parsers::series_no_source.eq(req
+                    .series_no_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::series_no_value.eq(&req.series_no_value),
+                title_parsers::subtitle_group_source.eq(req
+                    .subtitle_group_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::subtitle_group_value.eq(&req.subtitle_group_value),
+                title_parsers::resolution_source.eq(req
+                    .resolution_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::resolution_value.eq(&req.resolution_value),
+                title_parsers::season_source.eq(req
+                    .season_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::season_value.eq(&req.season_value),
+                title_parsers::year_source.eq(req
+                    .year_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::year_value.eq(&req.year_value),
+                title_parsers::episode_end_source.eq(req
+                    .episode_end_source
+                    .as_ref()
+                    .map(|s| parse_source_type(s))
+                    .transpose()?),
+                title_parsers::episode_end_value.eq(&req.episode_end_value),
+                title_parsers::updated_at.eq(now),
+            ))
+            .get_result::<TitleParser>(&mut conn)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     }; // conn 在此 drop，釋放連線給 reparse 使用
 
     // 同步重新解析所有 raw_anime_items
-    let stats =
-        crate::services::reparse::reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
+    let stats = crate::services::reparse::reparse_all_items(
+        state.db.clone(),
+        state.dispatch_service.clone(),
+        state.sync_service.clone(),
+        state.conflict_detection.clone(),
+        state.cancel_service.clone(),
+    )
+    .await;
 
     Ok(Json(ParserWithReparseResponse {
         parser: ParserResponse::from(updated_parser),
@@ -411,8 +423,14 @@ pub async fn delete_parser(
     } // conn 在此 drop
 
     // 同步重新解析所有 raw_anime_items
-    let stats =
-        crate::services::reparse::reparse_all_items(state.db.clone(), state.dispatch_service.clone(), state.sync_service.clone(), state.conflict_detection.clone(), state.cancel_service.clone()).await;
+    let stats = crate::services::reparse::reparse_all_items(
+        state.db.clone(),
+        state.dispatch_service.clone(),
+        state.sync_service.clone(),
+        state.conflict_detection.clone(),
+        state.cancel_service.clone(),
+    )
+    .await;
 
     Ok(Json(DeleteWithReparseResponse { reparse: stats }))
 }
@@ -428,7 +446,6 @@ fn parse_source_type(s: &str) -> Result<ParserSourceType, (StatusCode, String)> 
     }
 }
 
-
 /// 批次查詢各實體名稱，分別按 created_from_type 分組。
 /// 回傳值為 4 個獨立的 HashMap，以各自的主鍵對應名稱。
 fn resolve_parser_names(
@@ -440,7 +457,7 @@ fn resolve_parser_names(
     std::collections::HashMap<i32, String>, // group_id -> group_name
     std::collections::HashMap<i32, String>, // subscription_id -> name
 ) {
-    use crate::schema::{anime_works, animes, subtitle_groups, subscriptions};
+    use crate::schema::{anime_works, animes, subscriptions, subtitle_groups};
 
     let mut work_ids: Vec<i32> = vec![];
     let mut anime_ids: Vec<i32> = vec![];
@@ -715,16 +732,19 @@ pub async fn preview_parser(
         // causing find_matching_parser to skip it).
         let (parse_result, parse_error) = if is_current_after {
             match TitleParserService::try_parser(&current_parser, &item.title) {
-                Ok(Some(r)) => (Some(ParsedFields {
-                    anime_title: r.anime_title,
-                    episode_no: r.episode_no,
-                    episode_end: r.episode_end,
-                    series_no: r.series_no,
-                    subtitle_group: r.subtitle_group,
-                    resolution: r.resolution,
-                    season: r.season,
-                    year: r.year,
-                }), None),
+                Ok(Some(r)) => (
+                    Some(ParsedFields {
+                        anime_title: r.anime_title,
+                        episode_no: r.episode_no,
+                        episode_end: r.episode_end,
+                        series_no: r.series_no,
+                        subtitle_group: r.subtitle_group,
+                        resolution: r.resolution,
+                        season: r.season,
+                        year: r.year,
+                    }),
+                    None,
+                ),
                 Ok(None) => (None, None),
                 Err(e) => (None, Some(e)),
             }
@@ -747,8 +767,9 @@ pub async fn preview_parser(
         };
 
         let is_newly_matched = before_match.is_none() && current_matched;
-        let is_override =
-            before_match.is_some() && current_matched && before_match.map(|p| p.parser_id) != Some(-1);
+        let is_override = before_match.is_some()
+            && current_matched
+            && before_match.map(|p| p.parser_id) != Some(-1);
 
         results.push(ParserPreviewResult {
             title: item.title.clone(),
@@ -806,13 +827,11 @@ fn find_scoped_raw_items(
     };
 
     match target_type {
-        "global" => {
-            raw_anime_items::table
-                .order(raw_anime_items::item_id.desc())
-                .limit(limit)
-                .load::<RawAnimeItem>(conn)
-                .map_err(|e| e.to_string())
-        }
+        "global" => raw_anime_items::table
+            .order(raw_anime_items::item_id.desc())
+            .limit(limit)
+            .load::<RawAnimeItem>(conn)
+            .map_err(|e| e.to_string()),
         "anime_series" | "anime" => {
             let sid = target_id.ok_or("anime requires target_id")?;
             let sub_ids: Vec<i32> = anime_links::table

@@ -1,3 +1,4 @@
+use crate::{models::db::AnimeCoverImage, schema::anime_cover_images, state::AppState};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -5,7 +6,6 @@ use axum::{
     Json,
 };
 use diesel::prelude::*;
-use crate::{models::db::AnimeCoverImage, schema::anime_cover_images, state::AppState};
 
 pub async fn list_anime_covers(
     State(state): State<AppState>,
@@ -37,11 +37,9 @@ pub async fn set_default_cover(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     let result = conn.transaction::<_, diesel::result::Error, _>(|conn| {
-        diesel::update(
-            anime_cover_images::table.filter(anime_cover_images::work_id.eq(anime_id)),
-        )
-        .set(anime_cover_images::is_default.eq(false))
-        .execute(conn)?;
+        diesel::update(anime_cover_images::table.filter(anime_cover_images::work_id.eq(anime_id)))
+            .set(anime_cover_images::is_default.eq(false))
+            .execute(conn)?;
 
         let updated = diesel::update(
             anime_cover_images::table

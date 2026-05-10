@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 use shared::{DetailRequest, DetailResponse, ServiceType};
 use std::time::Duration;
@@ -33,14 +29,23 @@ pub async fn detail(
     let fetcher = match fetcher {
         Some(f) => f,
         None => {
-            tracing::warn!("No fetcher with detail_endpoint found for source={}", payload.source);
+            tracing::warn!(
+                "No fetcher with detail_endpoint found for source={}",
+                payload.source
+            );
             return (StatusCode::OK, Json(DetailResponse { items: vec![] }));
         }
     };
 
-    let endpoint = fetcher.capabilities.detail_endpoint.as_deref().unwrap_or("/detail");
+    let endpoint = fetcher
+        .capabilities
+        .detail_endpoint
+        .as_deref()
+        .unwrap_or("/detail");
     let url = format!("http://{}:{}{}", fetcher.host, fetcher.port, endpoint);
-    let req_body = DetailRequest { detail_key: payload.detail_key.clone() };
+    let req_body = DetailRequest {
+        detail_key: payload.detail_key.clone(),
+    };
 
     let client = reqwest::Client::new();
     let result = tokio::time::timeout(

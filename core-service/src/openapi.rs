@@ -2,12 +2,12 @@ use utoipa::OpenApi;
 
 use crate::dto::{
     AnimeLinkConflictInfo, AnimeLinkConflictLink, AnimeLinkRequest, AnimeLinkResponse,
-    AnimeLinkRichResponse, AnimeRichResponse, AnimeRequest, AnimeResponse, AnimeWorkRequest,
+    AnimeLinkRichResponse, AnimeRequest, AnimeResponse, AnimeRichResponse, AnimeWorkRequest,
     AnimeWorkResponse, AnimeWorksListResponse, ConflictingLinkResponse, DashboardStats,
     DownloadInfo, FilterRuleRequest, FilterRuleResponse, ResolveAnimeLinkConflictRequest,
     ResolveByRawItemRequest, ResolveByRawItemResponse, RetryBulkRequest, RetryOneResponse,
-    RetryResultResponse, SeasonInfo, SeasonRequest, SeasonResponse, ServiceInfo,
-    SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+    RetryResultResponse, SeasonInfo, SeasonRequest, SeasonResponse, ServiceInfo, SubscriptionInfo,
+    SubtitleGroupRequest, SubtitleGroupResponse, UpdateAnimeRequest,
 };
 
 #[derive(OpenApi)]

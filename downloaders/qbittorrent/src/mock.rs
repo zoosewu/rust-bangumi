@@ -1,8 +1,8 @@
 // src/mock.rs
 //! Mock implementation of DownloaderClient for testing purposes.
 
-use shared::DownloaderClient;
 use anyhow::{anyhow, Result};
+use shared::DownloaderClient;
 use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
 use std::cell::RefCell;
 

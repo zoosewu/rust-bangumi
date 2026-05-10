@@ -7,10 +7,10 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::db::WebhookRepository;
 use crate::models::{NewWebhook, Webhook};
 use crate::services::webhook_service::{render_template, WebhookContext};
 use crate::state::AppState;
-use crate::db::WebhookRepository;
 
 // ─── Request / Response DTOs ──────────────────────────────────────────────────
 
@@ -58,9 +58,7 @@ impl From<Webhook> for WebhookResponse {
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 /// GET /webhooks — 列出所有 webhook
-pub async fn list_webhooks(
-    State(state): State<AppState>,
-) -> (StatusCode, Json<serde_json::Value>) {
+pub async fn list_webhooks(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
     let repo = &state.repos.webhook;
     match repo.find_all().await {
         Ok(webhooks) => {
@@ -106,7 +104,10 @@ pub async fn create_webhook(
     match repo.create(new_webhook).await {
         Ok(webhook) => {
             tracing::info!("Created webhook: {}", webhook.webhook_id);
-            (StatusCode::CREATED, Json(json!(WebhookResponse::from(webhook))))
+            (
+                StatusCode::CREATED,
+                Json(json!(WebhookResponse::from(webhook))),
+            )
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -161,7 +162,9 @@ pub async fn update_webhook(
     let updated = Webhook {
         name: payload.name.unwrap_or(existing.name),
         url: payload.url.unwrap_or(existing.url),
-        payload_template: payload.payload_template.unwrap_or(existing.payload_template),
+        payload_template: payload
+            .payload_template
+            .unwrap_or(existing.payload_template),
         is_active: payload.is_active.unwrap_or(existing.is_active),
         ..existing
     };

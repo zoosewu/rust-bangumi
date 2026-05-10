@@ -66,7 +66,12 @@ struct RawItemRow {
 
 pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Result<()> {
     match action {
-        RawItemAction::List { status, sub, limit, offset } => {
+        RawItemAction::List {
+            status,
+            sub,
+            limit,
+            offset,
+        } => {
             let mut params = format!("?limit={}&offset={}", limit, offset);
             if let Some(s) = &status {
                 params.push_str(&format!("&status={}", s));
@@ -74,8 +79,7 @@ pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Resul
             if let Some(sid) = sub {
                 params.push_str(&format!("&subscription_id={}", sid));
             }
-            let resp: RawItemsResponse =
-                client.get(&format!("/raw-items{}", params)).await?;
+            let resp: RawItemsResponse = client.get(&format!("/raw-items{}", params)).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -158,8 +162,9 @@ pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Resul
         }
 
         RawItemAction::Reparse { id } => {
-            let resp: serde_json::Value =
-                client.post_no_body(&format!("/raw-items/{}/reparse", id)).await?;
+            let resp: serde_json::Value = client
+                .post_no_body(&format!("/raw-items/{}/reparse", id))
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -168,8 +173,9 @@ pub async fn run(client: &ApiClient, action: RawItemAction, json: bool) -> Resul
         }
 
         RawItemAction::Skip { id } => {
-            let resp: serde_json::Value =
-                client.post_no_body(&format!("/raw-items/{}/skip", id)).await?;
+            let resp: serde_json::Value = client
+                .post_no_body(&format!("/raw-items/{}/skip", id))
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());

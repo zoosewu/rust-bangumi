@@ -86,7 +86,6 @@ impl ConflictDetectionService {
                     episode_no,
                     links.len()
                 );
-
             }
         }
 
@@ -115,11 +114,7 @@ impl ConflictDetectionService {
                 // No longer a conflict — delete the conflict record
                 let _ = self
                     .conflict_repo
-                    .delete_by_episode(
-                        conflict.anime_id,
-                        conflict.group_id,
-                        conflict.episode_no,
-                    )
+                    .delete_by_episode(conflict.anime_id, conflict.group_id, conflict.episode_no)
                     .await;
 
                 // Restore resolved links for this episode back to 'active'
@@ -454,8 +449,7 @@ mod tests {
         let svc =
             ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
 
-        let (resolved, skipped, _, _) =
-            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+        let (resolved, skipped, _, _) = svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
 
         assert!(resolved.is_empty());
         assert!(skipped.is_empty());

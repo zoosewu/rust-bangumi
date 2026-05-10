@@ -21,9 +21,7 @@ pub mod naive_datetime_utc_opt {
         S: Serializer,
     {
         match dt {
-            Some(dt) => {
-                serializer.serialize_str(&format!("{}Z", dt.format("%Y-%m-%dT%H:%M:%S")))
-            }
+            Some(dt) => serializer.serialize_str(&format!("{}Z", dt.format("%Y-%m-%dT%H:%M:%S"))),
             None => serializer.serialize_none(),
         }
     }

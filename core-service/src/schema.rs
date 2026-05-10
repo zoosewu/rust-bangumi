@@ -382,4 +382,24 @@ diesel::joinable!(subscriptions -> service_modules (preferred_downloader_id));
 diesel::joinable!(title_parsers -> pending_ai_results (pending_result_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    ai_prompt_settings,ai_providers,anime_cover_images,anime_link_conflicts,anime_links,anime_works,animes,cron_logs,downloader_capabilities,downloads,filter_rules,pending_ai_results,raw_anime_items,seasons,service_modules,subscription_conflicts,subscriptions,subtitle_groups,title_parsers,webhooks,);
+    ai_prompt_settings,
+    ai_providers,
+    anime_cover_images,
+    anime_link_conflicts,
+    anime_links,
+    anime_works,
+    animes,
+    cron_logs,
+    downloader_capabilities,
+    downloads,
+    filter_rules,
+    pending_ai_results,
+    raw_anime_items,
+    seasons,
+    service_modules,
+    subscription_conflicts,
+    subscriptions,
+    subtitle_groups,
+    title_parsers,
+    webhooks,
+);

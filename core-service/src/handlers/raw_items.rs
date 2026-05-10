@@ -53,7 +53,12 @@ pub struct RawItemResponse {
 }
 
 impl RawItemResponse {
-    fn from_item(item: RawAnimeItem, download: Option<RawItemDownloadInfo>, filter_passed: Option<bool>, conflict_flag: bool) -> Self {
+    fn from_item(
+        item: RawAnimeItem,
+        download: Option<RawItemDownloadInfo>,
+        filter_passed: Option<bool>,
+        conflict_flag: bool,
+    ) -> Self {
         Self {
             item_id: item.item_id,
             title: item.title,
@@ -103,7 +108,11 @@ fn load_download_info(
                         existing.progress = progress;
                     }
                 })
-                .or_insert(RawItemDownloadInfo { download_id, status, progress });
+                .or_insert(RawItemDownloadInfo {
+                    download_id,
+                    status,
+                    progress,
+                });
         }
     }
     Ok(map)
@@ -259,7 +268,12 @@ pub async fn get_raw_item(
         }
     };
 
-    Ok(Json(RawItemResponse::from_item(item, dl, filter_passed, conflict_flag)))
+    Ok(Json(RawItemResponse::from_item(
+        item,
+        dl,
+        filter_passed,
+        conflict_flag,
+    )))
 }
 
 /// POST /raw-items/:item_id/reparse - 重新解析單一項目

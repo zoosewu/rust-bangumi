@@ -3,16 +3,18 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use std::collections::HashSet;
 use diesel::prelude::*;
 use serde_json::json;
+use std::collections::HashSet;
 
 use crate::dto::{
-    AnimeLinkConflictInfo, AnimeLinkConflictLink, DownloadInfo,
-    ResolveAnimeLinkConflictRequest, ResolveByRawItemRequest, ResolveByRawItemResponse,
+    AnimeLinkConflictInfo, AnimeLinkConflictLink, DownloadInfo, ResolveAnimeLinkConflictRequest,
+    ResolveByRawItemRequest, ResolveByRawItemResponse,
 };
 use crate::models::{AnimeLink, Download};
-use crate::schema::{anime_links, animes, anime_works, downloads, raw_anime_items, subtitle_groups};
+use crate::schema::{
+    anime_links, anime_works, animes, downloads, raw_anime_items, subtitle_groups,
+};
 use crate::state::AppState;
 
 /// GET /link-conflicts - List all unresolved anime link conflicts
@@ -155,7 +157,12 @@ pub async fn resolve_link_conflict(
     };
 
     // Step 1: Get the conflict to find all links in this group
-    let conflict = match state.repos.anime_link_conflict.find_by_id(conflict_id).await {
+    let conflict = match state
+        .repos
+        .anime_link_conflict
+        .find_by_id(conflict_id)
+        .await
+    {
         Ok(Some(c)) => c,
         Ok(None) => {
             return (
@@ -218,7 +225,11 @@ pub async fn resolve_link_conflict(
 
     // Step 4: Cancel downloads for unchosen links
     if !unchosen_ids.is_empty() {
-        if let Err(e) = state.cancel_service.cancel_downloads_for_links(&unchosen_ids).await {
+        if let Err(e) = state
+            .cancel_service
+            .cancel_downloads_for_links(&unchosen_ids)
+            .await
+        {
             tracing::warn!("Failed to cancel unchosen downloads: {}", e);
         }
     }
@@ -233,7 +244,10 @@ pub async fn resolve_link_conflict(
     match &dispatch_result {
         Ok(r) => tracing::info!(
             "Dispatched chosen link {}: dispatched={}, no_downloader={}, failed={}",
-            payload.chosen_link_id, r.dispatched, r.no_downloader, r.failed
+            payload.chosen_link_id,
+            r.dispatched,
+            r.no_downloader,
+            r.failed
         ),
         Err(e) => tracing::warn!("Failed to dispatch chosen link: {}", e),
     }
@@ -318,5 +332,8 @@ pub async fn resolve_link_conflicts_by_raw_item(
         dispatched_link_ids,
     };
 
-    (StatusCode::OK, Json(serde_json::to_value(&response).unwrap_or(json!({}))))
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(&response).unwrap_or(json!({}))),
+    )
 }

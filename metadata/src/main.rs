@@ -2,7 +2,10 @@ mod bangumi_client;
 mod handlers;
 mod models;
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use handlers::AppState;
 use shared::{register_with_core_backoff, ServiceRegistration};
 use std::sync::Arc;
@@ -46,8 +49,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async {
         let core_url = std::env::var("CORE_SERVICE_URL")
             .unwrap_or_else(|_| "http://core-service:8000".to_string());
-        let service_host =
-            std::env::var("SERVICE_HOST").unwrap_or_else(|_| "metadata".to_string());
+        let service_host = std::env::var("SERVICE_HOST").unwrap_or_else(|_| "metadata".to_string());
         let service_port: u16 = std::env::var("SERVICE_PORT")
             .ok()
             .and_then(|v| v.parse().ok())

@@ -174,10 +174,12 @@ impl SyncService {
             series_no: series.series_no,
             episode_no: link.episode_no,
             subtitle_group,
-            video_path: download.video_file
+            video_path: download
+                .video_file
                 .clone()
                 .unwrap_or_else(|| download.file_path.clone().unwrap_or_default()),
-            subtitle_paths: download.subtitle_files
+            subtitle_paths: download
+                .subtitle_files
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default(),
@@ -241,16 +243,14 @@ impl SyncService {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
         let now = chrono::Utc::now().naive_utc();
-        let updated = diesel::update(
-            downloads::table.filter(downloads::status.eq("sync_failed")),
-        )
-        .set((
-            downloads::status.eq("completed"),
-            downloads::sync_retry_count.eq(0),
-            downloads::updated_at.eq(now),
-        ))
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to reset sync_failed downloads: {}", e))?;
+        let updated = diesel::update(downloads::table.filter(downloads::status.eq("sync_failed")))
+            .set((
+                downloads::status.eq("completed"),
+                downloads::sync_retry_count.eq(0),
+                downloads::updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to reset sync_failed downloads: {}", e))?;
 
         if updated > 0 {
             tracing::info!(

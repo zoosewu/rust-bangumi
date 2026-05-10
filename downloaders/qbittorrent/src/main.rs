@@ -29,10 +29,15 @@ async fn main() -> anyhow::Result<()> {
     let client = Arc::new(QBittorrentClient::new(qb_url));
     if !qb_user.is_empty() && !qb_pass.is_empty() {
         if let Err(e) = client.login(&qb_user, &qb_pass).await {
-            tracing::warn!("qBittorrent 登入失敗: {}。請使用 'bangumi qb-login' 指令設定帳密。", e);
+            tracing::warn!(
+                "qBittorrent 登入失敗: {}。請使用 'bangumi qb-login' 指令設定帳密。",
+                e
+            );
         }
     } else {
-        tracing::info!("未設定 qBittorrent 帳密，請在 qBittorrent 初始化後執行 'bangumi qb-login' 指令。");
+        tracing::info!(
+            "未設定 qBittorrent 帳密，請在 qBittorrent 初始化後執行 'bangumi qb-login' 指令。"
+        );
     }
 
     let app = Router::new()
@@ -61,7 +66,10 @@ async fn main() -> anyhow::Result<()> {
             delete(handlers::delete_download::<QBittorrentClient>),
         )
         .route("/health", get(handlers::health_check))
-        .route("/config/credentials", post(handlers::set_credentials::<QBittorrentClient>))
+        .route(
+            "/config/credentials",
+            post(handlers::set_credentials::<QBittorrentClient>),
+        )
         .with_state(client);
 
     let service_port: u16 = std::env::var("SERVICE_PORT")
@@ -82,8 +90,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async {
         let core_url = std::env::var("CORE_SERVICE_URL")
             .unwrap_or_else(|_| "http://localhost:8000".to_string());
-        let service_name = std::env::var("SERVICE_NAME")
-            .unwrap_or_else(|_| "qbittorrent-downloader".to_string());
+        let service_name =
+            std::env::var("SERVICE_NAME").unwrap_or_else(|_| "qbittorrent-downloader".to_string());
         let service_host =
             std::env::var("SERVICE_HOST").unwrap_or_else(|_| "localhost".to_string());
         let service_port: u16 = std::env::var("SERVICE_PORT")

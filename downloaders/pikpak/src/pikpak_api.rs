@@ -228,7 +228,8 @@ impl PikPakApi {
             .json()
             .await?;
 
-        resp.task.ok_or_else(|| anyhow!("PikPak returned no task for offline download"))
+        resp.task
+            .ok_or_else(|| anyhow!("PikPak returned no task for offline download"))
     }
 
     pub async fn list_running_tasks(&self) -> Result<Vec<OfflineTask>> {
@@ -280,10 +281,7 @@ impl PikPakApi {
             .or(info.web_content_link)
             .ok_or_else(|| anyhow!("No download URL for file {file_id}"))?;
 
-        let size = info
-            .size
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0);
+        let size = info.size.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
 
         Ok((url, size))
     }

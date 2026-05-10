@@ -42,7 +42,10 @@ impl DetailScraper for RealDetailScraper {
     }
 }
 
-async fn scrape_bangumi(client: &reqwest::Client, bangumi_id: &str) -> Result<DetailResponse, String> {
+async fn scrape_bangumi(
+    client: &reqwest::Client,
+    bangumi_id: &str,
+) -> Result<DetailResponse, String> {
     let url = format!("https://mikanani.me/Home/Bangumi/{}", bangumi_id);
     let html = client
         .get(&url)
@@ -99,8 +102,8 @@ async fn scrape_source(client: &reqwest::Client, query: &str) -> Result<DetailRe
 pub fn parse_bangumi_detail(html: &str, bangumi_id: &str) -> Result<DetailResponse, String> {
     let document = Html::parse_document(html);
 
-    let subgroup_sel = Selector::parse("div.subgroup-text")
-        .map_err(|e| format!("Invalid selector: {:?}", e))?;
+    let subgroup_sel =
+        Selector::parse("div.subgroup-text").map_err(|e| format!("Invalid selector: {:?}", e))?;
 
     let mut items: Vec<DetailItem> = Vec::new();
 
@@ -128,7 +131,10 @@ pub fn parse_bangumi_detail(html: &str, bangumi_id: &str) -> Result<DetailRespon
             bangumi_id, subgroup_id
         );
 
-        items.push(DetailItem { subgroup_name, rss_url });
+        items.push(DetailItem {
+            subgroup_name,
+            rss_url,
+        });
     }
 
     // Always include a root RSS entry that covers all subgroups
@@ -183,7 +189,10 @@ pub fn parse_source_detail(html: &str, query: &str) -> Result<DetailResponse, St
             subgroup_id
         );
 
-        items.push(DetailItem { subgroup_name, rss_url });
+        items.push(DetailItem {
+            subgroup_name,
+            rss_url,
+        });
     }
 
     // Always include a catch-all RSS entry for all subgroups

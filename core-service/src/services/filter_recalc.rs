@@ -51,7 +51,12 @@ pub fn recalculate_filtered_flags(
             diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))
                 .set(anime_links::filtered_flag.eq(new_flag))
                 .execute(conn)
-                .map_err(|e| format!("Failed to update filtered_flag for link {}: {}", link.link_id, e))?;
+                .map_err(|e| {
+                    format!(
+                        "Failed to update filtered_flag for link {}: {}",
+                        link.link_id, e
+                    )
+                })?;
             updated += 1;
             if new_flag {
                 // false → true: newly filtered OUT
@@ -220,7 +225,8 @@ pub fn collect_all_rules_for_link(
     if let Some(sub_id) = subscription_id {
         let sub_rules: Vec<FilterRule> = filter_rules::table
             .filter(
-                filter_rules::target_type.eq(FilterTargetType::Fetcher)
+                filter_rules::target_type
+                    .eq(FilterTargetType::Fetcher)
                     .or(filter_rules::target_type.eq(FilterTargetType::Subscription)),
             )
             .filter(filter_rules::target_id.eq(sub_id))

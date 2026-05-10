@@ -8,6 +8,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -63,7 +64,13 @@ export default function AnimeWorksPage() {
   )
 
   const columns: Column<Record<string, unknown>>[] = [
-    { key: "title", header: t("common.name"), render: (item) => String(item.title) },
+    {
+      key: "title",
+      header: t("common.name"),
+      headClassName: "min-w-[420px]",
+      cellClassName: "min-w-[420px]",
+      render: (item) => <TitleCell value={String(item.title)} />,
+    },
     {
       key: "created_at",
       header: t("anime.created"),

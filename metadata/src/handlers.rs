@@ -1,9 +1,11 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use std::sync::Arc;
 use crate::{
     bangumi_client::BangumiClient,
-    models::{EnrichAnimeRequest, EnrichAnimeResponse, EnrichEpisodesRequest, EnrichEpisodesResponse},
+    models::{
+        EnrichAnimeRequest, EnrichAnimeResponse, EnrichEpisodesRequest, EnrichEpisodesResponse,
+    },
 };
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -47,14 +49,12 @@ pub async fn enrich_anime(
         .await
         .unwrap_or_default();
 
-    let meta = state
-        .bangumi
-        .get_subject_meta(bangumi_id)
-        .await
-        .unwrap_or(crate::bangumi_client::SubjectMeta {
+    let meta = state.bangumi.get_subject_meta(bangumi_id).await.unwrap_or(
+        crate::bangumi_client::SubjectMeta {
             summary: None,
             air_date: None,
-        });
+        },
+    );
 
     Json(EnrichAnimeResponse {
         bangumi_id: Some(bangumi_id),
@@ -69,7 +69,11 @@ pub async fn enrich_episodes(
     State(state): State<AppState>,
     Json(req): Json<EnrichEpisodesRequest>,
 ) -> impl IntoResponse {
-    match state.bangumi.get_episode(req.bangumi_id, req.episode_no).await {
+    match state
+        .bangumi
+        .get_episode(req.bangumi_id, req.episode_no)
+        .await
+    {
         Ok(Some(ep)) => Json(EnrichEpisodesResponse {
             episode_no: ep.episode_no,
             title: ep.title,

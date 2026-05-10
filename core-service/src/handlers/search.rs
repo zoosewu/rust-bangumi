@@ -69,11 +69,9 @@ pub async fn search(
         let source = fetcher.service_name.clone();
 
         async move {
-            let result = tokio::time::timeout(
-                Duration::from_secs(20),
-                client.post(&url).json(&req).send(),
-            )
-            .await;
+            let result =
+                tokio::time::timeout(Duration::from_secs(20), client.post(&url).json(&req).send())
+                    .await;
 
             match result {
                 Ok(Ok(resp)) => match resp.json::<SearchResponse>().await {
@@ -88,11 +86,7 @@ pub async fn search(
                         })
                         .collect::<Vec<_>>(),
                     Err(e) => {
-                        tracing::warn!(
-                            "Failed to parse search response from {}: {}",
-                            source,
-                            e
-                        );
+                        tracing::warn!("Failed to parse search response from {}: {}", source, e);
                         vec![]
                     }
                 },
@@ -108,11 +102,8 @@ pub async fn search(
         }
     });
 
-    let results: Vec<AggregatedSearchResult> = join_all(tasks)
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
+    let results: Vec<AggregatedSearchResult> =
+        join_all(tasks).await.into_iter().flatten().collect();
 
     tracing::info!("Search '{}' returned {} results", query, results.len());
     (StatusCode::OK, Json(AggregatedSearchResponse { results }))

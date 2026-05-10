@@ -1,7 +1,7 @@
-use shared::retry_with_backoff;
 use chrono::{DateTime, Utc};
 use feed_rs::parser;
 use shared::models::RawAnimeItem;
+use shared::retry_with_backoff;
 use std::time::Duration;
 
 pub struct RssParser;

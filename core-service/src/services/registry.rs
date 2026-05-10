@@ -19,9 +19,8 @@ impl ServiceRegistry {
         let mut services = self.services.lock().map_err(|e| e.to_string())?;
         // Deduplicate by (host, port): remove any stale registration at the same
         // address so a restarted service doesn't accumulate duplicate entries.
-        services.retain(|_, existing| {
-            existing.host != service.host || existing.port != service.port
-        });
+        services
+            .retain(|_, existing| existing.host != service.host || existing.port != service.port);
         services.insert(service.service_id, service.clone());
         tracing::info!(
             "Service registered: {} ({})",
@@ -169,7 +168,11 @@ mod tests {
         registry.register(service2).unwrap();
 
         let services = registry.get_services().unwrap();
-        assert_eq!(services.len(), 1, "Re-registering same host:port must replace old entry");
+        assert_eq!(
+            services.len(),
+            1,
+            "Re-registering same host:port must replace old entry"
+        );
         assert_eq!(services[0].service_id, id2, "New registration should win");
     }
 

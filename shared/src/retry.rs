@@ -32,12 +32,7 @@ where
                     return Err(e);
                 }
 
-                tracing::warn!(
-                    "Attempt {} failed: {}. Retrying in {:?}",
-                    attempt,
-                    e,
-                    delay
-                );
+                tracing::warn!("Attempt {} failed: {}. Retrying in {:?}", attempt, e, delay);
                 sleep(delay).await;
                 delay = delay.saturating_mul(2);
             }
@@ -48,10 +43,7 @@ where
 }
 
 /// 向 Core 註冊，指數退避重試直到成功
-pub async fn register_with_core_backoff(
-    core_url: &str,
-    registration: &crate::ServiceRegistration,
-) {
+pub async fn register_with_core_backoff(core_url: &str, registration: &crate::ServiceRegistration) {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .build()

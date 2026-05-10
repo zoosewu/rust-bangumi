@@ -112,8 +112,7 @@ pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result
         }
 
         SeriesAction::Show { id } => {
-            let resp: AnimeRichResponse =
-                client.get(&format!("/anime/{}", id)).await?;
+            let resp: AnimeRichResponse = client.get(&format!("/anime/{}", id)).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -149,15 +148,20 @@ pub async fn run(client: &ApiClient, action: SeriesAction, json: bool) -> Result
             );
         }
 
-        SeriesAction::Update { id, description, aired_date, end_date, season_id } => {
+        SeriesAction::Update {
+            id,
+            description,
+            aired_date,
+            end_date,
+            season_id,
+        } => {
             let req = UpdateSeriesRequest {
                 season_id,
                 description,
                 aired_date,
                 end_date,
             };
-            let resp: serde_json::Value =
-                client.put(&format!("/anime/{}", id), &req).await?;
+            let resp: serde_json::Value = client.put(&format!("/anime/{}", id), &req).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());

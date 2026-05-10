@@ -216,10 +216,7 @@ pub fn get_animes_by_work_id(pool: &DbPool, work_id: i32) -> Result<Vec<Anime>, 
         .map_err(|e| format!("Failed to get animes by work_id: {}", e))
 }
 
-pub fn get_animes_by_season(
-    pool: &DbPool,
-    season_id: i32,
-) -> Result<Vec<Anime>, String> {
+pub fn get_animes_by_season(pool: &DbPool, season_id: i32) -> Result<Vec<Anime>, String> {
     let mut conn = pool
         .get()
         .map_err(|e| format!("Failed to get connection: {}", e))?;

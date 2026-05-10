@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::models::CoverImageInfo;
+use anyhow::Result;
 
 const BANGUMI_API_BASE: &str = "https://api.bgm.tv";
 
@@ -71,7 +71,10 @@ impl BangumiClient {
         let url = format!("{}/v0/subjects/{}", BANGUMI_API_BASE, bangumi_id);
         let resp = self.http.get(&url).send().await?;
         if !resp.status().is_success() {
-            return Ok(SubjectMeta { summary: None, air_date: None });
+            return Ok(SubjectMeta {
+                summary: None,
+                air_date: None,
+            });
         }
         let body: serde_json::Value = resp.json().await?;
         Ok(SubjectMeta {
@@ -81,7 +84,11 @@ impl BangumiClient {
     }
 
     /// 取得指定集數的 metadata
-    pub async fn get_episode(&self, bangumi_id: i32, episode_no: i32) -> Result<Option<EpisodeMeta>> {
+    pub async fn get_episode(
+        &self,
+        bangumi_id: i32,
+        episode_no: i32,
+    ) -> Result<Option<EpisodeMeta>> {
         let url = format!("{}/v0/episodes", BANGUMI_API_BASE);
         let resp = self
             .http

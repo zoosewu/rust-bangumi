@@ -788,7 +788,9 @@ pub struct NewPendingAiResult {
 }
 
 // ============ Webhook 模型 ============
-#[derive(Debug, Clone, Queryable, Selectable, Identifiable, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Queryable, Selectable, Identifiable, serde::Serialize, serde::Deserialize,
+)]
 #[diesel(table_name = crate::schema::webhooks)]
 #[diesel(primary_key(webhook_id))]
 pub struct Webhook {
@@ -825,7 +827,13 @@ mod tests {
     #[test]
     fn filter_target_type_parse_new_wire_values() {
         use std::str::FromStr;
-        assert!(matches!(FilterTargetType::from_str("anime_work").unwrap(), FilterTargetType::AnimeWork));
-        assert!(matches!(FilterTargetType::from_str("anime").unwrap(), FilterTargetType::Anime));
+        assert!(matches!(
+            FilterTargetType::from_str("anime_work").unwrap(),
+            FilterTargetType::AnimeWork
+        ));
+        assert!(matches!(
+            FilterTargetType::from_str("anime").unwrap(),
+            FilterTargetType::Anime
+        ));
     }
 }

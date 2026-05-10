@@ -27,12 +27,18 @@ pub async fn run(client: &ApiClient, json: bool) -> Result<()> {
 
     println!("{}", "=== 待處理 ===".bold());
     if stats.pending_raw_items > 0 {
-        println!("  待解析 Raw Items: {}", stats.pending_raw_items.to_string().yellow());
+        println!(
+            "  待解析 Raw Items: {}",
+            stats.pending_raw_items.to_string().yellow()
+        );
     } else {
         println!("  待解析 Raw Items: {}", "0".green());
     }
     if stats.pending_conflicts > 0 {
-        println!("  待解決衝突:       {}", stats.pending_conflicts.to_string().red());
+        println!(
+            "  待解決衝突:       {}",
+            stats.pending_conflicts.to_string().red()
+        );
     } else {
         println!("  待解決衝突:       {}", "0".green());
     }

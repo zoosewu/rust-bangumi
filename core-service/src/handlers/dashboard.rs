@@ -64,10 +64,7 @@ pub async fn get_dashboard_stats(
         .get_result(&mut conn)
         .unwrap_or(0);
 
-    let total_downloads: i64 = downloads::table
-        .count()
-        .get_result(&mut conn)
-        .unwrap_or(0);
+    let total_downloads: i64 = downloads::table.count().get_result(&mut conn).unwrap_or(0);
 
     let downloading: i64 = downloads::table
         .filter(downloads::status.eq("downloading"))
@@ -82,7 +79,11 @@ pub async fn get_dashboard_stats(
         .unwrap_or(0);
 
     let failed: i64 = downloads::table
-        .filter(downloads::status.eq("failed").or(downloads::status.eq("no_downloader")))
+        .filter(
+            downloads::status
+                .eq("failed")
+                .or(downloads::status.eq("no_downloader")),
+        )
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);
@@ -102,10 +103,7 @@ pub async fn get_dashboard_stats(
     // Service health info from registry
     let services: Vec<ServiceInfo> = match service_modules::table
         .filter(service_modules::is_enabled.eq(true))
-        .select((
-            service_modules::name,
-            service_modules::module_type,
-        ))
+        .select((service_modules::name, service_modules::module_type))
         .load::<(String, crate::models::ModuleTypeEnum)>(&mut conn)
     {
         Ok(mods) => mods

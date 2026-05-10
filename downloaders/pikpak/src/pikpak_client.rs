@@ -21,7 +21,10 @@ fn extract_magnet_hash(url: &str) -> Option<String> {
     let lower = url.to_lowercase();
     let prefix = "urn:btih:";
     let start = lower.find(prefix)? + prefix.len();
-    let end = lower[start..].find('&').map(|i| start + i).unwrap_or(lower.len());
+    let end = lower[start..]
+        .find('&')
+        .map(|i| start + i)
+        .unwrap_or(lower.len());
     let hash = &url[start..end];
     if hash.len() >= 32 {
         Some(hash.to_uppercase())
@@ -218,9 +221,7 @@ impl DownloaderClient for PikPakClient {
                         error_msg: None,
                     };
                     if let Err(e) = self.db.insert(&rec) {
-                        tracing::error!(
-                            "Failed to persist download record for hash={hash}: {e}"
-                        );
+                        tracing::error!("Failed to persist download record for hash={hash}: {e}");
                     }
                     results.push(DownloadResultItem {
                         url: item.url,
@@ -304,7 +305,10 @@ impl DownloaderClient for PikPakClient {
     async fn delete_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
         if let Ok(Some(rec)) = self.db.get(hash) {
             if let Some(task_id) = &rec.task_id {
-                let _ = self.api.delete_tasks(&[task_id.as_str()], delete_files).await;
+                let _ = self
+                    .api
+                    .delete_tasks(&[task_id.as_str()], delete_files)
+                    .await;
             }
             if delete_files {
                 if let Some(path) = &rec.content_path {

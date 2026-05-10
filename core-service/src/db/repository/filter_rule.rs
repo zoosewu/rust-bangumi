@@ -49,7 +49,10 @@ impl FilterRuleRepository for DieselFilterRuleRepository {
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             filter_rules::table
-                .order((filter_rules::target_type.asc(), filter_rules::rule_order.asc()))
+                .order((
+                    filter_rules::target_type.asc(),
+                    filter_rules::rule_order.asc(),
+                ))
                 .load::<FilterRule>(&mut conn)
                 .map_err(RepositoryError::from)
         })

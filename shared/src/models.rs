@@ -226,8 +226,8 @@ pub struct ViewerSyncRequest {
     pub video_path: String,
     pub subtitle_paths: Vec<String>,
     pub callback_url: String,
-    pub bangumi_id: Option<i32>,          // bangumi subject id for episode metadata
-    pub cover_image_url: Option<String>,  // default cover image URL for poster download
+    pub bangumi_id: Option<i32>, // bangumi subject id for episode metadata
+    pub cover_image_url: Option<String>, // default cover image URL for poster download
 }
 
 /// Core → Viewer: request to resync a previously synced download with updated metadata

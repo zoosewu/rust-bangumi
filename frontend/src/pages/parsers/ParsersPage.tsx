@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { EntityLink } from "@/components/shared/EntityLink"
 import { FullScreenDialog } from "@/components/shared/FullScreenDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2 } from "lucide-react"
 import type { ParserPreviewResponse, ReparseStats } from "@/schemas/parser"
@@ -209,7 +210,13 @@ export default function ParsersPage() {
   }, [t])
 
   const columns: Column<Record<string, unknown>>[] = [
-    { key: "name", header: t("common.name"), render: (item) => String(item.name) },
+    {
+      key: "name",
+      header: t("common.name"),
+      headClassName: "min-w-[360px]",
+      cellClassName: "min-w-[360px]",
+      render: (item) => <TitleCell value={String(item.name)} />,
+    },
     { key: "priority", header: t("parsers.priority"), render: (item) => String(item.priority) },
     {
       key: "condition_regex",

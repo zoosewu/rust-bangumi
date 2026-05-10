@@ -353,39 +353,53 @@ mod tests {
 
     #[test]
     fn anime_work_request_json_has_title_field() {
-        let req = AnimeWorkRequest { title: "test".to_string() };
+        let req = AnimeWorkRequest {
+            title: "test".to_string(),
+        };
         let v = serde_json::to_value(&req).unwrap();
-        assert_eq!(v["title"], "test");  // JSON key "title" 不變
+        assert_eq!(v["title"], "test"); // JSON key "title" 不變
     }
 
     #[test]
     fn anime_request_json_fields_are_api_contract() {
         let req = AnimeRequest {
-            anime_id: 1, series_no: 2, season_id: 3,
-            description: None, aired_date: None, end_date: None,
+            anime_id: 1,
+            series_no: 2,
+            season_id: 3,
+            description: None,
+            aired_date: None,
+            end_date: None,
         };
         let v = serde_json::to_value(&req).unwrap();
-        assert_eq!(v["anime_id"], 1);   // JSON key "anime_id" 不變
-        assert_eq!(v["series_no"], 2);  // JSON key "series_no" 不變
-        assert_eq!(v["season_id"], 3);  // JSON key "season_id" 不變
+        assert_eq!(v["anime_id"], 1); // JSON key "anime_id" 不變
+        assert_eq!(v["series_no"], 2); // JSON key "series_no" 不變
+        assert_eq!(v["season_id"], 3); // JSON key "season_id" 不變
     }
 
     #[test]
     fn anime_rich_json_has_series_id_and_anime_id() {
         use chrono::Utc;
         let resp = AnimeRichResponse {
-            series_id: 42, anime_id: 1,
-            anime_title: "Test".to_string(), series_no: 1,
-            season: SeasonInfo { year: 2024, season: "spring".to_string() },
-            episode_downloaded: 0, episode_found: 0,
+            series_id: 42,
+            anime_id: 1,
+            anime_title: "Test".to_string(),
+            series_no: 1,
+            season: SeasonInfo {
+                year: 2024,
+                season: "spring".to_string(),
+            },
+            episode_downloaded: 0,
+            episode_found: 0,
             subscriptions: vec![],
-            description: None, aired_date: None, end_date: None,
+            description: None,
+            aired_date: None,
+            end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
             cover_image_url: None,
         };
         let v = serde_json::to_value(&resp).unwrap();
-        assert_eq!(v["series_id"], 42);  // JSON key 不變
-        assert_eq!(v["anime_id"], 1);    // JSON key 不變
+        assert_eq!(v["series_id"], 42); // JSON key 不變
+        assert_eq!(v["anime_id"], 1); // JSON key 不變
     }
 }

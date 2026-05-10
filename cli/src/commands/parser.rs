@@ -18,9 +18,7 @@ pub enum ParserAction {
 
     /// 顯示解析器詳情
     #[command(about = "顯示解析器詳情")]
-    Show {
-        id: i64,
-    },
+    Show { id: i64 },
 
     /// 新增解析器
     #[command(about = "新增標題解析器")]
@@ -68,9 +66,7 @@ pub enum ParserAction {
 
     /// 刪除解析器
     #[command(about = "刪除解析器")]
-    Delete {
-        id: i64,
-    },
+    Delete { id: i64 },
 
     /// 預覽解析效果
     #[command(about = "預覽解析器對現有 Raw Items 的效果")]
@@ -115,8 +111,7 @@ pub async fn run(client: &ApiClient, action: ParserAction, json: bool) -> Result
             if let Some(id) = target {
                 params.push_str(&format!("{}created_from_id={}", sep, id));
             }
-            let resp: ParsersResponse =
-                client.get(&format!("/parsers{}", params)).await?;
+            let resp: ParsersResponse = client.get(&format!("/parsers{}", params)).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -132,10 +127,7 @@ pub async fn run(client: &ApiClient, action: ParserAction, json: bool) -> Result
                     id: p.parser_id,
                     name: p.name.clone(),
                     priority: p.priority,
-                    condition: p
-                        .condition_regex
-                        .clone()
-                        .unwrap_or_else(|| "-".to_string()),
+                    condition: p.condition_regex.clone().unwrap_or_else(|| "-".to_string()),
                     enabled: output::format_bool(p.enabled),
                     from: match &p.created_from_type {
                         Some(t) => {
@@ -228,8 +220,7 @@ pub async fn run(client: &ApiClient, action: ParserAction, json: bool) -> Result
                 parse_regex,
                 enabled,
             };
-            let resp: ParserResponse =
-                client.put(&format!("/parsers/{}", id), &req).await?;
+            let resp: ParserResponse = client.put(&format!("/parsers/{}", id), &req).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -246,7 +237,11 @@ pub async fn run(client: &ApiClient, action: ParserAction, json: bool) -> Result
             output::print_success(&format!("解析器 #{} 已刪除", id));
         }
 
-        ParserAction::Preview { id, condition, parse_regex } => {
+        ParserAction::Preview {
+            id,
+            condition,
+            parse_regex,
+        } => {
             let body = serde_json::json!({
                 "parser_id": id,
                 "condition_regex": condition,

@@ -1,6 +1,6 @@
-use crate::models::AiProvider;
 use super::client::AiClient;
 use super::openai::OpenAiClient;
+use crate::models::AiProvider;
 
 pub fn build_provider(p: &AiProvider) -> Result<Box<dyn AiClient>, String> {
     match p.provider_kind.as_str() {

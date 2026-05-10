@@ -298,7 +298,11 @@ pub fn build_parser_batch_user_prompt(titles: &[String], custom: Option<&str>) -
         .map(|(i, t)| format!("{}. {}", i + 1, t))
         .collect::<Vec<_>>()
         .join("\n");
-    let mut s = format!("Unmatched anime RSS titles ({} total):\n{}", titles.len(), list);
+    let mut s = format!(
+        "Unmatched anime RSS titles ({} total):\n{}",
+        titles.len(),
+        list
+    );
     if let Some(c) = custom {
         if !c.is_empty() {
             s.push_str("\n\n");

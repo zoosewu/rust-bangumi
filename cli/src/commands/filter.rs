@@ -94,8 +94,7 @@ pub async fn run(client: &ApiClient, action: FilterAction, json: bool) -> Result
             if let Some(id) = target {
                 params.push_str(&format!("{}target_id={}", sep, id));
             }
-            let resp: FiltersResponse =
-                client.get(&format!("/filters{}", params)).await?;
+            let resp: FiltersResponse = client.get(&format!("/filters{}", params)).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
@@ -126,7 +125,13 @@ pub async fn run(client: &ApiClient, action: FilterAction, json: bool) -> Result
             println!("{}", Table::new(rows));
         }
 
-        FilterAction::Add { r#type, target, regex, order, negative } => {
+        FilterAction::Add {
+            r#type,
+            target,
+            regex,
+            order,
+            negative,
+        } => {
             let req = CreateFilterRuleRequest {
                 target_type: r#type,
                 target_id: target,
@@ -151,7 +156,13 @@ pub async fn run(client: &ApiClient, action: FilterAction, json: bool) -> Result
             output::print_success(&format!("過濾規則 #{} 已刪除", id));
         }
 
-        FilterAction::Preview { r#type, target, regex, negative, order } => {
+        FilterAction::Preview {
+            r#type,
+            target,
+            regex,
+            negative,
+            order,
+        } => {
             let req = CreateFilterRuleRequest {
                 target_type: r#type.unwrap_or_else(|| "global".to_string()),
                 target_id: target,

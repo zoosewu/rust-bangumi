@@ -9,9 +9,14 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json::json;
 
-use crate::dto::{AnimeLinkRequest, AnimeLinkResponse, AnimeLinkRichResponse, ConflictingLinkResponse, DownloadInfo};
-use crate::models::{AnimeLink, Anime, AnimeWork, Download, NewAnimeLink, SubtitleGroup};
-use crate::schema::{anime_links, anime_works, animes, downloads, raw_anime_items, subscriptions, subtitle_groups};
+use crate::dto::{
+    AnimeLinkRequest, AnimeLinkResponse, AnimeLinkRichResponse, ConflictingLinkResponse,
+    DownloadInfo,
+};
+use crate::models::{Anime, AnimeLink, AnimeWork, Download, NewAnimeLink, SubtitleGroup};
+use crate::schema::{
+    anime_links, anime_works, animes, downloads, raw_anime_items, subscriptions, subtitle_groups,
+};
 use crate::state::AppState;
 
 /// Create a new anime link
@@ -52,7 +57,11 @@ pub async fn create_anime_link(
             match state.conflict_detection.detect_and_mark_conflicts().await {
                 Ok(result) => {
                     if !result.auto_dispatch_link_ids.is_empty() {
-                        if let Err(e) = state.dispatch_service.dispatch_new_links(result.auto_dispatch_link_ids).await {
+                        if let Err(e) = state
+                            .dispatch_service
+                            .dispatch_new_links(result.auto_dispatch_link_ids)
+                            .await
+                        {
                             tracing::warn!("Auto-dispatch after conflict detection failed: {}", e);
                         }
                     }
@@ -116,7 +125,10 @@ pub async fn get_anime_links(
         .inner_join(subtitle_groups::table.on(subtitle_groups::group_id.eq(anime_links::group_id)))
         .filter(anime_links::anime_id.eq(series_id))
         .select((AnimeLink::as_select(), SubtitleGroup::as_select()))
-        .order((anime_links::filtered_flag.asc(), anime_links::episode_no.asc()))
+        .order((
+            anime_links::filtered_flag.asc(),
+            anime_links::episode_no.asc(),
+        ))
         .load::<(AnimeLink, SubtitleGroup)>(&mut conn)
     {
         Ok(data) => data,
@@ -158,7 +170,12 @@ pub async fn get_anime_links(
         let conflicting_link_ids = if link.conflict_flag {
             conflict_groups
                 .get(&(link.group_id, link.episode_no))
-                .map(|ids| ids.iter().filter(|&&id| id != link.link_id).cloned().collect())
+                .map(|ids| {
+                    ids.iter()
+                        .filter(|&&id| id != link.link_id)
+                        .cloned()
+                        .collect()
+                })
                 .unwrap_or_default()
         } else {
             vec![]
@@ -261,7 +278,10 @@ pub async fn list_conflicting_links(
                 .map(|(item_id, sub_id, name)| (item_id, (sub_id, name)))
                 .collect(),
             Err(e) => {
-                tracing::warn!("Failed to fetch subscription info for conflicting links: {}", e);
+                tracing::warn!(
+                    "Failed to fetch subscription info for conflicting links: {}",
+                    e
+                );
                 HashMap::new()
             }
         }
@@ -284,7 +304,12 @@ pub async fn list_conflicting_links(
         .map(|(link, group, series, work)| {
             let conflicting_link_ids = conflict_groups
                 .get(&(link.anime_id, link.group_id, link.episode_no))
-                .map(|ids| ids.iter().filter(|&&id| id != link.link_id).cloned().collect())
+                .map(|ids| {
+                    ids.iter()
+                        .filter(|&&id| id != link.link_id)
+                        .cloned()
+                        .collect()
+                })
                 .unwrap_or_default();
 
             let (subscription_id, subscription_name) = link

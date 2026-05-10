@@ -14,7 +14,7 @@ use crate::schema::{raw_anime_items, title_parsers};
 pub struct ParsedResult {
     pub anime_title: String,
     pub episode_no: i32,
-    pub episode_end: Option<i32>,  // None = single episode; Some(n) = batch end
+    pub episode_end: Option<i32>, // None = single episode; Some(n) = batch end
     pub series_no: i32,
     pub subtitle_group: Option<String>,
     pub resolution: Option<String>,
@@ -91,9 +91,7 @@ impl TitleParserService {
             let already_pending: bool = pending_ai_results::table
                 .filter(pending_ai_results::result_type.eq("parser"))
                 .filter(pending_ai_results::source_title.eq(title))
-                .filter(
-                    pending_ai_results::status.eq_any(vec!["generating", "pending"]),
-                )
+                .filter(pending_ai_results::status.eq_any(vec!["generating", "pending"]))
                 .count()
                 .get_result::<i64>(conn)
                 .unwrap_or(0)
@@ -302,7 +300,7 @@ impl TitleParserService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::db::{TitleParser, ParserSourceType};
+    use crate::models::db::{ParserSourceType, TitleParser};
     use chrono::Utc;
 
     #[test]
@@ -387,7 +385,9 @@ mod tests {
     fn test_try_parser_extracts_episode_end() {
         let parser = make_batch_parser();
         let title = "動畫名 01-12 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.episode_no, 1);
         assert_eq!(result.episode_end, Some(12));
@@ -428,7 +428,9 @@ mod tests {
             pending_result_id: None,
         };
         let title = "動畫名 05 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.episode_no, 5);
         assert_eq!(result.episode_end, None);
@@ -440,17 +442,27 @@ mod tests {
         let parser = make_parser(3, r"^\[.+\]", r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)");
         let title = "Title without brackets - 01";
         let result = TitleParserService::try_parser(&parser, title).unwrap();
-        assert!(result.is_none(), "Should return None when condition_regex does not match");
+        assert!(
+            result.is_none(),
+            "Should return None when condition_regex does not match"
+        );
     }
 
     /// condition_regex 匹配但 parse_regex 不匹配時回傳 None
     #[test]
     fn test_try_parser_parse_regex_no_match_returns_none() {
-        let parser = make_parser(4, r"^\[.+\]", r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)");
+        let parser = make_parser(
+            4,
+            r"^\[.+\]",
+            r"^\[([^\]]+)\]\s*(.+?)\s+-\s*(\d+)\s*\[.*?(\d{3,4}p)",
+        );
         // 有 [Group] 和 - 數字，但缺少解析度資訊
         let title = "[Group] Title - 01";
         let result = TitleParserService::try_parser(&parser, title).unwrap();
-        assert!(result.is_none(), "Should return None when parse_regex does not capture");
+        assert!(
+            result.is_none(),
+            "Should return None when parse_regex does not capture"
+        );
     }
 
     /// 使用 Static source type 提取 anime_title
@@ -488,7 +500,9 @@ mod tests {
             pending_result_id: None,
         };
         let title = "任意標題 07 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.anime_title, "固定動畫名");
         assert_eq!(result.episode_no, 7);
     }
@@ -528,7 +542,9 @@ mod tests {
             pending_result_id: None,
         };
         let title = "進擊的巨人 - 25 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.anime_title, "進擊的巨人");
         assert_eq!(result.episode_no, 25);
     }
@@ -569,7 +585,9 @@ mod tests {
             pending_result_id: None,
         };
         let title = "[LoliHouse] 進擊的巨人 - 25 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(result.anime_title, "進擊的巨人");
         assert_eq!(result.episode_no, 25);
@@ -615,7 +633,9 @@ mod tests {
             pending_result_id: None,
         };
         let title = "鬼滅之刃 S03E08";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.anime_title, "鬼滅之刃");
         assert_eq!(result.series_no, 3);
         assert_eq!(result.episode_no, 8);
@@ -626,7 +646,9 @@ mod tests {
     fn test_try_parser_series_no_defaults_to_one() {
         let parser = make_parser(9, ".*", r"^(.+?)\s+-\s*(\d+)");
         let title = "進擊的巨人 - 10";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.series_no, 1);
     }
 
@@ -666,7 +688,10 @@ mod tests {
         };
         let title = "タイトル - SP";
         let result = TitleParserService::try_parser(&parser, title);
-        assert!(result.is_err(), "Should return Err when episode_no is not numeric");
+        assert!(
+            result.is_err(),
+            "Should return Err when episode_no is not numeric"
+        );
     }
 
     /// invalid condition_regex 回傳 Err
@@ -704,7 +729,10 @@ mod tests {
             pending_result_id: None,
         };
         let result = TitleParserService::try_parser(&parser, "some title - 01");
-        assert!(result.is_err(), "Should return Err for invalid condition_regex");
+        assert!(
+            result.is_err(),
+            "Should return Err for invalid condition_regex"
+        );
     }
 
     /// episode_end 無效時（end < start）視為單集
@@ -714,7 +742,9 @@ mod tests {
         // 05-01 不合理，end < start → 視為單集（解析成功但 episode_end 仍回傳 Some(1)）
         // try_parser 只做 regex 解析，不做業務驗證，所以 episode_end = Some(1) 是正確的
         let title = "動畫名 05-01 [1080p]";
-        let result = TitleParserService::try_parser(&parser, title).unwrap().unwrap();
+        let result = TitleParserService::try_parser(&parser, title)
+            .unwrap()
+            .unwrap();
         assert_eq!(result.episode_no, 5);
         assert_eq!(result.episode_end, Some(1));
     }

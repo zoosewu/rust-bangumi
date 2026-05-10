@@ -233,10 +233,7 @@ impl FileOrganizer {
         language_codes: &shared::LanguageCodeMap,
     ) -> String {
         let path = std::path::Path::new(source_path);
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("ass");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("ass");
 
         let base = format!(
             "{} - S{:02}E{:02}",
@@ -320,24 +317,18 @@ impl FileOrganizer {
             // 嘗試 rename，失敗時 copy+delete（cross-device fallback）
             match tokio::fs::rename(&source, &dest).await {
                 Ok(()) => {
-                    tracing::info!(
-                        "Moved subtitle: {} → {}",
-                        source.display(),
-                        dest.display()
-                    );
+                    tracing::info!("Moved subtitle: {} → {}", source.display(), dest.display());
                     results.push(dest);
                 }
-                Err(_) => {
-                    match tokio::fs::copy(&source, &dest).await {
-                        Ok(_) => {
-                            let _ = tokio::fs::remove_file(&source).await;
-                            results.push(dest);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to move subtitle {}: {}", source_path, e);
-                        }
+                Err(_) => match tokio::fs::copy(&source, &dest).await {
+                    Ok(_) => {
+                        let _ = tokio::fs::remove_file(&source).await;
+                        results.push(dest);
                     }
-                }
+                    Err(e) => {
+                        tracing::warn!("Failed to move subtitle {}: {}", source_path, e);
+                    }
+                },
             }
         }
         results
@@ -430,42 +421,26 @@ mod tests {
 
     #[test]
     fn test_build_subtitle_dest_name_with_lang() {
-        let map = shared::LanguageCodeMap::from_entries(vec![
-            ("TC".to_string(), "zh-TW".to_string()),
-        ]);
-        let name = FileOrganizer::build_subtitle_dest_name(
-            "Title",
-            1,
-            1,
-            "/downloads/sub.TC.ass",
-            &map,
-        );
+        let map =
+            shared::LanguageCodeMap::from_entries(vec![("TC".to_string(), "zh-TW".to_string())]);
+        let name =
+            FileOrganizer::build_subtitle_dest_name("Title", 1, 1, "/downloads/sub.TC.ass", &map);
         assert_eq!(name, "Title - S01E01.zh-TW.ass");
     }
 
     #[test]
     fn test_build_subtitle_dest_name_no_lang() {
         let map = shared::LanguageCodeMap::from_entries(vec![]);
-        let name = FileOrganizer::build_subtitle_dest_name(
-            "Title",
-            1,
-            1,
-            "/downloads/subtitle.ass",
-            &map,
-        );
+        let name =
+            FileOrganizer::build_subtitle_dest_name("Title", 1, 1, "/downloads/subtitle.ass", &map);
         assert_eq!(name, "Title - S01E01.ass");
     }
 
     #[test]
     fn test_build_subtitle_dest_name_unknown_lang() {
         let map = shared::LanguageCodeMap::from_entries(vec![]);
-        let name = FileOrganizer::build_subtitle_dest_name(
-            "Title",
-            1,
-            1,
-            "/downloads/sub.XX.srt",
-            &map,
-        );
+        let name =
+            FileOrganizer::build_subtitle_dest_name("Title", 1, 1, "/downloads/sub.XX.srt", &map);
         assert_eq!(name, "Title - S01E01.XX.srt");
     }
 }

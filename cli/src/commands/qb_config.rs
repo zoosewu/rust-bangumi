@@ -44,8 +44,7 @@ pub async fn run(_client: &ApiClient, action: QbConfigAction, json: bool) -> Res
                 username: &user,
                 password: &password,
             };
-            let resp: serde_json::Value =
-                dl_client.post("/config/credentials", &req).await?;
+            let resp: serde_json::Value = dl_client.post("/config/credentials", &req).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());

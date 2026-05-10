@@ -134,17 +134,15 @@ pub async fn confirm_pending(
 
     match pending.result_type.as_str() {
         "parser" => {
-            diesel::update(
-                title_parsers::table.filter(title_parsers::pending_result_id.eq(id)),
-            )
-            .set((
-                title_parsers::pending_result_id.eq(None::<i32>),
-                title_parsers::created_from_type.eq(Some(target_type)),
-                title_parsers::created_from_id.eq(req.target_id),
-                title_parsers::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            diesel::update(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
+                .set((
+                    title_parsers::pending_result_id.eq(None::<i32>),
+                    title_parsers::created_from_type.eq(Some(target_type)),
+                    title_parsers::created_from_id.eq(req.target_id),
+                    title_parsers::updated_at.eq(now),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             // 觸發 re-run + conflict detection（背景非同步）
             let pool_arc = Arc::new(pool.clone());
@@ -161,11 +159,9 @@ pub async fn confirm_pending(
         }
         "filter" => {
             // 刪除舊的 filter_rules，改從 generated_data（使用者可能已編輯）重建
-            diesel::delete(
-                filter_rules::table.filter(filter_rules::pending_result_id.eq(id)),
-            )
-            .execute(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
+                .execute(&mut conn)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             let rules_data = pending
                 .generated_data
@@ -178,9 +174,19 @@ pub async fn confirm_pending(
             use crate::models::NewFilterRule;
             for (i, rule) in rules_data.iter().enumerate() {
                 let new_rule = NewFilterRule {
-                    rule_order: rule.get("rule_order").and_then(|v| v.as_i64()).unwrap_or(i as i64 + 1) as i32,
-                    regex_pattern: rule.get("regex_pattern").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    is_positive: rule.get("is_positive").and_then(|v| v.as_bool()).unwrap_or(true),
+                    rule_order: rule
+                        .get("rule_order")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(i as i64 + 1) as i32,
+                    regex_pattern: rule
+                        .get("regex_pattern")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    is_positive: rule
+                        .get("is_positive")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
                     target_type,
                     target_id: req.target_id,
                     created_at: now,
@@ -201,9 +207,16 @@ pub async fn confirm_pending(
             let target_id = req.target_id;
             tokio::spawn(async move {
                 let recalc = if let Ok(mut conn) = db.get() {
-                    match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, target_type, target_id) {
+                    match crate::services::filter_recalc::recalculate_filtered_flags(
+                        &mut conn,
+                        target_type,
+                        target_id,
+                    ) {
                         Ok(r) => {
-                            tracing::info!("filter_recalc after confirm: updated {} links", r.updated_count);
+                            tracing::info!(
+                                "filter_recalc after confirm: updated {} links",
+                                r.updated_count
+                            );
                             r
                         }
                         Err(e) => {
@@ -224,8 +237,13 @@ pub async fn confirm_pending(
                 };
 
                 if !recalc.newly_filtered.is_empty() {
-                    match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
-                        Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
+                    match cancel_service
+                        .cancel_downloads_for_links(&recalc.newly_filtered)
+                        .await
+                    {
+                        Ok(n) => {
+                            tracing::info!("Cancelled {} downloads for newly filtered links", n)
+                        }
                         Err(e) => tracing::warn!("Failed to cancel downloads: {}", e),
                     }
                 }
@@ -285,18 +303,14 @@ pub async fn reject_pending(
 
     match pending.result_type.as_str() {
         "parser" => {
-            diesel::delete(
-                title_parsers::table.filter(title_parsers::pending_result_id.eq(id)),
-            )
-            .execute(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
+                .execute(&mut conn)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
         "filter" => {
-            diesel::delete(
-                filter_rules::table.filter(filter_rules::pending_result_id.eq(id)),
-            )
-            .execute(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
+                .execute(&mut conn)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
         _ => {}
     }
@@ -341,11 +355,9 @@ pub async fn regenerate_pending(
                 .ok();
             }
             "filter" => {
-                diesel::delete(
-                    filter_rules::table.filter(filter_rules::pending_result_id.eq(id)),
-                )
-                .execute(&mut conn)
-                .ok();
+                diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
+                    .execute(&mut conn)
+                    .ok();
             }
             _ => {}
         }
@@ -400,7 +412,9 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
     use std::collections::HashSet;
 
     let items: Vec<RawAnimeItem> = {
-        let mut conn = pool.get().map_err(|e: diesel::r2d2::PoolError| e.to_string())?;
+        let mut conn = pool
+            .get()
+            .map_err(|e: diesel::r2d2::PoolError| e.to_string())?;
         raw_anime_items::table
             .filter(
                 raw_anime_items::status
@@ -418,19 +432,29 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
         let mut conn = pool.get().map_err(|e| e.to_string())?;
         match TitleParserService::parse_title(&mut conn, &item.title) {
             Ok(Some(parsed)) => {
-                match crate::handlers::fetcher_results::process_parsed_result(&mut conn, item, &parsed) {
+                match crate::handlers::fetcher_results::process_parsed_result(
+                    &mut conn, item, &parsed,
+                ) {
                     Ok(link_ids) => {
                         new_link_ids.extend(link_ids);
                         TitleParserService::update_raw_item_status(
-                            &mut conn, item.item_id, ParseStatus::Parsed,
-                            Some(parsed.parser_id), None,
-                        ).ok();
+                            &mut conn,
+                            item.item_id,
+                            ParseStatus::Parsed,
+                            Some(parsed.parser_id),
+                            None,
+                        )
+                        .ok();
                     }
                     Err(e) => {
                         TitleParserService::update_raw_item_status(
-                            &mut conn, item.item_id, ParseStatus::Failed,
-                            Some(parsed.parser_id), Some(&e),
-                        ).ok();
+                            &mut conn,
+                            item.item_id,
+                            ParseStatus::Failed,
+                            Some(parsed.parser_id),
+                            Some(&e),
+                        )
+                        .ok();
                     }
                 }
             }
@@ -448,7 +472,9 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
             Ok(result) => {
                 tracing::info!(
                     "rerun 後派送：dispatched={}, no_downloader={}, failed={}",
-                    result.dispatched, result.no_downloader, result.failed
+                    result.dispatched,
+                    result.no_downloader,
+                    result.failed
                 );
             }
             Err(e) => tracing::warn!("rerun 後派送失敗: {}", e),
@@ -472,10 +498,12 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
         if !already_generating {
             let pool_clone = pool.clone();
             tokio::spawn(async move {
-                if let Err(e) = crate::ai::parser_generator::generate_parsers_for_subscription_batch(
-                    pool_clone,
-                    sub_id,
-                ).await {
+                if let Err(e) =
+                    crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+                        pool_clone, sub_id,
+                    )
+                    .await
+                {
                     tracing::warn!("Batch parser 生成失敗 subscription={}: {}", sub_id, e);
                 }
             });

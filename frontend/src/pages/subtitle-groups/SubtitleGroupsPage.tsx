@@ -9,6 +9,7 @@ import { DataTable } from "@/components/shared/DataTable"
 import type { Column } from "@/components/shared/DataTable"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -63,7 +64,9 @@ export default function SubtitleGroupsPage() {
     {
       key: "group_name",
       header: t("subtitleGroups.groupName"),
-      render: (item) => String(item.group_name),
+      headClassName: "min-w-[360px]",
+      cellClassName: "min-w-[360px]",
+      render: (item) => <TitleCell value={String(item.group_name)} />,
     },
     {
       key: "created_at",

@@ -40,8 +40,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let db_path =
-        std::env::var("PIKPAK_DB_PATH").unwrap_or_else(|_| "/data/pikpak.db".to_string());
+    let db_path = std::env::var("PIKPAK_DB_PATH").unwrap_or_else(|_| "/data/pikpak.db".to_string());
 
     if let Some(parent) = std::path::Path::new(&db_path).parent() {
         if !parent.as_os_str().is_empty() {
@@ -72,10 +71,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let app = Router::new()
-        .route(
-            "/downloads",
-            post(handlers::batch_download::<PikPakClient>),
-        )
+        .route("/downloads", post(handlers::batch_download::<PikPakClient>))
         .route(
             "/downloads",
             get(handlers::query_download_status::<PikPakClient>),

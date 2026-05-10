@@ -23,8 +23,8 @@ mod handlers {
         http::StatusCode,
         Json,
     };
-    use shared::DownloaderClient;
     use serde::Deserialize;
+    use shared::DownloaderClient;
     use shared::{
         BatchCancelRequest, BatchCancelResponse, BatchDownloadRequest, BatchDownloadResponse,
         StatusQueryResponse,

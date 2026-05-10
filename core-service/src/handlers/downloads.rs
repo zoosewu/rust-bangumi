@@ -146,11 +146,7 @@ pub async fn retry_one(
     State(state): State<AppState>,
     Path(download_id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    let result = match state
-        .dispatch_service
-        .manual_retry(vec![download_id])
-        .await
-    {
+    let result = match state.dispatch_service.manual_retry(vec![download_id]).await {
         Ok(r) => r,
         Err(e) => {
             tracing::error!("retry_one({}) failed: {}", download_id, e);
@@ -233,7 +229,10 @@ pub async fn retry_one(
             link_id,
             status: "dispatched".to_string(),
         };
-        return (StatusCode::OK, Json(serde_json::to_value(resp).expect("response serialization should not fail")));
+        return (
+            StatusCode::OK,
+            Json(serde_json::to_value(resp).expect("response serialization should not fail")),
+        );
     }
 
     if result.no_downloader == 1 {
@@ -242,7 +241,10 @@ pub async fn retry_one(
             link_id,
             status: "no_downloader".to_string(),
         };
-        return (StatusCode::OK, Json(serde_json::to_value(resp).expect("response serialization should not fail")));
+        return (
+            StatusCode::OK,
+            Json(serde_json::to_value(resp).expect("response serialization should not fail")),
+        );
     }
 
     if result.conflict_or_filtered == 1 {
@@ -288,11 +290,11 @@ pub async fn retry_bulk(
         }
     };
 
-    let mut q = downloads::table
-        .filter(downloads::status.eq_any(RETRYABLE_STATUSES))
-        .into_boxed();
+    let mut q = downloads::table.into_boxed();
     if let Some(ids) = &payload.download_ids {
         q = q.filter(downloads::download_id.eq_any(ids));
+    } else {
+        q = q.filter(downloads::status.eq_any(RETRYABLE_STATUSES));
     }
     if let Some(s) = &payload.status {
         q = q.filter(downloads::status.eq_any(s));
@@ -323,7 +325,10 @@ pub async fn retry_bulk(
             conflict_or_filtered: 0,
             failed: 0,
         };
-        return (StatusCode::OK, Json(serde_json::to_value(empty).expect("response serialization should not fail")));
+        return (
+            StatusCode::OK,
+            Json(serde_json::to_value(empty).expect("response serialization should not fail")),
+        );
     }
 
     let count = candidate_ids.len();
@@ -332,7 +337,10 @@ pub async fn retry_bulk(
             tracing::info!("retry_bulk: candidates={}, result={:?}", count, r);
             (
                 StatusCode::OK,
-                Json(serde_json::to_value(into_response(r)).expect("response serialization should not fail")),
+                Json(
+                    serde_json::to_value(into_response(r))
+                        .expect("response serialization should not fail"),
+                ),
             )
         }
         Err(e) => {

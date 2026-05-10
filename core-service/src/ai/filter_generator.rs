@@ -3,12 +3,14 @@ use diesel::prelude::*;
 use serde_json::Value;
 use std::sync::Arc;
 
-use crate::db::DbPool;
-use crate::models::{AiPromptSettings, FilterTargetType, NewFilterRule, NewPendingAiResult, PendingAiResult};
-use crate::schema::{ai_prompt_settings, filter_rules, pending_ai_results};
 use super::client::AiError;
-use crate::ai::{build_ai_chain, AttemptRecord};
 use super::prompts::*;
+use crate::ai::{build_ai_chain, AttemptRecord};
+use crate::db::DbPool;
+use crate::models::{
+    AiPromptSettings, FilterTargetType, NewFilterRule, NewPendingAiResult, PendingAiResult,
+};
+use crate::schema::{ai_prompt_settings, filter_rules, pending_ai_results};
 
 pub async fn generate_filter_for_conflict(
     pool: Arc<DbPool>,
@@ -27,7 +29,13 @@ pub async fn generate_filter_for_conflict(
             .optional()
             .map_err(|e| e.to_string())?;
         let fixed = non_empty(temp_fixed_prompt)
-            .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_filter_prompt.clone())))
+            .or_else(|| {
+                non_empty(
+                    prompt_settings
+                        .as_ref()
+                        .and_then(|p| p.fixed_filter_prompt.clone()),
+                )
+            })
             .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string());
         let custom = non_empty(temp_custom_prompt)
             .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_filter_prompt)));
@@ -68,7 +76,10 @@ pub async fn generate_filter_for_conflict(
         Ok(Some(chain)) => {
             let system = build_system_prompt(Some(&fixed_prompt));
             let user = build_filter_user_prompt(&conflict_titles, custom_prompt.as_deref());
-            match chain.chat_completion_structured(&system, &user, &filter_schema()).await {
+            match chain
+                .chat_completion_structured(&system, &user, &filter_schema())
+                .await
+            {
                 Ok((resp, attempts)) => {
                     if !attempts.is_empty() {
                         tracing::info!(
@@ -117,7 +128,8 @@ pub async fn generate_filter_for_conflict(
                     // 修正雙重轉義的 regex_pattern 欄位
                     if let Some(rules) = data.get_mut("rules").and_then(|r| r.as_array_mut()) {
                         for rule in rules {
-                            if let Some(fixed) = rule.get("regex_pattern")
+                            if let Some(fixed) = rule
+                                .get("regex_pattern")
                                 .and_then(|v| v.as_str())
                                 .map(super::fix_regex_escaping)
                             {
@@ -138,7 +150,11 @@ pub async fn generate_filter_for_conflict(
                     update_filter_pending_failed(
                         &pool,
                         pending_id,
-                        &format!("JSON 解析失敗: {}（原始回應長度: {} 字元）", e, json_str.len()),
+                        &format!(
+                            "JSON 解析失敗: {}（原始回應長度: {} 字元）",
+                            e,
+                            json_str.len()
+                        ),
                     )
                     .await
                 }
@@ -159,10 +175,7 @@ async fn create_unconfirmed_filter_rules(
     let rules = data["rules"].as_array().unwrap();
     for rule in rules {
         let new_rule = NewFilterRule {
-            rule_order: rule
-                .get("rule_order")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1) as i32,
+            rule_order: rule.get("rule_order").and_then(|v| v.as_i64()).unwrap_or(1) as i32,
             regex_pattern: rule
                 .get("regex_pattern")
                 .and_then(|v| v.as_str())
@@ -213,7 +226,13 @@ fn load_filter_prompts(
         .optional()
         .map_err(|e| e.to_string())?;
     let fixed = non_empty(temp_fixed)
-        .or_else(|| non_empty(prompt_settings.as_ref().and_then(|p| p.fixed_filter_prompt.clone())))
+        .or_else(|| {
+            non_empty(
+                prompt_settings
+                    .as_ref()
+                    .and_then(|p| p.fixed_filter_prompt.clone()),
+            )
+        })
         .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string());
     let custom = non_empty(temp_custom)
         .or_else(|| non_empty(prompt_settings.and_then(|p| p.custom_filter_prompt)));
@@ -284,7 +303,10 @@ pub async fn generate_filters_for_subscription_batch(
 
         let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
             Ok(Some(chain)) => {
-                match chain.chat_completion_structured(&system, &user, &filter_schema()).await {
+                match chain
+                    .chat_completion_structured(&system, &user, &filter_schema())
+                    .await
+                {
                     Ok((resp, attempts)) => {
                         if !attempts.is_empty() {
                             tracing::info!(
@@ -328,12 +350,8 @@ pub async fn generate_filters_for_subscription_batch(
 
         let extracted = super::extract_json(&json_str);
         if extracted.is_empty() {
-            let _ = update_filter_pending_failed(
-                &pool,
-                pending_id,
-                "AI 回應為空或無法提取 JSON",
-            )
-            .await;
+            let _ =
+                update_filter_pending_failed(&pool, pending_id, "AI 回應為空或無法提取 JSON").await;
             break;
         }
 
@@ -356,19 +374,17 @@ pub async fn generate_filters_for_subscription_batch(
         };
 
         if data.get("rules").and_then(|r| r.as_array()).is_none() {
-            let _ = update_filter_pending_failed(
-                &pool,
-                pending_id,
-                "AI 返回的 JSON 缺少 rules 陣列",
-            )
-            .await;
+            let _ =
+                update_filter_pending_failed(&pool, pending_id, "AI 返回的 JSON 缺少 rules 陣列")
+                    .await;
             break;
         }
 
         // 修正雙重轉義的 regex_pattern 欄位
         if let Some(rules) = data.get_mut("rules").and_then(|r| r.as_array_mut()) {
             for rule in rules {
-                if let Some(fixed) = rule.get("regex_pattern")
+                if let Some(fixed) = rule
+                    .get("regex_pattern")
                     .and_then(|v| v.as_str())
                     .map(super::fix_regex_escaping)
                 {
@@ -398,10 +414,7 @@ pub async fn generate_filters_for_subscription_batch(
             .unwrap_or_default();
 
         if unresolved_indices.is_empty() {
-            tracing::info!(
-                "批次過濾完成：iteration {} 解決所有衝突群組",
-                iteration
-            );
+            tracing::info!("批次過濾完成：iteration {} 解決所有衝突群組", iteration);
             break;
         }
 

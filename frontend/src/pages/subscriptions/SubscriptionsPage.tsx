@@ -9,6 +9,7 @@ import type { Column } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { DeleteSubscriptionDialog } from "@/components/shared/DeleteSubscriptionDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { SubscriptionDialog } from "./SubscriptionDialog"
@@ -55,7 +56,9 @@ export default function SubscriptionsPage() {
     {
       key: "name",
       header: t("common.name"),
-      render: (item) => String(item.name ?? item.source_url),
+      headClassName: "min-w-[420px]",
+      cellClassName: "min-w-[420px]",
+      render: (item) => <TitleCell value={String(item.name ?? item.source_url)} />,
     },
     {
       key: "source_url",

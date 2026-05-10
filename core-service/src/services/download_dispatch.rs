@@ -1,20 +1,23 @@
 use crate::db::DbPool;
 use crate::models::{AnimeLink, Download, DownloaderCapability, NewDownload, ServiceModule};
-use crate::schema::{anime_links, downloader_capabilities, downloads, raw_anime_items, service_modules, subscriptions};
+use crate::schema::{
+    anime_links, downloader_capabilities, downloads, raw_anime_items, service_modules,
+    subscriptions,
+};
 use chrono::Utc;
 use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
 use std::collections::{HashMap, HashSet};
 
-/// Download statuses that allow re-dispatching the link.
-/// `dispatch_new_links` treats other statuses as "active" and skips the link.
-/// Manual retry uses the same set as the input gate.
-pub const RETRYABLE_STATUSES: &[&str] = &[
-    "cancelled",
-    "failed",
-    "no_downloader",
-    "downloader_error",
-];
+/// Download statuses that allow a user-triggered manual retry.
+pub const RETRYABLE_STATUSES: &[&str] = &["failed", "no_downloader", "downloader_error"];
+
+/// Terminal statuses that do not block future automatic dispatch.
+///
+/// `cancelled` is intentionally terminal for automatic dispatch so parser/filter
+/// changes can create a new download later, but it is not manually retryable.
+pub const DISPATCH_TERMINAL_STATUSES: &[&str] =
+    &["cancelled", "failed", "no_downloader", "downloader_error"];
 
 /// Group a slice of links by URL, preserving insertion order.
 /// Each unique URL maps to all links sharing that URL.
@@ -146,11 +149,11 @@ impl DownloadDispatchService {
         }
 
         // Skip links that already have a non-terminal download.
-        // Only these terminal-failure statuses allow re-dispatch:
+        // Terminal records do not block automatic re-dispatch.
         let candidate_link_ids: Vec<i32> = links.iter().map(|l| l.link_id).collect();
         let links_with_active_downloads: Vec<i32> = downloads::table
             .filter(downloads::link_id.eq_any(&candidate_link_ids))
-            .filter(downloads::status.ne_all(RETRYABLE_STATUSES))
+            .filter(downloads::status.ne_all(DISPATCH_TERMINAL_STATUSES))
             .select(downloads::link_id)
             .distinct()
             .load::<i32>(&mut conn)
@@ -192,14 +195,12 @@ impl DownloadDispatchService {
         let link_preferred_map: HashMap<i32, i32> = {
             let result: Vec<(i32, i32)> = anime_links::table
                 .inner_join(
-                    raw_anime_items::table.on(
-                        anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())
-                    )
+                    raw_anime_items::table
+                        .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
                 )
                 .inner_join(
-                    subscriptions::table.on(
-                        subscriptions::subscription_id.eq(raw_anime_items::subscription_id)
-                    )
+                    subscriptions::table
+                        .on(subscriptions::subscription_id.eq(raw_anime_items::subscription_id)),
                 )
                 .filter(anime_links::link_id.eq_any(&surviving_link_ids))
                 .filter(subscriptions::preferred_downloader_id.is_not_null())
@@ -260,7 +261,10 @@ impl DownloadDispatchService {
 
             // Dispatch each preferred downloader group
             for (pref_id, pref_links) in &by_preferred {
-                let pref_dl = downloaders.iter().find(|d| d.module_id == *pref_id).unwrap();
+                let pref_dl = downloaders
+                    .iter()
+                    .find(|d| d.module_id == *pref_id)
+                    .unwrap();
                 let url_groups = group_links_by_url(pref_links);
                 let items: Vec<DownloadRequestItem> = url_groups
                     .iter()
@@ -444,10 +448,7 @@ impl DownloadDispatchService {
     /// - `dispatched / no_downloader / failed`: forwarded from `DispatchResult`
     /// - `conflict_or_filtered`: `unique_links - dispatched - no_downloader - failed`
     ///   (links dropped by dispatch's conflict / filter / link_status / batch-conflict gates)
-    pub async fn manual_retry(
-        &self,
-        download_ids: Vec<i32>,
-    ) -> Result<RetryResult, String> {
+    pub async fn manual_retry(&self, download_ids: Vec<i32>) -> Result<RetryResult, String> {
         if download_ids.is_empty() {
             return Ok(RetryResult {
                 downloads_matched: 0,
@@ -473,7 +474,13 @@ impl DownloadDispatchService {
         let mut seen: HashSet<i32> = HashSet::new();
         let unique_link_ids: Vec<i32> = retryable
             .iter()
-            .filter_map(|d| if seen.insert(d.link_id) { Some(d.link_id) } else { None })
+            .filter_map(|d| {
+                if seen.insert(d.link_id) {
+                    Some(d.link_id)
+                } else {
+                    None
+                }
+            })
             .collect();
         let unique_links = unique_link_ids.len();
 
@@ -697,9 +704,15 @@ mod tests {
         let groups = group_links_by_url(&refs);
 
         assert_eq!(groups.len(), 2, "should have 2 unique URLs");
-        let abc_group = groups.iter().find(|(url, _)| url == "magnet:?xt=urn:btih:ABC").unwrap();
+        let abc_group = groups
+            .iter()
+            .find(|(url, _)| url == "magnet:?xt=urn:btih:ABC")
+            .unwrap();
         assert_eq!(abc_group.1.len(), 2);
-        let def_group = groups.iter().find(|(url, _)| url == "magnet:?xt=urn:btih:DEF").unwrap();
+        let def_group = groups
+            .iter()
+            .find(|(url, _)| url == "magnet:?xt=urn:btih:DEF")
+            .unwrap();
         assert_eq!(def_group.1.len(), 1);
     }
 
@@ -715,16 +728,37 @@ mod tests {
     }
 
     #[test]
-    fn partition_retryable_keeps_retryable_statuses() {
+    fn partition_retryable_keeps_only_unexpected_failure_statuses() {
         let downloads = vec![
             make_download(1, 10, "failed"),
-            make_download(2, 20, "cancelled"),
+            make_download(2, 20, "no_downloader"),
+            make_download(3, 30, "downloader_error"),
+        ];
+        let (retryable, not_retryable) = super::partition_retryable(&downloads);
+        assert_eq!(retryable.len(), 3);
+        assert_eq!(not_retryable, 0);
+    }
+
+    #[test]
+    fn partition_retryable_excludes_cancelled_downloads() {
+        let downloads = vec![
+            make_download(1, 10, "cancelled"),
             make_download(3, 30, "no_downloader"),
             make_download(4, 40, "downloader_error"),
         ];
         let (retryable, not_retryable) = super::partition_retryable(&downloads);
-        assert_eq!(retryable.len(), 4);
-        assert_eq!(not_retryable, 0);
+        assert_eq!(retryable.len(), 2);
+        assert_eq!(
+            retryable.iter().map(|d| d.download_id).collect::<Vec<_>>(),
+            vec![3, 4]
+        );
+        assert_eq!(not_retryable, 1);
+    }
+
+    #[test]
+    fn dispatch_terminal_statuses_include_cancelled_downloads() {
+        assert!(super::DISPATCH_TERMINAL_STATUSES.contains(&"cancelled"));
+        assert!(!super::RETRYABLE_STATUSES.contains(&"cancelled"));
     }
 
     #[test]

@@ -63,8 +63,7 @@ pub async fn revert_parser_prompt(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     diesel::update(ai_prompt_settings::table)
         .set((
-            ai_prompt_settings::fixed_parser_prompt
-                .eq(Some(DEFAULT_FIXED_PARSER_PROMPT)),
+            ai_prompt_settings::fixed_parser_prompt.eq(Some(DEFAULT_FIXED_PARSER_PROMPT)),
             ai_prompt_settings::updated_at.eq(Utc::now().naive_utc()),
         ))
         .execute(&mut conn)
@@ -84,8 +83,7 @@ pub async fn revert_filter_prompt(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     diesel::update(ai_prompt_settings::table)
         .set((
-            ai_prompt_settings::fixed_filter_prompt
-                .eq(Some(DEFAULT_FIXED_FILTER_PROMPT)),
+            ai_prompt_settings::fixed_filter_prompt.eq(Some(DEFAULT_FIXED_FILTER_PROMPT)),
             ai_prompt_settings::updated_at.eq(Utc::now().naive_utc()),
         ))
         .execute(&mut conn)
@@ -94,4 +92,3 @@ pub async fn revert_filter_prompt(
         serde_json::json!({ "ok": true, "value": DEFAULT_FIXED_FILTER_PROMPT }),
     ))
 }
-

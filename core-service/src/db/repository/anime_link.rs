@@ -37,17 +37,10 @@ pub trait AnimeLinkRepository: Send + Sync {
         episode_no: i32,
     ) -> Result<Vec<AnimeLink>, RepositoryError>;
     /// Batch set conflict_flag for given link_ids
-    async fn set_conflict_flags(
-        &self,
-        link_ids: &[i32],
-        flag: bool,
-    ) -> Result<(), RepositoryError>;
+    async fn set_conflict_flags(&self, link_ids: &[i32], flag: bool)
+        -> Result<(), RepositoryError>;
     /// Batch set link_status for given link_ids
-    async fn set_link_status(
-        &self,
-        link_ids: &[i32],
-        status: &str,
-    ) -> Result<(), RepositoryError>;
+    async fn set_link_status(&self, link_ids: &[i32], status: &str) -> Result<(), RepositoryError>;
     /// Clear conflict_flag for all links (reset before re-detection)
     async fn clear_all_conflict_flags(&self) -> Result<usize, RepositoryError>;
     /// Find resolved (link_status='resolved') unfiltered links for a given episode
@@ -141,7 +134,7 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
                  FROM anime_links \
                  WHERE link_status = 'active' AND filtered_flag = false \
                  GROUP BY anime_id, group_id, episode_no \
-                 HAVING COUNT(*) > 1"
+                 HAVING COUNT(*) > 1",
             )
             .load::<ConflictGroup>(&mut conn)?
             .into_iter()
@@ -190,11 +183,7 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
         .await?
     }
 
-    async fn set_link_status(
-        &self,
-        link_ids: &[i32],
-        status: &str,
-    ) -> Result<(), RepositoryError> {
+    async fn set_link_status(&self, link_ids: &[i32], status: &str) -> Result<(), RepositoryError> {
         let pool = self.pool.clone();
         let ids = link_ids.to_vec();
         let status = status.to_string();
@@ -212,11 +201,10 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
-            let updated = diesel::update(
-                anime_links::table.filter(anime_links::conflict_flag.eq(true)),
-            )
-            .set(anime_links::conflict_flag.eq(false))
-            .execute(&mut conn)?;
+            let updated =
+                diesel::update(anime_links::table.filter(anime_links::conflict_flag.eq(true)))
+                    .set(anime_links::conflict_flag.eq(false))
+                    .execute(&mut conn)?;
             Ok(updated)
         })
         .await?

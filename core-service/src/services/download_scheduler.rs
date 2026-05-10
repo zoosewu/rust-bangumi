@@ -6,8 +6,10 @@ use tokio::time::interval;
 use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{anime_links, downloads, service_modules};
-use shared::{build_default_chain, classify_files, collect_files_recursive, match_batch_files,
-             FileType, StatusQueryResponse};
+use shared::{
+    build_default_chain, classify_files, collect_files_recursive, match_batch_files, FileType,
+    StatusQueryResponse,
+};
 
 pub struct DownloadScheduler {
     db_pool: DbPool,
@@ -333,10 +335,7 @@ impl DownloadScheduler {
         .execute(conn)
         {
             Ok(count) if count > 0 => {
-                tracing::warn!(
-                    "Reset {} stale syncing downloads back to completed",
-                    count
-                );
+                tracing::warn!("Reset {} stale syncing downloads back to completed", count);
             }
             Err(e) => {
                 tracing::error!("Failed to recover stale syncing downloads: {}", e);
@@ -441,11 +440,14 @@ impl DownloadScheduler {
                     match updated {
                         Ok(_) => tracing::info!(
                             "retry_batch_unmatched: recovered download_id={} ep={} hash={}",
-                            dl.download_id, ep, hash
+                            dl.download_id,
+                            ep,
+                            hash
                         ),
                         Err(e) => tracing::error!(
                             "retry_batch_unmatched: failed to update download_id={}: {}",
-                            dl.download_id, e
+                            dl.download_id,
+                            e
                         ),
                     }
                 } else {
@@ -466,34 +468,30 @@ impl DownloadScheduler {
     ) {
         let new_count = dl.sync_retry_count + 1;
         if new_count >= max_retries {
-            diesel::update(
-                downloads::table.filter(downloads::download_id.eq(dl.download_id)),
-            )
-            .set((
-                downloads::status.eq("batch_failed"),
-                downloads::sync_retry_count.eq(new_count),
-                downloads::error_message.eq(Some(format!(
-                    "Batch file matching failed after {} retries",
-                    new_count
-                ))),
-                downloads::updated_at.eq(now),
-            ))
-            .execute(conn)
-            .ok();
+            diesel::update(downloads::table.filter(downloads::download_id.eq(dl.download_id)))
+                .set((
+                    downloads::status.eq("batch_failed"),
+                    downloads::sync_retry_count.eq(new_count),
+                    downloads::error_message.eq(Some(format!(
+                        "Batch file matching failed after {} retries",
+                        new_count
+                    ))),
+                    downloads::updated_at.eq(now),
+                ))
+                .execute(conn)
+                .ok();
             tracing::warn!(
                 "retry_batch_unmatched: download_id={} exceeded max retries ({}), marking as batch_failed",
                 dl.download_id, max_retries
             );
         } else {
-            diesel::update(
-                downloads::table.filter(downloads::download_id.eq(dl.download_id)),
-            )
-            .set((
-                downloads::sync_retry_count.eq(new_count),
-                downloads::updated_at.eq(now),
-            ))
-            .execute(conn)
-            .ok();
+            diesel::update(downloads::table.filter(downloads::download_id.eq(dl.download_id)))
+                .set((
+                    downloads::sync_retry_count.eq(new_count),
+                    downloads::updated_at.eq(now),
+                ))
+                .execute(conn)
+                .ok();
         }
     }
 
@@ -531,20 +529,18 @@ impl DownloadScheduler {
         if records.len() == 1 {
             // Single episode: original behaviour — pick first video
             let (video_file, subtitle_files_json) = Self::extract_media_files(files);
-            diesel::update(
-                downloads::table.filter(downloads::download_id.eq(records[0].0)),
-            )
-            .set((
-                downloads::status.eq("completed"),
-                downloads::progress.eq(progress as f32),
-                downloads::total_bytes.eq(size as i64),
-                downloads::file_path.eq(content_path),
-                downloads::video_file.eq(video_file.as_deref()),
-                downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
-                downloads::updated_at.eq(now),
-            ))
-            .execute(conn)
-            .ok();
+            diesel::update(downloads::table.filter(downloads::download_id.eq(records[0].0)))
+                .set((
+                    downloads::status.eq("completed"),
+                    downloads::progress.eq(progress as f32),
+                    downloads::total_bytes.eq(size as i64),
+                    downloads::file_path.eq(content_path),
+                    downloads::video_file.eq(video_file.as_deref()),
+                    downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
+                    downloads::updated_at.eq(now),
+                ))
+                .execute(conn)
+                .ok();
             return;
         }
 
@@ -604,10 +600,12 @@ impl DownloadScheduler {
             return (None, None);
         }
         let classified = classify_files(files.to_vec());
-        let video = classified.iter()
+        let video = classified
+            .iter()
             .find(|f| f.file_type == FileType::Video)
             .map(|f| f.path.clone());
-        let subtitles: Vec<String> = classified.iter()
+        let subtitles: Vec<String> = classified
+            .iter()
             .filter(|f| f.file_type == FileType::Subtitle)
             .map(|f| f.path.clone())
             .collect();

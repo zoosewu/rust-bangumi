@@ -1,6 +1,6 @@
 use crate::db::DbPool;
-use crate::schema::webhooks;
 use crate::models::Webhook;
+use crate::schema::webhooks;
 use diesel::prelude::*;
 
 /// 模板渲染所需的動畫下載上下文
@@ -64,12 +64,7 @@ impl WebhookService {
                         );
                     }
                     Err(e) => {
-                        tracing::warn!(
-                            "Webhook {} failed to fire to {}: {}",
-                            webhook_id,
-                            url,
-                            e
-                        );
+                        tracing::warn!("Webhook {} failed to fire to {}: {}", webhook_id, url, e);
                     }
                 }
             });

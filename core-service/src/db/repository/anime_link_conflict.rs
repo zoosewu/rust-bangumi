@@ -198,10 +198,7 @@ pub mod mock {
 
     #[async_trait]
     impl AnimeLinkConflictRepository for MockAnimeLinkConflictRepository {
-        async fn find_by_id(
-            &self,
-            id: i32,
-        ) -> Result<Option<AnimeLinkConflict>, RepositoryError> {
+        async fn find_by_id(&self, id: i32) -> Result<Option<AnimeLinkConflict>, RepositoryError> {
             Ok(self
                 .conflicts
                 .lock()
@@ -234,9 +231,7 @@ pub mod mock {
                 .unwrap()
                 .iter()
                 .find(|c| {
-                    c.anime_id == anime_id
-                        && c.group_id == group_id
-                        && c.episode_no == episode_no
+                    c.anime_id == anime_id && c.group_id == group_id && c.episode_no == episode_no
                 })
                 .cloned())
         }
@@ -276,10 +271,7 @@ pub mod mock {
             chosen_link_id: i32,
         ) -> Result<AnimeLinkConflict, RepositoryError> {
             let mut conflicts = self.conflicts.lock().unwrap();
-            if let Some(c) = conflicts
-                .iter_mut()
-                .find(|c| c.conflict_id == conflict_id)
-            {
+            if let Some(c) = conflicts.iter_mut().find(|c| c.conflict_id == conflict_id) {
                 c.resolution_status = "resolved".to_string();
                 c.chosen_link_id = Some(chosen_link_id);
                 c.resolved_at = Some(Utc::now().naive_utc());
@@ -297,9 +289,7 @@ pub mod mock {
             let mut conflicts = self.conflicts.lock().unwrap();
             let orig = conflicts.len();
             conflicts.retain(|c| {
-                !(c.anime_id == anime_id
-                    && c.group_id == group_id
-                    && c.episode_no == episode_no)
+                !(c.anime_id == anime_id && c.group_id == group_id && c.episode_no == episode_no)
             });
             Ok(conflicts.len() < orig)
         }

@@ -94,7 +94,9 @@ mod tests {
             summary: Some("A great episode".to_string()),
         };
 
-        generate_episode_nfo(&video_path, &episode, 1, 1).await.unwrap();
+        generate_episode_nfo(&video_path, &episode, 1, 1)
+            .await
+            .unwrap();
 
         let nfo_path = video_path.with_extension("nfo");
         assert!(nfo_path.exists());
@@ -117,7 +119,9 @@ mod tests {
             summary: None,
         };
 
-        generate_episode_nfo(&video_path, &episode, 2, 1).await.unwrap();
+        generate_episode_nfo(&video_path, &episode, 2, 1)
+            .await
+            .unwrap();
 
         let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
         assert!(content.contains("<title>Second Episode</title>"));
@@ -135,7 +139,9 @@ mod tests {
             summary: None,
         };
 
-        generate_episode_nfo(&video_path, &episode, 3, 1).await.unwrap();
+        generate_episode_nfo(&video_path, &episode, 3, 1)
+            .await
+            .unwrap();
 
         let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
         assert!(content.contains("Ep &amp; &lt;Test&gt;"));

@@ -44,7 +44,10 @@ impl QBittorrentClient {
         let creds = self.credentials.lock().await;
         if let Some((username, password)) = creds.as_ref() {
             tracing::info!("Session expired, re-authenticating with qBittorrent...");
-            let params = [("username", username.as_str()), ("password", password.as_str())];
+            let params = [
+                ("username", username.as_str()),
+                ("password", password.as_str()),
+            ];
             let resp = self
                 .client
                 .post(format!("{}/api/v2/auth/login", self.base_url))
@@ -139,8 +142,7 @@ impl DownloaderClient for QBittorrentClient {
             let body = resp.text().await?;
             if body == "Ok." {
                 // 儲存帳密供 session 過期時重新登入
-                *self.credentials.lock().await =
-                    Some((username.to_string(), password.to_string()));
+                *self.credentials.lock().await = Some((username.to_string(), password.to_string()));
                 tracing::info!("Successfully logged in to qBittorrent");
                 Ok(())
             } else {

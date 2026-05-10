@@ -11,6 +11,8 @@ export interface Column<T> {
   key: string
   header: string
   render: (item: T) => React.ReactNode
+  headClassName?: string
+  cellClassName?: string
 }
 
 interface DataTableProps<T> {
@@ -31,7 +33,7 @@ export function DataTable<T extends Record<string, unknown>>({
       <TableHeader>
         <TableRow>
           {columns.map((col) => (
-            <TableHead key={col.key}>{col.header}</TableHead>
+            <TableHead key={col.key} className={col.headClassName}>{col.header}</TableHead>
           ))}
         </TableRow>
       </TableHeader>
@@ -43,7 +45,7 @@ export function DataTable<T extends Record<string, unknown>>({
             className={onRowClick ? "cursor-pointer" : ""}
           >
             {columns.map((col) => (
-              <TableCell key={col.key}>{col.render(item)}</TableCell>
+              <TableCell key={col.key} className={col.cellClassName}>{col.render(item)}</TableCell>
             ))}
           </TableRow>
         ))}

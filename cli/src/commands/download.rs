@@ -40,13 +40,16 @@ struct DownloadRow {
 
 pub async fn run(client: &ApiClient, action: DownloadAction, json: bool) -> Result<()> {
     match action {
-        DownloadAction::List { status, limit, offset } => {
+        DownloadAction::List {
+            status,
+            limit,
+            offset,
+        } => {
             let mut params = format!("?limit={}&offset={}", limit, offset);
             if let Some(s) = &status {
                 params.push_str(&format!("&status={}", s));
             }
-            let downloads: DownloadsResponse =
-                client.get(&format!("/downloads{}", params)).await?;
+            let downloads: DownloadsResponse = client.get(&format!("/downloads{}", params)).await?;
             if json {
                 output::print_json(&downloads);
                 return Ok(());

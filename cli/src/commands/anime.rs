@@ -68,13 +68,18 @@ pub async fn run(client: &ApiClient, action: AnimeAction, json: bool) -> Result<
         }
 
         AnimeAction::Add { title } => {
-            let req = CreateAnimeWorkRequest { title: title.clone() };
+            let req = CreateAnimeWorkRequest {
+                title: title.clone(),
+            };
             let resp: AnimeWorkResponse = client.post("/anime-works", &req).await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
             }
-            output::print_success(&format!("動畫作品已建立: {} (ID: {})", resp.title, resp.anime_id));
+            output::print_success(&format!(
+                "動畫作品已建立: {} (ID: {})",
+                resp.title, resp.anime_id
+            ));
         }
 
         AnimeAction::Delete { id } => {
@@ -87,8 +92,9 @@ pub async fn run(client: &ApiClient, action: AnimeAction, json: bool) -> Result<
         }
 
         AnimeAction::Animes { work_id } => {
-            let resp: serde_json::Value =
-                client.get(&format!("/anime-works/{}/anime", work_id)).await?;
+            let resp: serde_json::Value = client
+                .get(&format!("/anime-works/{}/anime", work_id))
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());

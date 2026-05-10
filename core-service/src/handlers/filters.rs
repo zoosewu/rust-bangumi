@@ -91,9 +91,14 @@ pub async fn create_filter_rule(
             let tid = rule.target_id;
             tokio::spawn(async move {
                 let recalc = if let Ok(mut conn) = db.get() {
-                    match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
+                    match crate::services::filter_recalc::recalculate_filtered_flags(
+                        &mut conn, tt, tid,
+                    ) {
                         Ok(r) => {
-                            tracing::info!("filter_recalc after create: updated {} links", r.updated_count);
+                            tracing::info!(
+                                "filter_recalc after create: updated {} links",
+                                r.updated_count
+                            );
                             r
                         }
                         Err(e) => {
@@ -114,9 +119,16 @@ pub async fn create_filter_rule(
                 };
 
                 if !recalc.newly_filtered.is_empty() {
-                    match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
-                        Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
-                        Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
+                    match cancel_service
+                        .cancel_downloads_for_links(&recalc.newly_filtered)
+                        .await
+                    {
+                        Ok(n) => {
+                            tracing::info!("Cancelled {} downloads for newly filtered links", n)
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to cancel downloads for filtered links: {}", e)
+                        }
                     }
                 }
 
@@ -189,9 +201,9 @@ pub async fn get_filter_rules(
     State(state): State<AppState>,
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    use std::collections::HashMap;
+    use crate::schema::{anime_works, animes, subscriptions, subtitle_groups};
     use diesel::prelude::*;
-    use crate::schema::{anime_works, animes, subtitle_groups, subscriptions};
+    use std::collections::HashMap;
 
     let to_response = |r: &FilterRule, name: Option<String>| FilterRuleResponse {
         rule_id: r.rule_id,
@@ -213,7 +225,9 @@ pub async fn get_filter_rules(
                 tracing::error!("Failed to list all filter rules: {}", e);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "database_error", "message": e.to_string(), "rules": [] })),
+                    Json(
+                        json!({ "error": "database_error", "message": e.to_string(), "rules": [] }),
+                    ),
                 );
             }
         };
@@ -223,55 +237,99 @@ pub async fn get_filter_rules(
             Ok(c) => c,
             Err(_) => {
                 // Return rules without names if DB connection fails
-                let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| to_response(r, None)).collect();
+                let responses: Vec<FilterRuleResponse> =
+                    rules.iter().map(|r| to_response(r, None)).collect();
                 return (StatusCode::OK, Json(json!({ "rules": responses })));
             }
         };
 
-        let work_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::AnimeWork).filter_map(|r| r.target_id).collect();
-        let anime_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::Anime).filter_map(|r| r.target_id).collect();
-        let group_ids: Vec<i32> = rules.iter().filter(|r| r.target_type == FilterTargetType::SubtitleGroup).filter_map(|r| r.target_id).collect();
-        let fetcher_ids: Vec<i32> = rules.iter()
-            .filter(|r| r.target_type == FilterTargetType::Fetcher || r.target_type == FilterTargetType::Subscription)
+        let work_ids: Vec<i32> = rules
+            .iter()
+            .filter(|r| r.target_type == FilterTargetType::AnimeWork)
+            .filter_map(|r| r.target_id)
+            .collect();
+        let anime_ids: Vec<i32> = rules
+            .iter()
+            .filter(|r| r.target_type == FilterTargetType::Anime)
+            .filter_map(|r| r.target_id)
+            .collect();
+        let group_ids: Vec<i32> = rules
+            .iter()
+            .filter(|r| r.target_type == FilterTargetType::SubtitleGroup)
+            .filter_map(|r| r.target_id)
+            .collect();
+        let fetcher_ids: Vec<i32> = rules
+            .iter()
+            .filter(|r| {
+                r.target_type == FilterTargetType::Fetcher
+                    || r.target_type == FilterTargetType::Subscription
+            })
             .filter_map(|r| r.target_id)
             .collect();
 
-        let work_names: HashMap<i32, String> = if work_ids.is_empty() { HashMap::new() } else {
-            anime_works::table.filter(anime_works::work_id.eq_any(&work_ids))
+        let work_names: HashMap<i32, String> = if work_ids.is_empty() {
+            HashMap::new()
+        } else {
+            anime_works::table
+                .filter(anime_works::work_id.eq_any(&work_ids))
                 .select((anime_works::work_id, anime_works::title))
-                .load::<(i32, String)>(&mut conn).unwrap_or_default()
-                .into_iter().collect()
+                .load::<(i32, String)>(&mut conn)
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
         };
-        let anime_names: HashMap<i32, String> = if anime_ids.is_empty() { HashMap::new() } else {
-            animes::table.inner_join(anime_works::table.on(anime_works::work_id.eq(animes::work_id)))
+        let anime_names: HashMap<i32, String> = if anime_ids.is_empty() {
+            HashMap::new()
+        } else {
+            animes::table
+                .inner_join(anime_works::table.on(anime_works::work_id.eq(animes::work_id)))
                 .filter(animes::anime_id.eq_any(&anime_ids))
                 .select((animes::anime_id, anime_works::title, animes::series_no))
-                .load::<(i32, String, i32)>(&mut conn).unwrap_or_default()
-                .into_iter().map(|(id, title, sno)| (id, format!("{} S{}", title, sno))).collect()
+                .load::<(i32, String, i32)>(&mut conn)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(id, title, sno)| (id, format!("{} S{}", title, sno)))
+                .collect()
         };
-        let group_names: HashMap<i32, String> = if group_ids.is_empty() { HashMap::new() } else {
-            subtitle_groups::table.filter(subtitle_groups::group_id.eq_any(&group_ids))
+        let group_names: HashMap<i32, String> = if group_ids.is_empty() {
+            HashMap::new()
+        } else {
+            subtitle_groups::table
+                .filter(subtitle_groups::group_id.eq_any(&group_ids))
                 .select((subtitle_groups::group_id, subtitle_groups::group_name))
-                .load::<(i32, String)>(&mut conn).unwrap_or_default()
-                .into_iter().collect()
+                .load::<(i32, String)>(&mut conn)
+                .unwrap_or_default()
+                .into_iter()
+                .collect()
         };
-        let sub_names: HashMap<i32, String> = if fetcher_ids.is_empty() { HashMap::new() } else {
-            subscriptions::table.filter(subscriptions::subscription_id.eq_any(&fetcher_ids))
+        let sub_names: HashMap<i32, String> = if fetcher_ids.is_empty() {
+            HashMap::new()
+        } else {
+            subscriptions::table
+                .filter(subscriptions::subscription_id.eq_any(&fetcher_ids))
                 .select((subscriptions::subscription_id, subscriptions::name))
-                .load::<(i32, Option<String>)>(&mut conn).unwrap_or_default()
-                .into_iter().filter_map(|(id, name)| name.map(|n| (id, n))).collect()
+                .load::<(i32, Option<String>)>(&mut conn)
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(id, name)| name.map(|n| (id, n)))
+                .collect()
         };
 
-        let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| {
-            let name = r.target_id.and_then(|id| match r.target_type {
-                FilterTargetType::AnimeWork => work_names.get(&id).cloned(),
-                FilterTargetType::Anime => anime_names.get(&id).cloned(),
-                FilterTargetType::SubtitleGroup => group_names.get(&id).cloned(),
-                FilterTargetType::Fetcher | FilterTargetType::Subscription => sub_names.get(&id).cloned(),
-                _ => None,
-            });
-            to_response(r, name)
-        }).collect();
+        let responses: Vec<FilterRuleResponse> = rules
+            .iter()
+            .map(|r| {
+                let name = r.target_id.and_then(|id| match r.target_type {
+                    FilterTargetType::AnimeWork => work_names.get(&id).cloned(),
+                    FilterTargetType::Anime => anime_names.get(&id).cloned(),
+                    FilterTargetType::SubtitleGroup => group_names.get(&id).cloned(),
+                    FilterTargetType::Fetcher | FilterTargetType::Subscription => {
+                        sub_names.get(&id).cloned()
+                    }
+                    _ => None,
+                });
+                to_response(r, name)
+            })
+            .collect();
 
         tracing::info!("Retrieved {} filter rules (all)", responses.len());
         return (StatusCode::OK, Json(json!({ "rules": responses })));
@@ -290,12 +348,20 @@ pub async fn get_filter_rules(
 
     let target_id: Option<i32> = params.get("target_id").and_then(|s| s.parse().ok());
 
-    match state.repos.filter_rule.find_by_target(target_type, target_id).await {
+    match state
+        .repos
+        .filter_rule
+        .find_by_target(target_type, target_id)
+        .await
+    {
         Ok(rules) => {
-            let responses: Vec<FilterRuleResponse> = rules.iter().map(|r| to_response(r, None)).collect();
+            let responses: Vec<FilterRuleResponse> =
+                rules.iter().map(|r| to_response(r, None)).collect();
             tracing::info!(
                 "Retrieved {} filter rules for target_type={}, target_id={:?}",
-                responses.len(), target_type_str, target_id
+                responses.len(),
+                target_type_str,
+                target_id
             );
             (StatusCode::OK, Json(json!({ "rules": responses })))
         }
@@ -344,9 +410,14 @@ pub async fn delete_filter_rule(
                     let dispatch_service = state.dispatch_service.clone();
                     tokio::spawn(async move {
                         let recalc = if let Ok(mut conn) = db.get() {
-                            match crate::services::filter_recalc::recalculate_filtered_flags(&mut conn, tt, tid) {
+                            match crate::services::filter_recalc::recalculate_filtered_flags(
+                                &mut conn, tt, tid,
+                            ) {
                                 Ok(r) => {
-                                    tracing::info!("filter_recalc after delete: updated {} links", r.updated_count);
+                                    tracing::info!(
+                                        "filter_recalc after delete: updated {} links",
+                                        r.updated_count
+                                    );
                                     r
                                 }
                                 Err(e) => {
@@ -367,20 +438,33 @@ pub async fn delete_filter_rule(
                         };
 
                         if !recalc.newly_filtered.is_empty() {
-                            match cancel_service.cancel_downloads_for_links(&recalc.newly_filtered).await {
-                                Ok(n) => tracing::info!("Cancelled {} downloads for newly filtered links", n),
-                                Err(e) => tracing::warn!("Failed to cancel downloads for filtered links: {}", e),
+                            match cancel_service
+                                .cancel_downloads_for_links(&recalc.newly_filtered)
+                                .await
+                            {
+                                Ok(n) => tracing::info!(
+                                    "Cancelled {} downloads for newly filtered links",
+                                    n
+                                ),
+                                Err(e) => tracing::warn!(
+                                    "Failed to cancel downloads for filtered links: {}",
+                                    e
+                                ),
                             }
                         }
 
                         // Re-run conflict detection; it may auto-resolve some conflicts
-                        let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
-                            Ok(result) => result.auto_dispatch_link_ids,
-                            Err(e) => {
-                                tracing::error!("conflict re-detection after filter delete failed: {}", e);
-                                vec![]
-                            }
-                        };
+                        let auto_dispatch_ids =
+                            match conflict_detection.detect_and_mark_conflicts().await {
+                                Ok(result) => result.auto_dispatch_link_ids,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "conflict re-detection after filter delete failed: {}",
+                                        e
+                                    );
+                                    vec![]
+                                }
+                            };
 
                         // Dispatch newly unfiltered links + auto-resolved conflict links
                         let mut to_dispatch = recalc.newly_unfiltered;
@@ -525,22 +609,34 @@ pub async fn preview_filter(
     use std::collections::HashMap;
 
     // anime_id → (work_title, series_no)
-    let anime_ids: Vec<i32> = links.iter().map(|l| l.anime_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let anime_ids: Vec<i32> = links
+        .iter()
+        .map(|l| l.anime_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
     let series_anime_map: HashMap<i32, (String, i32)> = if anime_ids.is_empty() {
         HashMap::new()
     } else {
-        use crate::schema::{animes, anime_works};
+        use crate::schema::{anime_works, animes};
         let rows: Vec<(i32, i32, String)> = animes::table
             .inner_join(anime_works::table)
             .filter(animes::anime_id.eq_any(&anime_ids))
             .select((animes::anime_id, animes::series_no, anime_works::title))
             .load(&mut conn)
             .unwrap_or_default();
-        rows.into_iter().map(|(aid, sno, wtitle)| (aid, (wtitle, sno))).collect()
+        rows.into_iter()
+            .map(|(aid, sno, wtitle)| (aid, (wtitle, sno)))
+            .collect()
     };
 
     // group_id → group_name
-    let group_ids: Vec<i32> = links.iter().map(|l| l.group_id).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    let group_ids: Vec<i32> = links
+        .iter()
+        .map(|l| l.group_id)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
     let group_map: HashMap<i32, String> = if group_ids.is_empty() {
         HashMap::new()
     } else {
@@ -642,4 +738,3 @@ pub async fn preview_filter(
         })),
     )
 }
-

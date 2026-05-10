@@ -117,19 +117,15 @@ async fn process_sync(
         .expect("valid reqwest client config");
     let callback_url = req.callback_url.clone();
     let download_id = req.download_id;
-    let result = shared::retry_with_backoff(
-        10,
-        std::time::Duration::from_secs(2),
-        || {
-            let client = client.clone();
-            let url = callback_url.clone();
-            let cb = callback.clone();
-            async move {
-                let resp = client.post(&url).json(&cb).send().await?;
-                resp.error_for_status().map(|_| ())
-            }
-        },
-    )
+    let result = shared::retry_with_backoff(10, std::time::Duration::from_secs(2), || {
+        let client = client.clone();
+        let url = callback_url.clone();
+        let cb = callback.clone();
+        async move {
+            let resp = client.post(&url).json(&cb).send().await?;
+            resp.error_for_status().map(|_| ())
+        }
+    })
     .await;
 
     if let Err(e) = result {
@@ -243,7 +239,8 @@ async fn fetch_and_generate_metadata(
                 air_date: ep_info.air_date,
                 summary: ep_info.summary,
             };
-            nfo_generator::generate_episode_nfo(target_path, &episode_data, episode_no, series_no).await?;
+            nfo_generator::generate_episode_nfo(target_path, &episode_data, episode_no, series_no)
+                .await?;
         }
         Ok(None) => {
             tracing::warn!(
@@ -349,19 +346,15 @@ async fn process_resync(
         .expect("valid reqwest client config");
     let callback_url = req.callback_url.clone();
     let download_id = req.download_id;
-    let result = shared::retry_with_backoff(
-        10,
-        std::time::Duration::from_secs(2),
-        || {
-            let client = client.clone();
-            let url = callback_url.clone();
-            let cb = callback.clone();
-            async move {
-                let resp = client.post(&url).json(&cb).send().await?;
-                resp.error_for_status().map(|_| ())
-            }
-        },
-    )
+    let result = shared::retry_with_backoff(10, std::time::Duration::from_secs(2), || {
+        let client = client.clone();
+        let url = callback_url.clone();
+        let cb = callback.clone();
+        async move {
+            let resp = client.post(&url).json(&cb).send().await?;
+            resp.error_for_status().map(|_| ())
+        }
+    })
     .await;
 
     if let Err(e) = result {
@@ -482,16 +475,14 @@ pub async fn delete_synced(
 async fn delete_single_download(state: &AppState, download_id: i32) -> shared::ViewerDeleteResult {
     // Find the latest completed sync task for this download_id
     let target_path: Option<String> = match state.db.get() {
-        Ok(mut conn) => {
-            sync_tasks::table
-                .filter(sync_tasks::download_id.eq(download_id))
-                .filter(sync_tasks::status.eq("completed"))
-                .order(sync_tasks::completed_at.desc())
-                .select(sync_tasks::target_path)
-                .first::<Option<String>>(&mut conn)
-                .ok()
-                .flatten()
-        }
+        Ok(mut conn) => sync_tasks::table
+            .filter(sync_tasks::download_id.eq(download_id))
+            .filter(sync_tasks::status.eq("completed"))
+            .order(sync_tasks::completed_at.desc())
+            .select(sync_tasks::target_path)
+            .first::<Option<String>>(&mut conn)
+            .ok()
+            .flatten(),
         Err(_) => None,
     };
 
@@ -502,9 +493,7 @@ async fn delete_single_download(state: &AppState, download_id: i32) -> shared::V
                 download_id,
                 success: false,
                 deleted_path: None,
-                error_message: Some(
-                    "No completed sync task found for this download".to_string(),
-                ),
+                error_message: Some("No completed sync task found for this download".to_string()),
             };
         }
     };

@@ -75,12 +75,12 @@ pub fn parse_search_results(html: &str, query: &str) -> Result<Vec<SearchResult>
     let mut results = Vec::new();
 
     // --- Part 1: Bangumi cards ---
-    let bangumi_sel = Selector::parse("ul.an-ul li a")
-        .map_err(|e| format!("Invalid selector: {:?}", e))?;
-    let title_sel = Selector::parse("div.an-text")
-        .map_err(|e| format!("Invalid selector: {:?}", e))?;
-    let img_sel = Selector::parse("span.b-lazy")
-        .map_err(|e| format!("Invalid selector: {:?}", e))?;
+    let bangumi_sel =
+        Selector::parse("ul.an-ul li a").map_err(|e| format!("Invalid selector: {:?}", e))?;
+    let title_sel =
+        Selector::parse("div.an-text").map_err(|e| format!("Invalid selector: {:?}", e))?;
+    let img_sel =
+        Selector::parse("span.b-lazy").map_err(|e| format!("Invalid selector: {:?}", e))?;
 
     for element in document.select(&bangumi_sel) {
         let href = match element.value().attr("href") {
@@ -140,9 +140,11 @@ pub fn parse_search_results(html: &str, query: &str) -> Result<Vec<SearchResult>
     let episode_sel = Selector::parse("tr.js-search-results-row td a.magnet-link-wrap")
         .map_err(|e| format!("Invalid selector: {:?}", e))?;
 
-    let has_episodes = document
-        .select(&episode_sel)
-        .any(|el| el.value().attr("href").map_or(false, |h| h.contains("/Home/Episode/")));
+    let has_episodes = document.select(&episode_sel).any(|el| {
+        el.value()
+            .attr("href")
+            .map_or(false, |h| h.contains("/Home/Episode/"))
+    });
 
     if has_episodes {
         results.push(SearchResult {
@@ -372,7 +374,11 @@ mod tests {
             </body></html>
         "#;
         let results = parse_search_results(html, "Show").unwrap();
-        assert_eq!(results.len(), 1, "All episodes should collapse to ONE source entry");
+        assert_eq!(
+            results.len(),
+            1,
+            "All episodes should collapse to ONE source entry"
+        );
         assert_eq!(results[0].title, "Extended: Show");
         assert_eq!(results[0].detail_key, "source:Show");
         assert_eq!(

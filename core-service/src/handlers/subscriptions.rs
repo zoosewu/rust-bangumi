@@ -52,7 +52,6 @@ pub struct SubscriptionResponse {
     pub updated_at: chrono::NaiveDateTime,
 }
 
-
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct CanHandleRequest {
     pub source_url: String,
@@ -526,9 +525,7 @@ pub async fn get_fetcher_subscriptions(
 }
 
 /// List all registered fetcher modules
-pub async fn list_fetcher_modules(
-    State(state): State<AppState>,
-) -> Json<serde_json::Value> {
+pub async fn list_fetcher_modules(State(state): State<AppState>) -> Json<serde_json::Value> {
     let Ok(mut conn) = state.db.get() else {
         return Json(json!({ "modules": [] }));
     };
@@ -600,7 +597,11 @@ pub async fn update_subscription(
 
     let now = Utc::now().naive_utc();
 
-    if payload.name.is_none() && payload.fetch_interval_minutes.is_none() && payload.is_active.is_none() && payload.preferred_downloader_id.is_none() {
+    if payload.name.is_none()
+        && payload.fetch_interval_minutes.is_none()
+        && payload.is_active.is_none()
+        && payload.preferred_downloader_id.is_none()
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(json!({
@@ -611,7 +612,8 @@ pub async fn update_subscription(
     }
 
     let result = (|| -> Result<usize, diesel::result::Error> {
-        let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+        let target =
+            subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
         let rows = diesel::update(target)
             .set(subscriptions::updated_at.eq(now))
             .execute(&mut conn)?;
@@ -620,26 +622,30 @@ pub async fn update_subscription(
         }
 
         if let Some(ref name) = payload.name {
-            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            let target =
+                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
             diesel::update(target)
                 .set(subscriptions::name.eq(Some(name.as_str())))
                 .execute(&mut conn)?;
         }
         if let Some(interval) = payload.fetch_interval_minutes {
-            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            let target =
+                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
             diesel::update(target)
                 .set(subscriptions::fetch_interval_minutes.eq(interval))
                 .execute(&mut conn)?;
         }
         if let Some(active) = payload.is_active {
-            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            let target =
+                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
             diesel::update(target)
                 .set(subscriptions::is_active.eq(active))
                 .execute(&mut conn)?;
         }
         if let Some(pref_dl) = payload.preferred_downloader_id {
             // Some(Some(id)) → 設定；Some(None) → 清除
-            let target = subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
+            let target =
+                subscriptions::table.filter(subscriptions::subscription_id.eq(subscription_id));
             diesel::update(target)
                 .set(subscriptions::preferred_downloader_id.eq(pref_dl))
                 .execute(&mut conn)?;
@@ -794,16 +800,21 @@ async fn delete_subscription_purge(
 
     // Step 1: Find all anime_link_ids associated with this subscription
     let link_ids: Vec<i32> = match anime_links::table
-        .inner_join(raw_anime_items::table.on(
-            anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())
-        ))
+        .inner_join(
+            raw_anime_items::table
+                .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
+        )
         .filter(raw_anime_items::subscription_id.eq(subscription_id))
         .select(anime_links::link_id)
         .load::<i32>(&mut conn)
     {
         Ok(ids) => ids,
         Err(e) => {
-            tracing::error!("Failed to query anime links for subscription {}: {}", subscription_id, e);
+            tracing::error!(
+                "Failed to query anime links for subscription {}: {}",
+                subscription_id,
+                e
+            );
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
@@ -854,10 +865,7 @@ async fn delete_subscription_purge(
                     );
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        "Best-effort viewer delete failed (continuing): {}",
-                        e
-                    );
+                    tracing::warn!("Best-effort viewer delete failed (continuing): {}", e);
                 }
             }
         }
@@ -890,8 +898,13 @@ async fn delete_subscription_purge(
                     .send()
                     .await
                 {
-                    Ok(_) => tracing::info!("Downloader cancel request sent for subscription {}", subscription_id),
-                    Err(e) => tracing::warn!("Best-effort downloader cancel failed (continuing): {}", e),
+                    Ok(_) => tracing::info!(
+                        "Downloader cancel request sent for subscription {}",
+                        subscription_id
+                    ),
+                    Err(e) => {
+                        tracing::warn!("Best-effort downloader cancel failed (continuing): {}", e)
+                    }
                 }
             }
         }
@@ -907,13 +920,15 @@ async fn delete_subscription_purge(
 
         // Step 5b: Delete downloads explicitly
         // (ON DELETE CASCADE on downloads.link_id may not be applied on the DB)
-        match diesel::delete(
-            downloads::table.filter(downloads::link_id.eq_any(&link_ids)),
-        )
-        .execute(&mut conn)
+        match diesel::delete(downloads::table.filter(downloads::link_id.eq_any(&link_ids)))
+            .execute(&mut conn)
         {
             Ok(count) => {
-                tracing::info!("Purge: deleted {} downloads for subscription {}", count, subscription_id);
+                tracing::info!(
+                    "Purge: deleted {} downloads for subscription {}",
+                    count,
+                    subscription_id
+                );
             }
             Err(e) => {
                 tracing::error!("Failed to delete downloads: {}", e);
@@ -928,14 +943,16 @@ async fn delete_subscription_purge(
         }
 
         // Step 5c: Delete anime_links
-        match diesel::delete(
-            anime_links::table.filter(anime_links::link_id.eq_any(&link_ids)),
-        )
-        .execute(&mut conn)
+        match diesel::delete(anime_links::table.filter(anime_links::link_id.eq_any(&link_ids)))
+            .execute(&mut conn)
         {
             Ok(count) => {
                 links_deleted = count;
-                tracing::info!("Purge: deleted {} anime_links for subscription {}", count, subscription_id);
+                tracing::info!(
+                    "Purge: deleted {} anime_links for subscription {}",
+                    count,
+                    subscription_id
+                );
             }
             Err(e) => {
                 tracing::error!("Failed to delete anime_links: {}", e);
@@ -960,16 +977,14 @@ async fn delete_subscription_purge(
 
     if !remaining_raw_ids.is_empty() {
         let _ = diesel::update(
-            anime_links::table
-                .filter(anime_links::raw_item_id.eq_any(&remaining_raw_ids)),
+            anime_links::table.filter(anime_links::raw_item_id.eq_any(&remaining_raw_ids)),
         )
         .set(anime_links::raw_item_id.eq(None::<i32>))
         .execute(&mut conn);
     }
 
     let raw_count = match diesel::delete(
-        raw_anime_items::table
-            .filter(raw_anime_items::subscription_id.eq(subscription_id)),
+        raw_anime_items::table.filter(raw_anime_items::subscription_id.eq(subscription_id)),
     )
     .execute(&mut conn)
     {
@@ -1065,7 +1080,14 @@ pub async fn trigger_fetch_now(
 
     drop(conn);
 
-    match trigger_immediate_fetch(&state.db, sub.subscription_id, &sub.source_url, sub.fetcher_id).await {
+    match trigger_immediate_fetch(
+        &state.db,
+        sub.subscription_id,
+        &sub.source_url,
+        sub.fetcher_id,
+    )
+    .await
+    {
         Ok(()) => (
             StatusCode::OK,
             Json(json!({
@@ -1088,7 +1110,9 @@ async fn trigger_immediate_fetch(
     fetcher_id: i32,
 ) -> Result<(), String> {
     // 查出 fetcher 的 base_url
-    let mut conn = db.get().map_err(|e| format!("DB connection error: {}", e))?;
+    let mut conn = db
+        .get()
+        .map_err(|e| format!("DB connection error: {}", e))?;
 
     let fetcher = service_modules::table
         .filter(service_modules::module_id.eq(fetcher_id))
@@ -1156,13 +1180,21 @@ pub async fn detect_conflicts_and_generate_filters(
     // 1. 先確保所有未解析的 raw items 都重新解析（避免 race condition：
     //    parser confirmation 的背景 rerun 可能尚未完成）
     let pool = Arc::new(state.db.clone());
-    if let Err(e) = crate::handlers::pending_ai_results::rerun_unmatched_raw_items(pool.clone()).await {
-        tracing::warn!("detect_conflicts_and_generate_filters: rerun_unmatched_raw_items 失敗: {}", e);
+    if let Err(e) =
+        crate::handlers::pending_ai_results::rerun_unmatched_raw_items(pool.clone()).await
+    {
+        tracing::warn!(
+            "detect_conflicts_and_generate_filters: rerun_unmatched_raw_items 失敗: {}",
+            e
+        );
     }
 
     // 2. 跑全局衝突偵測（標記衝突 flag）
     if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
-        tracing::warn!("detect_conflicts_and_generate_filters: conflict detection 失敗: {}", e);
+        tracing::warn!(
+            "detect_conflicts_and_generate_filters: conflict detection 失敗: {}",
+            e
+        );
     }
 
     // 3. 查詢此訂閱的衝突連結，組成衝突群組

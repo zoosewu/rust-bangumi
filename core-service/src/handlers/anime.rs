@@ -5,17 +5,20 @@ use axum::{
 };
 use serde_json::json;
 
-use diesel::prelude::*;
 use diesel::dsl::{count_distinct, exists};
+use diesel::prelude::*;
 
 use crate::db::CreateAnimeParams;
 use crate::dto::{
-    AnimeWorkRequest, AnimeWorkResponse, AnimeWorksListResponse, AnimeRequest, AnimeResponse,
-    AnimeRichResponse, DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse,
-    SubtitleGroupRequest, SubtitleGroupResponse, SubscriptionInfo, UpdateAnimeRequest,
+    AnimeRequest, AnimeResponse, AnimeRichResponse, AnimeWorkRequest, AnimeWorkResponse,
+    AnimeWorksListResponse, DownloadInfo, SeasonInfo, SeasonRequest, SeasonResponse,
+    SubscriptionInfo, SubtitleGroupRequest, SubtitleGroupResponse, UpdateAnimeRequest,
 };
 use crate::models::{Anime, AnimeWork, Download, Season};
-use crate::schema::{anime_cover_images, anime_links, animes, anime_works, downloads, raw_anime_items, seasons, subscriptions};
+use crate::schema::{
+    anime_cover_images, anime_links, anime_works, animes, downloads, raw_anime_items, seasons,
+    subscriptions,
+};
 use crate::state::AppState;
 
 // ============ AnimeWork Handlers ============
@@ -92,7 +95,10 @@ pub async fn list_anime_work(
         let mut conn = match state.db.get() {
             Ok(c) => c,
             Err(e) => {
-                tracing::error!("Failed to get DB connection for anime works (has_links): {:?}", e);
+                tracing::error!(
+                    "Failed to get DB connection for anime works (has_links): {:?}",
+                    e
+                );
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(json!({
@@ -436,12 +442,15 @@ pub async fn list_all_anime(
 
         // subscriptions: via anime_links → raw_anime_items → subscriptions
         let sub_infos: Vec<SubscriptionInfo> = match anime_links::table
-            .inner_join(raw_anime_items::table.on(
-                raw_anime_items::item_id.nullable().eq(anime_links::raw_item_id),
-            ))
-            .inner_join(subscriptions::table.on(
-                subscriptions::subscription_id.eq(raw_anime_items::subscription_id),
-            ))
+            .inner_join(
+                raw_anime_items::table.on(raw_anime_items::item_id
+                    .nullable()
+                    .eq(anime_links::raw_item_id)),
+            )
+            .inner_join(
+                subscriptions::table
+                    .on(subscriptions::subscription_id.eq(raw_anime_items::subscription_id)),
+            )
             .filter(anime_links::anime_id.eq(anime.anime_id))
             .select((subscriptions::subscription_id, subscriptions::name))
             .distinct()
@@ -671,8 +680,7 @@ pub async fn update_anime(
             .first::<crate::models::Anime>(&mut conn);
     }
 
-    match query
-    {
+    match query {
         Ok(anime) => {
             tracing::info!("Updated anime: {}", anime_id);
             let response = AnimeResponse {
@@ -737,11 +745,7 @@ pub async fn list_anime(
                     updated_at: a.updated_at,
                 })
                 .collect();
-            tracing::info!(
-                "Listed {} anime for work_id {}",
-                responses.len(),
-                work_id
-            );
+            tracing::info!("Listed {} anime for work_id {}", responses.len(), work_id);
             (StatusCode::OK, Json(json!({ "series": responses })))
         }
         Err(e) => {
@@ -1062,8 +1066,8 @@ mod tests {
 // ============ Background Metadata Fetch ============
 
 pub async fn fetch_and_store_covers(db: crate::db::DbPool, work_id: i32, anime_title: String) {
-    use crate::schema::{anime_cover_images, service_modules};
     use crate::models::db::{ModuleTypeEnum, NewAnimeCoverImage};
+    use crate::schema::{anime_cover_images, service_modules};
 
     // 1. 從 DB 找所有啟用的 metadata service
     let metadata_services: Vec<(String, i32)> = {
@@ -1110,12 +1114,20 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, work_id: i32, anime_t
             Ok(r) if r.status().is_success() => match r.json().await {
                 Ok(v) => v,
                 Err(e) => {
-                    tracing::error!("Failed to parse metadata response from {}: {}", metadata_url, e);
+                    tracing::error!(
+                        "Failed to parse metadata response from {}: {}",
+                        metadata_url,
+                        e
+                    );
                     continue;
                 }
             },
             Ok(r) => {
-                tracing::warn!("Metadata service {} returned HTTP {}", metadata_url, r.status());
+                tracing::warn!(
+                    "Metadata service {} returned HTTP {}",
+                    metadata_url,
+                    r.status()
+                );
                 continue;
             }
             Err(e) => {

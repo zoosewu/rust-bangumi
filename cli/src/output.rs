@@ -24,9 +24,7 @@ pub fn format_status(status: &str) -> String {
             status.green().to_string()
         }
         "downloading" | "pending" | "in_progress" => status.yellow().to_string(),
-        "failed" | "error" | "unhealthy" | "false" | "no_match" => {
-            status.red().to_string()
-        }
+        "failed" | "error" | "unhealthy" | "false" | "no_match" => status.red().to_string(),
         "skipped" | "paused" | "inactive" => status.dimmed().to_string(),
         _ => status.to_string(),
     }
@@ -75,7 +73,10 @@ pub fn truncate_str(s: &str, max_chars: usize) -> String {
 pub fn truncate_path(s: &str, max_chars: usize) -> String {
     let chars: Vec<char> = s.chars().collect();
     if chars.len() > max_chars {
-        format!("...{}", chars[chars.len() - max_chars..].iter().collect::<String>())
+        format!(
+            "...{}",
+            chars[chars.len() - max_chars..].iter().collect::<String>()
+        )
     } else {
         s.to_string()
     }

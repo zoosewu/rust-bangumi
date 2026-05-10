@@ -23,11 +23,12 @@ import { EntityLink } from "@/components/shared/EntityLink"
 import { RawItemDialog } from "./RawItemDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { SearchBar } from "@/components/shared/SearchBar"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { formatDateTime } from "@/lib/datetime"
 
 const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
 const PAGE_SIZE = 50
-const RETRYABLE_DOWNLOAD = new Set(["failed", "downloader_error", "no_downloader", "cancelled"])
+const RETRYABLE_DOWNLOAD = new Set(["failed", "downloader_error", "no_downloader"])
 
 export default function RawItemsPage() {
   const { t } = useTranslation()
@@ -117,13 +118,45 @@ export default function RawItemsPage() {
 
   const columns: Column<Record<string, unknown>>[] = [
     {
+      key: "retry",
+      header: t("rawItems.retry"),
+      headClassName: "w-20",
+      cellClassName: "w-20",
+      render: (item) => {
+        const dl = item.download as { download_id: number; status: string; progress: number | null } | null | undefined
+        if (!dl || !RETRYABLE_DOWNLOAD.has(dl.status)) return "-"
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 px-2"
+            disabled={retryOne.isLoading}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleRetry(dl.download_id)
+            }}
+          >
+            <RotateCw className="h-3 w-3 mr-1" />
+            {t("rawItems.retry")}
+          </Button>
+        )
+      },
+    },
+    {
+      key: "download",
+      header: t("rawItems.download"),
+      render: (item) => {
+        const dl = item.download as { download_id: number; status: string; progress: number | null } | null | undefined
+        if (!dl) return "-"
+        return <DownloadBadge status={dl.status} progress={dl.progress} />
+      },
+    },
+    {
       key: "title",
       header: t("rawItems.itemTitle"),
-      render: (item) => (
-        <span className="text-sm font-mono truncate max-w-[400px] block">
-          {String(item.title)}
-        </span>
-      ),
+      headClassName: "min-w-[520px]",
+      cellClassName: "min-w-[520px]",
+      render: (item) => <TitleCell value={String(item.title)} mono />,
     },
     {
       key: "status",
@@ -139,35 +172,6 @@ export default function RawItemsPage() {
           )}
         </div>
       ),
-    },
-    {
-      key: "download",
-      header: t("rawItems.download"),
-      render: (item) => {
-        const dl = item.download as { download_id: number; status: string; progress: number | null } | null | undefined
-        if (!dl) return "-"
-        const canRetry = RETRYABLE_DOWNLOAD.has(dl.status)
-        return (
-          <div className="flex items-center gap-2">
-            <DownloadBadge status={dl.status} progress={dl.progress} />
-            {canRetry && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 px-2"
-                disabled={retryOne.isLoading}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleRetry(dl.download_id)
-                }}
-              >
-                <RotateCw className="h-3 w-3 mr-1" />
-                {t("rawItems.retry")}
-              </Button>
-            )}
-          </div>
-        )
-      },
     },
     {
       key: "subscription_id",

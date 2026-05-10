@@ -9,6 +9,7 @@ import type { Column } from "@/components/shared/DataTable"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { TitleCell } from "@/components/shared/TitleCell"
 import { AnimeDialog } from "./AnimeSeriesDialog"
 import { AnimeCard } from "@/components/AnimeSeriesCard"
 import type { AnimeRich } from "@/schemas/anime"
@@ -43,9 +44,9 @@ export default function AnimePage() {
     {
       key: "anime_title",
       header: t("animeSeries.animeTitle", "Anime"),
-      render: (item) => (
-        <span className="font-medium">{String(item.anime_title)}</span>
-      ),
+      headClassName: "min-w-[420px]",
+      cellClassName: "min-w-[420px]",
+      render: (item) => <TitleCell value={String(item.anime_title)} />,
     },
     {
       key: "series_no",

@@ -118,8 +118,7 @@ impl AnimeRepository for DieselAnimeRepository {
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             let deleted =
-                diesel::delete(animes::table.filter(animes::anime_id.eq(id)))
-                    .execute(&mut conn)?;
+                diesel::delete(animes::table.filter(animes::anime_id.eq(id))).execute(&mut conn)?;
             Ok(deleted > 0)
         })
         .await?
@@ -223,10 +222,7 @@ pub mod mock {
                 .cloned())
         }
 
-        async fn find_by_work_id(
-            &self,
-            work_id: i32,
-        ) -> Result<Vec<Anime>, RepositoryError> {
+        async fn find_by_work_id(&self, work_id: i32) -> Result<Vec<Anime>, RepositoryError> {
             self.operations
                 .lock()
                 .unwrap()
@@ -246,10 +242,7 @@ pub mod mock {
             Ok(self.series.lock().unwrap().clone())
         }
 
-        async fn create(
-            &self,
-            params: CreateAnimeParams,
-        ) -> Result<Anime, RepositoryError> {
+        async fn create(&self, params: CreateAnimeParams) -> Result<Anime, RepositoryError> {
             self.operations
                 .lock()
                 .unwrap()
@@ -298,9 +291,10 @@ pub mod mock {
             // Try to find existing
             {
                 let series = self.series.lock().unwrap();
-                if let Some(s) = series.iter().find(|s| {
-                    s.work_id == work_id && s.series_no == series_no
-                }) {
+                if let Some(s) = series
+                    .iter()
+                    .find(|s| s.work_id == work_id && s.series_no == series_no)
+                {
                     return Ok(s.clone());
                 }
             }

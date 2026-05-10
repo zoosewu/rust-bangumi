@@ -77,32 +77,27 @@ impl<C: HttpClient> FetchTask<C> {
     ) -> Result<(), FetchTaskError> {
         let http_client = self.http_client.clone();
         let url = callback_url.to_string();
-        let payload_json = serde_json::to_string(payload)
-            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
+        let payload_json =
+            serde_json::to_string(payload).map_err(|e| HttpError::RequestFailed(e.to_string()))?;
 
-        let result = shared::retry_with_backoff(
-            3,
-            std::time::Duration::from_secs(2),
-            || {
-                let http_client = http_client.clone();
-                let url = url.clone();
-                let payload_json = payload_json.clone();
-                async move {
-                    let payload: RawFetcherResultsPayload =
-                        serde_json::from_str(&payload_json)
-                            .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
-                    let response = http_client.post_json(&url, &payload).await?;
-                    if response.status.is_success() {
-                        Ok(())
-                    } else {
-                        Err(HttpError::RequestFailed(format!(
-                            "Core service returned error: {}",
-                            response.status
-                        )))
-                    }
+        let result = shared::retry_with_backoff(3, std::time::Duration::from_secs(2), || {
+            let http_client = http_client.clone();
+            let url = url.clone();
+            let payload_json = payload_json.clone();
+            async move {
+                let payload: RawFetcherResultsPayload = serde_json::from_str(&payload_json)
+                    .map_err(|e| HttpError::RequestFailed(e.to_string()))?;
+                let response = http_client.post_json(&url, &payload).await?;
+                if response.status.is_success() {
+                    Ok(())
+                } else {
+                    Err(HttpError::RequestFailed(format!(
+                        "Core service returned error: {}",
+                        response.status
+                    )))
                 }
-            },
-        )
+            }
+        })
         .await;
 
         match result {

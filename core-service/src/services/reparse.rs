@@ -7,7 +7,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::db::DbPool;
-use crate::models::{Anime, AnimeLink, AnimeWork, Download, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason, NewSubtitleGroup, RawAnimeItem, Season, SubtitleGroup};
+use crate::models::{
+    Anime, AnimeLink, AnimeWork, Download, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason,
+    NewSubtitleGroup, RawAnimeItem, Season, SubtitleGroup,
+};
 use crate::schema::{anime_links, anime_works, animes, raw_anime_items, seasons, subtitle_groups};
 use crate::services::title_parser::{ParseStatus, ParsedResult, TitleParserService};
 use crate::services::{
@@ -66,7 +69,10 @@ pub async fn reparse_all_items(
         return ReparseStats::default();
     }
 
-    tracing::info!("reparse_all_items: 開始重新解析全部 {} 筆項目", all_ids.len());
+    tracing::info!(
+        "reparse_all_items: 開始重新解析全部 {} 筆項目",
+        all_ids.len()
+    );
     reparse_affected_items(
         db,
         dispatch_service,
@@ -155,8 +161,9 @@ pub async fn reparse_affected_items(
                             resync_link_ids.extend(&result.updated_link_ids);
                         }
                         let ep_desc = match parsed.episode_end {
-                            Some(end) if end > parsed.episode_no =>
-                                format!("EP{}-{}", parsed.episode_no, end),
+                            Some(end) if end > parsed.episode_no => {
+                                format!("EP{}-{}", parsed.episode_no, end)
+                            }
                             _ => format!("EP{}", parsed.episode_no),
                         };
                         TitleParserService::update_raw_item_status(
@@ -510,13 +517,7 @@ fn upsert_anime_link(
         .unwrap_or_else(|| Utc::now().year());
     let season_name = parsed.season.as_deref().unwrap_or("unknown");
     let season = create_or_get_season(conn, year, season_name)?;
-    let series = create_or_get_series(
-        conn,
-        anime.work_id,
-        parsed.series_no,
-        season.season_id,
-        "",
-    )?;
+    let series = create_or_get_series(conn, anime.work_id, parsed.series_no, season.season_id, "")?;
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
     let group = create_or_get_subtitle_group(conn, group_name)?;
 
@@ -531,7 +532,8 @@ fn upsert_anime_link(
         Some(bad) => {
             tracing::warn!(
                 "reparse: episode_end ({}) invalid relative to episode_no ({}), treating as single",
-                bad, ep_start
+                bad,
+                ep_start
             );
             ep_start
         }
@@ -587,29 +589,26 @@ fn upsert_anime_link(
             let old_anime_id = existing.anime_id;
             let old_group_id = existing.group_id;
 
-            diesel::update(
-                anime_links::table.filter(anime_links::link_id.eq(existing.link_id)),
-            )
-            .set((
-                anime_links::anime_id.eq(series.anime_id),
-                anime_links::group_id.eq(group.group_id),
-                anime_links::episode_no.eq(ep),
-                anime_links::title.eq(Some(&raw_item.title)),
-                anime_links::source_hash.eq(&source_hash),
-                anime_links::url.eq(&raw_item.download_url),
-            ))
-            .execute(conn)
-            .map_err(|e| format!("Failed to update anime link ep {}: {}", ep, e))?;
+            diesel::update(anime_links::table.filter(anime_links::link_id.eq(existing.link_id)))
+                .set((
+                    anime_links::anime_id.eq(series.anime_id),
+                    anime_links::group_id.eq(group.group_id),
+                    anime_links::episode_no.eq(ep),
+                    anime_links::title.eq(Some(&raw_item.title)),
+                    anime_links::source_hash.eq(&source_hash),
+                    anime_links::url.eq(&raw_item.download_url),
+                ))
+                .execute(conn)
+                .map_err(|e| format!("Failed to update anime link ep {}: {}", ep, e))?;
 
             // 重算 filtered_flag
             let updated_link: AnimeLink = anime_links::table
                 .filter(anime_links::link_id.eq(existing.link_id))
                 .first(conn)
                 .map_err(|e| format!("Failed to reload link: {}", e))?;
-            if let Ok(flag) = crate::services::filter_recalc::compute_filtered_flag_for_link(
-                conn,
-                &updated_link,
-            ) {
+            if let Ok(flag) =
+                crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &updated_link)
+            {
                 if flag != updated_link.filtered_flag {
                     diesel::update(
                         anime_links::table.filter(anime_links::link_id.eq(existing.link_id)),
@@ -647,10 +646,9 @@ fn upsert_anime_link(
                 .get_result(conn)
                 .map_err(|e| format!("Failed to create anime link ep {}: {}", ep, e))?;
 
-            if let Ok(flag) = crate::services::filter_recalc::compute_filtered_flag_for_link(
-                conn,
-                &created_link,
-            ) {
+            if let Ok(flag) =
+                crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link)
+            {
                 if flag != created_link.filtered_flag {
                     diesel::update(
                         anime_links::table.filter(anime_links::link_id.eq(created_link.link_id)),
@@ -686,8 +684,8 @@ fn cleanup_empty_series(conn: &mut diesel::PgConnection, anime_id: i32) {
         .unwrap_or(1); // 查詢失敗時保守不刪
 
     if link_count == 0 {
-        if let Err(e) = diesel::delete(animes::table.filter(animes::anime_id.eq(anime_id)))
-            .execute(conn)
+        if let Err(e) =
+            diesel::delete(animes::table.filter(animes::anime_id.eq(anime_id))).execute(conn)
         {
             tracing::warn!("cleanup_empty_series: 刪除 anime {} 失敗: {}", anime_id, e);
         } else {

@@ -159,7 +159,13 @@ impl FetchScheduler {
         let mut last_error = String::new();
 
         while attempt < self.max_retries {
-            match self.http_client.post(&fetch_url).json(&request).send().await {
+            match self
+                .http_client
+                .post(&fetch_url)
+                .json(&request)
+                .send()
+                .await
+            {
                 Ok(response) => {
                     if response.status().is_success()
                         || response.status() == reqwest::StatusCode::ACCEPTED

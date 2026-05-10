@@ -1,6 +1,6 @@
 // shared/src/downloader_trait.rs
-use anyhow::Result;
 use crate::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
+use anyhow::Result;
 
 pub trait DownloaderClient: Send + Sync {
     fn login(

@@ -101,7 +101,10 @@ impl DownloaderClient for MockPikPakClient {
         }
     }
 
-    async fn add_torrents(&self, items: Vec<DownloadRequestItem>) -> Result<Vec<DownloadResultItem>> {
+    async fn add_torrents(
+        &self,
+        items: Vec<DownloadRequestItem>,
+    ) -> Result<Vec<DownloadResultItem>> {
         self.add_torrents_calls.borrow_mut().push(items);
         match &*self.add_torrents_result.borrow() {
             Ok(r) => Ok(r.clone()),

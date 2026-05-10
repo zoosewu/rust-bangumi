@@ -4,7 +4,10 @@ use fetcher_mikanani::{
     SearchScraper,
 };
 use serde::{Deserialize, Serialize};
-use shared::{DetailRequest, DetailResponse, FetchTriggerRequest, FetchTriggerResponse, SearchRequest, SearchResponse};
+use shared::{
+    DetailRequest, DetailResponse, FetchTriggerRequest, FetchTriggerResponse, SearchRequest,
+    SearchResponse,
+};
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -136,7 +139,10 @@ pub async fn detail(
     State(state): State<AppState>,
     Json(payload): Json<DetailRequest>,
 ) -> (StatusCode, Json<DetailResponse>) {
-    tracing::info!("Received detail request: detail_key={:?}", payload.detail_key);
+    tracing::info!(
+        "Received detail request: detail_key={:?}",
+        payload.detail_key
+    );
 
     match state.detail_scraper.scrape(&payload.detail_key).await {
         Ok(response) => {
@@ -225,14 +231,12 @@ mod tests {
             parser: Arc::new(RssParser::new()),
             http_client: Arc::new(RealHttpClient::new()),
             search_scraper: Arc::new(
-                fetcher_mikanani::search_scraper::mock::MockSearchScraper::with_results(vec![])
+                fetcher_mikanani::search_scraper::mock::MockSearchScraper::with_results(vec![]),
             ),
-            detail_scraper: Arc::new(MockDetailScraper::with_items(vec![
-                shared::DetailItem {
-                    subgroup_name: "TestGroup".to_string(),
-                    rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=1".to_string(),
-                }
-            ])),
+            detail_scraper: Arc::new(MockDetailScraper::with_items(vec![shared::DetailItem {
+                subgroup_name: "TestGroup".to_string(),
+                rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=1".to_string(),
+            }])),
         };
 
         let payload = Json(shared::DetailRequest {

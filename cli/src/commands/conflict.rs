@@ -106,33 +106,31 @@ pub async fn run(client: &ApiClient, action: ConflictAction, json: bool) -> Resu
         }
 
         ConflictAction::Resolve { id, fetcher } => {
-            let req = ResolveConflictRequest { fetcher_id: fetcher };
-            let resp: serde_json::Value =
-                client.post(&format!("/conflicts/{}/resolve", id), &req).await?;
+            let req = ResolveConflictRequest {
+                fetcher_id: fetcher,
+            };
+            let resp: serde_json::Value = client
+                .post(&format!("/conflicts/{}/resolve", id), &req)
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
             }
-            output::print_success(&format!(
-                "衝突 #{} 已解決（Fetcher: {}）",
-                id, fetcher
-            ));
+            output::print_success(&format!("衝突 #{} 已解決（Fetcher: {}）", id, fetcher));
         }
 
         ConflictAction::ResolveLink { id, link } => {
-            let req = ResolveLinkConflictRequest { chosen_link_id: link };
-            let resp: serde_json::Value =
-                client
-                    .post(&format!("/link-conflicts/{}/resolve", id), &req)
-                    .await?;
+            let req = ResolveLinkConflictRequest {
+                chosen_link_id: link,
+            };
+            let resp: serde_json::Value = client
+                .post(&format!("/link-conflicts/{}/resolve", id), &req)
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
             }
-            output::print_success(&format!(
-                "Link 衝突 #{} 已解決（保留 Link: {}）",
-                id, link
-            ));
+            output::print_success(&format!("Link 衝突 #{} 已解決（保留 Link: {}）", id, link));
         }
     }
     Ok(())

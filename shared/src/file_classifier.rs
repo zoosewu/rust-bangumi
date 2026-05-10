@@ -144,13 +144,19 @@ impl EpisodeExtractHandler for ExplicitMarkerHandler {
 
         let mut candidates: Vec<i32> = Vec::new();
         for c in re_ep.captures_iter(stem) {
-            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+            if let Ok(n) = c[1].parse::<i32>() {
+                candidates.push(n);
+            }
         }
         for c in re_cjk.captures_iter(stem) {
-            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+            if let Ok(n) = c[1].parse::<i32>() {
+                candidates.push(n);
+            }
         }
         for c in re_e.captures_iter(stem) {
-            if let Ok(n) = c[1].parse::<i32>() { candidates.push(n); }
+            if let Ok(n) = c[1].parse::<i32>() {
+                candidates.push(n);
+            }
         }
         unique_match(candidates, expected)
     }
@@ -228,7 +234,10 @@ pub fn match_batch_files(
         }
     }
 
-    for mf in classified.iter().filter(|f| f.file_type == FileType::Subtitle) {
+    for mf in classified
+        .iter()
+        .filter(|f| f.file_type == FileType::Subtitle)
+    {
         let stem = Path::new(&mf.path)
             .file_stem()
             .and_then(|s| s.to_str())
@@ -276,14 +285,19 @@ mod episode_tests {
     // DashSeparatorHandler tests
     #[test]
     fn test_dash_separator() {
-        let ep = extract_episode_from_stem("[Group] Show - 07 [1080p][ABCD]", &expected(1..=12), &chain());
+        let ep = extract_episode_from_stem(
+            "[Group] Show - 07 [1080p][ABCD]",
+            &expected(1..=12),
+            &chain(),
+        );
         assert_eq!(ep, Some(7));
     }
 
     #[test]
     fn test_dash_separator_version_suffix() {
         // "07v2" — the v2 should not block matching
-        let ep = extract_episode_from_stem("[Group] Show - 07v2 [1080p]", &expected(1..=12), &chain());
+        let ep =
+            extract_episode_from_stem("[Group] Show - 07v2 [1080p]", &expected(1..=12), &chain());
         assert_eq!(ep, Some(7));
     }
 
@@ -329,9 +343,18 @@ mod episode_tests {
         let chain = build_default_chain();
         let result = match_batch_files(&files, &[1, 2], &chain);
 
-        assert_eq!(result.get(&1).unwrap().0.as_deref(), Some("/dl/Show/[G] Show - 01 [1080p].mkv"));
-        assert_eq!(result.get(&1).unwrap().1, vec!["/dl/Show/[G] Show - 01 [1080p].zh.ass"]);
-        assert_eq!(result.get(&2).unwrap().0.as_deref(), Some("/dl/Show/[G] Show - 02 [1080p].mkv"));
+        assert_eq!(
+            result.get(&1).unwrap().0.as_deref(),
+            Some("/dl/Show/[G] Show - 01 [1080p].mkv")
+        );
+        assert_eq!(
+            result.get(&1).unwrap().1,
+            vec!["/dl/Show/[G] Show - 01 [1080p].zh.ass"]
+        );
+        assert_eq!(
+            result.get(&2).unwrap().0.as_deref(),
+            Some("/dl/Show/[G] Show - 02 [1080p].mkv")
+        );
     }
 
     #[test]
@@ -352,12 +375,13 @@ mod episode_tests {
     #[test]
     fn test_match_batch_files_single_episode_not_confused() {
         // Only one expected episode → no ambiguity
-        let files = vec![
-            "/dl/Show - 05 [1080p].mkv".to_string(),
-        ];
+        let files = vec!["/dl/Show - 05 [1080p].mkv".to_string()];
         let chain = build_default_chain();
         let result = match_batch_files(&files, &[5], &chain);
-        assert_eq!(result.get(&5).unwrap().0.as_deref(), Some("/dl/Show - 05 [1080p].mkv"));
+        assert_eq!(
+            result.get(&5).unwrap().0.as_deref(),
+            Some("/dl/Show - 05 [1080p].mkv")
+        );
     }
 }
 
@@ -375,7 +399,12 @@ mod tests {
         ];
         let result = classify_files(files);
         for mf in &result {
-            assert_eq!(mf.file_type, FileType::Video, "expected Video for {}", mf.path);
+            assert_eq!(
+                mf.file_type,
+                FileType::Video,
+                "expected Video for {}",
+                mf.path
+            );
         }
     }
 
@@ -389,7 +418,12 @@ mod tests {
         ];
         let result = classify_files(files);
         for mf in &result {
-            assert_eq!(mf.file_type, FileType::Subtitle, "expected Subtitle for {}", mf.path);
+            assert_eq!(
+                mf.file_type,
+                FileType::Subtitle,
+                "expected Subtitle for {}",
+                mf.path
+            );
         }
     }
 
@@ -398,7 +432,12 @@ mod tests {
         let files = vec!["image.jpg".to_string(), "readme.txt".to_string()];
         let result = classify_files(files);
         for mf in &result {
-            assert_eq!(mf.file_type, FileType::Other, "expected Other for {}", mf.path);
+            assert_eq!(
+                mf.file_type,
+                FileType::Other,
+                "expected Other for {}",
+                mf.path
+            );
         }
     }
 
@@ -433,9 +472,7 @@ mod tests {
 
     #[test]
     fn test_language_code_map_case_insensitive() {
-        let map = LanguageCodeMap::from_entries(vec![
-            ("TC".to_string(), "zh-TW".to_string()),
-        ]);
+        let map = LanguageCodeMap::from_entries(vec![("TC".to_string(), "zh-TW".to_string())]);
         assert_eq!(map.normalize("tc"), "zh-TW");
     }
 

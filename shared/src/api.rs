@@ -55,4 +55,3 @@ pub mod defaults {
     pub const HTTP_TIMEOUT_SECS: u64 = 30;
     pub const DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECS: u64 = 30;
 }
-

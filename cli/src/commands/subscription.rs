@@ -87,22 +87,30 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
                 println!("尚無訂閱");
                 return Ok(());
             }
-            let rows: Vec<SubRow> = resp.subscriptions.iter().map(|s| SubRow {
-                id: s.subscription_id,
-                name: output::opt_str(&s.name),
-                url: output::truncate_str(&s.source_url, 60),
-                interval: s.fetch_interval_minutes,
-                status: output::format_status(if s.is_active { "active" } else { "inactive" }),
-                last_fetched: s
-                    .last_fetched_at
-                    .as_deref()
-                    .map(|t| t[..16.min(t.len())].to_string())
-                    .unwrap_or_else(|| "-".to_string()),
-            }).collect();
+            let rows: Vec<SubRow> = resp
+                .subscriptions
+                .iter()
+                .map(|s| SubRow {
+                    id: s.subscription_id,
+                    name: output::opt_str(&s.name),
+                    url: output::truncate_str(&s.source_url, 60),
+                    interval: s.fetch_interval_minutes,
+                    status: output::format_status(if s.is_active { "active" } else { "inactive" }),
+                    last_fetched: s
+                        .last_fetched_at
+                        .as_deref()
+                        .map(|t| t[..16.min(t.len())].to_string())
+                        .unwrap_or_else(|| "-".to_string()),
+                })
+                .collect();
             println!("{}", Table::new(rows));
         }
 
-        SubscriptionAction::Add { url, name, interval } => {
+        SubscriptionAction::Add {
+            url,
+            name,
+            interval,
+        } => {
             let req = CreateSubscriptionRequest {
                 source_url: url,
                 name,
@@ -136,7 +144,10 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
                     ("名稱", output::opt_str(&sub.name)),
                     ("URL", sub.source_url.clone()),
                     ("間隔", format!("{} 分鐘", sub.fetch_interval_minutes)),
-                    ("狀態", output::format_status(if sub.is_active { "active" } else { "inactive" })),
+                    (
+                        "狀態",
+                        output::format_status(if sub.is_active { "active" } else { "inactive" }),
+                    ),
                     (
                         "上次抓取",
                         sub.last_fetched_at
@@ -155,7 +166,13 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
             );
         }
 
-        SubscriptionAction::Update { id, name, interval, active, inactive } => {
+        SubscriptionAction::Update {
+            id,
+            name,
+            interval,
+            active,
+            inactive,
+        } => {
             let is_active = if active {
                 Some(true)
             } else if inactive {
@@ -168,8 +185,9 @@ pub async fn run(client: &ApiClient, action: SubscriptionAction, json: bool) -> 
                 fetch_interval_minutes: interval,
                 is_active,
             };
-            let resp: SubscriptionResponse =
-                client.patch(&format!("/subscriptions/{}", id), &req).await?;
+            let resp: SubscriptionResponse = client
+                .patch(&format!("/subscriptions/{}", id), &req)
+                .await?;
             if json {
                 output::print_json(&resp);
                 return Ok(());
