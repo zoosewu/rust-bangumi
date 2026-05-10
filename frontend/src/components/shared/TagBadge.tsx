@@ -11,12 +11,12 @@ export type TagBadgeTone =
   | "danger"
 
 const toneClasses: Record<TagBadgeTone, string> = {
-  neutral: "border-border bg-background text-foreground",
-  muted: "border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300",
-  info: "border-sky-200 bg-sky-100 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
-  success: "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-  warning: "border-amber-200 bg-amber-100 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  danger: "border-red-200 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300",
+  neutral: "border-border bg-muted/30 text-muted-foreground",
+  muted: "border-slate-500/20 bg-slate-500/8 text-slate-700 dark:text-slate-300",
+  info: "border-sky-500/20 bg-sky-500/8 text-slate-700 dark:text-slate-300",
+  success: "border-emerald-500/20 bg-emerald-500/8 text-slate-700 dark:text-slate-300",
+  warning: "border-amber-500/20 bg-amber-500/8 text-slate-700 dark:text-slate-300",
+  danger: "border-red-500/20 bg-red-500/8 text-slate-700 dark:text-slate-300",
 }
 
 interface TagBadgeProps extends Omit<ComponentProps<typeof Badge>, "variant"> {
