@@ -33,6 +33,11 @@ fn group_links_by_url<'a>(links: &[&'a AnimeLink]) -> Vec<(String, Vec<&'a Anime
     groups
 }
 
+/// Format a downloader rejection/error into the reason persisted in `downloads.error_message`.
+pub fn format_fail_reason(downloader_name: &str, reason: Option<&str>, status: &str) -> String {
+    format!("{}: {}", downloader_name, reason.unwrap_or(status))
+}
+
 /// Split a slice of downloads into (retryable references, count of non-retryable).
 /// Pure function — no DB / IO.
 pub fn partition_retryable(downloads: &[Download]) -> (Vec<&Download>, usize) {
@@ -47,6 +52,16 @@ pub fn partition_retryable(downloads: &[Download]) -> (Vec<&Download>, usize) {
 pub struct DownloadDispatchService {
     db_pool: DbPool,
     http_client: reqwest::Client,
+}
+
+/// Parameters for a new `downloads` row created during dispatch.
+struct DownloadRecord<'a> {
+    link_id: i32,
+    downloader_type: &'a str,
+    status: &'a str,
+    module_id: Option<i32>,
+    torrent_hash: Option<&'a str>,
+    error_message: Option<&'a str>,
 }
 
 pub struct DispatchResult {
@@ -216,6 +231,8 @@ impl DownloadDispatchService {
         let mut total_dispatched = 0;
         let mut total_no_downloader = 0;
         let mut total_failed = 0;
+        // 每個 link 最後一次被拒/出錯的原因，最終寫入 failed 記錄的 error_message
+        let mut fail_reasons: HashMap<i32, String> = HashMap::new();
 
         for (download_type, type_links) in groups {
             // Find capable downloaders sorted by priority DESC
@@ -226,11 +243,14 @@ impl DownloadDispatchService {
                 for link in &type_links {
                     self.create_download_record(
                         &mut conn,
-                        link.link_id,
-                        &download_type,
-                        "no_downloader",
-                        None,
-                        None,
+                        DownloadRecord {
+                            link_id: link.link_id,
+                            downloader_type: &download_type,
+                            status: "no_downloader",
+                            module_id: None,
+                            torrent_hash: None,
+                            error_message: None,
+                        },
                     )?;
                 }
                 total_no_downloader += type_links.len();
@@ -286,15 +306,26 @@ impl DownloadDispatchService {
                                 if result.status == "accepted" {
                                     self.create_download_record(
                                         &mut conn,
-                                        link.link_id,
-                                        &download_type,
-                                        "downloading",
-                                        Some(pref_dl.module_id),
-                                        result.hash.as_deref(),
+                                        DownloadRecord {
+                                            link_id: link.link_id,
+                                            downloader_type: &download_type,
+                                            status: "downloading",
+                                            module_id: Some(pref_dl.module_id),
+                                            torrent_hash: result.hash.as_deref(),
+                                            error_message: None,
+                                        },
                                     )?;
                                     total_dispatched += 1;
                                 } else {
                                     // rejected by preferred — fallback to cascade
+                                    fail_reasons.insert(
+                                        link.link_id,
+                                        format_fail_reason(
+                                            &pref_dl.name,
+                                            result.reason.as_deref(),
+                                            &result.status,
+                                        ),
+                                    );
                                     cascade_pending.push(link);
                                 }
                             }
@@ -307,6 +338,9 @@ impl DownloadDispatchService {
                             pref_links.len(),
                             e
                         );
+                        for link in pref_links {
+                            fail_reasons.insert(link.link_id, format!("{}: {}", pref_dl.name, e));
+                        }
                         cascade_pending.extend(pref_links.iter().copied());
                     }
                 }
@@ -343,14 +377,25 @@ impl DownloadDispatchService {
                                 if result.status == "accepted" {
                                     self.create_download_record(
                                         &mut conn,
-                                        link.link_id,
-                                        &download_type,
-                                        "downloading",
-                                        Some(downloader.module_id),
-                                        result.hash.as_deref(),
+                                        DownloadRecord {
+                                            link_id: link.link_id,
+                                            downloader_type: &download_type,
+                                            status: "downloading",
+                                            module_id: Some(downloader.module_id),
+                                            torrent_hash: result.hash.as_deref(),
+                                            error_message: None,
+                                        },
                                     )?;
                                     total_dispatched += 1;
                                 } else {
+                                    fail_reasons.insert(
+                                        link.link_id,
+                                        format_fail_reason(
+                                            &downloader.name,
+                                            result.reason.as_deref(),
+                                            &result.status,
+                                        ),
+                                    );
                                     rejected.push(*link);
                                 }
                             }
@@ -365,6 +410,10 @@ impl DownloadDispatchService {
                             downloader.base_url,
                             e
                         );
+                        for link in &pending_links {
+                            fail_reasons
+                                .insert(link.link_id, format!("{}: {}", downloader.name, e));
+                        }
                         // Network error: try next downloader
                         continue;
                     }
@@ -375,11 +424,14 @@ impl DownloadDispatchService {
             for link in &pending_links {
                 self.create_download_record(
                     &mut conn,
-                    link.link_id,
-                    &download_type,
-                    "failed",
-                    None,
-                    None,
+                    DownloadRecord {
+                        link_id: link.link_id,
+                        downloader_type: &download_type,
+                        status: "failed",
+                        module_id: None,
+                        torrent_hash: None,
+                        error_message: fail_reasons.get(&link.link_id).map(|s| s.as_str()),
+                    },
                 )?;
                 total_failed += 1;
             }
@@ -621,21 +673,18 @@ impl DownloadDispatchService {
     fn create_download_record(
         &self,
         conn: &mut PgConnection,
-        link_id: i32,
-        downloader_type: &str,
-        status: &str,
-        module_id: Option<i32>,
-        torrent_hash: Option<&str>,
+        record: DownloadRecord<'_>,
     ) -> Result<(), String> {
         let now = Utc::now().naive_utc();
         let new_download = NewDownload {
-            link_id,
-            downloader_type: downloader_type.to_string(),
-            status: status.to_string(),
+            link_id: record.link_id,
+            downloader_type: record.downloader_type.to_string(),
+            status: record.status.to_string(),
+            error_message: record.error_message.map(|m| m.to_string()),
             created_at: now,
             updated_at: now,
-            module_id,
-            torrent_hash: torrent_hash.map(|h| h.to_string()),
+            module_id: record.module_id,
+            torrent_hash: record.torrent_hash.map(|h| h.to_string()),
         };
 
         diesel::insert_into(downloads::table)
@@ -649,7 +698,7 @@ impl DownloadDispatchService {
 
 #[cfg(test)]
 mod tests {
-    use super::group_links_by_url;
+    use super::{format_fail_reason, group_links_by_url};
     use crate::models::{AnimeLink, Download};
     use chrono::Utc;
 
@@ -780,5 +829,25 @@ mod tests {
         let (retryable, not_retryable) = super::partition_retryable(&[]);
         assert!(retryable.is_empty());
         assert_eq!(not_retryable, 0);
+    }
+
+    #[test]
+    fn format_fail_reason_uses_downloader_reason() {
+        assert_eq!(
+            format_fail_reason(
+                "qbittorrent-downloader",
+                Some("qBittorrent returned 403 Forbidden"),
+                "failed",
+            ),
+            "qbittorrent-downloader: qBittorrent returned 403 Forbidden"
+        );
+    }
+
+    #[test]
+    fn format_fail_reason_falls_back_to_status() {
+        assert_eq!(
+            format_fail_reason("pikpak-downloader", None, "failed"),
+            "pikpak-downloader: failed"
+        );
     }
 }

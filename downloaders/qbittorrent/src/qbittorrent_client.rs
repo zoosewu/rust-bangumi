@@ -39,6 +39,31 @@ impl QBittorrentClient {
         }
     }
 
+    /// 預先注入帳密（不發送請求）。
+    /// 即使啟動時 qBittorrent 尚未就緒導致登入失敗，
+    /// 後續請求收到 403 時仍可用這組帳密自動重登。
+    pub async fn set_credentials(&self, username: &str, password: &str) {
+        *self.credentials.lock().await = Some((username.to_string(), password.to_string()));
+    }
+
+    /// 發送請求；收到 403 時嘗試重新登入並重試一次
+    async fn send_with_relogin<F>(&self, build_request: F) -> reqwest::Result<reqwest::Response>
+    where
+        F: Fn() -> reqwest::RequestBuilder,
+    {
+        let resp = build_request().send().await;
+        match resp {
+            Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => match self.re_login().await {
+                Ok(()) => build_request().send().await,
+                Err(e) => {
+                    tracing::warn!("qBittorrent re-login failed: {}", e);
+                    Ok(r)
+                }
+            },
+            other => other,
+        }
+    }
+
     /// 嘗試重新登入（使用儲存的帳密）
     async fn re_login(&self) -> Result<()> {
         let creds = self.credentials.lock().await;
@@ -170,30 +195,17 @@ impl DownloaderClient for QBittorrentClient {
                 continue;
             }
 
-            let mut params = vec![("urls", item.url.as_str())];
             let save_path = &item.save_path;
-            if !save_path.is_empty() {
-                params.push(("savepath", save_path.as_str()));
-            }
-
             let add_url = format!("{}/api/v2/torrents/add", self.base_url);
-            let resp = self.client.post(&add_url).form(&params).send().await;
-
-            // 403 時嘗試重新登入再重試一次
-            let resp = match &resp {
-                Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => {
-                    if self.re_login().await.is_ok() {
-                        let mut retry_params = vec![("urls", item.url.as_str())];
-                        if !save_path.is_empty() {
-                            retry_params.push(("savepath", save_path.as_str()));
-                        }
-                        self.client.post(&add_url).form(&retry_params).send().await
-                    } else {
-                        resp
+            let resp = self
+                .send_with_relogin(|| {
+                    let mut params = vec![("urls", item.url.as_str())];
+                    if !save_path.is_empty() {
+                        params.push(("savepath", save_path.as_str()));
                     }
-                }
-                _ => resp,
-            };
+                    self.client.post(&add_url).form(&params)
+                })
+                .await;
 
             match resp {
                 Ok(r) if r.status().is_success() => match Self::extract_hash_from_url(&item.url) {
@@ -246,10 +258,11 @@ impl DownloaderClient for QBittorrentClient {
 
         for hash in &hashes {
             let resp = self
-                .client
-                .post(format!("{}/api/v2/torrents/delete", self.base_url))
-                .form(&[("hashes", hash.as_str()), ("deleteFiles", "false")])
-                .send()
+                .send_with_relogin(|| {
+                    self.client
+                        .post(format!("{}/api/v2/torrents/delete", self.base_url))
+                        .form(&[("hashes", hash.as_str()), ("deleteFiles", "false")])
+                })
                 .await;
 
             match resp {
@@ -288,10 +301,11 @@ impl DownloaderClient for QBittorrentClient {
 
         let hashes_param = hashes.join("|");
         let resp = self
-            .client
-            .get(format!("{}/api/v2/torrents/info", self.base_url))
-            .query(&[("hashes", &hashes_param)])
-            .send()
+            .send_with_relogin(|| {
+                self.client
+                    .get(format!("{}/api/v2/torrents/info", self.base_url))
+                    .query(&[("hashes", &hashes_param)])
+            })
             .await?;
 
         if !resp.status().is_success() {
@@ -346,10 +360,11 @@ impl DownloaderClient for QBittorrentClient {
 
     async fn pause_torrent(&self, hash: &str) -> Result<()> {
         let resp = self
-            .client
-            .post(format!("{}/api/v2/torrents/pause", self.base_url))
-            .form(&[("hashes", hash)])
-            .send()
+            .send_with_relogin(|| {
+                self.client
+                    .post(format!("{}/api/v2/torrents/pause", self.base_url))
+                    .form(&[("hashes", hash)])
+            })
             .await?;
 
         if resp.status().is_success() {
@@ -362,10 +377,11 @@ impl DownloaderClient for QBittorrentClient {
 
     async fn resume_torrent(&self, hash: &str) -> Result<()> {
         let resp = self
-            .client
-            .post(format!("{}/api/v2/torrents/resume", self.base_url))
-            .form(&[("hashes", hash)])
-            .send()
+            .send_with_relogin(|| {
+                self.client
+                    .post(format!("{}/api/v2/torrents/resume", self.base_url))
+                    .form(&[("hashes", hash)])
+            })
             .await?;
 
         if resp.status().is_success() {
@@ -378,13 +394,14 @@ impl DownloaderClient for QBittorrentClient {
 
     async fn delete_torrent(&self, hash: &str, delete_files: bool) -> Result<()> {
         let resp = self
-            .client
-            .post(format!("{}/api/v2/torrents/delete", self.base_url))
-            .form(&[
-                ("hashes", hash),
-                ("deleteFiles", if delete_files { "true" } else { "false" }),
-            ])
-            .send()
+            .send_with_relogin(|| {
+                self.client
+                    .post(format!("{}/api/v2/torrents/delete", self.base_url))
+                    .form(&[
+                        ("hashes", hash),
+                        ("deleteFiles", if delete_files { "true" } else { "false" }),
+                    ])
+            })
             .await?;
 
         if resp.status().is_success() {

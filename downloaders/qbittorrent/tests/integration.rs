@@ -2,4 +2,5 @@
 mod integration {
     mod client_tests;
     mod handler_tests;
+    mod relogin_tests;
 }

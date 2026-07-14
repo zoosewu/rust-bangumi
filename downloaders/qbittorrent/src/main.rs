@@ -28,9 +28,12 @@ async fn main() -> anyhow::Result<()> {
 
     let client = Arc::new(QBittorrentClient::new(qb_url));
     if !qb_user.is_empty() && !qb_pass.is_empty() {
+        // 先注入帳密再嘗試登入：即使 qBittorrent 尚未就緒導致啟動登入失敗，
+        // 後續請求收到 403 時仍會以這組帳密自動重登
+        client.set_credentials(&qb_user, &qb_pass).await;
         if let Err(e) = client.login(&qb_user, &qb_pass).await {
             tracing::warn!(
-                "qBittorrent 登入失敗: {}。請使用 'bangumi qb-login' 指令設定帳密。",
+                "qBittorrent 登入失敗: {}。將於後續請求收到 403 時自動重試登入。",
                 e
             );
         }

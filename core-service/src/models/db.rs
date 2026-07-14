@@ -354,6 +354,7 @@ pub struct NewDownload {
     pub link_id: i32,
     pub downloader_type: String,
     pub status: String,
+    pub error_message: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub module_id: Option<i32>,

@@ -548,6 +548,7 @@ pub fn create_download(
         link_id,
         downloader_type,
         status: "pending".to_string(),
+        error_message: None,
         created_at: now,
         updated_at: now,
         module_id: None,
