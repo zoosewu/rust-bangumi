@@ -6,8 +6,8 @@
 -- 相同格式，讓 raw_items 去重（download_url UNIQUE）與後續 RSS 抓取保持一致，
 -- 並將卡住的下載重置為 failed，交由 downloader 註冊時的自動重試以新 URL 重新派送。
 --
--- 映射來源：2026-07-14 自 7 個訂閱的 RSS feed 實際收割（與 DB 中 190 個 magnet
--- 的 btih hash 100% 對應）。冪等：重跑無副作用。
+-- 映射來源：2026-07-15 自 7 個訂閱的 RSS feed 實際收割（與 DB 中 192 個 magnet
+-- 的 btih hash 100% 對應，已逐一比對驗證）。冪等：重跑無副作用。
 --
 -- 使用方式（生產）：
 --   docker exec -i bangumi-postgres psql -U bangumi -d bangumi -v ON_ERROR_STOP=1 < 本檔
@@ -206,7 +206,9 @@ INSERT INTO magnet_url_fix (hash, new_url) VALUES
   ('5bd993de0c78143ad8d9baae0e6562a16488cfef', 'https://mikanani.me/Download/20260706/5bd993de0c78143ad8d9baae0e6562a16488cfef.torrent'),
   ('68fa16ccd5454b1683c1232870f7fafcd89bb7e3', 'https://mikanani.me/Download/20260706/68fa16ccd5454b1683c1232870f7fafcd89bb7e3.torrent'),
   ('217e6da069a8ee782fb6d2cabe8e438f6293780c', 'https://mikanani.me/Download/20260708/217e6da069a8ee782fb6d2cabe8e438f6293780c.torrent'),
-  ('bb9e4edf912d1d73178b5dbe18e69ce04051240c', 'https://mikanani.me/Download/20260708/bb9e4edf912d1d73178b5dbe18e69ce04051240c.torrent');
+  ('bb9e4edf912d1d73178b5dbe18e69ce04051240c', 'https://mikanani.me/Download/20260708/bb9e4edf912d1d73178b5dbe18e69ce04051240c.torrent'),
+  ('8348de6ad936ac7df2ffa37c961495e3642bb9be', 'https://mikanani.me/Download/20260715/8348de6ad936ac7df2ffa37c961495e3642bb9be.torrent'),
+  ('d3f8c75b903f438f6e2284aa856d65f092cd5b5f', 'https://mikanani.me/Download/20260715/d3f8c75b903f438f6e2284aa856d65f092cd5b5f.torrent');
 
 -- 1. raw_anime_items：改寫 download_url（去重鍵，之後 RSS 重抓會精確匹配）
 UPDATE raw_anime_items r

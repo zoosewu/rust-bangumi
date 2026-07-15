@@ -41,7 +41,20 @@ docker exec -i bangumi-postgres psql -U bangumi -d bangumi -v ON_ERROR_STOP=1 \
 ```
 
 腳本末尾會輸出驗證:`raw_items magnet remaining` 與 `anime_links magnet remaining`
-應為 **0**,downloads 應出現 `failed=22`(等待自動重派)。腳本冪等,重跑無害。
+應為 **0**,downloads 應出現 `failed=23`(等待自動重派)。腳本冪等,重跑無害。
+
+> **注意**:映射表是「收割當下的 RSS 快照」。若停止 stack 前 fetcher 又抓進新集數,
+> 那些項目不在映射內,執行後會殘留 magnet 並在部署後造成重複攝入。
+> **執行前先確認涵蓋率**(應輸出 `uncovered: 0`):
+> ```bash
+> grep -oE "^  \('[0-9a-f]{40}'" scripts/2026-07-14-fix-magnet-urls.sql \
+>   | grep -oE "[0-9a-f]{40}" | sort -u > /tmp/sql_hashes.txt
+> docker exec bangumi-postgres psql -U bangumi -d bangumi -t -A -c \
+>   "SELECT substring(download_url from 'btih:([0-9a-f]+)') FROM raw_anime_items \
+>      WHERE download_url LIKE 'magnet:%';" | sort -u > /tmp/db_hashes.txt
+> echo "uncovered: $(comm -13 /tmp/sql_hashes.txt /tmp/db_hashes.txt | wc -l)"
+> ```
+> 若不為 0,需重新自 RSS 收割並更新腳本映射表(2026-07-15 即因此從 190 補到 192)。
 
 ### 4. 部署新版鏡像並啟動
 
@@ -52,7 +65,7 @@ docker exec -i bangumi-postgres psql -U bangumi -d bangumi -v ON_ERROR_STOP=1 \
 1. **自動重派**(downloader 註冊時觸發,約啟動後數秒):
    ```bash
    docker logs bangumi-core 2>&1 | grep "Retried failed downloads"
-   # 期望: Retried failed downloads: 22 dispatched, 0 no_downloader, 0 failed again
+   # 期望: Retried failed downloads: 23 dispatched, 0 no_downloader, 0 failed again
    # 且整個啟動過程只出現一次(原子化修復生效)
    ```
 2. **無重複記錄**:
