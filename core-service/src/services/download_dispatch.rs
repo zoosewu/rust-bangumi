@@ -456,24 +456,20 @@ impl DownloadDispatchService {
 
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
-        // Find downloads with no_downloader status that match the new types
-        let no_dl_records: Vec<Download> = downloads::table
-            .filter(downloads::status.eq("no_downloader"))
-            .filter(downloads::downloader_type.eq_any(download_types))
-            .load::<Download>(&mut conn)
-            .map_err(|e| format!("Failed to query no_downloader records: {}", e))?;
+        // Atomically claim matching no_downloader records (delete + return link_ids).
+        // Concurrent registrations each get a disjoint set, preventing duplicate dispatch.
+        let link_ids: Vec<i32> = diesel::delete(
+            downloads::table
+                .filter(downloads::status.eq("no_downloader"))
+                .filter(downloads::downloader_type.eq_any(download_types)),
+        )
+        .returning(downloads::link_id)
+        .get_results(&mut conn)
+        .map_err(|e| format!("Failed to claim no_downloader records: {}", e))?;
 
-        if no_dl_records.is_empty() {
+        if link_ids.is_empty() {
             return Ok(0);
         }
-
-        let link_ids: Vec<i32> = no_dl_records.iter().map(|d| d.link_id).collect();
-        let download_ids: Vec<i32> = no_dl_records.iter().map(|d| d.download_id).collect();
-
-        // Delete old no_downloader records
-        diesel::delete(downloads::table.filter(downloads::download_id.eq_any(&download_ids)))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to delete no_downloader records: {}", e))?;
 
         // Re-dispatch
         let result = self.dispatch_new_links(link_ids).await?;
@@ -589,29 +585,24 @@ impl DownloadDispatchService {
     pub async fn retry_failed_downloads(&self) -> Result<usize, String> {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
+        // Atomically claim failed records (delete + return link_ids).
+        // Multiple downloaders can register at the same instant; each concurrent
+        // call gets a disjoint set, preventing duplicate dispatch.
         let retryable_statuses = vec!["failed", "downloader_error"];
-        let failed_records: Vec<Download> = downloads::table
-            .filter(downloads::status.eq_any(&retryable_statuses))
-            .load::<Download>(&mut conn)
-            .map_err(|e| format!("Failed to query failed downloads: {}", e))?;
+        let link_ids: Vec<i32> =
+            diesel::delete(downloads::table.filter(downloads::status.eq_any(&retryable_statuses)))
+                .returning(downloads::link_id)
+                .get_results(&mut conn)
+                .map_err(|e| format!("Failed to claim failed download records: {}", e))?;
 
-        if failed_records.is_empty() {
+        if link_ids.is_empty() {
             return Ok(0);
         }
 
-        let link_ids: Vec<i32> = failed_records.iter().map(|d| d.link_id).collect();
-        let download_ids: Vec<i32> = failed_records.iter().map(|d| d.download_id).collect();
-        let count = failed_records.len();
-
         tracing::info!(
             "Service Downloader recovered: retrying {} failed/downloader_error tasks",
-            count
+            link_ids.len()
         );
-
-        // Delete old failed records
-        diesel::delete(downloads::table.filter(downloads::download_id.eq_any(&download_ids)))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to delete failed download records: {}", e))?;
 
         // Re-dispatch
         let result = self.dispatch_new_links(link_ids).await?;

@@ -1,37 +1,47 @@
-# qBittorrent 登入競態修復 (2026-07-14)
+# 死 tracker + 重試競態修復 (2026-07-14 第二階段)
 
-Spec: `docs/superpowers/specs/2026-07-14-qbittorrent-login-race-fix-design.md`
+Spec: `docs/superpowers/specs/2026-07-14-dead-tracker-retry-race-fix-design.md`
+Runbook: `docs/runbooks/2026-07-14-tracker-fix-deploy.md`
+(第一階段登入競態修復已完成並部署,見前一份 spec)
 
 ## 計畫
 
-- [x] Fix 1: `QBittorrentClient::set_credentials()` + `main.rs` 啟動時先注入憑證
-- [x] Fix 2: `send_with_relogin()` helper 套用至六個 API 方法,移除 add_torrents 特例
-- [x] Fix 3: dispatch 失敗原因寫入 `downloads.error_message`(`NewDownload` + `create_download_record`)
-- [x] 測試: client 層 mock qBittorrent server 測 403 自動重登(含非 add 路徑)
-- [x] 測試: dispatch 層 `format_fail_reason` 單元測試
+- [x] Fix A: fetcher 保留原始 .torrent URL(移除 TRACKERS / torrent_url_to_magnet)
+- [x] Fix A: entry_to_raw_item 純函式重構 + RSS 樣本單元測試
+- [x] Fix B: retry_failed_downloads / retry_no_downloader_links 原子化 (DELETE..RETURNING)
+- [x] 資料遷移 SQL(190 筆映射自實際 RSS 收割,100% hash 對應)
+- [x] SQL 端到端驗證(拋棄式 Postgres + 全部 repo 遷移 + 冪等重跑)
+- [x] 部署 runbook
 - [x] `cargo fmt` / `cargo clippy` / `cargo test` 全過
 - [x] Review 章節總結
 
-## 遷移(部署後人工驗證,零程式碼)
+## 部署後驗證(runbook 第 5 節)
 
-- [ ] Core 日誌: `Retried failed downloads: N dispatched, ..., 0 failed again`
-- [ ] SQL: `SELECT status, COUNT(*) FROM downloads GROUP BY status;` 無 failed 殘留
+- [ ] `Retried failed downloads: 22 dispatched` 且只出現一次
+- [ ] downloads 無重複 link_id
+- [ ] qBittorrent 種子帶完整 tracker 清單且有進度
+- [ ] 下次 RSS 抓取無重複攝入(raw_items 不爆增)
 
 ## Review
 
-- `downloaders/qbittorrent/src/qbittorrent_client.rs`:
-  - 新增 `set_credentials()`(只存憑證不發請求)與 `send_with_relogin()`(403 → 重登 → 重試一次)。
-  - 六個 API 方法(`add_torrents`/`cancel_torrents`/`query_status`/`pause`/`resume`/`delete`)
-    全部改走 `send_with_relogin()`,移除原本只在 `add_torrents` 的手寫 403 特例。
-- `downloaders/qbittorrent/src/main.rs`: 啟動時先 `set_credentials()` 再嘗試登入;
-  登入失敗訊息改為說明會於 403 時自動重登。
-- `core-service`:
-  - `NewDownload` 增加 `error_message` 欄位(DB 欄位既有,無需 migration)。
-  - `create_download_record()` 改收 `DownloadRecord` 參數結構(具名欄位,同時修 clippy too_many_arguments)。
-  - dispatch 以 `fail_reasons: HashMap<link_id, String>` 追蹤最後被拒/出錯原因,
-    寫入 failed 記錄的 `error_message`;新增純函式 `format_fail_reason()`。
-- 測試: 新增 `tests/integration/relogin_tests.rs`(axum mock qBittorrent,3 個測試)
-  與 `format_fail_reason` 2 個單元測試。全 workspace `cargo test` 通過,
-  clippy 無新增警告(僅存 repo 既有警告)。
-- 既有 32 筆 failed 的遷移依賴 Core 既有 `retry_failed_downloads()`
-  (downloader 註冊時自動全量重派),不需要資料遷移。
+- `fetchers/mikanani/src/rss_parser.rs`:移除 `TRACKERS` 常數與 `torrent_url_to_magnet()`,
+  download_url 直接使用 RSS enclosure 的原始 `.torrent` URL。entry→RawAnimeItem 映射
+  抽為純函式 `entry_to_raw_item()`,`fetch_raw_items` 改為 `filter_map` 迭代器鏈
+  (符合專案函數式原則)。順手移除該函式內既有的多餘 `DateTime::<Utc>::from` 轉換。
+  舊的 6 個 magnet 轉換測試已無對應程式碼,replaced by 2 個以樣本 RSS XML 驅動的測試。
+- `core-service/src/services/download_dispatch.rs`:`retry_failed_downloads()` 與
+  `retry_no_downloader_links()` 的「SELECT 後 DELETE」改為單一
+  `DELETE ... RETURNING link_id`,併發呼叫各得不相交集合,消除重複派送競態。
+  順帶簡化:不再需要載入完整 `Download` 記錄。
+- `scripts/2026-07-14-fix-magnet-urls.sql`:190 筆 hash→URL 映射(自 7 個訂閱的 RSS
+  實際收割,與 DB 中 190 個 magnet hash 100% 對應)。已在拋棄式 Postgres 上套用全部
+  repo 遷移後端到端驗證:magnet 歸零、source_hash 重算正確(與 Python sha256 比對一致)、
+  重複記錄清除、冪等重跑全 0。
+- 驗證:全 workspace `cargo test` 372 passed / 0 failed;`cargo fmt` 已套用;
+  touched files 的 clippy 無新增警告(僅存 repo 既有的 `DownloaderCapability` unused import)。
+
+## 後續事項(本次範圍外)
+
+- fetcher pub_date 解析(mikanani torrent:pubDate 命名空間欄位)
+- 主機對外 UDP / DHT 環境檢查
+- download_scheduler 對 not_found 狀態的處理

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use feed_rs::model::Entry;
 use feed_rs::parser;
 use shared::models::RawAnimeItem;
 use shared::retry_with_backoff;
@@ -30,47 +30,11 @@ impl RssParser {
         let feed =
             parser::parse(&content[..]).map_err(|e| format!("Failed to parse RSS feed: {}", e))?;
 
-        let mut items = Vec::new();
-
-        for entry in feed.entries {
-            let title = entry.title.map(|t| t.content).unwrap_or_default();
-            if title.is_empty() {
-                continue;
-            }
-
-            // Get download URL from enclosure or link
-            let original_url = entry
-                .media
-                .first()
-                .and_then(|m| m.content.first())
-                .and_then(|c| c.url.as_ref())
-                .map(|u| u.to_string())
-                .or_else(|| entry.links.first().map(|l| l.href.clone()))
-                .unwrap_or_default();
-
-            if original_url.is_empty() {
-                continue;
-            }
-
-            // 優先轉換為 magnet link，失敗則使用原始 URL
-            let download_url = torrent_url_to_magnet(&original_url).unwrap_or(original_url);
-
-            let description = entry.summary.map(|s| s.content);
-
-            let pub_date = entry
-                .published
-                .or(entry.updated)
-                .map(|dt| DateTime::<Utc>::from(dt));
-
-            items.push(RawAnimeItem {
-                title,
-                description,
-                download_url,
-                pub_date,
-            });
-        }
-
-        Ok(items)
+        Ok(feed
+            .entries
+            .into_iter()
+            .filter_map(entry_to_raw_item)
+            .collect())
     }
 }
 
@@ -80,83 +44,85 @@ impl Default for RssParser {
     }
 }
 
-/// 常用 BitTorrent tracker 列表
-const TRACKERS: &[&str] = &[
-    "http://open.acgtracker.com:1096/announce",
-    "http://t.nyaatracker.com:80/announce",
-    "udp://tracker.openbittorrent.com:80/announce",
-];
-
-/// 嘗試從 mikanani 的 .torrent URL 提取 hash 並構造 magnet link
+/// 將 RSS entry 轉為 RawAnimeItem。
 ///
-/// URL 格式: `https://mikanani.me/Download/{date}/{hash}.torrent`
-fn torrent_url_to_magnet(url: &str) -> Option<String> {
-    if !url.contains("mikanani.me") || !url.ends_with(".torrent") {
+/// download_url 保留原始 .torrent URL：下載器抓取 torrent 檔可取得完整的
+/// 現役 tracker 清單；轉成僅含 hash 的 magnet 會丟失 tracker 並依賴 DHT。
+fn entry_to_raw_item(entry: Entry) -> Option<RawAnimeItem> {
+    let title = entry.title.map(|t| t.content).unwrap_or_default();
+    if title.is_empty() {
         return None;
     }
 
-    let filename = url.rsplit('/').next()?;
-    let hash = filename.strip_suffix(".torrent")?;
+    // Get download URL from enclosure or link
+    let download_url = entry
+        .media
+        .first()
+        .and_then(|m| m.content.first())
+        .and_then(|c| c.url.as_ref())
+        .map(|u| u.to_string())
+        .or_else(|| entry.links.first().map(|l| l.href.clone()))
+        .filter(|u| !u.is_empty())?;
 
-    if hash.len() < 32 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
+    let description = entry.summary.map(|s| s.content);
 
-    let trackers: String = TRACKERS.iter().map(|t| format!("&tr={}", t)).collect();
+    let pub_date = entry.published.or(entry.updated);
 
-    Some(format!(
-        "magnet:?xt=urn:btih:{}{}",
-        hash.to_lowercase(),
-        trackers
-    ))
+    Some(RawAnimeItem {
+        title,
+        description,
+        download_url,
+        pub_date,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_torrent_url_to_magnet_valid_mikanani_url() {
-        let url = "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
-        let result = torrent_url_to_magnet(url);
-        assert!(result.is_some());
-        let magnet = result.unwrap();
-        assert!(magnet.starts_with("magnet:?xt=urn:btih:ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc"));
-        assert!(magnet.contains("&tr="));
+    const RSS_SAMPLE: &[u8] = br#"<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mikan Project - Test</title>
+    <link>https://mikanani.me/RSS/Bangumi?bangumiId=1</link>
+    <item>
+      <guid isPermaLink="false">[Group] Test Anime - 01</guid>
+      <link>https://mikanani.me/Home/Episode/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc</link>
+      <title>[Group] Test Anime - 01</title>
+      <enclosure type="application/x-bittorrent" length="123" url="https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent" />
+    </item>
+  </channel>
+</rss>"#;
+
+    fn first_entry(xml: &[u8]) -> Entry {
+        parser::parse(xml)
+            .expect("parse RSS")
+            .entries
+            .into_iter()
+            .next()
+            .expect("one entry")
     }
 
     #[test]
-    fn test_torrent_url_to_magnet_uppercase_hash_lowered() {
-        let url = "https://mikanani.me/Download/20241222/ABCDEF1234567890ABCDEF1234567890ABCDEF12.torrent";
-        let result = torrent_url_to_magnet(url);
-        assert!(result.is_some());
-        assert!(result
-            .unwrap()
-            .contains("abcdef1234567890abcdef1234567890abcdef12"));
+    fn test_entry_keeps_original_torrent_url() {
+        let item = entry_to_raw_item(first_entry(RSS_SAMPLE)).expect("item");
+
+        assert_eq!(
+            item.download_url,
+            "https://mikanani.me/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent",
+            "enclosure 的 .torrent URL 應原樣保留，不轉換為 magnet"
+        );
+        assert_eq!(item.title, "[Group] Test Anime - 01");
     }
 
     #[test]
-    fn test_torrent_url_to_magnet_non_mikanani_returns_none() {
-        let url = "https://example.com/Download/20241222/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc.torrent";
-        assert!(torrent_url_to_magnet(url).is_none());
-    }
-
-    #[test]
-    fn test_torrent_url_to_magnet_non_torrent_returns_none() {
-        let url = "https://mikanani.me/Home/Episode/ced9cfe5ba04d2caadc1ff5366a07a939d25a0bc";
-        assert!(torrent_url_to_magnet(url).is_none());
-    }
-
-    #[test]
-    fn test_torrent_url_to_magnet_short_hash_returns_none() {
-        let url = "https://mikanani.me/Download/20241222/shorthash.torrent";
-        assert!(torrent_url_to_magnet(url).is_none());
-    }
-
-    #[test]
-    fn test_torrent_url_to_magnet_non_hex_hash_returns_none() {
-        let url =
-            "https://mikanani.me/Download/20241222/not_a_valid_hex_string_at_all_nope.torrent";
-        assert!(torrent_url_to_magnet(url).is_none());
+    fn test_entry_without_title_is_skipped() {
+        let xml = br#"<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><channel><title>t</title>
+  <item>
+    <enclosure type="application/x-bittorrent" length="1" url="https://mikanani.me/Download/20241222/abc.torrent" />
+  </item>
+</channel></rss>"#;
+        assert!(entry_to_raw_item(first_entry(xml)).is_none());
     }
 }
