@@ -35,6 +35,40 @@ docker exec bangumi-qbittorrent sh -c "
 
 ### 3. 執行資料修復 SQL
 
+**只啟動 postgres**,其他服務保持停止——尤其 fetcher 絕不能在遷移前啟動,
+否則會以舊格式繼續攝入,造成重複:
+
+```bash
+docker compose up -d postgres
+until docker exec bangumi-postgres pg_isready -U bangumi >/dev/null 2>&1; do sleep 1; done
+```
+
+**執行前務必確認映射涵蓋率。** 映射表是「收割當下的 RSS 快照」,若停止 stack 前
+fetcher 又抓進新集數,那些項目不在映射內,執行後會殘留 magnet 並在部署後重複攝入
+(2026-07-15 即因此從 190 補到 192)。下列檢查在 DB 查不到資料時會**明確報錯**
+而非誤判通過:
+
+```bash
+grep -oE "^  \('[0-9a-f]{40}'" scripts/2026-07-14-fix-magnet-urls.sql \
+  | grep -oE "[0-9a-f]{40}" | sort -u > /tmp/sql_hashes.txt
+docker exec bangumi-postgres psql -U bangumi -d bangumi -t -A -c \
+  "SELECT substring(download_url from 'btih:([0-9a-f]+)') FROM raw_anime_items \
+     WHERE download_url LIKE 'magnet:%';" | sort -u > /tmp/db_hashes.txt
+
+sql_n=$(wc -l < /tmp/sql_hashes.txt); db_n=$(wc -l < /tmp/db_hashes.txt)
+uncovered=$(comm -13 /tmp/sql_hashes.txt /tmp/db_hashes.txt | wc -l)
+echo "sql=$sql_n db=$db_n uncovered=$uncovered"
+if [ "$sql_n" -eq 0 ] || [ "$db_n" -eq 0 ]; then
+  echo "ABORT: 清單為空 — DB 未啟動或查詢失敗，這不是通過"
+elif [ "$uncovered" -ne 0 ]; then
+  echo "ABORT: 有 $uncovered 筆未涵蓋 — 需重新自 RSS 收割並更新映射表"
+else
+  echo "OK: 涵蓋率 100%，可以執行遷移"
+fi
+```
+
+**兩個數字都非 0 且 uncovered=0 才能往下做。** 確認後執行:
+
 ```bash
 docker exec -i bangumi-postgres psql -U bangumi -d bangumi -v ON_ERROR_STOP=1 \
   < scripts/2026-07-14-fix-magnet-urls.sql
@@ -42,19 +76,6 @@ docker exec -i bangumi-postgres psql -U bangumi -d bangumi -v ON_ERROR_STOP=1 \
 
 腳本末尾會輸出驗證:`raw_items magnet remaining` 與 `anime_links magnet remaining`
 應為 **0**,downloads 應出現 `failed=23`(等待自動重派)。腳本冪等,重跑無害。
-
-> **注意**:映射表是「收割當下的 RSS 快照」。若停止 stack 前 fetcher 又抓進新集數,
-> 那些項目不在映射內,執行後會殘留 magnet 並在部署後造成重複攝入。
-> **執行前先確認涵蓋率**(應輸出 `uncovered: 0`):
-> ```bash
-> grep -oE "^  \('[0-9a-f]{40}'" scripts/2026-07-14-fix-magnet-urls.sql \
->   | grep -oE "[0-9a-f]{40}" | sort -u > /tmp/sql_hashes.txt
-> docker exec bangumi-postgres psql -U bangumi -d bangumi -t -A -c \
->   "SELECT substring(download_url from 'btih:([0-9a-f]+)') FROM raw_anime_items \
->      WHERE download_url LIKE 'magnet:%';" | sort -u > /tmp/db_hashes.txt
-> echo "uncovered: $(comm -13 /tmp/sql_hashes.txt /tmp/db_hashes.txt | wc -l)"
-> ```
-> 若不為 0,需重新自 RSS 收割並更新腳本映射表(2026-07-15 即因此從 190 補到 192)。
 
 ### 4. 部署新版鏡像並啟動
 
