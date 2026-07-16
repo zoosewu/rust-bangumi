@@ -1226,8 +1226,15 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   - `pub fn registered_namespaces(conn: &mut PgConnection) -> Result<Vec<String>, String>`
   - `pub fn usable_ids(all: &[ExternalId], registered: &[String]) -> Vec<ExternalId>`
   - `pub fn find_anime_by_external_id(conn, &ExternalId) -> Result<Option<i32>, String>`
+  - `pub fn find_external_id(conn, anime_id: i32, namespace: &str) -> Result<Option<String>, String>`
+  - `pub fn metadata_base_url_for(conn, namespace: &str) -> Result<Option<String>, String>`
   - `pub fn season_name_from_date(date: &str) -> (i32, &'static str)`
   - `pub fn link_external_id(conn, anime_id: i32, &ExternalId, source: &str) -> Result<(), String>`
+
+**注意（飛行前檢查發現）：** `AppState`（`core-service/src/state.rs:54-63`）**沒有** `metadata_url`
+欄位，也不要新增。既有慣例（`anime.rs:1081-1096`）是從 `service_modules` 表查 metadata
+service 的 `base_url`。本 task 提供 `metadata_base_url_for`：依 namespace 反查該身分
+該由誰解析——這正是 namespace 路由的本意，也讓 `AppState` 完全不用動。
 
 - [ ] **Step 1: 寫失敗測試**
 
@@ -1316,6 +1323,48 @@ pub fn find_anime_by_external_id(
         .first::<i32>(conn)
         .optional()
         .map_err(|e| format!("Failed to look up external id {}: {}", external, e))
+}
+
+/// 取得某季在指定 namespace 的 external id。
+pub fn find_external_id(
+    conn: &mut PgConnection,
+    anime_id: i32,
+    namespace: &str,
+) -> Result<Option<String>, String> {
+    anime_external_ids::table
+        .filter(anime_external_ids::anime_id.eq(anime_id))
+        .filter(anime_external_ids::namespace.eq(namespace))
+        .select(anime_external_ids::external_id)
+        .first::<String>(conn)
+        .optional()
+        .map_err(|e| format!("Failed to look up external id for anime {}: {}", anime_id, e))
+}
+
+/// 找出該由哪個 metadata service 解析這個 namespace。
+///
+/// 依 service_modules 查 base_url（比照 anime.rs:1081-1096 的既有慣例）；
+/// AppState 不持有 metadata_url，服務可隨時上下線。
+/// 多個 service 認領同一 namespace 時取 priority 最小者（本期不做更複雜的仲裁）。
+pub fn metadata_base_url_for(
+    conn: &mut PgConnection,
+    namespace: &str,
+) -> Result<Option<String>, String> {
+    use crate::models::db::ModuleTypeEnum;
+    use crate::schema::service_modules;
+
+    metadata_namespaces::table
+        .inner_join(
+            service_modules::table
+                .on(service_modules::module_id.eq(metadata_namespaces::module_id)),
+        )
+        .filter(metadata_namespaces::namespace.eq(namespace))
+        .filter(service_modules::is_enabled.eq(true))
+        .filter(service_modules::module_type.eq(ModuleTypeEnum::Metadata))
+        .order(metadata_namespaces::priority.asc())
+        .select(service_modules::base_url)
+        .first::<String>(conn)
+        .optional()
+        .map_err(|e| format!("Failed to find metadata service for {}: {}", namespace, e))
 }
 
 /// 把身分綁到季上。人工修正（manual）永遠不被 fetcher 覆寫。
@@ -1452,8 +1501,11 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: Task 8 的全部函式、Task 9 的 `RawAnimeItem.external_ids`
-- Produces: `pub(crate) async fn resolve_or_create_anime(conn, raw_item, parsed, metadata_url) -> Result<Option<Anime>, String>`
-  （`Ok(None)` 表示身分不明，呼叫端應送入待認領佇列）
+- Produces:
+  - `pub(crate) async fn resolve_or_create_anime(conn, raw_item, parsed) -> Result<Option<Anime>, String>`
+    （`Ok(None)` 表示身分不明，呼叫端應送入待認領佇列）
+  - `pub(crate) async fn fetch_authoritative_metadata(conn, &ExternalId) -> Result<Option<AuthoritativeMeta>, String>`
+  - `pub(crate) struct AuthoritativeMeta { title, title_cn, summary, air_date }`（皆 `Option<String>`）
 
 - [ ] **Step 1: 寫失敗測試**
 
@@ -1505,6 +1557,66 @@ Expected: FAIL
 在 `fetcher_results.rs` 加入：
 
 ```rust
+/// metadata service 回覆的權威資料。
+#[derive(Debug, Clone, Deserialize)]
+pub(crate) struct AuthoritativeMeta {
+    pub title: Option<String>,
+    pub title_cn: Option<String>,
+    pub summary: Option<String>,
+    pub air_date: Option<String>,
+}
+
+/// 向認領該 namespace 的 metadata service 取權威資料。
+///
+/// 找不到能解析此 namespace 的服務時回 Ok(None)——不要退回用標題搜尋，
+/// 那正是這次要根除的東西。
+pub(crate) async fn fetch_authoritative_metadata(
+    conn: &mut PgConnection,
+    external: &shared::ExternalId,
+) -> Result<Option<AuthoritativeMeta>, String> {
+    let Some(base_url) =
+        crate::services::identity::metadata_base_url_for(conn, &external.namespace)?
+    else {
+        tracing::warn!(
+            "no enabled metadata service claims namespace '{}'",
+            external.namespace
+        );
+        return Ok(None);
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| format!("Failed to build http client: {}", e))?;
+
+    let resp = client
+        .post(format!("{}/enrich/anime", base_url))
+        .json(&serde_json::json!({
+            "namespace": external.namespace,
+            "external_id": external.id,
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Metadata service {} unreachable: {}", base_url, e))?;
+
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        tracing::warn!("metadata service has no subject for {}", external);
+        return Ok(None);
+    }
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Metadata service {} returned HTTP {}",
+            base_url,
+            resp.status()
+        ));
+    }
+
+    resp.json::<AuthoritativeMeta>()
+        .await
+        .map(Some)
+        .map_err(|e| format!("Bad metadata response for {}: {}", external, e))
+}
+
 /// 決定這個 raw item 屬於哪一季。
 ///
 /// 身分只來自 fetcher 回報的 external id——parser 不再決定作品名。
@@ -1515,7 +1627,6 @@ pub(crate) async fn resolve_or_create_anime(
     conn: &mut PgConnection,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
-    metadata_url: &str,
 ) -> Result<Option<Anime>, String> {
     use crate::services::identity::*;
 
@@ -1547,7 +1658,9 @@ pub(crate) async fn resolve_or_create_anime(
     }
 
     // 未知身分：向 metadata service 取權威資料後建立。
-    let meta = fetch_authoritative_metadata(metadata_url, external).await?;
+    let Some(meta) = fetch_authoritative_metadata(conn, external).await? else {
+        return Ok(None);
+    };
 
     // 系列層 title 取 metadata 的中文名（退回原名）；季別資訊由 parsed.series_no 提供。
     let series_title = meta.title_cn.clone().or(meta.title.clone()).ok_or_else(|| {
@@ -1593,9 +1706,19 @@ pub(crate) async fn resolve_or_create_anime(
 
 `process_parsed_result:694-713` 的前三步（`create_or_get_anime` / `create_or_get_season` /
 `create_or_get_series`）以 `resolve_or_create_anime` 取代。
-`process_parsed_result` 需改為 `async`，並接受 `metadata_url: &str`。
+`process_parsed_result` 需改為 `async`（metadata service 的 base_url 由
+`fetch_authoritative_metadata` 自行依 namespace 查表，**不要**新增 `metadata_url` 參數，
+也不要動 `AppState`）。
 回傳 `Ok(None)` 時，呼叫端改寫 `pending_identities`（Task 11）並將 raw item 標為
 `status = 'no_identity'`，**不建立 work**。
+
+`process_parsed_result` 改 async 後，其呼叫端（`receive_raw_fetcher_results` 內）
+需一併加 `.await`。
+
+`raw_anime_items.status` **沒有** CHECK 約束（已於 2026-07-16 對產品環境查證：
+`SELECT ... FROM pg_constraint WHERE conrelid='raw_anime_items'::regclass AND contype='c'`
+回 0 rows），故新狀態值 `'no_identity'` 可直接寫入，不需額外遷移。
+（對照：`downloads` 有 `downloads_status_check`，commit 816a09f 曾因此整批 UPDATE 被 rollback。）
 
 - [ ] **Step 5: 執行測試確認通過**
 
@@ -1780,13 +1903,7 @@ pub async fn resolve(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    match crate::handlers::fetcher_results::reparse_single_item(
-        &mut conn,
-        raw_item_id,
-        &state.metadata_url,
-    )
-    .await
-    {
+    match crate::handlers::fetcher_results::reparse_single_item(&mut conn, raw_item_id).await {
         Ok(Some(anime_id)) => {
             // 覆寫為 manual：人的決定不得被後續 fetcher 蓋掉。
             if let Err(e) = crate::services::identity::link_external_id(
@@ -1854,7 +1971,17 @@ pub async fn candidates(
         }
     };
 
-    let url = format!("{}/search/candidates", state.metadata_url);
+    // 候選來自認領 bgm 的那個 service；沒有服務就沒有候選，不要自己編。
+    let base_url = match crate::services::identity::metadata_base_url_for(&mut conn, "bgm") {
+        Ok(Some(u)) => u,
+        Ok(None) => return StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        Err(e) => {
+            tracing::error!("{}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let url = format!("{}/search/candidates", base_url);
     match reqwest::Client::new()
         .get(&url)
         .query(&[("q", source_title.as_str())])
@@ -1891,7 +2018,6 @@ pub async fn candidates(
 pub(crate) async fn reparse_single_item(
     conn: &mut PgConnection,
     item_id: i32,
-    metadata_url: &str,
 ) -> Result<Option<i32>, String> {
     let item: RawAnimeItem = raw_anime_items::table
         .find(item_id)
@@ -1905,9 +2031,9 @@ pub(crate) async fn reparse_single_item(
         Err(e) => return Err(format!("Failed to parse raw item {}: {}", item_id, e)),
     };
 
-    match resolve_or_create_anime(conn, &item, &parsed, metadata_url).await? {
+    match resolve_or_create_anime(conn, &item, &parsed).await? {
         Some(anime) => {
-            process_parsed_result(conn, &item, &parsed, metadata_url).await?;
+            process_parsed_result(conn, &item, &parsed).await?;
             Ok(Some(anime.anime_id))
         }
         None => Ok(None),
@@ -2068,24 +2194,7 @@ metadata 從未生成過。改為查表帶出真實身分：
 `None, // bangumi_id not available in resync request` 改為 `req.external_id`
 （該欄位已於 Step 2 加入 `ViewerResyncRequest`）。
 
-於 `identity.rs` 補上對應函式：
-
-```rust
-/// 取得某季在指定 namespace 的 external id。
-pub fn find_external_id(
-    conn: &mut PgConnection,
-    anime_id: i32,
-    namespace: &str,
-) -> Result<Option<String>, String> {
-    anime_external_ids::table
-        .filter(anime_external_ids::anime_id.eq(anime_id))
-        .filter(anime_external_ids::namespace.eq(namespace))
-        .select(anime_external_ids::external_id)
-        .first::<String>(conn)
-        .optional()
-        .map_err(|e| format!("Failed to look up external id for anime {}: {}", anime_id, e))
-}
-```
+`find_external_id` 已於 Task 8 的 `identity.rs` 提供，本 task 直接使用，不要重複定義。
 
 `metadata/src/handlers.rs` 的 `enrich_episodes` 亦需比照 `enrich_anime`
 （Task 7）先做 `owns_namespace` 檢查再查詢。
