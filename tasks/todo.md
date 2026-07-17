@@ -15,12 +15,14 @@ Runbook: `docs/runbooks/2026-07-14-tracker-fix-deploy.md`
 - [x] `cargo fmt` / `cargo clippy` / `cargo test` 全過
 - [x] Review 章節總結
 
-## 部署後驗證(runbook 第 5 節)
+## 部署後驗證(runbook 第 5 節)— 全數通過 (2026-07-15 部署)
 
-- [ ] `Retried failed downloads: 22 dispatched` 且只出現一次
-- [ ] downloads 無重複 link_id
-- [ ] qBittorrent 種子帶完整 tracker 清單且有進度
-- [ ] 下次 RSS 抓取無重複攝入(raw_items 不爆增)
+- [x] `Retried failed downloads: 23 dispatched, 0 failed again`,只出現一次
+- [x] downloads 無重複 link_id(0 rows)
+- [x] 種子帶 7 個 tracker(修復前僅 3 個且全死),nyaa.tracker.wf 正常、40 peers
+- [x] 無重複攝入:重複 download_url = 0;192 → 204 的成長來自新訂閱與新集數
+- [x] 遷移結果:magnet 192 → 0;23 筆重派下載已全數完成並同步
+
 
 ## Review
 
@@ -42,6 +44,7 @@ Runbook: `docs/runbooks/2026-07-14-tracker-fix-deploy.md`
 
 ## 後續事項(本次範圍外)
 
-- fetcher pub_date 解析(mikanani torrent:pubDate 命名空間欄位)
-- 主機對外 UDP / DHT 環境檢查
-- download_scheduler 對 not_found 狀態的處理
+- `816a09f` 的 batch status migration 尚未套用到生產(潛在 bug,下次部署會自動帶上)
+- fetcher pub_date 解析(mikanani torrent:pubDate 命名空間欄位,全為 NULL)
+- download_scheduler 對 not_found 狀態的處理(`_ => continue` 靜默忽略)
+- ~~主機對外 UDP / DHT 環境檢查~~ — 部署後已自行恢復(connected, DHT 282 節點)
