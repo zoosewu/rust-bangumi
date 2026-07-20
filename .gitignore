@@ -36,8 +36,18 @@ Thumbs.db
 .pids/
 .logs/
 
+# Runtime data（容器掛載的 host 目錄，對應 .env 中的 *_DIR 變數）
+# .env.prod 預設全部落在 ./data/ 之下：
+#   POSTGRES_DATA_DIR / DOWNLOADS_DIR / JELLYFIN_LIBRARY_DIR /
+#   QBITTORRENT_CONFIG_DIR / JELLYFIN_CONFIG_DIR / JELLYFIN_CACHE_DIR / PIKPAK_DATA_DIR
+# 內含資料庫、影片與含密碼的服務設定，絕不可進版控。
+/data/
+/postgres-data/
+/jellyfin-media/
+
 # Git worktrees
 .worktrees/
+.claude/worktrees/
 
 # dev
 tmp/
