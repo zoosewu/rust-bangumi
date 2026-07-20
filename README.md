@@ -86,6 +86,10 @@ docker compose up -d
 docker compose -f docker-compose.yaml -f docker-compose.override.yaml up -d
 ```
 
+> qBittorrent 首次啟動時，`qbittorrent-init` 容器會自動套用 `configs/qbittorrent/prod.conf`
+> 的初始設定（含佇列相關設定，避免死種子卡住下載名額）。此步驟冪等，不會覆蓋既有設定。
+> 詳見 [`configs/qbittorrent/README.md`](configs/qbittorrent/README.md)。
+
 ### 步驟三：開啟管理介面
 
 瀏覽器前往 **http://localhost:8004**，即可開始使用。

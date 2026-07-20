@@ -2,23 +2,32 @@
 
 ## 兩個檔案的角色
 
-| 檔案 | 用途 | 是否被掛載 |
+| 檔案 | 用途 | 如何生效 |
 |------|------|-----------|
-| `dev.conf` | 開發環境 | **是** — `docker-compose.dev.yaml` 直接掛載為容器內的 `/config/qBittorrent/qBittorrent.conf` |
-| `prod.conf` | 生產環境的**初始範本** | **否** — 見下方說明 |
+| `dev.conf` | 開發環境 | `docker-compose.dev.yaml` 直接掛載為容器內的 `/config/qBittorrent/qBittorrent.conf` |
+| `prod.conf` | 生產環境的**初始設定** | 由 `qbittorrent-init` 容器於首次啟動時複製(見下方) |
 
-## 為什麼 prod.conf 沒有被掛載
+## 生產環境如何套用 prod.conf
 
 生產的 compose 掛載的是**目錄**(`${QBITTORRENT_CONFIG_DIR}` → `/config`,預設 `./data/qbittorrent`),
-qBittorrent 在裡面自行維護 `qBittorrent.conf`。原因是這個檔案是 **runtime state**:
-WebUI 改設定、Core 透過 API 改設定,qBittorrent 都會寫回這個檔案。唯讀掛載會讓 WebUI 無法存檔。
+而非單一 conf 檔。原因是 `qBittorrent.conf` 是 **runtime state**:WebUI 改設定、Core 透過 API 改設定,
+qBittorrent 都會寫回這個檔案——唯讀掛載會讓 WebUI 無法存檔。
 
-**代價是它會與 repo drift。** `prod.conf` 的定位因此是:
+因此無法像 dev 那樣直接掛載 `prod.conf`。改由 `docker-compose.override.yaml` 中的
+**`qbittorrent-init` 一次性容器**處理:qBittorrent 啟動前,它會檢查設定是否已存在,
+不存在才把 `prod.conf` 複製過去。這讓**新部署自動獲得與生產一致的設定**,無需手動步驟。
 
-1. 新環境部署時的起點(複製到 `$QBITTORRENT_CONFIG_DIR/qBittorrent/qBittorrent.conf`)
-2. **關鍵設定的期望值文件** — 生產若被手動調整,必須同步回這裡
+- **冪等**:設定已存在時不覆蓋,保留該環境後續透過 WebUI/API 做的 runtime 調整。
+- **`depends_on: service_completed_successfully`** 確保複製完成後 qBittorrent 才啟動。
 
-`data/` 未納入版控,所以生產的實際 conf 不在 git 裡。
+### 之後如何讓 prod.conf 生效的變更套用到既有環境
+
+init 只在「設定不存在」時執行,所以**改了 `prod.conf` 不會自動套用到已有設定的環境**。
+既有環境要套用,需透過 WebUI/API 手動調整(並依下方流程同步回 repo),
+或在停止服務後刪除 `$QBITTORRENT_CONFIG_DIR/qBittorrent/qBittorrent.conf` 讓 init 重新複製。
+
+`data/` 未納入版控,所以各環境的實際 conf(含 runtime 調整)不在 git 裡——
+這也是為什麼 `prod.conf` 必須是關鍵設定的**期望值文件**。
 
 ## 關鍵設定與理由
 

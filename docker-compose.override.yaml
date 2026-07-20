@@ -10,11 +10,48 @@ version: '3.8'
 
 services:
   # ============================================================================
+  # qBittorrent 設定初始化
+  # ============================================================================
+  # qBittorrent 的 qBittorrent.conf 是 runtime state（WebUI 與 Core 都會寫入），
+  # 因此無法唯讀掛載 configs/qbittorrent/prod.conf。改為首次啟動時複製過去，
+  # 讓新部署直接獲得與生產一致的設定（特別是佇列相關設定，見該目錄 README）。
+  #
+  # 冪等：設定已存在時不覆蓋，保留既有環境的 runtime 調整。
+  qbittorrent-init:
+    image: alpine:3.20
+    container_name: bangumi-qbittorrent-init
+    user: root
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${QBITTORRENT_CONFIG_DIR:?QBITTORRENT_CONFIG_DIR is required}:/config
+      - ./configs/qbittorrent/prod.conf:/template.conf:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        target=/config/qBittorrent/qBittorrent.conf
+        if [ -f "$$target" ]; then
+          echo "qBittorrent 設定已存在，保留現有設定"
+        else
+          echo "初始化 qBittorrent 設定（來自 configs/qbittorrent/prod.conf）"
+          mkdir -p /config/qBittorrent
+          cp /template.conf "$$target"
+          chown -R "$${PUID}:$${PGID}" /config/qBittorrent
+        fi
+    restart: "no"
+
+  # ============================================================================
   # qBittorrent - 下載管理
   # ============================================================================
   qbittorrent:
     image: linuxserver/qbittorrent:latest
     container_name: bangumi-qbittorrent
+    depends_on:
+      qbittorrent-init:
+        condition: service_completed_successfully
     environment:
       WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
       TORRENTING_PORT: ${QBITTORRENT_DHT_PORT:-16881}
