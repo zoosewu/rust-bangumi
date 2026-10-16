@@ -23,7 +23,24 @@ pub async fn sync_callback(
                 payload.target_path.as_deref(),
                 payload.error_message.as_deref(),
             ) {
-                Ok(()) => (StatusCode::OK, Json(json!({ "status": "ok" }))),
+                Ok(()) => {
+                    if payload.status == "synced" {
+                        let sync_service = state.sync_service.clone();
+                        let download_id = payload.download_id;
+                        tokio::spawn(async move {
+                            if let Err(e) =
+                                sync_service.release_torrent_if_settled(download_id).await
+                            {
+                                tracing::warn!(
+                                    "Failed to release torrent for download {}: {}",
+                                    download_id,
+                                    e
+                                );
+                            }
+                        });
+                    }
+                    (StatusCode::OK, Json(json!({ "status": "ok" })))
+                }
                 Err(e) => {
                     tracing::error!("Failed to handle sync callback: {}", e);
                     (

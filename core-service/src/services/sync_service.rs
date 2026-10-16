@@ -8,6 +8,18 @@ use diesel::prelude::*;
 use shared::ViewerSyncRequest;
 use std::sync::Arc;
 
+/// Download statuses in which the torrent must stay in the downloader:
+/// it is still being fetched, or is waiting to be polled again after an outage.
+const TORRENT_IN_USE_STATUSES: [&str; 3] = ["pending", "downloading", "downloader_error"];
+
+/// A torrent can leave the downloader once no download sharing it still needs it.
+/// Batch torrents are shared by one download per episode.
+fn torrent_releasable(sibling_statuses: &[String]) -> bool {
+    !sibling_statuses
+        .iter()
+        .any(|s| TORRENT_IN_USE_STATUSES.contains(&s.as_str()))
+}
+
 pub struct SyncService {
     db_pool: DbPool,
     http_client: reqwest::Client,
@@ -417,6 +429,77 @@ impl SyncService {
         }
     }
 
+    /// Remove a synced download's torrent from its downloader, keeping the files.
+    ///
+    /// The viewer moves media out of the download directory, so a torrent left
+    /// behind turns into "missingFiles" and can re-download from scratch.
+    /// Skipped while another download sharing the torrent still needs it.
+    /// Returns Ok(true) if the downloader removed the torrent.
+    pub async fn release_torrent_if_settled(&self, download_id: i32) -> Result<bool, String> {
+        let (hash, base_url) = {
+            let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+
+            let download: Download = downloads::table
+                .find(download_id)
+                .first::<Download>(&mut conn)
+                .map_err(|e| format!("Download {} not found: {}", download_id, e))?;
+
+            let (hash, module_id) = match (
+                download.torrent_hash.filter(|h| !h.is_empty()),
+                download.module_id,
+            ) {
+                (Some(h), Some(m)) => (h, m),
+                _ => return Ok(false),
+            };
+
+            let sibling_statuses: Vec<String> = downloads::table
+                .filter(downloads::torrent_hash.eq(&hash))
+                .filter(downloads::module_id.eq(module_id))
+                .select(downloads::status)
+                .load::<String>(&mut conn)
+                .map_err(|e| format!("Failed to query downloads for torrent {}: {}", hash, e))?;
+
+            if !torrent_releasable(&sibling_statuses) {
+                tracing::debug!(
+                    "Keeping torrent {} — other downloads still depend on it",
+                    hash
+                );
+                return Ok(false);
+            }
+
+            let base_url = service_modules::table
+                .filter(service_modules::module_id.eq(module_id))
+                .select(service_modules::base_url)
+                .first::<String>(&mut conn)
+                .optional()
+                .map_err(|e| format!("Failed to query downloader {}: {}", module_id, e))?;
+
+            match base_url {
+                Some(url) => (hash, url),
+                None => return Ok(false),
+            }
+        };
+
+        let url = format!("{}/downloads/{}?delete_files=false", base_url, hash);
+        let response = self
+            .http_client
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to remove torrent {}: {}", hash, e))?;
+
+        if response.status().is_success() {
+            tracing::info!("Removed torrent {} from downloader after sync", hash);
+            Ok(true)
+        } else {
+            Err(format!(
+                "Downloader returned status {} removing torrent {}",
+                response.status(),
+                hash
+            ))
+        }
+    }
+
     /// Handle sync callback from viewer
     pub fn handle_callback(
         &self,
@@ -482,5 +565,42 @@ impl SyncService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn statuses(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn single_synced_download_releases_torrent() {
+        assert!(torrent_releasable(&statuses(&["synced"])));
+    }
+
+    #[test]
+    fn batch_waits_for_episodes_still_downloading() {
+        assert!(!torrent_releasable(&statuses(&["synced", "downloading"])));
+        assert!(!torrent_releasable(&statuses(&["synced", "pending"])));
+        assert!(!torrent_releasable(&statuses(&[
+            "synced",
+            "downloader_error"
+        ])));
+    }
+
+    #[test]
+    fn batch_releases_once_no_episode_needs_downloader() {
+        // completed / syncing / batch_unmatched work from files on disk, which are kept
+        assert!(torrent_releasable(&statuses(&[
+            "synced",
+            "completed",
+            "syncing",
+            "batch_unmatched",
+            "batch_failed",
+            "sync_failed",
+        ])));
     }
 }
