@@ -2,14 +2,46 @@ use anyhow::{anyhow, Result};
 use reqwest::{cookie::Jar, Client};
 use serde::{Deserialize, Serialize};
 use shared::{CancelResultItem, DownloadRequestItem, DownloadResultItem, DownloadStatusItem};
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
+
+/// qBittorrent fetches URL torrents asynchronously and answers `torrents/add` with `Ok.` even
+/// when the fetch later fails, so an add only counts once the torrent shows up in `torrents/info`.
+const DEFAULT_ADD_CONFIRM_TIMEOUT: Duration = Duration::from_secs(15);
+const ADD_CONFIRM_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub struct QBittorrentClient {
     pub client: Client,
     pub base_url: String,
     credentials: Arc<Mutex<Option<(String, String)>>>,
+    add_confirm_timeout: Duration,
+}
+
+/// Turns accepted results whose torrent never appeared in qBittorrent into failures.
+pub fn reject_unregistered(
+    results: Vec<DownloadResultItem>,
+    unregistered: &HashSet<String>,
+    timeout: Duration,
+) -> Vec<DownloadResultItem> {
+    results
+        .into_iter()
+        .map(|item| match &item.hash {
+            Some(hash) if item.status == "accepted" && unregistered.contains(hash) => {
+                DownloadResultItem {
+                    status: "failed".to_string(),
+                    reason: Some(format!(
+                        "qBittorrent did not register the torrent within {}s",
+                        timeout.as_secs()
+                    )),
+                    ..item
+                }
+            }
+            _ => item,
+        })
+        .collect()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,7 +68,43 @@ impl QBittorrentClient {
             client,
             base_url,
             credentials: Arc::new(Mutex::new(None)),
+            add_confirm_timeout: DEFAULT_ADD_CONFIRM_TIMEOUT,
         }
+    }
+
+    /// How long `add_torrents` waits for added torrents to appear in qBittorrent.
+    pub fn with_add_confirm_timeout(mut self, timeout: Duration) -> Self {
+        self.add_confirm_timeout = timeout;
+        self
+    }
+
+    /// Polls `torrents/info` until every accepted hash is known to qBittorrent or the timeout
+    /// passes. Returns the hashes that never appeared.
+    async fn unregistered_hashes(&self, results: &[DownloadResultItem]) -> HashSet<String> {
+        let mut missing: HashSet<String> = results
+            .iter()
+            .filter(|r| r.status == "accepted")
+            .filter_map(|r| r.hash.clone())
+            .collect();
+        let deadline = tokio::time::Instant::now() + self.add_confirm_timeout;
+
+        while !missing.is_empty() {
+            match self.query_status(missing.iter().cloned().collect()).await {
+                Ok(statuses) => statuses
+                    .iter()
+                    .filter(|s| s.status != "not_found")
+                    .for_each(|s| {
+                        missing.remove(&s.hash);
+                    }),
+                Err(e) => tracing::warn!("Confirming added torrents failed: {}", e),
+            }
+            if missing.is_empty() || tokio::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(ADD_CONFIRM_POLL_INTERVAL).await;
+        }
+
+        missing
     }
 
     /// 預先注入帳密（不發送請求）。
@@ -210,7 +278,7 @@ impl DownloaderClient for QBittorrentClient {
             match resp {
                 Ok(r) if r.status().is_success() => match Self::extract_hash_from_url(&item.url) {
                     Ok(hash) => {
-                        tracing::info!("Torrent added successfully: {}", hash);
+                        tracing::info!("Torrent submitted to qBittorrent: {}", hash);
                         results.push(DownloadResultItem {
                             url: item.url.clone(),
                             hash: Some(hash),
@@ -250,7 +318,19 @@ impl DownloaderClient for QBittorrentClient {
             }
         }
 
-        Ok(results)
+        let unregistered = self.unregistered_hashes(&results).await;
+        unregistered.iter().for_each(|hash| {
+            tracing::error!(
+                "Torrent {} was submitted but never appeared in qBittorrent within {}s",
+                hash,
+                self.add_confirm_timeout.as_secs()
+            )
+        });
+        Ok(reject_unregistered(
+            results,
+            &unregistered,
+            self.add_confirm_timeout,
+        ))
     }
 
     async fn cancel_torrents(&self, hashes: Vec<String>) -> Result<Vec<CancelResultItem>> {

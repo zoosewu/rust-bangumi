@@ -168,7 +168,8 @@ select download_id, torrent_hash, updated_at from downloads where status='downlo
 ### 修正方向
 
 - 程式：downloader 加入 torrent 後，輪詢 `torrents/info?hashes=` 幾秒，確認真的出現再回報成功。core 遇到 `not_found` 持續超過 N 分鐘時，改成 `failed`，讓既有的重試機制接手。
-- 環境：把 555 改成 `failed`，觸發重新派送。
+- 環境：把 555 改成 `failed`，觸發重新派送。（已在 DB 修復後的重啟中自動重派為 609）
+- 2026-10-17 第 8 項：已實作。downloader 加入後最多等 15 秒確認 torrent 出現；core 連續 10 分鐘 `not_found` 才改 `failed`；另外加上 24 小時沒進度的停滯標記（E10 的程式缺口）。
 
 ### 如何檢查
 

@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::time::interval;
 
 use crate::db::DbPool;
@@ -20,13 +20,24 @@ const POLLED_STATUSES: [&str; 2] = ["downloading", "downloader_error"];
 /// A single failure (restart, deploy, a busy moment) must not flag everything.
 const OFFLINE_AFTER_FAILED_POLLS: u32 = 3;
 
+/// How long a torrent may stay missing from its downloader before the download is failed.
+/// qBittorrent adds URL torrents asynchronously, so a short absence right after dispatch is normal.
+const MISSING_GRACE: Duration = Duration::from_secs(10 * 60);
+
+/// A download whose progress has not changed for this long is flagged as stalled.
+/// Its status stays `downloading`; only the error message tells the user to look at it.
+const STALL_AFTER_HOURS: i64 = 24;
+const STALL_NOTE: &str = "No download progress for 24 hours (no reachable peers?)";
+
 /// What a polled download should become, given the downloader's normalized status.
 #[derive(Debug, PartialEq, Eq)]
 enum PollOutcome {
     Completed,
     Failed,
     Downloading,
-    /// No information to act on (e.g. `not_found`, `unknown`); leave the record as is.
+    /// The downloader does not know the torrent.
+    Missing,
+    /// No information to act on (e.g. `unknown`); leave the record as is.
     Unchanged,
 }
 
@@ -35,6 +46,7 @@ fn poll_outcome(downloader_status: &str) -> PollOutcome {
         "completed" => PollOutcome::Completed,
         "error" => PollOutcome::Failed,
         "downloading" | "paused" | "checking" => PollOutcome::Downloading,
+        "not_found" => PollOutcome::Missing,
         _ => PollOutcome::Unchanged,
     }
 }
@@ -46,6 +58,8 @@ pub struct DownloadScheduler {
     sync_service: Arc<super::SyncService>,
     /// Consecutive failed polls per downloader module_id.
     failed_polls: Mutex<HashMap<i32, u32>>,
+    /// When each (module_id, torrent hash) was first reported `not_found` in a row of polls.
+    missing_since: Mutex<HashMap<(i32, String), Instant>>,
 }
 
 impl DownloadScheduler {
@@ -64,6 +78,7 @@ impl DownloadScheduler {
                 .unwrap(),
             sync_service,
             failed_polls: Mutex::new(HashMap::new()),
+            missing_since: Mutex::new(HashMap::new()),
         }
     }
 
@@ -143,6 +158,7 @@ impl DownloadScheduler {
         match self.query_downloader_status(&status_url).await {
             Ok(response) => {
                 self.record_poll_success(downloader);
+                self.forget_missing_except(downloader.module_id, &hashes);
 
                 for status_item in &response.statuses {
                     let now = chrono::Utc::now().naive_utc();
@@ -151,7 +167,12 @@ impl DownloadScheduler {
                         .filter(downloads::module_id.eq(downloader.module_id))
                         .filter(downloads::status.eq_any(POLLED_STATUSES));
 
-                    match poll_outcome(&status_item.status) {
+                    let outcome = poll_outcome(&status_item.status);
+                    if outcome != PollOutcome::Missing {
+                        self.forget_missing(downloader.module_id, &status_item.hash);
+                    }
+
+                    match outcome {
                         PollOutcome::Completed => Self::apply_completed_files(
                             conn,
                             &status_item.hash,
@@ -173,16 +194,51 @@ impl DownloadScheduler {
                                 .ok();
                         }
                         PollOutcome::Downloading => {
-                            diesel::update(polled_rows)
-                                .set((
-                                    downloads::status.eq("downloading"),
-                                    downloads::progress.eq(status_item.progress as f32),
-                                    downloads::total_bytes.eq(status_item.size as i64),
-                                    downloads::error_message.eq::<Option<String>>(None),
-                                    downloads::updated_at.eq(now),
-                                ))
-                                .execute(conn)
-                                .ok();
+                            // Only rows that made progress (or are recovering) are touched, so
+                            // updated_at of a `downloading` row means "last progress".
+                            let progress = status_item.progress as f32;
+                            diesel::update(
+                                polled_rows.filter(
+                                    downloads::progress
+                                        .is_distinct_from(progress)
+                                        .or(downloads::status.eq("downloader_error")),
+                                ),
+                            )
+                            .set((
+                                downloads::status.eq("downloading"),
+                                downloads::progress.eq(progress),
+                                downloads::total_bytes.eq(status_item.size as i64),
+                                downloads::error_message.eq::<Option<String>>(None),
+                                downloads::updated_at.eq(now),
+                            ))
+                            .execute(conn)
+                            .ok();
+                            Self::flag_stalled(conn, &status_item.hash, downloader.module_id, now);
+                        }
+                        PollOutcome::Missing => {
+                            let missing_for =
+                                self.missing_for(downloader.module_id, &status_item.hash);
+                            if missing_for >= MISSING_GRACE {
+                                let failed = diesel::update(polled_rows)
+                                    .set((
+                                        downloads::status.eq("failed"),
+                                        downloads::error_message.eq(Some(format!(
+                                            "Torrent not found in downloader for {} minutes",
+                                            missing_for.as_secs() / 60
+                                        ))),
+                                        downloads::updated_at.eq(now),
+                                    ))
+                                    .execute(conn)
+                                    .unwrap_or(0);
+                                tracing::warn!(
+                                    "Torrent {} missing from downloader {} for {}s, marked {} downloads as failed",
+                                    status_item.hash,
+                                    downloader.name,
+                                    missing_for.as_secs(),
+                                    failed
+                                );
+                                self.forget_missing(downloader.module_id, &status_item.hash);
+                            }
                         }
                         PollOutcome::Unchanged => {}
                     }
@@ -247,6 +303,61 @@ impl DownloadScheduler {
                 downloader.name,
                 count
             );
+        }
+    }
+
+    /// How long the torrent has been reported missing in consecutive polls (zero on first report).
+    fn missing_for(&self, module_id: i32, hash: &str) -> Duration {
+        self.missing_since
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry((module_id, hash.to_string()))
+            .or_insert_with(Instant::now)
+            .elapsed()
+    }
+
+    fn forget_missing(&self, module_id: i32, hash: &str) {
+        self.missing_since
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&(module_id, hash.to_string()));
+    }
+
+    /// Drops entries of torrents this downloader no longer polls (synced, cancelled, ...).
+    fn forget_missing_except(&self, module_id: i32, polled_hashes: &[String]) {
+        self.missing_since
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(m, h), _| *m != module_id || polled_hashes.contains(h));
+    }
+
+    /// Flags `downloading` rows of a torrent whose progress has not moved for STALL_AFTER_HOURS.
+    fn flag_stalled(
+        conn: &mut PgConnection,
+        torrent_hash: &str,
+        module_id: i32,
+        now: chrono::NaiveDateTime,
+    ) {
+        let cutoff = now - chrono::Duration::hours(STALL_AFTER_HOURS);
+        match diesel::update(
+            downloads::table
+                .filter(downloads::torrent_hash.eq(torrent_hash))
+                .filter(downloads::module_id.eq(module_id))
+                .filter(downloads::status.eq("downloading"))
+                .filter(downloads::updated_at.lt(cutoff))
+                .filter(downloads::error_message.is_null()),
+        )
+        .set(downloads::error_message.eq(STALL_NOTE))
+        .execute(conn)
+        {
+            Ok(count) if count > 0 => tracing::warn!(
+                "Torrent {} has made no progress for {} hours ({} downloads flagged)",
+                torrent_hash,
+                STALL_AFTER_HOURS,
+                count
+            ),
+            Err(e) => tracing::error!("Failed to flag stalled torrent {}: {}", torrent_hash, e),
+            _ => {}
         }
     }
 
@@ -636,8 +747,13 @@ mod tests {
     }
 
     #[test]
+    fn not_found_is_reported_as_missing() {
+        assert_eq!(poll_outcome("not_found"), PollOutcome::Missing);
+    }
+
+    #[test]
     fn statuses_without_information_leave_the_record_alone() {
-        for status in ["not_found", "unknown", ""] {
+        for status in ["unknown", ""] {
             assert_eq!(poll_outcome(status), PollOutcome::Unchanged, "{status}");
         }
     }

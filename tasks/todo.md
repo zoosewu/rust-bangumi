@@ -50,9 +50,19 @@
   - 驗證：core 161 個單元測試全過（新增 4 個），clippy 無新警告。DB 更新路徑沒有自動化測試，部署後觀察
   - `not_found` 仍維持不動，交給第 8 項
   - [ ] 部署後確認：重啟 downloader 不再出現 `marking … downloader_error`，只會看到 `Polling downloader … failed (1/3)`
-- [ ] 8. qB 回報 `not_found` 的處理（稽核 E4）
+- [x] 8. qB 回報 `not_found` 的處理（稽核 E4）+ 停滯偵測（稽核 E10 的程式缺口）
   - downloader 加入 URL 型 torrent 後輪詢 `torrents/info` 確認真的出現才回報成功
   - core：`downloading` 持續 `not_found` 超過 N 分鐘 → `failed`，交給既有重試
+  - 實作（downloader）：`add_torrents` 全部送出後，每 0.5 秒查 `torrents/info`，最多 15 秒；沒出現的改回報 `failed`
+    （reason：`qBittorrent did not register the torrent within 15s`），core 的派送會照既有邏輯 cascade 到下一個 downloader 或記成 failed。
+    純函式 `reject_unregistered` + 2 個單元測試；mock qB 整合測試新增「qB 回 Ok. 但 torrent 沒出現」案例
+  - 實作（core）：`not_found` 改成 `PollOutcome::Missing`，同一個 (downloader, hash) 連續回報 10 分鐘才改 `failed`
+    （記憶體計時，core 重啟會重新計時）；下載有進度或從 downloader_error 恢復時才更新 `updated_at`，
+    所以 `downloading` 的 updated_at 就是「最後有進度的時間」；超過 24 小時沒進度 → error_message 標
+    `No download progress for 24 hours (no reachable peers?)`，狀態維持 downloading，進度一動就清掉
+  - 驗證：downloader 28 + 17 個測試、core 162 個測試全過；clippy 只有既有的 `map_torrent_state` 警告
+  - 限制：`failed` 目前只在 downloader 重新註冊或手動重試時才會重派（沒有定時重試）
+  - [ ] 部署後確認：派送 log 出現 `Torrent submitted…` 後沒有 `never appeared`；正常下載的 updated_at 只在進度變化時更新
 - [ ] 9. 派送前一律先偵測衝突（稽核 E5）
   - `pending_ai_results.rs:471`（rerun）與 `raw_items.rs:347`（單筆 reparse）漏了；收斂到共用函式 / `dispatch_new_links` 內
 - [ ] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
