@@ -10,11 +10,15 @@
 - [x] repo：postgres 改用 Docker named volume `postgres_data` + `POSTGRES_INITDB_ARGS=--data-checksums`；`.env.prod` 移除 `POSTGRES_DATA_DIR`
 - [x] 修復腳本 `scripts/2026-10-16-postgres-migrate-to-volume.sh`（preflight → dump → switch → restore → verify → start，含 rollback）
   - 已在生產以唯讀方式驗證：去重 SQL（暫存表 + rollback）、筆數統計、驗證 SQL（能抓出全部 4 類已知問題）
-- [ ] commit + push 上述改動（等使用者同意）
-- [ ] 生產執行（需使用者操作或授權，自動權限擋下停服務的動作）：
-  1. `git checkout -- docker-compose.override.yaml && git pull`（生產的本地改動已併入 repo）
-  2. 依序執行腳本 `preflight` `dump` `switch` `restore` `verify`，`verify` 全部 PASS 才 `start`
-  3. 啟動後觀察 core / viewer log；一週後確認無異常再刪除舊目錄 `data/postgres` 與根目錄的 `postgres-data/`
+- [x] commit + push（b16b348、6ef2cf9、d14edc9：修正 bash 3.2 把全形字元當變數名的問題）
+- [x] 生產執行（2026-10-16 09:21–10:00 +08，使用者操作）
+  1. 生產 `git checkout -- docker-compose.override.yaml && git pull` → d14edc9（原 override 備份於主機 `/tmp/override.prod-backup.yaml`）
+  2. `preflight` `dump` `switch` `restore` `verify` 全 PASS：筆數與匯出一致；索引 / 重複 / 序列 OK；
+     data_checksums=on；PK 21、FK 21、UNIQUE 11、CHECK 6 全部重建成功；505 可經 PK 與 hash 索引查到；
+     `cron_logs` 1165 筆、`sync_tasks` 2 筆（508→220、510→221）重新編號
+  3. `start`：全部服務 healthy，postgres 無錯誤
+- [ ] 2026-10-23 前後：確認無異常後刪除舊目錄 `data/postgres`、根目錄 `postgres-data/`、主機 `/tmp/override.prod-backup.yaml`；
+  備份 `data/backups/2026-10-16-pg/` 保留
 - [ ] 後續：定期 `pg_dump` 到外接硬碟作為備份（取代以 bind mount 資料目錄當備份）
 
 ## 階段 1：程式修正（依序，一次一項）
@@ -49,13 +53,26 @@
 | qB 122 個已同步 torrent（94 missingFiles + 28 completed 但檔案已搬走） | 項目 1 部署 | `DELETE /downloads/{hash}?delete_files=false` |
 | 42 筆 `batch_failed`（6 個合集） | 項目 6 部署 | 改回 `batch_unmatched`、`sync_retry_count=0`，讓排程重新配對 |
 | 421 魔法科劇場版（資料夾） | 項目 6 部署 | 改回 `completed` 並重新取得 `video_file`（或觸發一次完成處理） |
-| 563–566（downloader_error，qB 已完成） | 項目 7 部署 | 自動恢復；仍需先解衝突 |
-| 555（downloading，qB not_found） | 無 | 改 `failed`，觸發重派 |
+| 563–566（downloader_error，qB 已完成） | — | 重啟時被重試機制刪除，link 因衝突未重派，目前無 download 紀錄；qB 裡的 torrent 與檔案還在。解衝突後選中的 link 會重派，qB 已有該 torrent → 直接完成並同步 |
+| ~~555（downloading，qB not_found）~~ | — | 已自動處理：重啟時重派為 609，qB 這次成功加入 |
 | 559/560、576/579/581/582、563–566 | 使用者 | UI 上解決 6 筆衝突（1581/1583/1589/1591/1609/1628）；未選中且已下載的版本從 qB 移除並刪檔 |
 | 506、508（sync_failed，實際已同步） | 無 | 改 `synced`、`file_path` 填媒體庫路徑，從 qB 移除 torrent |
 | 515（無 hash 的 completed） | 無 | 改 `cancelled`（S01E10 已在媒體庫） |
 | /downloads 孤兒檔 11 個（Mujikaku CR 02/03、推しの子 9 個） | 無 | 刪除 |
 | Jellyfin trickplay 唯讀失敗 | 使用者決定 | trickplay 改存 cache，或媒體庫改 rw |
+
+### 2026-10-16 DB 修復後重啟的觀察
+
+- downloader 重新註冊觸發「重試 failed / downloader_error」：22 筆被認領，14 筆重新派送（607–620），
+  3 筆因已有進行中的下載略過，其餘因衝突略過。
+  - 需要的（媒體庫缺這集）：607 LIAR GAME 24、609 尼古喵喵 10、613/620 Mujikaku 11/12、615 罗梅莉亚 02、617/618 女僕 8/4
+  - 重複的（媒體庫已有這集，DB 卻沒有任何同集紀錄，推測是 E1 的寫入遺失）：608、610、611、612、614、616、619。
+    同步時會以同檔名覆蓋，沒有傷害，只浪費頻寬
+- 停服務的順序是 downloader 先停、core 後停，core 輪詢失敗時把 555、561 標成 downloader_error（就是 E3 的行為），
+  重啟後被重試機制重派。之後的 runbook 要先停 core
+- 506 / 508 / 421 被 viewer 註冊時重設重試，會再失敗 3 次後回到 `sync_failed`（等項目 6、10）
+- 新發現的小 bug：`retry_completed_downloads` 把「因衝突略過」（`notify_viewer` 回 `Ok(false)`）當成「沒有 viewer」而中斷整個迴圈
+  （log：`No viewer available during retry, stopping`），後面的 completed 都不會被重試 → 併入項目 9
 
 ## 觀察依據
 

@@ -21,6 +21,8 @@
 
 ## E1：PostgreSQL 資料損壞（儲存層）
 
+> **狀態：已修復（2026-10-16）**：資料庫已搬到 named volume `rust-bangumi_postgres_data`，並開啟 data_checksums，驗證全部通過。過程與重啟後的觀察記在 `tasks/todo.md` 階段 0。
+
 ### 證據
 
 1. **主鍵重複**（主鍵索引存在，資料卻重複，代表索引當時沒有這些值）

@@ -176,6 +176,8 @@ phase_preflight() {
 
 phase_dump() {
   log "停止應用服務（qbittorrent / jellyfin 保持運作）"
+  # 先停 core：若 downloader 先停，core 的輪詢會把所有 downloading 標成 downloader_error
+  compose stop core-service
   compose stop "${APP_SERVICES[@]}"
   local clients
   clients=$(docker exec "$PG" psql -U "$PGU" -d postgres -Atc \
