@@ -313,6 +313,11 @@ select count(*) from anime_link_conflicts where resolution_status='unresolved';
 - 設好之後檢查：從 LAN 連 `114.32.227.135:16881` 不應該再是 refused（前提是路由器支援 NAT loopback），或用外部的 port 檢查工具確認；qB 的下載者分頁應該開始出現 `I` 旗標的 peer。
 - 程式：core 看不到「卡住」的狀態，因為 downloader 把 qB 的 `stalledDL` 和 `queuedDL` 都回報成 `downloading`。之後可以在 E4 的 `not_found` 逾時處理一併考慮：`downloading` 而且進度長時間沒變時要提醒。
 
+### 結果（2026-10-16 16:57 UTC 使用者設定轉發）
+
+- 從 LAN 連 `114.32.227.135:16881`：從 refused 變成可以連上。
+- 1 分鐘內 Mujikaku 10、12 開始下載；624（Mujikaku 12）在 17:10 完成 → 同步 → torrent 自動移除。Romelia 02 大約每分鐘 1%。Mujikaku 11 的 swarm 只有 3 個種子，還沒有開始。
+
 ### 如何檢查
 
 - qB WebUI 的下載者分頁：有沒有 `I` 旗標的 peer。
