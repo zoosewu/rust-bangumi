@@ -103,8 +103,9 @@ services:
       - "${JELLYFIN_PORT:-8096}:8096"
       - "${JELLYFIN_DISCOVERY_PORT:-7359}:7359/udp"
     volumes:
-      - ${JELLYFIN_CONFIG_DIR:?JELLYFIN_CONFIG_DIR is required}:/config
-      - ${JELLYFIN_CACHE_DIR:?JELLYFIN_CACHE_DIR is required}:/cache
+      # config / cache 走 bind 型 named volume（與生產 2026-09-07 起的設定一致）
+      - jellyfin_ext_config:/config
+      - jellyfin_ext_cache:/cache
       - ${JELLYFIN_LIBRARY_DIR:?JELLYFIN_LIBRARY_DIR is required}:/media/jellyfin:ro
     networks:
       bangumi-network:
@@ -129,3 +130,17 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+volumes:
+  jellyfin_ext_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${JELLYFIN_CONFIG_DIR:?JELLYFIN_CONFIG_DIR is required}
+  jellyfin_ext_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${JELLYFIN_CACHE_DIR:?JELLYFIN_CACHE_DIR is required}

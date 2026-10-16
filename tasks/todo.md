@@ -1,3 +1,82 @@
+# 生產環境問題修復 (2026-10-16)
+
+分析來源：2026-10-16 對 yeh3f@192.168.68.101 的唯讀檢查。
+環境稽核（根因、證據、觀察用 SQL）：`docs/runbooks/2026-10-16-production-environment-audit.md`（下稱「稽核」，E1–E9）。
+每次實作只解決一個問題。
+
+## 階段 0：環境基礎（最優先，其餘修正都建立在健康的 DB 上）
+
+- [x] repo 補上生產 2026-09-07 的本地改動：jellyfin config/cache 改用 bind 型 named volume（`docker-compose.override.yaml`）
+- [x] repo：postgres 改用 Docker named volume `postgres_data` + `POSTGRES_INITDB_ARGS=--data-checksums`；`.env.prod` 移除 `POSTGRES_DATA_DIR`
+- [x] 修復腳本 `scripts/2026-10-16-postgres-migrate-to-volume.sh`（preflight → dump → switch → restore → verify → start，含 rollback）
+  - 已在生產以唯讀方式驗證：去重 SQL（暫存表 + rollback）、筆數統計、驗證 SQL（能抓出全部 4 類已知問題）
+- [ ] commit + push 上述改動（等使用者同意）
+- [ ] 生產執行（需使用者操作或授權，自動權限擋下停服務的動作）：
+  1. `git checkout -- docker-compose.override.yaml && git pull`（生產的本地改動已併入 repo）
+  2. 依序執行腳本 `preflight` `dump` `switch` `restore` `verify`，`verify` 全部 PASS 才 `start`
+  3. 啟動後觀察 core / viewer log；一週後確認無異常再刪除舊目錄 `data/postgres` 與根目錄的 `postgres-data/`
+- [ ] 後續：定期 `pg_dump` 到外接硬碟作為備份（取代以 bind mount 資料目錄當備份）
+
+## 階段 1：程式修正（依序，一次一項）
+
+- [x] 1. 同步完成後從 qB 移除 torrent（稽核 E8）
+  - sync callback `synced` 後，背景檢查同 hash 的所有 downloads；沒有 pending/downloading/downloader_error 時呼叫 downloader `DELETE /downloads/:hash`（delete_files=false）
+  - 決策邏輯抽成純函式並寫單元測試
+- [ ] 6. core 與 downloader-qbittorrent 掛載 `${DOWNLOADS_DIR}:/downloads:ro`（稽核 E2：video_file 全為 NULL、合集全部 batch_failed、資料夾型 torrent 同步失敗）
+  - 挑影片改為「最大的影片檔」而非第一個（BD 資料夾含特典 / 選單）
+- [ ] 7. downloader_error 恢復（稽核 E3）
+  - `apply_completed_files` 同時處理 `downloading` 與 `downloader_error`
+  - 每次輪詢都做恢復檢查，不再只在「沒有 downloading」時才做
+  - 連續失敗 N 次才標 `downloader_error`，單次網路錯誤不全標
+- [ ] 8. qB 回報 `not_found` 的處理（稽核 E4）
+  - downloader 加入 URL 型 torrent 後輪詢 `torrents/info` 確認真的出現才回報成功
+  - core：`downloading` 持續 `not_found` 超過 N 分鐘 → `failed`，交給既有重試
+- [ ] 9. 派送前一律先偵測衝突（稽核 E5）
+  - `pending_ai_results.rs:471`（rerun）與 `raw_items.rs:347`（單筆 reparse）漏了；收斂到共用函式 / `dispatch_new_links` 內
+- [ ] 10. viewer 同步冪等（稽核 E6）：來源不存在但目標已存在 → 回報 `synced`
+- [ ] 11. 取消時清除殘檔（稽核 E7）
+  - 未完成的下載取消時 `deleteFiles=true`
+  - 訂閱 purge 依各 download 的 `module_id` 送到正確的 downloader
+- [ ] 2. AI 生成改為全域排隊（一次一個）+ 限流自動重試
+- [ ] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
+- [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
+- [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
+
+## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
+
+| 對象 | 前提 | 動作 |
+|------|------|------|
+| qB 122 個已同步 torrent（94 missingFiles + 28 completed 但檔案已搬走） | 項目 1 部署 | `DELETE /downloads/{hash}?delete_files=false` |
+| 42 筆 `batch_failed`（6 個合集） | 項目 6 部署 | 改回 `batch_unmatched`、`sync_retry_count=0`，讓排程重新配對 |
+| 421 魔法科劇場版（資料夾） | 項目 6 部署 | 改回 `completed` 並重新取得 `video_file`（或觸發一次完成處理） |
+| 563–566（downloader_error，qB 已完成） | 項目 7 部署 | 自動恢復；仍需先解衝突 |
+| 555（downloading，qB not_found） | 無 | 改 `failed`，觸發重派 |
+| 559/560、576/579/581/582、563–566 | 使用者 | UI 上解決 6 筆衝突（1581/1583/1589/1591/1609/1628）；未選中且已下載的版本從 qB 移除並刪檔 |
+| 506、508（sync_failed，實際已同步） | 無 | 改 `synced`、`file_path` 填媒體庫路徑，從 qB 移除 torrent |
+| 515（無 hash 的 completed） | 無 | 改 `cancelled`（S01E10 已在媒體庫） |
+| /downloads 孤兒檔 11 個（Mujikaku CR 02/03、推しの子 9 個） | 無 | 刪除 |
+| Jellyfin trickplay 唯讀失敗 | 使用者決定 | trickplay 改存 cache，或媒體庫改 rw |
+
+## 觀察依據
+
+稽核文件末的「日常觀察清單」；DB 一致性用稽核 E1「如何檢查」的 SQL（唯讀，主機或 OrbStack 重啟後必跑）。
+
+## Review
+
+### 1. 同步完成後移除 torrent
+- `core-service/src/services/sync_service.rs`：新增 `release_torrent_if_settled()`；判斷邏輯抽成純函式
+  `torrent_releasable()`，只要同 hash（同 downloader）還有 `pending` / `downloading` / `downloader_error`
+  的 download 就保留 torrent（合集 torrent 由多個 download 共用）。其他狀態（completed、syncing、
+  batch_unmatched 等）都只讀磁碟上的檔案，而檔案保留（`delete_files=false`），因此不受影響。
+- `core-service/src/handlers/sync.rs`：viewer 回報 `synced` 後在背景呼叫，失敗只記 warn，不影響 callback。
+- qBittorrent / PikPak 的 `DELETE /downloads/:hash` 介面一致，不需要改 downloader。
+- 驗證：3 個新單元測試 + `cargo test -p core-service` 全過；clippy 對新程式碼無警告。
+  DB 查詢 + HTTP 呼叫的路徑沒有自動化測試，部署後需看 log 有沒有 `Removed torrent … after sync`。
+- 已知限制：最後一集停在 `batch_failed` / `sync_failed`（沒有 `synced` 回報）的 torrent 不會自動移除。
+- 待環境處理：生產上現有 94 個 missingFiles torrent 要手動清除。
+
+---
+
 # 死 tracker + 重試競態修復 (2026-07-14 第二階段)
 
 Spec: `docs/superpowers/specs/2026-07-14-dead-tracker-retry-race-fix-design.md`

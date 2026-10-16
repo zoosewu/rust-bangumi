@@ -11,8 +11,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
       POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # 只在 initdb（首次建立 cluster）時生效：讓 Postgres 能偵測頁面損壞
+      POSTGRES_INITDB_ARGS: --data-checksums
     volumes:
-      - ${POSTGRES_DATA_DIR:?POSTGRES_DATA_DIR is required}:/var/lib/postgresql/data
+      # 必須是 Docker 管理的 volume（落在 Docker/OrbStack VM 自己的磁碟上）。
+      # 不可 bind mount 到 macOS 外接硬碟：2026-09～10 生產環境在該配置下出現
+      # 寫入遺失（索引缺列、主鍵重複、序列倒退），見
+      # docs/runbooks/2026-10-16-production-environment-audit.md E1。
+      - postgres_data:/var/lib/postgresql/data
       - ./configs/postgres/init-viewer-db.sh:/docker-entrypoint-initdb.d/02-init-viewer-db.sh
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -356,6 +362,12 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
 
 # ============================================================================
 # 網絡
