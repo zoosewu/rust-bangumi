@@ -16,6 +16,7 @@
 | E6 | 同步其實成功了，卻被記成 `sync_failed` | 程式（core 重複送同步 + 後到的失敗蓋掉成功 + viewer 不冪等） | 中 |
 | E7 | /downloads 裡的孤兒檔案 | 程式（取消時不刪檔） | 低 |
 | E8 | qB 留著 122 個已同步的 torrent（含 94 個 missingFiles） | 程式（第 1 項已修） | 低 |
+| E10 | 冷門、舊集數的下載永遠 0%（連不到 NAT 後面的 peer） | 網路環境（路由器沒有轉發 16881） | 中 |
 
 ---
 
@@ -288,6 +289,37 @@ select count(*) from anime_link_conflicts where resolution_status='unresolved';
 
 ---
 
+## E10：qB 沒有對外開放的 port，NAT 後面的 peer 全都連不上（網路環境，2026-10-17）
+
+**對象**：621–624（Mujikaku Seijo 10/11/12 ABEMA、Romelia Senki 02），在 qB 裡卡在 0% 超過一天。
+
+### 證據
+
+- qB 的 Trackers 分頁：5 個 tracker 全部「正在運作」，回報 Romelia 02 有 9～18 個種子。所以種子確實存在，tracker 也正常。
+- 一般分頁：跑了 1 天 9 小時，只下載 40.8 KiB，而且全部被丟棄；連線數 8；種子顯示 1（總共 18）。做種的 torrent 同樣連不上下載者，上傳一直是 0。
+- 下載者分頁：只有 1 個 peer，旗標 `H X P`（從 DHT/PeX 得知、µTP），**沒有 `I`（incoming）**，整個 qB 看不到任何從外部連進來的 peer。
+- 自行向 tracker announce 取得 12 個 peer（大多是中國的住宅 IP），從生產主機和 qB 容器做 TCP 連線，結果完全一樣：**11 個失敗、1 個成功**。所以容器網路沒問題，是對方在 NAT 後面、不接受連入。
+- 對外 IP 是 114.32.227.135（HiNet 固定制，不是 CGNAT）。從 LAN 連 `192.168.68.101:16881` 成功，表示 OrbStack 的 port 發布正常；連 `114.32.227.135:16881` 則是 **Connection refused**，路由器（192.168.68.1）沒有轉發這個 port。
+- qB 設定 `Connection\UPnP=false`；就算打開，qB 在 docker bridge（172.25.0.20）裡也沒辦法透過 UPnP 向路由器要 port。
+- Mac 有兩張網卡在同一個網段：en0 是 192.168.68.101，en1 是 192.168.68.2，兩者的預設路由都指向 192.168.68.1。
+
+### 根因
+
+兩端都在 NAT 後面時無法建立連線。我們只能連得到「能接受連入」的 peer（例如 seedbox）。熱門新番的 swarm 裡常有 seedbox，所以過去能正常下載，累計上傳 18.62 GiB 也都是靠主動連出去。但舊集數或冷門的 swarm 裡，剩下的種子多半是住宅網路的使用者，就永遠連不上。
+
+### 修正方向（環境，需要使用者在路由器上操作）
+
+- 在路由器設定 port 轉發：**TCP 和 UDP 的 16881 → 192.168.68.101**，並在 DHCP 幫 192.168.68.101 保留位址。
+- 設好之後檢查：從 LAN 連 `114.32.227.135:16881` 不應該再是 refused（前提是路由器支援 NAT loopback），或用外部的 port 檢查工具確認；qB 的下載者分頁應該開始出現 `I` 旗標的 peer。
+- 程式：core 看不到「卡住」的狀態，因為 downloader 把 qB 的 `stalledDL` 和 `queuedDL` 都回報成 `downloading`。之後可以在 E4 的 `not_found` 逾時處理一併考慮：`downloading` 而且進度長時間沒變時要提醒。
+
+### 如何檢查
+
+- qB WebUI 的下載者分頁：有沒有 `I` 旗標的 peer。
+- `downloads` 裡 `downloading` 超過 24 小時、`progress=0` 的筆數，應該是 0。
+
+---
+
 ## 其他已知但這次沒有深入的項目
 
 - Jellyfin trickplay 一直失敗：jellyfin 容器以 `:ro` 掛載 `/media/jellyfin`，而 Jellyfin 設定把 trickplay 存在媒體旁邊。可以把 trickplay 改存到 cache，或改成 rw 掛載。
@@ -298,6 +330,6 @@ select count(*) from anime_link_conflicts where resolution_status='unresolved';
 
 1. E1 的索引一致性檢查：每週一次，或主機、OrbStack 重啟後執行。
 2. `downloads` 依狀態分組：`downloader_error`、`completed` 超過 1 小時、`batch_failed`、`sync_failed` 都應該是 0。
-3. `downloading` 的 hash 在 qB 裡都要找得到。
+3. `downloading` 的 hash 在 qB 裡都要找得到；`downloading` 超過 24 小時、`progress=0` 的要查（E10）。
 4. 未解決的衝突數。
 5. /downloads 裡不應該有超過 7 天、又不屬於任何 `downloading` 的檔案。
