@@ -7,3 +7,4 @@
 - 對生產環境做的任何設定調整，都要在同一輪工作中回寫 repo 對應的檔案（例如改 qBittorrent 偏好設定 → 更新 `configs/qbittorrent/*.conf` 並記錄理由）。生產調整若只存在於生產，容器重建即遺失、無版本控制、dev/prod 行為分歧。**做調整前先找出 repo 裡對應的檔案；若找不到（設定屬 runtime state、未被掛載），仍要把關鍵設定與理由文件化。** 資料庫中的應用資料（parser、filter rule）由 UI 管理，屬例外，但變更理由值得記錄。
 - 把「檔案找不到／掃描結果為空」歸因到程式邏輯之前，先用 `docker inspect` 確認該容器真的掛載了那個路徑。2026-10-16 曾把合集 batch_failed 歸因於解析器拆分作品，實際原因是 core 與 downloader 根本沒有掛載 /downloads。
 - 生產 DB 的狀態「不可能由程式產生」時（例如沒有任何路徑會寫入的狀態轉移），先做索引一致性檢查（seq scan 與 index scan 筆數比對、主鍵重複、序列是否落後 max(id)），再去推論程式 bug。
+- 交給使用者的重啟指令，若涉及有輪詢依賴的服務，要依「被依賴者先起」排序，而且要分成兩次 `up`（先 `up -d downloader…`，等 healthy 後再 `up -d core-service`）。同一次 `docker compose up -d --no-deps A B` 不保證啟動順序。2026-10-16 部署第 6 項時 core 先起、downloader 晚了 5 秒，core 一輪詢就把 4 筆標成 downloader_error（E3）；這次靠 downloader 註冊後的恢復流程自動救回，修好 E3 前不能指望每次都這麼幸運。
