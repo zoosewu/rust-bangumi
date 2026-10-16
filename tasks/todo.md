@@ -50,7 +50,7 @@
 
 | 對象 | 前提 | 動作 |
 |------|------|------|
-| qB 122 個已同步 torrent（94 missingFiles + 28 completed 但檔案已搬走） | 項目 1 部署 | `DELETE /downloads/{hash}?delete_files=false` |
+| ~~qB 已同步 torrent~~ | — | 2026-10-16 完成：項目 1 部署（core 以 93d073e 重建）後移除 132 個（94 missingFiles + 38 completed 但檔案已搬走），失敗 0，qB 查詢全部 not_found |
 | 42 筆 `batch_failed`（6 個合集） | 項目 6 部署 | 改回 `batch_unmatched`、`sync_retry_count=0`，讓排程重新配對 |
 | 421 魔法科劇場版（資料夾） | 項目 6 部署 | 改回 `completed` 並重新取得 `video_file`（或觸發一次完成處理） |
 | 563–566（downloader_error，qB 已完成） | — | 重啟時被重試機制刪除，link 因衝突未重派，目前無 download 紀錄；qB 裡的 torrent 與檔案還在。解衝突後選中的 link 會重派，qB 已有該 torrent → 直接完成並同步 |
@@ -90,7 +90,8 @@
 - 驗證：3 個新單元測試 + `cargo test -p core-service` 全過；clippy 對新程式碼無警告。
   DB 查詢 + HTTP 呼叫的路徑沒有自動化測試，部署後需看 log 有沒有 `Removed torrent … after sync`。
 - 已知限制：最後一集停在 `batch_failed` / `sync_failed`（沒有 `synced` 回報）的 torrent 不會自動移除。
-- 待環境處理：生產上現有 94 個 missingFiles torrent 要手動清除。
+- 已部署（2026-10-16，core 以 93d073e 重建）；既有 torrent 已手動清除（見階段 2）。
+- [ ] 待確認：下一筆新同步後，core log 出現 `Removed torrent … after sync`，且該 hash 在 qB 為 not_found。
 
 ---
 
