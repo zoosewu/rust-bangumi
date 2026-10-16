@@ -1,5 +1,6 @@
 use diesel::prelude::*;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -11,11 +12,40 @@ use shared::{
     pick_main_video, FileType, StatusQueryResponse,
 };
 
+/// Statuses whose torrent is still tracked by the downloader and polled every cycle.
+/// `downloader_error` is included so a download recovers as soon as its downloader answers again.
+const POLLED_STATUSES: [&str; 2] = ["downloading", "downloader_error"];
+
+/// Consecutive failed polls before a downloader's downloads are marked `downloader_error`.
+/// A single failure (restart, deploy, a busy moment) must not flag everything.
+const OFFLINE_AFTER_FAILED_POLLS: u32 = 3;
+
+/// What a polled download should become, given the downloader's normalized status.
+#[derive(Debug, PartialEq, Eq)]
+enum PollOutcome {
+    Completed,
+    Failed,
+    Downloading,
+    /// No information to act on (e.g. `not_found`, `unknown`); leave the record as is.
+    Unchanged,
+}
+
+fn poll_outcome(downloader_status: &str) -> PollOutcome {
+    match downloader_status {
+        "completed" => PollOutcome::Completed,
+        "error" => PollOutcome::Failed,
+        "downloading" | "paused" | "checking" => PollOutcome::Downloading,
+        _ => PollOutcome::Unchanged,
+    }
+}
+
 pub struct DownloadScheduler {
     db_pool: DbPool,
     poll_interval_secs: u64,
     http_client: reqwest::Client,
     sync_service: Arc<super::SyncService>,
+    /// Consecutive failed polls per downloader module_id.
+    failed_polls: Mutex<HashMap<i32, u32>>,
 }
 
 impl DownloadScheduler {
@@ -33,6 +63,7 @@ impl DownloadScheduler {
                 .build()
                 .unwrap(),
             sync_service,
+            failed_polls: Mutex::new(HashMap::new()),
         }
     }
 
@@ -91,21 +122,13 @@ impl DownloadScheduler {
         conn: &mut PgConnection,
         downloader: &ServiceModule,
     ) -> Result<(), String> {
-        // Get all downloading records for this downloader
-        let active_downloads: Vec<Download> = downloads::table
+        let polled_downloads: Vec<Download> = downloads::table
             .filter(downloads::module_id.eq(downloader.module_id))
-            .filter(downloads::status.eq("downloading"))
+            .filter(downloads::status.eq_any(POLLED_STATUSES))
             .load::<Download>(conn)
             .map_err(|e| format!("Failed to query active downloads: {}", e))?;
 
-        if active_downloads.is_empty() {
-            // Also check for downloader_error records to recover
-            self.check_recovery(conn, downloader).await?;
-            return Ok(());
-        }
-
-        // Collect hashes to query
-        let hashes: Vec<String> = active_downloads
+        let hashes: Vec<String> = polled_downloads
             .iter()
             .filter_map(|d| d.torrent_hash.clone())
             .collect();
@@ -119,20 +142,17 @@ impl DownloadScheduler {
 
         match self.query_downloader_status(&status_url).await {
             Ok(response) => {
-                // Update download records based on status
+                self.record_poll_success(downloader);
+
                 for status_item in &response.statuses {
-                    let new_status = match status_item.status.as_str() {
-                        "completed" => "completed",
-                        "error" => "failed",
-                        "downloading" | "stalledDL" | "metaDL" | "queuedDL" | "checkingDL"
-                        | "forcedDL" | "allocating" | "moving" => "downloading",
-                        _ => continue,
-                    };
-
                     let now = chrono::Utc::now().naive_utc();
+                    let polled_rows = downloads::table
+                        .filter(downloads::torrent_hash.eq(&status_item.hash))
+                        .filter(downloads::module_id.eq(downloader.module_id))
+                        .filter(downloads::status.eq_any(POLLED_STATUSES));
 
-                    if new_status == "completed" {
-                        Self::apply_completed_files(
+                    match poll_outcome(&status_item.status) {
+                        PollOutcome::Completed => Self::apply_completed_files(
                             conn,
                             &status_item.hash,
                             downloader.module_id,
@@ -140,21 +160,31 @@ impl DownloadScheduler {
                             &status_item.files,
                             status_item.progress,
                             status_item.size,
-                        );
-                    } else {
-                        diesel::update(
-                            downloads::table
-                                .filter(downloads::torrent_hash.eq(&status_item.hash))
-                                .filter(downloads::module_id.eq(downloader.module_id)),
-                        )
-                        .set((
-                            downloads::status.eq(new_status),
-                            downloads::progress.eq(status_item.progress as f32),
-                            downloads::total_bytes.eq(status_item.size as i64),
-                            downloads::updated_at.eq(now),
-                        ))
-                        .execute(conn)
-                        .ok();
+                        ),
+                        PollOutcome::Failed => {
+                            diesel::update(polled_rows)
+                                .set((
+                                    downloads::status.eq("failed"),
+                                    downloads::error_message
+                                        .eq(Some("Downloader reported an error".to_string())),
+                                    downloads::updated_at.eq(now),
+                                ))
+                                .execute(conn)
+                                .ok();
+                        }
+                        PollOutcome::Downloading => {
+                            diesel::update(polled_rows)
+                                .set((
+                                    downloads::status.eq("downloading"),
+                                    downloads::progress.eq(status_item.progress as f32),
+                                    downloads::total_bytes.eq(status_item.size as i64),
+                                    downloads::error_message.eq::<Option<String>>(None),
+                                    downloads::updated_at.eq(now),
+                                ))
+                                .execute(conn)
+                                .ok();
+                        }
+                        PollOutcome::Unchanged => {}
                     }
                 }
 
@@ -164,16 +194,20 @@ impl DownloadScheduler {
                 Ok(())
             }
             Err(e) => {
-                // Downloader offline — mark all downloading records as downloader_error
-                tracing::warn!(
-                    "Downloader {} offline, marking {} downloads as downloader_error: {}",
-                    downloader.name,
-                    active_downloads.len(),
-                    e
-                );
+                let failed_polls = self.record_poll_failure(downloader);
+                if failed_polls < OFFLINE_AFTER_FAILED_POLLS {
+                    tracing::warn!(
+                        "Polling downloader {} failed ({}/{}), will retry: {}",
+                        downloader.name,
+                        failed_polls,
+                        OFFLINE_AFTER_FAILED_POLLS,
+                        e
+                    );
+                    return Ok(());
+                }
 
                 let now = chrono::Utc::now().naive_utc();
-                diesel::update(
+                let marked = diesel::update(
                     downloads::table
                         .filter(downloads::module_id.eq(downloader.module_id))
                         .filter(downloads::status.eq("downloading")),
@@ -186,94 +220,42 @@ impl DownloadScheduler {
                 .execute(conn)
                 .map_err(|e| format!("Failed to mark as downloader_error: {}", e))?;
 
+                if marked > 0 {
+                    tracing::warn!(
+                        "Downloader {} offline after {} failed polls, marked {} downloads as downloader_error: {}",
+                        downloader.name,
+                        failed_polls,
+                        marked,
+                        e
+                    );
+                }
+
                 Ok(())
             }
         }
     }
 
-    /// Check for downloader_error records and attempt recovery
-    async fn check_recovery(
-        &self,
-        conn: &mut PgConnection,
-        downloader: &ServiceModule,
-    ) -> Result<(), String> {
-        let error_downloads: Vec<Download> = downloads::table
-            .filter(downloads::module_id.eq(downloader.module_id))
-            .filter(downloads::status.eq("downloader_error"))
-            .load::<Download>(conn)
-            .map_err(|e| format!("Failed to query error downloads: {}", e))?;
-
-        if error_downloads.is_empty() {
-            return Ok(());
+    fn record_poll_success(&self, downloader: &ServiceModule) {
+        let previous = self
+            .failed_polls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&downloader.module_id);
+        if let Some(count) = previous {
+            tracing::info!(
+                "Downloader {} reachable again after {} failed polls",
+                downloader.name,
+                count
+            );
         }
+    }
 
-        let hashes: Vec<String> = error_downloads
-            .iter()
-            .filter_map(|d| d.torrent_hash.clone())
-            .collect();
-
-        if hashes.is_empty() {
-            return Ok(());
-        }
-
-        let hashes_param = hashes.join(",");
-        let status_url = format!("{}/downloads?hashes={}", downloader.base_url, hashes_param);
-
-        match self.query_downloader_status(&status_url).await {
-            Ok(response) => {
-                tracing::info!(
-                    "Downloader {} recovered, updating {} error records",
-                    downloader.name,
-                    response.statuses.len()
-                );
-
-                for status_item in &response.statuses {
-                    let new_status = match status_item.status.as_str() {
-                        "completed" => "completed",
-                        "error" => "failed",
-                        _ => "downloading",
-                    };
-
-                    let now = chrono::Utc::now().naive_utc();
-
-                    if new_status == "completed" {
-                        Self::apply_completed_files(
-                            conn,
-                            &status_item.hash,
-                            downloader.module_id,
-                            status_item.content_path.as_deref(),
-                            &status_item.files,
-                            status_item.progress,
-                            status_item.size,
-                        );
-                    } else {
-                        diesel::update(
-                            downloads::table
-                                .filter(downloads::torrent_hash.eq(&status_item.hash))
-                                .filter(downloads::module_id.eq(downloader.module_id)),
-                        )
-                        .set((
-                            downloads::status.eq(new_status),
-                            downloads::progress.eq(status_item.progress as f32),
-                            downloads::total_bytes.eq(status_item.size as i64),
-                            downloads::error_message.eq::<Option<String>>(None),
-                            downloads::updated_at.eq(now),
-                        ))
-                        .execute(conn)
-                        .ok();
-                    }
-                }
-
-                // Trigger sync for newly completed downloads
-                self.trigger_sync_for_completed(conn).await;
-
-                Ok(())
-            }
-            Err(_) => {
-                // Still offline, nothing to do
-                Ok(())
-            }
-        }
+    /// Returns the number of consecutive failed polls, including this one.
+    fn record_poll_failure(&self, downloader: &ServiceModule) -> u32 {
+        let mut failed_polls = self.failed_polls.lock().unwrap_or_else(|e| e.into_inner());
+        let count = failed_polls.entry(downloader.module_id).or_insert(0);
+        *count += 1;
+        *count
     }
 
     async fn trigger_sync_for_completed(&self, conn: &mut PgConnection) {
@@ -495,9 +477,9 @@ impl DownloadScheduler {
         }
     }
 
-    /// Update download records for a completed torrent.
+    /// Update download records for a completed torrent (`downloading` or `downloader_error`).
     ///
-    /// - Single record: bulk-set video_file to first video found (existing behaviour).
+    /// - Single record: set video_file to the main (largest) video.
     /// - Multiple records (batch torrent): use match_batch_files to assign
     ///   each record its specific video_file and subtitle_files.
     ///   Records that cannot be matched are set to status "batch_unmatched".
@@ -517,7 +499,7 @@ impl DownloadScheduler {
             .inner_join(anime_links::table.on(anime_links::link_id.eq(downloads::link_id)))
             .filter(downloads::torrent_hash.eq(torrent_hash))
             .filter(downloads::module_id.eq(module_id))
-            .filter(downloads::status.eq("downloading"))
+            .filter(downloads::status.eq_any(POLLED_STATUSES))
             .select((downloads::download_id, anime_links::episode_no))
             .load::<(i32, i32)>(conn)
             .unwrap_or_default();
@@ -527,7 +509,7 @@ impl DownloadScheduler {
         }
 
         if records.len() == 1 {
-            // Single episode: original behaviour — pick first video
+            // Single episode: pick the main video
             let (video_file, subtitle_files_json) = Self::extract_media_files(files);
             diesel::update(downloads::table.filter(downloads::download_id.eq(records[0].0)))
                 .set((
@@ -537,6 +519,7 @@ impl DownloadScheduler {
                     downloads::file_path.eq(content_path),
                     downloads::video_file.eq(video_file.as_deref()),
                     downloads::subtitle_files.eq(subtitle_files_json.as_deref()),
+                    downloads::error_message.eq::<Option<String>>(None),
                     downloads::updated_at.eq(now),
                 ))
                 .execute(conn)
@@ -564,6 +547,7 @@ impl DownloadScheduler {
                         downloads::file_path.eq(content_path),
                         downloads::video_file.eq(video.as_deref()),
                         downloads::subtitle_files.eq(subtitle_json.as_deref()),
+                        downloads::error_message.eq::<Option<String>>(None),
                         downloads::updated_at.eq(now),
                     ))
                     .execute(conn)
@@ -631,5 +615,36 @@ impl DownloadScheduler {
             .json::<StatusQueryResponse>()
             .await
             .map_err(|e| format!("Failed to parse response: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completed_and_error_are_terminal_outcomes() {
+        assert_eq!(poll_outcome("completed"), PollOutcome::Completed);
+        assert_eq!(poll_outcome("error"), PollOutcome::Failed);
+    }
+
+    #[test]
+    fn in_progress_statuses_keep_downloading() {
+        for status in ["downloading", "paused", "checking"] {
+            assert_eq!(poll_outcome(status), PollOutcome::Downloading, "{status}");
+        }
+    }
+
+    #[test]
+    fn statuses_without_information_leave_the_record_alone() {
+        for status in ["not_found", "unknown", ""] {
+            assert_eq!(poll_outcome(status), PollOutcome::Unchanged, "{status}");
+        }
+    }
+
+    #[test]
+    fn downloader_error_is_polled_so_it_can_recover() {
+        assert!(POLLED_STATUSES.contains(&"downloading"));
+        assert!(POLLED_STATUSES.contains(&"downloader_error"));
     }
 }

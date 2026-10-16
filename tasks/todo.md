@@ -39,10 +39,17 @@
     另外 2 筆（589、598）重現 E6 而落入 sync_failed，檔案實際已在媒體庫 → `scripts/2026-10-16-mark-synced-589-598.sql`
     （已執行，UPDATE 2）。最終：43 筆全部 synced，7 個 torrent 在 qB 皆為 not_found
   - 部署時 core 比 downloader 早 5 秒起來，觸發 E3（4 筆 downloader_error），註冊後自動恢復；教訓見 lessons.md
-- [ ] 7. downloader_error 恢復（稽核 E3）
+- [x] 7. downloader_error 恢復（稽核 E3）
   - `apply_completed_files` 同時處理 `downloading` 與 `downloader_error`
   - 每次輪詢都做恢復檢查，不再只在「沒有 downloading」時才做
   - 連續失敗 N 次才標 `downloader_error`，單次網路錯誤不全標
+  - 實作：`poll_downloader` 與 `check_recovery` 合併為一條路徑，每輪都查 `POLLED_STATUSES`（downloading + downloader_error）；
+    狀態對應抽成純函式 `poll_outcome`（completed / error / downloading·paused·checking / 其他不動）；
+    依 hash 更新時只動 POLLED_STATUSES 的列（原本會連同 hash 相同的舊 synced 列一起改）；
+    完成或恢復時清掉 `Downloader offline` 的 error_message；每個 downloader 連續 3 次輪詢失敗（約 3 分鐘）才標 downloader_error
+  - 驗證：core 161 個單元測試全過（新增 4 個），clippy 無新警告。DB 更新路徑沒有自動化測試，部署後觀察
+  - `not_found` 仍維持不動，交給第 8 項
+  - [ ] 部署後確認：重啟 downloader 不再出現 `marking … downloader_error`，只會看到 `Polling downloader … failed (1/3)`
 - [ ] 8. qB 回報 `not_found` 的處理（稽核 E4）
   - downloader 加入 URL 型 torrent 後輪詢 `torrents/info` 確認真的出現才回報成功
   - core：`downloading` 持續 `not_found` 超過 N 分鐘 → `failed`，交給既有重試

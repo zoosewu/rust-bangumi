@@ -138,6 +138,7 @@ from downloads where updated_at > now() - interval '7 days' group by 1;
 
 - 程式：`apply_completed_files` 同時處理 `downloading` 和 `downloader_error`；每次輪詢都要執行恢復檢查；連續失敗 N 次才標成 `downloader_error`。
 - 環境：程式修好後會自動恢復。563–566 還有衝突（見 E5），要等衝突解決後才會同步。
+- 2026-10-16 第 7 項：已實作（輪詢與恢復合併、連續 3 次失敗才標錯）。部署第 6 項時又重現一次：core 比 downloader 早 5 秒起來，4 筆被標成 downloader_error。
 
 ### 如何檢查
 
