@@ -192,7 +192,7 @@ phase_dump() {
     count_rows_sql | psql_db "$db" > "$BACKUP_DIR/$db.counts"
     echo "  $(wc -l < "$BACKUP_DIR/$db.counts") 張表，$(du -h "$BACKUP_DIR/$db.dump" | cut -f1)"
   done
-  log "OK：備份在 $BACKUP_DIR，下一步 switch"
+  log "OK：備份在 ${BACKUP_DIR}，下一步 switch"
 }
 
 phase_switch() {
@@ -205,7 +205,7 @@ phase_switch() {
   local src checksums
   src=$(mount_source)
   checksums=$(docker exec "$PG" psql -U "$PGU" -d postgres -Atc "show data_checksums")
-  echo "  資料目錄：$src，data_checksums=$checksums"
+  echo "  資料目錄：${src}，data_checksums=$checksums"
   [ "$src" = "volume:$NEW_VOLUME" ] || die "postgres 沒有掛在 $NEW_VOLUME"
   [ "$checksums" = "on" ] || die "data_checksums 未開啟"
   docker exec "$PG" psql -U "$PGU" -d postgres -Atc "select 1 from pg_database where datname='$VIEWER_DB'" | grep -q 1 \
@@ -228,7 +228,7 @@ restore_db() {
 }
 
 phase_restore() {
-  [ "$(mount_source)" = "volume:$NEW_VOLUME" ] || die "postgres 尚未切換到 $NEW_VOLUME，請先 switch"
+  [ "$(mount_source)" = "volume:$NEW_VOLUME" ] || die "postgres 尚未切換到 ${NEW_VOLUME}，請先 switch"
   restore_db "$MAIN_DB" dedup_sql_bangumi
   restore_db "$VIEWER_DB" dedup_sql_viewer
   log "OK：下一步 verify"
@@ -260,7 +260,7 @@ phase_start() {
 }
 
 phase_rollback() {
-  log "回滾：以舊 compose（$OLD_COMMIT）與舊資料目錄重啟 postgres"
+  log "回滾：以舊 compose（${OLD_COMMIT}）與舊資料目錄重啟 postgres"
   local old=/tmp/rust-bangumi-compose-$OLD_COMMIT.yaml
   git show "$OLD_COMMIT:docker-compose.yaml" > "$old"
   compose stop postgres
