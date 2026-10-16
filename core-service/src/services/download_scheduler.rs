@@ -7,8 +7,8 @@ use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{anime_links, downloads, service_modules};
 use shared::{
-    build_default_chain, classify_files, collect_files_recursive, match_batch_files, FileType,
-    StatusQueryResponse,
+    build_default_chain, classify_files, collect_files_recursive, match_batch_files,
+    pick_main_video, FileType, StatusQueryResponse,
 };
 
 pub struct DownloadScheduler {
@@ -600,10 +600,7 @@ impl DownloadScheduler {
             return (None, None);
         }
         let classified = classify_files(files.to_vec());
-        let video = classified
-            .iter()
-            .find(|f| f.file_type == FileType::Video)
-            .map(|f| f.path.clone());
+        let video = pick_main_video(&classified, |p| std::fs::metadata(p).ok().map(|m| m.len()));
         let subtitles: Vec<String> = classified
             .iter()
             .filter(|f| f.file_type == FileType::Subtitle)

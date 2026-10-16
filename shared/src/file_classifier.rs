@@ -28,6 +28,22 @@ pub fn classify_files(files: Vec<String>) -> Vec<MediaFile> {
         .collect()
 }
 
+/// 從檔案清單挑出主影片：取檔案最大的影片。
+///
+/// BD / 劇場版資料夾常同時含特典、選單、預告等較小的影片，取第一個容易選錯。
+/// 大小由 `size_of` 提供（取不到時視為 0）；大小相同時保留清單中較前面的檔案。
+pub fn pick_main_video(
+    files: &[MediaFile],
+    size_of: impl Fn(&str) -> Option<u64>,
+) -> Option<String> {
+    files
+        .iter()
+        .filter(|f| f.file_type == FileType::Video)
+        .rev()
+        .max_by_key(|f| size_of(&f.path).unwrap_or(0))
+        .map(|f| f.path.clone())
+}
+
 fn classify_extension(path: &str) -> FileType {
     let ext = Path::new(path)
         .extension()
@@ -388,6 +404,39 @@ mod episode_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn media(paths: &[&str]) -> Vec<MediaFile> {
+        classify_files(paths.iter().map(|p| p.to_string()).collect())
+    }
+
+    #[test]
+    fn test_pick_main_video_prefers_largest() {
+        let files = media(&["menu.m2ts", "main.mkv", "sp01.mkv", "sub.ass"]);
+        let sizes: HashMap<&str, u64> = [("menu.m2ts", 50), ("main.mkv", 9000), ("sp01.mkv", 300)]
+            .into_iter()
+            .collect();
+        let picked = pick_main_video(&files, |p| sizes.get(p).copied());
+        assert_eq!(picked.as_deref(), Some("main.mkv"));
+    }
+
+    #[test]
+    fn test_pick_main_video_ignores_non_video() {
+        let files = media(&["huge.iso", "ep.mp4", "sub.ass"]);
+        let picked = pick_main_video(&files, |p| Some(if p == "huge.iso" { 1 << 40 } else { 10 }));
+        assert_eq!(picked.as_deref(), Some("ep.mp4"));
+    }
+
+    #[test]
+    fn test_pick_main_video_falls_back_to_first_when_sizes_unknown() {
+        let files = media(&["a.mkv", "b.mkv"]);
+        assert_eq!(pick_main_video(&files, |_| None).as_deref(), Some("a.mkv"));
+    }
+
+    #[test]
+    fn test_pick_main_video_none_without_video() {
+        let files = media(&["readme.txt", "sub.ass"]);
+        assert_eq!(pick_main_video(&files, |_| Some(1)), None);
+    }
 
     #[test]
     fn test_classify_video_extensions() {

@@ -67,6 +67,10 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
     ports:
       - "${CORE_PORT:-8000}:${CORE_PORT:-8000}"
+    volumes:
+      # 唯讀：完成時的影片 / 字幕挑選與合集逐集配對都要讀 qBittorrent 的下載目錄
+      # （路徑需與 qBittorrent 回報的 content_path 一致，皆為 /downloads/...）
+      - ${DOWNLOADS_DIR:?DOWNLOADS_DIR is required}:/downloads:ro
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.10
@@ -159,6 +163,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
     ports:
       - "${DOWNLOADER_PORT:-8002}:${DOWNLOADER_PORT:-8002}"
+    volumes:
+      # 唯讀：回報完成狀態時要列出 content_path 底下的檔案
+      - ${DOWNLOADS_DIR:?DOWNLOADS_DIR is required}:/downloads:ro
     networks:
       bangumi-network:
         ipv4_address: 172.25.0.12

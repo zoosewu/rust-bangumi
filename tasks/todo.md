@@ -26,8 +26,15 @@
 - [x] 1. 同步完成後從 qB 移除 torrent（稽核 E8）
   - sync callback `synced` 後，背景檢查同 hash 的所有 downloads；沒有 pending/downloading/downloader_error 時呼叫 downloader `DELETE /downloads/:hash`（delete_files=false）
   - 決策邏輯抽成純函式並寫單元測試
-- [ ] 6. core 與 downloader-qbittorrent 掛載 `${DOWNLOADS_DIR}:/downloads:ro`（稽核 E2：video_file 全為 NULL、合集全部 batch_failed、資料夾型 torrent 同步失敗）
+- [x] 6. core 與 downloader-qbittorrent 掛載 `${DOWNLOADS_DIR}:/downloads:ro`（稽核 E2：video_file 全為 NULL、合集全部 batch_failed、資料夾型 torrent 同步失敗）
   - 挑影片改為「最大的影片檔」而非第一個（BD 資料夾含特典 / 選單）
+  - 實作：`docker-compose.yaml` 兩個服務加唯讀掛載；`shared::pick_main_video`（純函式，大小由呼叫端注入）+ 4 個單元測試；
+    core `extract_media_files` 改用它（`fs::metadata` 取大小）
+  - 驗證：`cargo test -p shared -p core-service` 全過、clippy 對改動無警告；compose 展開確認兩服務都掛 /downloads:ro；
+    以生產 7 個資料夾的實際檔名跑 `match_batch_files`：6 個合集 42 集全部配對成功，劇場版 17 個影片中選中正片
+  - 部署後資料修復：`scripts/2026-10-16-requeue-file-matching.sql`（唯讀計數確認命中 43 列）
+  - 未處理：dev 環境的服務以 cargo 在 host 執行，qB 回報的 /downloads 路徑在 host 上不存在，同樣拿不到檔案清單（另案）
+  - [ ] 部署後確認：downloader 回報的 files 不再為空；43 筆依序 completed → synced；合集全部 synced 後 torrent 自動移除
 - [ ] 7. downloader_error 恢復（稽核 E3）
   - `apply_completed_files` 同時處理 `downloading` 與 `downloader_error`
   - 每次輪詢都做恢復檢查，不再只在「沒有 downloading」時才做
@@ -51,8 +58,7 @@
 | 對象 | 前提 | 動作 |
 |------|------|------|
 | ~~qB 已同步 torrent~~ | — | 2026-10-16 完成：項目 1 部署（core 以 93d073e 重建）後移除 132 個（94 missingFiles + 38 completed 但檔案已搬走），失敗 0，qB 查詢全部 not_found |
-| 42 筆 `batch_failed`（6 個合集） | 項目 6 部署 | 改回 `batch_unmatched`、`sync_retry_count=0`，讓排程重新配對 |
-| 421 魔法科劇場版（資料夾） | 項目 6 部署 | 改回 `completed` 並重新取得 `video_file`（或觸發一次完成處理） |
+| 42 筆 `batch_failed`（6 個合集）+ 421 魔法科劇場版 | 項目 6 部署 | 執行 `scripts/2026-10-16-requeue-file-matching.sql`：改回 `downloading`，讓輪詢以實際檔案清單重跑完成流程。注意：てんびん、暴走千金的集數媒體庫已有（來自單集下載），同步時會以同檔名覆蓋 |
 | 563–566（downloader_error，qB 已完成） | — | 重啟時被重試機制刪除，link 因衝突未重派，目前無 download 紀錄；qB 裡的 torrent 與檔案還在。解衝突後選中的 link 會重派，qB 已有該 torrent → 直接完成並同步 |
 | ~~555（downloading，qB not_found）~~ | — | 已自動處理：重啟時重派為 609，qB 這次成功加入 |
 | 559/560、576/579/581/582、563–566 | 使用者 | UI 上解決 6 筆衝突（1581/1583/1589/1591/1609/1628）；未選中且已下載的版本從 qB 移除並刪檔 |
