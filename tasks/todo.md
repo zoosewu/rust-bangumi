@@ -34,7 +34,10 @@
     以生產 7 個資料夾的實際檔名跑 `match_batch_files`：6 個合集 42 集全部配對成功，劇場版 17 個影片中選中正片
   - 部署後資料修復：`scripts/2026-10-16-requeue-file-matching.sql`（唯讀計數確認命中 43 列）
   - 未處理：dev 環境的服務以 cargo 在 host 執行，qB 回報的 /downloads 路徑在 host 上不存在，同樣拿不到檔案清單（另案）
-  - [ ] 部署後確認：downloader 回報的 files 不再為空；43 筆依序 completed → synced；合集全部 synced 後 torrent 自動移除
+  - [x] 部署後確認（2026-10-16 12:38–12:54 UTC）：downloader 回報實際檔案；43 筆中 41 筆 synced（含 421 劇場版選中正片）；
+    合集 torrent 在全部同步後自動移除（log 有 `Removed torrent … after sync`，第 1 項也一併確認）。
+    另外 2 筆（589、598）重現 E6 而落入 sync_failed，檔案實際已在媒體庫 → `scripts/2026-10-16-mark-synced-589-598.sql`
+  - 部署時 core 比 downloader 早 5 秒起來，觸發 E3（4 筆 downloader_error），註冊後自動恢復；教訓見 lessons.md
 - [ ] 7. downloader_error 恢復（稽核 E3）
   - `apply_completed_files` 同時處理 `downloading` 與 `downloader_error`
   - 每次輪詢都做恢復檢查，不再只在「沒有 downloading」時才做
@@ -44,7 +47,14 @@
   - core：`downloading` 持續 `not_found` 超過 N 分鐘 → `failed`，交給既有重試
 - [ ] 9. 派送前一律先偵測衝突（稽核 E5）
   - `pending_ai_results.rs:471`（rerun）與 `raw_items.rs:347`（單筆 reparse）漏了；收斂到共用函式 / `dispatch_new_links` 內
-- [ ] 10. viewer 同步冪等（稽核 E6）：來源不存在但目標已存在 → 回報 `synced`
+- [ ] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
+  - core：`failed` callback 不得覆蓋 `synced`（只在 `syncing` 時接受）；送出前先標 `syncing`，逾時不回退，交給 `recover_stale_syncing`
+  - core：輪詢迴圈送出前重新確認狀態（避免拿 callback 前讀出的舊清單重送）
+  - viewer：同一 download 已有 processing task 時不重做；來源不存在但目標已存在 → 回報 `synced`
+  - viewer：handler / `process_sync` 的阻塞呼叫（r2d2、`Path::exists`）移出 async worker（容器 1 CPU = 1 個 worker）
+- [ ] 12. webhook：一次觸發大量通知時 Discord 回 429，訊息遺失不重試 → 依 `retry_after` 重試或排隊送出
+- [ ] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
+  已外洩到 log 的 token 建議在 Discord 重新產生
 - [ ] 11. 取消時清除殘檔（稽核 E7）
   - 未完成的下載取消時 `deleteFiles=true`
   - 訂閱 purge 依各 download 的 `module_id` 送到正確的 downloader
@@ -63,6 +73,7 @@
 | ~~555（downloading，qB not_found）~~ | — | 已自動處理：重啟時重派為 609，qB 這次成功加入 |
 | 559/560、576/579/581/582、563–566 | 使用者 | UI 上解決 6 筆衝突（1581/1583/1589/1591/1609/1628）；未選中且已下載的版本從 qB 移除並刪檔 |
 | 506、508（sync_failed，實際已同步） | 無 | 改 `synced`、`file_path` 填媒體庫路徑，從 qB 移除 torrent |
+| 589、598（sync_failed，實際已同步，2026-10-16 重現 E6） | 無 | `scripts/2026-10-16-mark-synced-589-598.sql`（file_path 已是媒體庫路徑，torrent 已隨合集移除） |
 | 515（無 hash 的 completed） | 無 | 改 `cancelled`（S01E10 已在媒體庫） |
 | /downloads 孤兒檔 11 個（Mujikaku CR 02/03、推しの子 9 個） | 無 | 刪除 |
 | Jellyfin trickplay 唯讀失敗 | 使用者決定 | trickplay 改存 cache，或媒體庫改 rw |

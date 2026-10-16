@@ -13,7 +13,7 @@
 | E3 | `downloader_error` 的下載在 qB 已完成卻永遠不會恢復 | 程式 | 高 |
 | E4 | `downloading` 但 qB 找不到（`not_found`），永遠卡住 | 程式 | 中 |
 | E5 | 同集的多個版本都被下載，之後因為衝突旗標永遠不同步 | 程式 + 待使用者處理的衝突 | 中 |
-| E6 | 同步其實成功了，卻被記成 `sync_failed` | E1 + viewer 重試不具冪等性 | 中 |
+| E6 | 同步其實成功了，卻被記成 `sync_failed` | 程式（core 重複送同步 + 後到的失敗蓋掉成功 + viewer 不冪等） | 中 |
 | E7 | /downloads 裡的孤兒檔案 | 程式（取消時不刪檔） | 低 |
 | E8 | qB 留著 122 個已同步的 torrent（含 94 個 missingFiles） | 程式（第 1 項已修） | 低 |
 
@@ -229,8 +229,22 @@ select count(*) from anime_link_conflicts where resolution_status='unresolved';
 - viewer 的同步**不具冪等性**：來源檔不存在、但目標檔已經存在時，應該視為成功，結果卻回報失敗。
 - 506（Tenbin 09）也一樣：媒體庫已經有 `てんびん - S01E09.mkv`，mtime 是 09-01 17:48 +08，也就是 09:48 UTC，和 506 的建立時間一致。但 viewer 的 sync_tasks 141 把這次成功記在 **download 507** 名下；core 的 507 其實是暴走千金 09，並在 09:51 同步到另一個路徑。viewer 的資料列和實際同步內容對不上，也符合 E1 的資料錯亂。
 
+### 2026-10-16 實際重現（589、598）：根因確認
+
+第 6 項部署後重跑 43 筆合集同步，589（ブチ切れ令嬢 04）和 598（てんびん 08）以相同方式落入 `sync_failed`，log 完整，可以確認機制（E1 不是必要條件）：
+
+1. core `notify_viewer` 的 HTTP 逾時是 10 秒。viewer 同時在搬多個大檔（外接硬碟，跨裝置 copy），`/sync` 的 202 回應超過 10 秒才回來，有時連請求都還沒進到 handler。
+2. core 把逾時當成「沒送出」：狀態維持 `completed`，下一輪輪詢又送一次。589 在 12:39:51～12:53:50 間被送了 12 次（其中 9 次逾時），viewer 端同一筆 download 同時有多個處理中的請求。
+3. 第一個請求搬檔成功並回報 `synced`（12:47:04）；同一毫秒 core 的輪詢迴圈又拿舊的清單送了一次（`completed` 清單在 callback 前就讀出來了）。
+4. 後到的請求找不到來源檔（已被搬走）→ 回報 `failed`。`update_sync_status` 處理 `failed` 時**不檢查目前狀態**，把 `synced` 蓋回 `completed`，三次後變成 `sync_failed`。
+5. viewer 202 變慢的原因（推論，待驗證）：viewer 容器限制 1 CPU，tokio 只有 1 個 worker；`process_sync` 與 handler 裡有同步阻塞呼叫（r2d2 `db.get()`、`Path::exists()` 等 stat），外接硬碟在大量 copy 時 stat 也會卡，唯一的 worker 被阻塞，整個 HTTP server 就停住。
+
+508 在 09-01 的時間軸（成功 30 秒後又被觸發）和這次一致，應該是同一個機制，E1 只是讓 viewer 的紀錄更亂。
+
 ### 修正方向
 
+- core：callback 的 `failed` 不得覆蓋 `synced`（只在 `syncing` 時接受結果）；送出前就把狀態改成 `syncing`，逾時不回退成 `completed`，交給既有的 `recover_stale_syncing`（5 分鐘）處理；輪詢迴圈送出前重新確認狀態。
+- viewer：同一 download 已有處理中的 task 時直接回 202 不重做；阻塞呼叫移到 `spawn_blocking`（或改用 `tokio::fs::try_exists`）。
 - 程式：viewer 在 `organize_episode` 中，若來源不存在但目標已存在，回報 `synced`。
 - 環境：506 和 508 的 DB 狀態直接改成 `synced`，`file_path` 填媒體庫路徑，再從 qB 移除 torrent。
 
