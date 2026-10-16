@@ -62,7 +62,9 @@
     `No download progress for 24 hours (no reachable peers?)`，狀態維持 downloading，進度一動就清掉
   - 驗證：downloader 28 + 17 個測試、core 162 個測試全過；clippy 只有既有的 `map_torrent_state` 警告
   - 限制：`failed` 目前只在 downloader 重新註冊或手動重試時才會重派（沒有定時重試）
-  - [ ] 部署後確認：派送 log 出現 `Torrent submitted…` 後沒有 `never appeared`；正常下載的 updated_at 只在進度變化時更新
+  - 2026-10-16 17:37 UTC 部署（downloader 先、core 後）：core 沒有出現 downloader_error 或輪詢失敗；
+    第一輪輪詢只更新有進度的 622/623，621（停在 99.7%）的 updated_at 沒變 → `is_distinct_from` 條件在 PG 上如預期
+  - [ ] 待下一次派送確認：log 出現 `Torrent submitted…`，且沒有 `never appeared`
 - [ ] 9. 派送前一律先偵測衝突（稽核 E5）
   - `pending_ai_results.rs:471`（rerun）與 `raw_items.rs:347`（單筆 reparse）漏了；收斂到共用函式 / `dispatch_new_links` 內
 - [ ] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
