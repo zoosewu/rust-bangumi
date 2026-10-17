@@ -122,9 +122,11 @@
     讓待確認的規則在資料結構上無法存在。title_parsers 的 pending 機制不變（parser 的讀取原本就有排除）
   - 驗證：cargo test 全過、clippy 警告 131 → 130；本機 postgres:15 跑全部 migration，seed 一筆待確認與一筆已確認規則，
     up 後只剩已確認的，down → up 正常
-  - [ ] 資料：部署**前**先查被待確認規則誤過濾的 link（部署後資料列就被 migration 刪掉了），再決定如何重算 filtered_flag
-    （重算後變成未過濾的 link 會被派送，可能下載舊集數，需先看清單）
-  - [ ] 資料：檢查既有 global 規則中是否有因 `ON DELETE SET NULL` 變成永久的 AI 規則
+  - [x] 資料（2026-10-17 生產唯讀查詢）：目前 0 筆待確認 filter rule（filter 類 pending_ai_results 只有 2 筆 failed）、
+    0 筆 global 規則（只有 5 fetcher + 7 subscription）→ migration 不會刪到任何資料，也沒有變成永久的 AI 規則。
+    以 SQL 依相同適用範圍與 `should_include` 語意重算 427 筆 active link：204 筆已過濾全都應過濾、223 筆未過濾全都應納入
+    → **沒有被誤過濾的 link，不需修資料**
+  - [ ] 部署 core（啟動時跑 migration）；部署後確認 `\d filter_rules` 已無 `pending_result_id`
 - [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
 - [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
 
