@@ -126,7 +126,8 @@
     0 筆 global 規則（只有 5 fetcher + 7 subscription）→ migration 不會刪到任何資料，也沒有變成永久的 AI 規則。
     以 SQL 依相同適用範圍與 `should_include` 語意重算 427 筆 active link：204 筆已過濾全都應過濾、223 筆未過濾全都應納入
     → **沒有被誤過濾的 link，不需修資料**
-  - [ ] 部署 core（啟動時跑 migration）；部署後確認 `\d filter_rules` 已無 `pending_result_id`
+  - [x] 2026-10-17 14:51 (+08) 部署 core（94a6029）：migration `20261017000000droppendingfilterrules` 已套用，
+    `filter_rules` 已無 `pending_result_id`、規則數維持 12；core healthy、restarts=0，log 無錯誤
 - [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
 - [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
 
