@@ -136,7 +136,8 @@
     確認時訂閱層級沒給 target 就用 pending 的 subscription_id，都沒有則 400（filter 確認同樣適用）
   - [x] 資料：`scripts/2026-10-17-bind-parsers-to-subscriptions.sql`，依 pending 結果與實際解析紀錄對應 12 個 parser 的訂閱、
     停用沒有訂閱的 46；生產上以 ROLLBACK 試跑：更新 12 + 1 筆，兩個驗證查詢皆 0 列
-  - [ ] **先跑資料修復 SQL、再部署 core**（順序反了，未綁定的 parser 會失效）
+  - [x] 2026-10-17 先套用資料修復 SQL（UPDATE 12、UPDATE 1，兩個驗證皆 0 列），20:46 (+08) 再部署 core（6ddc608）：
+    healthy、restarts=0，log 無 ERROR / WARN；12 個 parser 已綁訂閱、46 已停用、60 仍待確認
   - [ ] 部署後觀察：新集數仍由原 parser 解析；確認新 parser 後 `title_parsers.created_from_id` 有值
 - [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
 
