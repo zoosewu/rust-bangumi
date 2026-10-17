@@ -5,16 +5,17 @@
 // 收到 403 能自動重登並重試成功；以及加入後確認 torrent 真的出現在 qBittorrent。
 
 use axum::{
-    extract::State,
+    extract::{Form, State},
     http::StatusCode,
     routing::{get, post},
     Router,
 };
 use downloader_qbittorrent::{DownloaderClient, QBittorrentClient};
 use shared::DownloadRequestItem;
+use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicBool, AtomicU32, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::time::Duration;
 
@@ -25,6 +26,8 @@ struct MockQbState {
     /// 是否真的把加入的 torrent 放進清單（模擬 qB 抓 .torrent 失敗時為 false）
     registers_added: AtomicBool,
     added: AtomicBool,
+    /// 收到的 /torrents/delete 表單
+    delete_forms: Mutex<Vec<HashMap<String, String>>>,
 }
 
 async fn mock_login(State(state): State<Arc<MockQbState>>) -> (StatusCode, &'static str) {
@@ -41,6 +44,14 @@ async fn mock_add(State(state): State<Arc<MockQbState>>) -> (StatusCode, &'stati
     } else {
         (StatusCode::FORBIDDEN, "Forbidden")
     }
+}
+
+async fn mock_delete(
+    State(state): State<Arc<MockQbState>>,
+    Form(form): Form<HashMap<String, String>>,
+) -> StatusCode {
+    state.delete_forms.lock().unwrap().push(form);
+    StatusCode::OK
 }
 
 async fn mock_info(State(state): State<Arc<MockQbState>>) -> (StatusCode, String) {
@@ -70,12 +81,14 @@ async fn spawn_mock_qbittorrent_with(registers_added: bool) -> (String, Arc<Mock
         add_calls: AtomicU32::new(0),
         registers_added: AtomicBool::new(registers_added),
         added: AtomicBool::new(false),
+        delete_forms: Mutex::new(Vec::new()),
     });
 
     let app = Router::new()
         .route("/api/v2/auth/login", post(mock_login))
         .route("/api/v2/torrents/add", post(mock_add))
         .route("/api/v2/torrents/info", get(mock_info))
+        .route("/api/v2/torrents/delete", post(mock_delete))
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -190,4 +203,23 @@ async fn add_torrents_fails_when_torrent_never_appears() {
         "實際: {:?}",
         results[0].reason
     );
+}
+
+#[tokio::test]
+async fn cancel_torrents_removes_partial_files() {
+    let (base_url, state) = spawn_mock_qbittorrent().await;
+    let client = QBittorrentClient::new(base_url);
+    client.set_credentials("admin", "password").await;
+
+    let results = client
+        .cancel_torrents(vec![MAGNET_HASH.to_string()])
+        .await
+        .expect("cancel_torrents returns per-hash results");
+
+    assert_eq!(results[0].status, "cancelled");
+    let forms = state.delete_forms.lock().unwrap();
+    assert_eq!(forms.len(), 1);
+    assert_eq!(forms[0]["hashes"], MAGNET_HASH);
+    // 稽核 E7：取消後不能在 /downloads 留下沒下載完的檔案
+    assert_eq!(forms[0]["deleteFiles"], "true");
 }

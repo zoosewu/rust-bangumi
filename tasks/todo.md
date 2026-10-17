@@ -95,9 +95,17 @@
 - [ ] 12. webhook：一次觸發大量通知時 Discord 回 429，訊息遺失不重試 → 依 `retry_after` 重試或排隊送出
 - [ ] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
   已外洩到 log 的 token 建議在 Discord 重新產生
-- [ ] 11. 取消時清除殘檔（稽核 E7）
+- [x] 11. 取消時清除殘檔（稽核 E7）
   - 未完成的下載取消時 `deleteFiles=true`
   - 訂閱 purge 依各 download 的 `module_id` 送到正確的 downloader
+  - 實作：downloader 的 `cancel_torrents` 改成連檔案一起刪（qB `deleteFiles=true`、PikPak `delete_files=true`）；
+    core 新增 `DownloadCancelService::remove_torrents`，取消與 purge 共用：依 `module_id` 分送，
+    且**同一個 torrent 若還有範圍外、仍需要它的下載（狀態不是 cancelled/failed/synced，例如合集的其他集）就保留**。
+    這同時修掉一個既有 bug：過濾掉合集中的一集會把整個合集 torrent 從 qB 移除
+  - 取消範圍從 `downloading` 擴大到 `downloader_error`（同樣有 torrent 在 downloader 裡）
+  - 沒有 `module_id` 的舊資料不再送給「優先度最高的 downloader」，直接略過
+  - 驗證：新增 qB mock 測試確認 `deleteFiles=true`（先看到失敗再修）、4 個分組／保留規則單元測試；cargo test 全過、clippy 警告數不變
+  - [ ] 部署後觀察：下次過濾器或 purge 觸發取消時，/downloads 不再留下殘檔；合集只過濾一集時 torrent 仍在 qB
 - [ ] 2. AI 生成改為全域排隊（一次一個）+ 限流自動重試
 - [ ] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
 - [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）

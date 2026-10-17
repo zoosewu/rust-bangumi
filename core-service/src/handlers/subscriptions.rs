@@ -870,43 +870,18 @@ async fn delete_subscription_purge(
             }
         }
 
-        // Step 4: Best-effort notify downloader to cancel torrents
-        let torrent_hashes: Vec<String> = download_records
+        // Step 4: Best-effort removal of torrents and their files, each from the
+        // downloader that holds it (torrents shared with other subscriptions are kept)
+        let torrents: Vec<crate::services::download_cancel::TorrentRef> = download_records
             .iter()
-            .filter_map(|d| d.torrent_hash.clone())
+            .map(|d| (d.download_id, d.module_id, d.torrent_hash.clone()))
             .collect();
-
-        if !torrent_hashes.is_empty() {
-            // Find downloader module
-            let downloader = service_modules::table
-                .filter(service_modules::is_enabled.eq(true))
-                .filter(service_modules::module_type.eq(ModuleTypeEnum::Downloader))
-                .order(service_modules::priority.desc())
-                .first::<ServiceModule>(&mut conn)
-                .optional();
-
-            if let Ok(Some(dl)) = downloader {
-                let cancel_url = format!("{}/downloads/cancel", dl.base_url);
-                let cancel_req = shared::BatchCancelRequest {
-                    hashes: torrent_hashes,
-                };
-                let client = reqwest::Client::new();
-                match client
-                    .post(&cancel_url)
-                    .json(&cancel_req)
-                    .timeout(std::time::Duration::from_secs(10))
-                    .send()
-                    .await
-                {
-                    Ok(_) => tracing::info!(
-                        "Downloader cancel request sent for subscription {}",
-                        subscription_id
-                    ),
-                    Err(e) => {
-                        tracing::warn!("Best-effort downloader cancel failed (continuing): {}", e)
-                    }
-                }
-            }
+        if let Err(e) = state
+            .cancel_service
+            .remove_torrents(&mut conn, &torrents)
+            .await
+        {
+            tracing::warn!("Best-effort downloader cancel failed (continuing): {}", e);
         }
 
         // Step 5a: Nullify anime_link_conflicts.chosen_link_id references

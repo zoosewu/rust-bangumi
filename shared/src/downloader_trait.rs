@@ -14,6 +14,8 @@ pub trait DownloaderClient: Send + Sync {
         items: Vec<DownloadRequestItem>,
     ) -> impl std::future::Future<Output = Result<Vec<DownloadResultItem>>> + Send;
 
+    /// Stop and remove these torrents together with their downloaded files.
+    /// Core only cancels torrents no other download still needs.
     fn cancel_torrents(
         &self,
         hashes: Vec<String>,

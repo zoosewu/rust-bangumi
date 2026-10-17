@@ -341,7 +341,8 @@ impl DownloaderClient for QBittorrentClient {
                 .send_with_relogin(|| {
                     self.client
                         .post(format!("{}/api/v2/torrents/delete", self.base_url))
-                        .form(&[("hashes", hash.as_str()), ("deleteFiles", "false")])
+                        // Cancelled downloads are unfinished; nothing will use their files
+                        .form(&[("hashes", hash.as_str()), ("deleteFiles", "true")])
                 })
                 .await;
 

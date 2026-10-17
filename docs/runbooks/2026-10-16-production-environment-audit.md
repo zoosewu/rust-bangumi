@@ -281,6 +281,9 @@ viewer 對處理中的 download 不重做、來源已搬走但目標存在時回
 - 程式：取消時，還沒完成的下載用 `deleteFiles=true`，因為不會有其他人需要這些殘檔。purge 要依照每筆 download 的 `module_id` 送到正確的 downloader。
 - 環境：刪除上面 11 個檔案。
 
+**程式修正（2026-10-17，todo 第 11 項）**：取消改為連檔案一起刪除，取消與 purge 都依 `module_id` 送到持有該 torrent 的 downloader；
+仍被其他下載需要的合集 torrent 會保留。既有的 11 個殘檔仍需手動刪除。
+
 ---
 
 ## E8：qB 保留已同步的 torrent（第 1 項已修）

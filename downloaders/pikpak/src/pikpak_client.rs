@@ -250,7 +250,7 @@ impl DownloaderClient for PikPakClient {
             match self.db.get(&hash) {
                 Ok(Some(rec)) => {
                     if let Some(task_id) = &rec.task_id {
-                        let _ = self.api.delete_tasks(&[task_id.as_str()], false).await;
+                        let _ = self.api.delete_tasks(&[task_id.as_str()], true).await;
                     }
                     if let Err(e) = self.db.update_status(&hash, "cancelled", rec.progress) {
                         tracing::error!("Failed to update cancel status for hash={hash}: {e}");
