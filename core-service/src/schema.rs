@@ -174,7 +174,6 @@ diesel::table! {
         is_positive -> Bool,
         target_type -> FilterTargetType,
         target_id -> Nullable<Int4>,
-        pending_result_id -> Nullable<Int4>,
     }
 }
 
@@ -372,7 +371,6 @@ diesel::joinable!(animes -> seasons (season_id));
 diesel::joinable!(downloader_capabilities -> service_modules (module_id));
 diesel::joinable!(downloads -> anime_links (link_id));
 diesel::joinable!(downloads -> service_modules (module_id));
-diesel::joinable!(filter_rules -> pending_ai_results (pending_result_id));
 diesel::joinable!(pending_ai_results -> raw_anime_items (raw_item_id));
 diesel::joinable!(pending_ai_results -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> subscriptions (subscription_id));

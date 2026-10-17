@@ -113,7 +113,18 @@
   - 驗證：新增 qB mock 測試確認 `deleteFiles=true`（先看到失敗再修）、4 個分組／保留規則單元測試；cargo test 全過、clippy 警告數不變
   - [ ] 部署後觀察：下次過濾器或 purge 觸發取消時，/downloads 不再留下殘檔；合集只過濾一集時 torrent 仍在 qB
 - [ ] 2. AI 生成改為全域排隊（一次一個）+ 限流自動重試
-- [ ] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
+- [x] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
+  - 根因：AI 產生的 filter 在確認前就以 `target_type='global'` 寫進 filter_rules，只靠 `pending_result_id` 標記；
+    套用規則的 `collect_all_rules_for_link`（新 link 的 filtered_flag、所有 recalc）與 raw item 顯示都沒排除它 →
+    確認前就對**所有**連結生效。另外該欄位 FK 是 `ON DELETE SET NULL`：pending 被刪而規則沒先刪時，會變成永久 global 規則
+  - 實作：確認流程本來就從 `generated_data` 重建規則，這些資料列沒有用處 → 不再寫入；
+    migration `2026-10-17-000000-drop-pending-filter-rules` 刪除既有資料列並移除 `filter_rules.pending_result_id` 欄位，
+    讓待確認的規則在資料結構上無法存在。title_parsers 的 pending 機制不變（parser 的讀取原本就有排除）
+  - 驗證：cargo test 全過、clippy 警告 131 → 130；本機 postgres:15 跑全部 migration，seed 一筆待確認與一筆已確認規則，
+    up 後只剩已確認的，down → up 正常
+  - [ ] 資料：部署**前**先查被待確認規則誤過濾的 link（部署後資料列就被 migration 刪掉了），再決定如何重算 filtered_flag
+    （重算後變成未過濾的 link 會被派送，可能下載舊集數，需先看清單）
+  - [ ] 資料：檢查既有 global 規則中是否有因 `ON DELETE SET NULL` 變成永久的 AI 規則
 - [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
 - [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
 

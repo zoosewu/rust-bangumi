@@ -441,7 +441,6 @@ pub fn create_filter_rule(
         updated_at: now,
         target_type,
         target_id,
-        pending_result_id: None,
     };
 
     diesel::insert_into(filter_rules::table)

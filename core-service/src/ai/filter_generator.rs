@@ -7,10 +7,8 @@ use super::client::AiError;
 use super::prompts::*;
 use crate::ai::{build_ai_chain, AttemptRecord};
 use crate::db::DbPool;
-use crate::models::{
-    AiPromptSettings, FilterTargetType, NewFilterRule, NewPendingAiResult, PendingAiResult,
-};
-use crate::schema::{ai_prompt_settings, filter_rules, pending_ai_results};
+use crate::models::{AiPromptSettings, NewPendingAiResult, PendingAiResult};
+use crate::schema::{ai_prompt_settings, pending_ai_results};
 
 pub async fn generate_filter_for_conflict(
     pool: Arc<DbPool>,
@@ -137,7 +135,6 @@ pub async fn generate_filter_for_conflict(
                             }
                         }
                     }
-                    create_unconfirmed_filter_rules(&pool, &data, pending_id).await?;
                     update_filter_pending_success(&pool, pending_id, data).await
                 }
                 Err(e) => {
@@ -162,41 +159,6 @@ pub async fn generate_filter_for_conflict(
         }
         Err(e) => update_filter_pending_failed(&pool, pending_id, &e.to_string()).await,
     }
-}
-
-async fn create_unconfirmed_filter_rules(
-    pool: &Arc<DbPool>,
-    data: &Value,
-    pending_id: i32,
-) -> Result<(), String> {
-    let now = Utc::now().naive_utc();
-    let mut conn = pool.get().map_err(|e| e.to_string())?;
-
-    let rules = data["rules"].as_array().unwrap();
-    for rule in rules {
-        let new_rule = NewFilterRule {
-            rule_order: rule.get("rule_order").and_then(|v| v.as_i64()).unwrap_or(1) as i32,
-            regex_pattern: rule
-                .get("regex_pattern")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            is_positive: rule
-                .get("is_positive")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
-            target_type: FilterTargetType::Global,
-            target_id: None,
-            created_at: now,
-            updated_at: now,
-            pending_result_id: Some(pending_id),
-        };
-        diesel::insert_into(filter_rules::table)
-            .values(&new_rule)
-            .execute(&mut conn)
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 async fn update_filter_pending_success(
@@ -391,11 +353,6 @@ pub async fn generate_filters_for_subscription_batch(
                     rule["regex_pattern"] = Value::String(fixed);
                 }
             }
-        }
-
-        if let Err(e) = create_unconfirmed_filter_rules(&pool, &data, pending_id).await {
-            let _ = update_filter_pending_failed(&pool, pending_id, &e).await;
-            break;
         }
 
         let _ = update_filter_pending_success(&pool, pending_id, data.clone()).await;

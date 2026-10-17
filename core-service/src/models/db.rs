@@ -310,7 +310,6 @@ pub struct FilterRule {
     pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
-    pub pending_result_id: Option<i32>,
 }
 
 #[derive(Insertable)]
@@ -323,7 +322,6 @@ pub struct NewFilterRule {
     pub is_positive: bool,
     pub target_type: FilterTargetType,
     pub target_id: Option<i32>,
-    pub pending_result_id: Option<i32>,
 }
 
 // ============ Downloads ============

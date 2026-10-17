@@ -171,11 +171,7 @@ pub async fn confirm_pending(
             });
         }
         "filter" => {
-            // 刪除舊的 filter_rules，改從 generated_data（使用者可能已編輯）重建
-            diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
-                .execute(&mut conn)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
+            // 從 generated_data（使用者可能已編輯）建立規則；確認前規則不存在於 filter_rules
             let rules_data = pending
                 .generated_data
                 .as_ref()
@@ -204,7 +200,6 @@ pub async fn confirm_pending(
                     target_id: req.target_id,
                     created_at: now,
                     updated_at: now,
-                    pending_result_id: None,
                 };
                 diesel::insert_into(filter_rules::table)
                     .values(&new_rule)
@@ -303,18 +298,11 @@ pub async fn reject_pending(
         .first::<PendingAiResult>(&mut conn)
         .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
 
-    match pending.result_type.as_str() {
-        "parser" => {
-            diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
-                .execute(&mut conn)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        }
-        "filter" => {
-            diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
-                .execute(&mut conn)
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        }
-        _ => {}
+    // 待確認的 filter 只存在 generated_data；parser 則已寫入 title_parsers，要一併刪除
+    if pending.result_type == "parser" {
+        diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
+            .execute(&mut conn)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
     diesel::delete(pending_ai_results::table.find(id))
@@ -347,21 +335,11 @@ pub async fn regenerate_pending(
             .first::<PendingAiResult>(&mut conn)
             .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
 
-        // 先刪除舊的 parser/filter
-        match p.result_type.as_str() {
-            "parser" => {
-                diesel::delete(
-                    title_parsers::table.filter(title_parsers::pending_result_id.eq(id)),
-                )
+        // 先刪除舊的 parser（待確認的 filter 只存在 generated_data）
+        if p.result_type == "parser" {
+            diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
                 .execute(&mut conn)
                 .ok();
-            }
-            "filter" => {
-                diesel::delete(filter_rules::table.filter(filter_rules::pending_result_id.eq(id)))
-                    .execute(&mut conn)
-                    .ok();
-            }
-            _ => {}
         }
 
         // 重設為 generating
