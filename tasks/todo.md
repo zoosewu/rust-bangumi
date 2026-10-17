@@ -77,11 +77,21 @@
     因衝突被略過（Skipped）不再被當成「沒有 viewer」而中斷整個重試迴圈
   - 驗證：cargo test 全過、clippy 警告數不變（131）
   - [ ] 部署後觀察：下一次 parser 確認 / 單筆 reparse 產生同集多版本時，log 先出現 `Conflict detected` 且不派送
-- [ ] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
+- [x] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
   - core：`failed` callback 不得覆蓋 `synced`（只在 `syncing` 時接受）；送出前先標 `syncing`，逾時不回退，交給 `recover_stale_syncing`
   - core：輪詢迴圈送出前重新確認狀態（避免拿 callback 前讀出的舊清單重送）
   - viewer：同一 download 已有 processing task 時不重做；來源不存在但目標已存在 → 回報 `synced`
   - viewer：handler / `process_sync` 的阻塞呼叫（r2d2、`Path::exists`）移出 async worker（容器 1 CPU = 1 個 worker）
+  - 實作（core）：`notify_viewer` 送出前用條件更新 `completed → syncing` 認領，認領失敗（狀態已變）就略過，
+    順帶解決輪詢用舊清單重送；逾時保留 `syncing` 交給 `recover_stale_syncing`，只有連線被拒或 viewer 回非 2xx 才退回 `completed`；
+    `failed` callback 只在 `syncing`/`resyncing` 時接受，更新也帶狀態條件
+  - 實作（viewer）：記憶體內 `InFlightSyncs`，同一 download 處理中時重複請求直接回 202；`/sync` handler 不再碰 DB，
+    sync_tasks 的寫入改用 `spawn_blocking`；`organize_episode` 來源不在但目標已在 → 回報成功；
+    file_organizer 的 `exists()` 全改 `tokio::fs::try_exists`
+  - 驗證：cargo test 全過（含 2 個新的 tempdir 測試：重複同步回報同一檔案、來源與目標都不在仍失敗）；clippy 警告數不變
+  - 未處理：`/resync`、`/delete` handler 仍在 async worker 上同步呼叫 `db.get()` / `exists()`（使用頻率低，之後再改）
+  - [ ] 部署後觀察：大量同步時 core log 不再出現 `Failed to notify viewer` 逾時後重送；viewer log 若出現
+    `already in progress, ignoring duplicate` 表示去重有作用；不再有新的 `sync_failed`
 - [ ] 12. webhook：一次觸發大量通知時 Discord 回 429，訊息遺失不重試 → 依 `retry_after` 重試或排隊送出
 - [ ] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
   已外洩到 log 的 token 建議在 Discord 重新產生

@@ -7,6 +7,12 @@ use tokio::fs;
 static EPISODE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)s(\d+)e(\d+)|\[(\d+)\]").unwrap());
 
+/// `Path::exists` without blocking the async worker: a stat on a busy external disk
+/// can take seconds, and the viewer runs on a single worker thread.
+async fn exists(path: &Path) -> bool {
+    fs::try_exists(path).await.unwrap_or(false)
+}
+
 #[derive(Clone, Debug)]
 pub struct FileOrganizer {
     source_dir: PathBuf,
@@ -32,15 +38,15 @@ impl FileOrganizer {
     /// - 正式環境：viewer 容器內 /downloads 已掛載，路徑直接可用
     /// - 開發環境：viewer 以 cargo run 執行，/downloads 不存在，
     ///   需對應到 DOWNLOADS_DIR（如 ./tmp/bangumi-downloads）
-    pub fn resolve_download_path(&self, file_path: &str) -> PathBuf {
+    pub async fn resolve_download_path(&self, file_path: &str) -> PathBuf {
         let path = Path::new(file_path);
-        if path.exists() {
+        if exists(path).await {
             return path.to_path_buf();
         }
         // 嘗試將 /downloads/... 前綴替換為 source_dir
         if let Ok(relative) = path.strip_prefix("/downloads") {
             let mapped = self.source_dir.join(relative);
-            if mapped.exists() {
+            if exists(&mapped).await {
                 return mapped;
             }
         }
@@ -55,20 +61,10 @@ impl FileOrganizer {
         episode: u32,
         source_file: &Path,
     ) -> anyhow::Result<PathBuf> {
-        // Validate source file exists
-        if !source_file.exists() {
-            return Err(anyhow::anyhow!(
-                "Source file does not exist: {}",
-                source_file.display()
-            ));
-        }
-
         let season_dir = self
             .library_dir
             .join(Self::sanitize_filename(anime_title))
             .join(format!("Season {:02}", season));
-
-        fs::create_dir_all(&season_dir).await?;
 
         let extension = source_file
             .extension()
@@ -84,6 +80,25 @@ impl FileOrganizer {
         );
 
         let target_path = season_dir.join(new_filename);
+
+        if !exists(source_file).await {
+            // A repeated sync of an episode already moved into the library: report the
+            // file that is there instead of failing (a failure would undo the first sync)
+            if exists(&target_path).await {
+                tracing::info!(
+                    "Already organized: {} (source {} is gone)",
+                    target_path.display(),
+                    source_file.display()
+                );
+                return Ok(target_path);
+            }
+            return Err(anyhow::anyhow!(
+                "Source file does not exist: {}",
+                source_file.display()
+            ));
+        }
+
+        fs::create_dir_all(&season_dir).await?;
 
         // Move the file (rename for same filesystem, fallback to copy+delete)
         if let Err(_) = fs::rename(source_file, &target_path).await {
@@ -108,7 +123,7 @@ impl FileOrganizer {
         new_season: u32,
         new_episode: u32,
     ) -> anyhow::Result<PathBuf> {
-        if !current_path.exists() {
+        if !exists(current_path).await {
             return Err(anyhow::anyhow!(
                 "Current file does not exist: {}",
                 current_path.display()
@@ -278,8 +293,8 @@ impl FileOrganizer {
         }
 
         for source_path in subtitle_paths {
-            let source = self.resolve_download_path(source_path);
-            if !source.exists() {
+            let source = self.resolve_download_path(source_path).await;
+            if !exists(&source).await {
                 tracing::warn!("Subtitle file not found: {}", source_path);
                 continue;
             }
@@ -442,5 +457,49 @@ mod tests {
         let name =
             FileOrganizer::build_subtitle_dest_name("Title", 1, 1, "/downloads/sub.XX.srt", &map);
         assert_eq!(name, "Title - S01E01.XX.srt");
+    }
+
+    fn organizer_in(root: &Path) -> FileOrganizer {
+        FileOrganizer::new(
+            root.join("downloads"),
+            root.join("library"),
+            shared::LanguageCodeMap::default(),
+        )
+    }
+
+    #[tokio::test]
+    async fn repeated_sync_reports_the_already_organized_file() {
+        let root = tempfile::tempdir().unwrap();
+        let organizer = organizer_in(root.path());
+        let source = root.path().join("downloads/[Group] Show - 03.mkv");
+        std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+        std::fs::write(&source, b"video").unwrap();
+
+        let first = organizer
+            .organize_episode("Show", 1, 3, &source)
+            .await
+            .unwrap();
+        assert!(!source.exists());
+
+        // E6: a duplicate request arrives after the first one moved the file
+        let second = organizer
+            .organize_episode("Show", 1, 3, &source)
+            .await
+            .unwrap();
+        assert_eq!(first, second);
+        assert_eq!(std::fs::read(&second).unwrap(), b"video");
+    }
+
+    #[tokio::test]
+    async fn missing_source_without_organized_file_still_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let organizer = organizer_in(root.path());
+        let source = root.path().join("downloads/[Group] Show - 04.mkv");
+
+        let err = organizer
+            .organize_episode("Show", 1, 4, &source)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("Source file does not exist"));
     }
 }

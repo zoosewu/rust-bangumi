@@ -9,8 +9,63 @@ use axum::{extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
 use serde::Serialize;
 use shared::ViewerSyncRequest;
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+/// Download ids whose sync is being processed.
+///
+/// Core may send the same sync again while the first one is still running (it timed
+/// out waiting for our 202, or recovered a long `syncing`). A second copy would find
+/// the source already moved and report a failure, so it is acknowledged and dropped.
+#[derive(Clone, Default)]
+pub struct InFlightSyncs(Arc<Mutex<HashSet<i32>>>);
+
+impl InFlightSyncs {
+    /// Marks `download_id` as in progress, or returns `None` if it already is.
+    /// The mark is cleared when the returned guard is dropped.
+    pub fn try_start(&self, download_id: i32) -> Option<InFlightGuard> {
+        let inserted = self
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(download_id);
+        inserted.then(|| InFlightGuard {
+            syncs: self.clone(),
+            download_id,
+        })
+    }
+}
+
+pub struct InFlightGuard {
+    syncs: InFlightSyncs,
+    download_id: i32,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        self.syncs
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.download_id);
+    }
+}
+
+/// Run a DB operation off the async worker: r2d2 `get` blocks while the pool is busy,
+/// and the viewer has a single worker thread that also has to answer HTTP requests.
+async fn with_conn<T, F>(db: &DbPool, f: F) -> anyhow::Result<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&mut diesel::PgConnection) -> QueryResult<T> + Send + 'static,
+{
+    let db = db.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut conn = db.get()?;
+        Ok(f(&mut conn)?)
+    })
+    .await?
+}
 
 #[derive(Debug, Serialize)]
 pub struct HealthResponse {
@@ -39,27 +94,21 @@ pub async fn sync(State(state): State<AppState>, Json(req): Json<ViewerSyncReque
         req.episode_no
     );
 
-    // Record sync task and get task_id
-    let task_id = if let Ok(mut conn) = state.db.get() {
-        let new_task = NewSyncTask {
-            download_id: req.download_id,
-            status: "processing".to_string(),
-        };
-        diesel::insert_into(sync_tasks::table)
-            .values(&new_task)
-            .returning(sync_tasks::task_id)
-            .get_result::<i32>(&mut conn)
-            .ok()
-    } else {
-        None
+    let Some(guard) = state.in_flight.try_start(req.download_id) else {
+        tracing::info!(
+            "Sync for download {} is already in progress, ignoring duplicate request",
+            req.download_id
+        );
+        return StatusCode::ACCEPTED;
     };
 
-    // Spawn async processing
+    // Answer right away; everything that touches the DB or the disk runs in the task
     let organizer = state.organizer.clone();
     let db = state.db.clone();
     let metadata = state.metadata.clone();
     tokio::spawn(async move {
-        process_sync(organizer, db, metadata, req, task_id).await;
+        process_sync(organizer, db, metadata, req).await;
+        drop(guard);
     });
 
     StatusCode::ACCEPTED
@@ -70,32 +119,40 @@ async fn process_sync(
     db: DbPool,
     metadata: Arc<MetadataClient>,
     req: ViewerSyncRequest,
-    task_id: Option<i32>,
 ) {
+    // Record sync task and get task_id
+    let new_task = NewSyncTask {
+        download_id: req.download_id,
+        status: "processing".to_string(),
+    };
+    let task_id = with_conn(&db, move |conn| {
+        diesel::insert_into(sync_tasks::table)
+            .values(&new_task)
+            .returning(sync_tasks::task_id)
+            .get_result::<i32>(conn)
+    })
+    .await
+    .ok();
+
     let result = do_sync(&organizer, &db, &metadata, &req).await;
 
     // Update sync_task record by task_id
-    if let (Some(tid), Ok(mut conn)) = (task_id, db.get()) {
+    if let Some(tid) = task_id {
         let now = chrono::Utc::now().naive_utc();
-        match &result {
-            Ok(target_path) => {
-                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
-                    .set((
-                        sync_tasks::status.eq("completed"),
-                        sync_tasks::target_path.eq(target_path),
-                        sync_tasks::completed_at.eq(Some(now)),
-                    ))
-                    .execute(&mut conn);
-            }
-            Err(_) => {
-                let _ = diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
-                    .set((
-                        sync_tasks::status.eq("failed"),
-                        sync_tasks::completed_at.eq(Some(now)),
-                    ))
-                    .execute(&mut conn);
-            }
-        }
+        let (status, target_path) = match &result {
+            Ok(target_path) => ("completed", Some(target_path.clone())),
+            Err(_) => ("failed", None),
+        };
+        let _ = with_conn(&db, move |conn| {
+            diesel::update(sync_tasks::table.filter(sync_tasks::task_id.eq(tid)))
+                .set((
+                    sync_tasks::status.eq(status),
+                    sync_tasks::target_path.eq(target_path),
+                    sync_tasks::completed_at.eq(Some(now)),
+                ))
+                .execute(conn)
+        })
+        .await;
     }
 
     // Callback to Core
@@ -144,7 +201,7 @@ async fn do_sync(
     req: &ViewerSyncRequest,
 ) -> anyhow::Result<String> {
     // 1. Move the file (resolve container path → local path)
-    let source = organizer.resolve_download_path(&req.video_path);
+    let source = organizer.resolve_download_path(&req.video_path).await;
     let target_path = organizer
         .organize_episode(
             &req.anime_title,
@@ -223,7 +280,7 @@ async fn fetch_and_generate_metadata(
     // Download poster from cover_image_url if provided and not already present
     if let Some(url) = cover_image_url {
         let poster_path = anime_dir.join("poster.jpg");
-        if !poster_path.exists() {
+        if !tokio::fs::try_exists(&poster_path).await.unwrap_or(false) {
             if let Err(e) = metadata.download_image(url, &poster_path).await {
                 tracing::warn!("Failed to download poster: {}", e);
             }

@@ -23,6 +23,7 @@ pub struct AppState {
     pub organizer: Arc<FileOrganizer>,
     pub db: db::DbPool,
     pub metadata: Arc<metadata_client::MetadataClient>,
+    pub in_flight: handlers::InFlightSyncs,
 }
 
 #[tokio::main]
@@ -99,6 +100,7 @@ async fn main() -> anyhow::Result<()> {
         organizer,
         db: db_pool,
         metadata,
+        in_flight: handlers::InFlightSyncs::default(),
     };
 
     tracing::info!("AppState initialized with DB pool and MetadataClient");

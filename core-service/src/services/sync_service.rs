@@ -31,6 +31,37 @@ pub enum SyncNotice {
     NoViewer,
 }
 
+/// Statuses in which a viewer is working on the download and its callback is expected.
+const SYNC_IN_FLIGHT_STATUSES: [&str; 2] = ["syncing", "resyncing"];
+
+/// A `failed` callback only counts while a sync is in flight. One that arrives later
+/// comes from a duplicate request whose source file the successful one already moved,
+/// and must not turn a `synced` download back into `completed`.
+fn accepts_failed_callback(current_status: &str) -> bool {
+    SYNC_IN_FLIGHT_STATUSES.contains(&current_status)
+}
+
+/// Undo `notify_viewer`'s claim when the viewer is known not to have taken the request.
+fn release_sync_claim(conn: &mut diesel::PgConnection, download_id: i32) {
+    let released = diesel::update(
+        downloads::table
+            .filter(downloads::download_id.eq(download_id))
+            .filter(downloads::status.eq("syncing")),
+    )
+    .set((
+        downloads::status.eq("completed"),
+        downloads::updated_at.eq(chrono::Utc::now().naive_utc()),
+    ))
+    .execute(conn);
+    if let Err(e) = released {
+        tracing::warn!(
+            "Failed to release sync claim for download {}: {}",
+            download_id,
+            e
+        );
+    }
+}
+
 pub struct SyncService {
     db_pool: DbPool,
     http_client: reqwest::Client,
@@ -105,6 +136,28 @@ impl SyncService {
         // Build the sync request by joining anime metadata
         let sync_request = self.build_sync_request(&mut conn, download)?;
 
+        // Claim the download before sending. The caller's list may be stale (a callback
+        // can land between reading it and getting here) and a slow viewer used to get the
+        // same sync several times; only the request that moves it out of `completed` is sent.
+        let claimed = diesel::update(
+            downloads::table
+                .filter(downloads::download_id.eq(download.download_id))
+                .filter(downloads::status.eq("completed")),
+        )
+        .set((
+            downloads::status.eq("syncing"),
+            downloads::updated_at.eq(chrono::Utc::now().naive_utc()),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to claim download for sync: {}", e))?;
+        if claimed == 0 {
+            tracing::info!(
+                "Skipping sync for download {} - no longer completed",
+                download.download_id
+            );
+            return Ok(SyncNotice::Skipped);
+        }
+
         let sync_url = format!("{}/sync", viewer.base_url);
         tracing::info!(
             "Notifying viewer {} for download {} at {}",
@@ -114,28 +167,27 @@ impl SyncService {
         );
 
         // Send the notification
-        let response = self
+        let response = match self
             .http_client
             .post(&sync_url)
             .json(&sync_request)
             .timeout(std::time::Duration::from_secs(10))
             .send()
             .await
-            .map_err(|e| format!("Failed to notify viewer: {}", e))?;
+        {
+            Ok(response) => response,
+            Err(e) => {
+                // A timeout does not mean the viewer missed it (a busy viewer answers late),
+                // so the claim stays and `recover_stale_syncing` re-queues it if no callback
+                // ever comes. Only a refused connection is known not to have arrived.
+                if e.is_connect() {
+                    release_sync_claim(&mut conn, download.download_id);
+                }
+                return Err(format!("Failed to notify viewer: {}", e));
+            }
+        };
 
         if response.status() == reqwest::StatusCode::ACCEPTED || response.status().is_success() {
-            // Update status to syncing
-            let now = chrono::Utc::now().naive_utc();
-            diesel::update(
-                downloads::table.filter(downloads::download_id.eq(download.download_id)),
-            )
-            .set((
-                downloads::status.eq("syncing"),
-                downloads::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to update download status: {}", e))?;
-
             // Fire webhooks fire-and-forget
             let webhook_ctx = WebhookContext {
                 download_id: sync_request.download_id,
@@ -153,6 +205,7 @@ impl SyncService {
 
             Ok(SyncNotice::Sent)
         } else {
+            release_sync_claim(&mut conn, download.download_id);
             Err(format!("Viewer returned status: {}", response.status()))
         }
     }
@@ -548,6 +601,16 @@ impl SyncService {
                     .first::<Download>(conn)
                     .map_err(|e| format!("Download not found: {}", e))?;
 
+                if !accepts_failed_callback(&download.status) {
+                    tracing::info!(
+                        "Ignoring failed sync callback for download {} in status {}: {}",
+                        download_id,
+                        download.status,
+                        error_message.unwrap_or("unknown")
+                    );
+                    return Ok(());
+                }
+
                 let new_retry_count = download.sync_retry_count + 1;
                 let new_status = if new_retry_count >= 3 {
                     "sync_failed"
@@ -555,15 +618,20 @@ impl SyncService {
                     "completed" // back to completed so scheduler will re-trigger
                 };
 
-                diesel::update(downloads::table.filter(downloads::download_id.eq(download_id)))
-                    .set((
-                        downloads::status.eq(new_status),
-                        downloads::sync_retry_count.eq(new_retry_count),
-                        downloads::error_message.eq(error_message),
-                        downloads::updated_at.eq(now),
-                    ))
-                    .execute(conn)
-                    .map_err(|e| format!("Failed to update download: {}", e))?;
+                // Re-check the status: a `synced` callback may have landed since the read
+                diesel::update(
+                    downloads::table
+                        .filter(downloads::download_id.eq(download_id))
+                        .filter(downloads::status.eq_any(SYNC_IN_FLIGHT_STATUSES)),
+                )
+                .set((
+                    downloads::status.eq(new_status),
+                    downloads::sync_retry_count.eq(new_retry_count),
+                    downloads::error_message.eq(error_message),
+                    downloads::updated_at.eq(now),
+                ))
+                .execute(conn)
+                .map_err(|e| format!("Failed to update download: {}", e))?;
 
                 tracing::warn!(
                     "Download {} sync failed (attempt {}/3): {}",
@@ -615,5 +683,19 @@ mod tests {
             "batch_failed",
             "sync_failed",
         ])));
+    }
+
+    #[test]
+    fn failed_callback_counts_only_while_sync_in_flight() {
+        assert!(accepts_failed_callback("syncing"));
+        assert!(accepts_failed_callback("resyncing"));
+    }
+
+    #[test]
+    fn late_failed_callback_cannot_undo_a_finished_sync() {
+        // E6: a duplicate request fails after the first one already synced the file
+        for status in ["synced", "completed", "sync_failed", "cancelled"] {
+            assert!(!accepts_failed_callback(status), "{status}");
+        }
     }
 }

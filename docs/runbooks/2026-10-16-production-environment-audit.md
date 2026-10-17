@@ -255,6 +255,10 @@ select count(*) from anime_link_conflicts where resolution_status='unresolved';
 - 程式：viewer 在 `organize_episode` 中，若來源不存在但目標已存在，回報 `synced`。
 - 環境：506 和 508 的 DB 狀態直接改成 `synced`，`file_path` 填媒體庫路徑，再從 qB 移除 torrent。
 
+**程式修正（2026-10-17，todo 第 10 項）**：core 送出前先認領成 `syncing`、逾時不回退、`failed` callback 只在同步進行中才接受；
+viewer 對處理中的 download 不重做、來源已搬走但目標存在時回報成功，`/sync` 的 DB 與 stat 呼叫移出 async worker。
+506/508 的資料仍需手動修復。
+
 ---
 
 ## E7：/downloads 裡的孤兒檔案
