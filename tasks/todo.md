@@ -92,9 +92,15 @@
   - 未處理：`/resync`、`/delete` handler 仍在 async worker 上同步呼叫 `db.get()` / `exists()`（使用頻率低，之後再改）
   - [ ] 部署後觀察：大量同步時 core log 不再出現 `Failed to notify viewer` 逾時後重送；viewer log 若出現
     `already in progress, ignoring duplicate` 表示去重有作用；不再有新的 `sync_failed`
-- [ ] 12. webhook：一次觸發大量通知時 Discord 回 429，訊息遺失不重試 → 依 `retry_after` 重試或排隊送出
-- [ ] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
+- [x] 12. webhook：一次觸發大量通知時 Discord 回 429，訊息遺失不重試 → 依 `retry_after` 重試或排隊送出
+  - 實作：每個 webhook 一條佇列（`tokio::sync::Mutex`），同一 webhook 一次只送一則；429 時依 body 的 `retry_after`
+    （其次 `Retry-After` header，預設 1 秒，上限 60 秒）等待後重試，最多 5 次，仍失敗記 error
+  - 驗證：mock webhook 測試（429 兩次後成功 → 共 3 次；一直 429 → 停在 5 次）與 `retry_wait` 解析測試
+  - [ ] 部署後觀察：下次一批同步完成時，Discord 通知數量與同步數一致；log 出現 `rate limited` 後接著 `fired`
+- [x] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
   已外洩到 log 的 token 建議在 Discord 重新產生
+  - 實作：log 只記 webhook id；送出失敗時的 reqwest 錯誤用 `without_url()`（錯誤訊息預設會帶 URL）
+  - [ ] 使用者：在 Discord 重新產生 webhook URL，並在 UI 更新（舊 token 仍在既有 log 裡）
 - [x] 11. 取消時清除殘檔（稽核 E7）
   - 未完成的下載取消時 `deleteFiles=true`
   - 訂閱 purge 依各 download 的 `module_id` 送到正確的 downloader
