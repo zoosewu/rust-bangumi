@@ -124,6 +124,10 @@
     - `PUT /ai-prompt-settings` 改為只更新有送出的欄位：順手修掉既有 bug——儲存 parser prompt 會把 filter prompt 清成 NULL（反之亦然）
   - 驗證：佇列 5 個測試、限流重試 5 個測試（tokio 暫停時間）、設定範圍 1 個；本機以暫存 DB 跑 core：migration 套用（預設 1）、
     分開儲存併行數與 parser prompt 後 filter prompt 仍保留、改 3 立即生效、11 回 400、down/up 可重跑；前端 tsc、47 個測試通過
+  - [x] 2026-10-17 23:23 (+08) 部署 core + frontend（551f369）：migration `20261017000001aimaxconcurrentrequests` 已套用，
+    log `AI 請求併行數：1`，core healthy、restarts=0；經前端代理讀到 `max_concurrent_requests: 1`
+  - 生產現況：`fixed_parser_prompt` 為 NULL、`fixed_filter_prompt` 為空字串（兩者都會用內建預設 prompt）、
+    `custom_parser_prompt` 為 NULL、`custom_filter_prompt` 有 223 字，最後更新 2026-03-13。符合舊 bug 的痕跡，但無法確認是否有自訂內容被清掉
   - [ ] 部署後觀察：log 出現 `All AI providers rate limited, retrying after wait` 後該筆最終成功；新的 failed 不再是限流
 - [x] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
   - 根因：AI 產生的 filter 在確認前就以 `target_type='global'` 寫進 filter_rules，只靠 `pending_result_id` 標記；
