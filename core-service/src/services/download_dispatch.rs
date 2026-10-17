@@ -4,6 +4,7 @@ use crate::schema::{
     anime_links, downloader_capabilities, downloads, raw_anime_items, service_modules,
     subscriptions,
 };
+use crate::services::ConflictDetectionService;
 use chrono::Utc;
 use diesel::prelude::*;
 use shared::{BatchDownloadRequest, BatchDownloadResponse, DownloadRequestItem};
@@ -18,6 +19,14 @@ pub const RETRYABLE_STATUSES: &[&str] = &["failed", "no_downloader", "downloader
 /// changes can create a new download later, but it is not manually retryable.
 pub const DISPATCH_TERMINAL_STATUSES: &[&str] =
     &["cancelled", "failed", "no_downloader", "downloader_error"];
+
+/// Union of two link id lists, sorted and without duplicates.
+fn merge_link_ids(mut link_ids: Vec<i32>, more: Vec<i32>) -> Vec<i32> {
+    link_ids.extend(more);
+    link_ids.sort_unstable();
+    link_ids.dedup();
+    link_ids
+}
 
 /// Group a slice of links by URL, preserving insertion order.
 /// Each unique URL maps to all links sharing that URL.
@@ -444,6 +453,26 @@ impl DownloadDispatchService {
         })
     }
 
+    /// Dispatch links that were just created or became eligible again.
+    ///
+    /// Every such path must come through here: conflict detection has to flag
+    /// competing versions of an episode *before* dispatch, otherwise all of them
+    /// get downloaded and then never sync. Links freed by conflicts that resolved
+    /// themselves are dispatched too. If detection fails nothing is dispatched,
+    /// since the conflict flags can no longer be trusted.
+    pub async fn detect_conflicts_and_dispatch(
+        &self,
+        conflict_detection: &ConflictDetectionService,
+        link_ids: Vec<i32>,
+    ) -> Result<DispatchResult, String> {
+        let detected = conflict_detection
+            .detect_and_mark_conflicts()
+            .await
+            .map_err(|e| format!("Conflict detection failed, nothing dispatched: {}", e))?;
+        self.dispatch_new_links(merge_link_ids(link_ids, detected.auto_dispatch_link_ids))
+            .await
+    }
+
     /// Retry dispatching links that have no_downloader status for given download types.
     /// Called when a new downloader registers.
     pub async fn retry_no_downloader_links(
@@ -689,7 +718,7 @@ impl DownloadDispatchService {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_fail_reason, group_links_by_url};
+    use super::{format_fail_reason, group_links_by_url, merge_link_ids};
     use crate::models::{AnimeLink, Download};
     use chrono::Utc;
 
@@ -840,5 +869,12 @@ mod tests {
             format_fail_reason("pikpak-downloader", None, "failed"),
             "pikpak-downloader: failed"
         );
+    }
+
+    #[test]
+    fn merge_link_ids_unions_without_duplicates() {
+        assert_eq!(merge_link_ids(vec![7, 3, 5], vec![5, 1]), vec![1, 3, 5, 7]);
+        assert_eq!(merge_link_ids(vec![], vec![2, 2]), vec![2]);
+        assert!(merge_link_ids(vec![], vec![]).is_empty());
     }
 }

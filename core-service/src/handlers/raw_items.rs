@@ -341,10 +341,14 @@ pub async fn reparse_item(
                     )
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-                    // 觸發 dispatch 下載
+                    // 先偵測衝突再派送下載
                     let dispatch_service = state.dispatch_service.clone();
+                    let conflict_detection = state.conflict_detection.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = dispatch_service.dispatch_new_links(link_ids).await {
+                        if let Err(e) = dispatch_service
+                            .detect_conflicts_and_dispatch(&conflict_detection, link_ids)
+                            .await
+                        {
                             tracing::warn!("reparse dispatch 失敗: {}", e);
                         }
                     });

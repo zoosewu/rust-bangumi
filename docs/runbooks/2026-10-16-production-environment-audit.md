@@ -205,6 +205,10 @@ select download_id, torrent_hash, updated_at from downloads where status='downlo
 - 環境：使用者解決這 6 筆衝突。選中的版本會被同步；沒選中的版本已經下載完成，要從 qB 移除並刪除檔案。
 - 長期：用過濾器設定繁體或簡體偏好，可以從源頭避免這類衝突。
 
+**程式修正（2026-10-17，todo 第 9 項）**：所有建立或重新啟用 link 的路徑都改走
+`DownloadDispatchService::detect_conflicts_and_dispatch`，先偵測衝突再派送；
+`retry_completed_downloads` 也不再因為遇到衝突中的下載就中斷整個重試。已經卡住的 6 筆衝突仍需要使用者處理。
+
 ### 如何檢查
 
 ```sql

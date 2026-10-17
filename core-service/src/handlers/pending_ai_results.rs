@@ -144,16 +144,29 @@ pub async fn confirm_pending(
                 .execute(&mut conn)
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-            // 觸發 re-run + conflict detection（背景非同步）
+            // 觸發 re-run + conflict detection + 派送（背景非同步）
             let pool_arc = Arc::new(pool.clone());
             let conflict_detection = state.conflict_detection.clone();
+            let dispatch_service = state.dispatch_service.clone();
             tokio::spawn(async move {
-                if let Err(e) = rerun_unmatched_raw_items(pool_arc).await {
-                    tracing::warn!("rerun_unmatched_raw_items 失敗: {}", e);
-                }
-                // 解析完成後重跑 conflict detection，觸發 AI filter 生成
-                if let Err(e) = conflict_detection.detect_and_mark_conflicts().await {
-                    tracing::warn!("conflict detection after parser confirm 失敗: {}", e);
+                let new_link_ids = rerun_unmatched_raw_items(pool_arc)
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::warn!("rerun_unmatched_raw_items 失敗: {}", e);
+                        vec![]
+                    });
+                // 解析完成後重跑 conflict detection（觸發 AI filter 生成），再派送新連結
+                match dispatch_service
+                    .detect_conflicts_and_dispatch(&conflict_detection, new_link_ids)
+                    .await
+                {
+                    Ok(r) => tracing::info!(
+                        "parser confirm 後派送：dispatched={}, no_downloader={}, failed={}",
+                        r.dispatched,
+                        r.no_downloader,
+                        r.failed
+                    ),
+                    Err(e) => tracing::warn!("parser confirm 後派送失敗: {}", e),
                 }
             });
         }
@@ -248,26 +261,15 @@ pub async fn confirm_pending(
                     }
                 }
 
-                let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
-                    Ok(result) => result.auto_dispatch_link_ids,
-                    Err(e) => {
-                        tracing::error!("conflict detection after filter confirm failed: {}", e);
-                        vec![]
-                    }
-                };
-
-                let mut to_dispatch = recalc.newly_unfiltered;
-                to_dispatch.extend(auto_dispatch_ids);
-                to_dispatch.sort_unstable();
-                to_dispatch.dedup();
-                if !to_dispatch.is_empty() {
-                    match dispatch_service.dispatch_new_links(to_dispatch).await {
-                        Ok(r) => tracing::info!(
-                            "Re-dispatched after filter confirm: {} dispatched, {} no_downloader, {} failed",
-                            r.dispatched, r.no_downloader, r.failed
-                        ),
-                        Err(e) => tracing::warn!("Failed to dispatch after filter confirm: {}", e),
-                    }
+                match dispatch_service
+                    .detect_conflicts_and_dispatch(&conflict_detection, recalc.newly_unfiltered)
+                    .await
+                {
+                    Ok(r) => tracing::info!(
+                        "Re-dispatched after filter confirm: {} dispatched, {} no_downloader, {} failed",
+                        r.dispatched, r.no_downloader, r.failed
+                    ),
+                    Err(e) => tracing::warn!("Failed to dispatch after filter confirm: {}", e),
                 }
             });
         }
@@ -404,8 +406,10 @@ pub async fn regenerate_pending(
     Ok(Json(result))
 }
 
-/// 重新解析所有未匹配的 raw_items：先用現有解析器 re-parse，仍失敗的按 subscription 觸發批次 AI 生成
-pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), String> {
+/// 重新解析所有未匹配的 raw_items：先用現有解析器 re-parse，仍失敗的按 subscription 觸發批次 AI 生成。
+/// 回傳新建立的 anime_link id；呼叫端要用 `detect_conflicts_and_dispatch` 派送，
+/// 不能直接派送，否則同一集的多個版本會在衝突標記之前全部被下載。
+pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i32>, String> {
     use crate::models::RawAnimeItem;
     use crate::schema::raw_anime_items;
     use crate::services::title_parser::{ParseStatus, TitleParserService};
@@ -465,22 +469,6 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
         }
     }
 
-    // 派送新建立的下載連結
-    if !new_link_ids.is_empty() {
-        let dispatch = crate::services::DownloadDispatchService::new(pool.as_ref().clone());
-        match dispatch.dispatch_new_links(new_link_ids).await {
-            Ok(result) => {
-                tracing::info!(
-                    "rerun 後派送：dispatched={}, no_downloader={}, failed={}",
-                    result.dispatched,
-                    result.no_downloader,
-                    result.failed
-                );
-            }
-            Err(e) => tracing::warn!("rerun 後派送失敗: {}", e),
-        }
-    }
-
     // 對每個仍有未匹配項目的訂閱，檢查是否已有進行中的批次 pending，若無則觸發
     for sub_id in still_unmatched_subs {
         let already_generating = {
@@ -510,5 +498,5 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<(), S
         }
     }
 
-    Ok(())
+    Ok(new_link_ids)
 }

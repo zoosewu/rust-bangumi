@@ -19,6 +19,6 @@ pub use download_scheduler::DownloadScheduler;
 pub use registry::ServiceRegistry;
 pub use reparse::ReparseStats;
 pub use scheduler::{CleanupScheduler, FetchScheduler};
-pub use sync_service::SyncService;
+pub use sync_service::{SyncNotice, SyncService};
 pub use title_parser::TitleParserService;
 pub use webhook_service::{WebhookContext, WebhookService};

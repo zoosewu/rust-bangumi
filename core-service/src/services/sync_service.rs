@@ -20,6 +20,17 @@ fn torrent_releasable(sibling_statuses: &[String]) -> bool {
         .any(|s| TORRENT_IN_USE_STATUSES.contains(&s.as_str()))
 }
 
+/// What `notify_viewer` did with a download.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncNotice {
+    /// The viewer accepted the sync request.
+    Sent,
+    /// The download must not be synced (its link is in conflict or not active).
+    Skipped,
+    /// No viewer is registered, so nothing can be synced right now.
+    NoViewer,
+}
+
 pub struct SyncService {
     db_pool: DbPool,
     http_client: reqwest::Client,
@@ -42,8 +53,8 @@ impl SyncService {
         }
     }
 
-    /// Notify viewer of a completed download. Returns Ok(true) if notification sent.
-    pub async fn notify_viewer(&self, download: &Download) -> Result<bool, String> {
+    /// Notify viewer of a completed download.
+    pub async fn notify_viewer(&self, download: &Download) -> Result<SyncNotice, String> {
         let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
 
         // Check if the associated anime_link is in conflict or resolved
@@ -58,7 +69,7 @@ impl SyncService {
                 download.download_id,
                 link.link_id
             );
-            return Ok(false);
+            return Ok(SyncNotice::Skipped);
         }
 
         if link.link_status != "active" {
@@ -68,7 +79,7 @@ impl SyncService {
                 link.link_id,
                 link.link_status
             );
-            return Ok(false);
+            return Ok(SyncNotice::Skipped);
         }
 
         // Find a viewer module
@@ -87,7 +98,7 @@ impl SyncService {
                     "No viewer module available for download {}",
                     download.download_id
                 );
-                return Ok(false);
+                return Ok(SyncNotice::NoViewer);
             }
         };
 
@@ -140,7 +151,7 @@ impl SyncService {
                 wh_service.fire(webhook_ctx).await;
             });
 
-            Ok(true)
+            Ok(SyncNotice::Sent)
         } else {
             Err(format!("Viewer returned status: {}", response.status()))
         }
@@ -225,8 +236,10 @@ impl SyncService {
         let mut synced = 0;
         for download in &completed {
             match self.notify_viewer(download).await {
-                Ok(true) => synced += 1,
-                Ok(false) => {
+                Ok(SyncNotice::Sent) => synced += 1,
+                // A conflicted download must not stop the others from syncing
+                Ok(SyncNotice::Skipped) => {}
+                Ok(SyncNotice::NoViewer) => {
                     tracing::warn!("No viewer available during retry, stopping");
                     break;
                 }

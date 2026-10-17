@@ -54,19 +54,12 @@ pub async fn create_anime_link(
     match state.repos.anime_link.create(new_link).await {
         Ok(link) => {
             // Trigger conflict detection
-            match state.conflict_detection.detect_and_mark_conflicts().await {
-                Ok(result) => {
-                    if !result.auto_dispatch_link_ids.is_empty() {
-                        if let Err(e) = state
-                            .dispatch_service
-                            .dispatch_new_links(result.auto_dispatch_link_ids)
-                            .await
-                        {
-                            tracing::warn!("Auto-dispatch after conflict detection failed: {}", e);
-                        }
-                    }
-                }
-                Err(e) => tracing::warn!("Conflict detection failed: {}", e),
+            if let Err(e) = state
+                .dispatch_service
+                .detect_conflicts_and_dispatch(&state.conflict_detection, vec![])
+                .await
+            {
+                tracing::warn!("Auto-dispatch after conflict detection failed: {}", e);
             }
 
             tracing::info!("Created anime link: {}", link.link_id);

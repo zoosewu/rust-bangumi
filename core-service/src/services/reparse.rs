@@ -276,32 +276,21 @@ pub async fn reparse_affected_items(
         }
     }
 
-    // 觸發衝突偵測
-    let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
-        Ok(result) => result.auto_dispatch_link_ids,
-        Err(e) => {
-            tracing::warn!("reparse_affected_items: conflict detection 失敗: {}", e);
-            vec![]
-        }
-    };
-
     // Dispatch: new links + updated links (may have become eligible) + auto-resolved conflict links
     // dispatch_new_links will automatically skip filtered/conflicted/already-downloading links
     let mut to_dispatch = new_link_ids;
     to_dispatch.extend(updated_link_ids);
-    to_dispatch.extend(auto_dispatch_ids);
-    to_dispatch.sort_unstable();
-    to_dispatch.dedup();
-    if !to_dispatch.is_empty() {
-        match dispatch_service.dispatch_new_links(to_dispatch).await {
-            Ok(r) => tracing::info!(
-                "reparse: dispatched {} links, {} no_downloader, {} failed",
-                r.dispatched,
-                r.no_downloader,
-                r.failed
-            ),
-            Err(e) => tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e),
-        }
+    match dispatch_service
+        .detect_conflicts_and_dispatch(&conflict_detection, to_dispatch)
+        .await
+    {
+        Ok(r) => tracing::info!(
+            "reparse: dispatched {} links, {} no_downloader, {} failed",
+            r.dispatched,
+            r.no_downloader,
+            r.failed
+        ),
+        Err(e) => tracing::warn!("reparse_affected_items: dispatch 失敗: {}", e),
     }
 
     // 觸發 resync（metadata 變更的已 synced downloads）

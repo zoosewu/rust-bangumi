@@ -132,28 +132,17 @@ pub async fn create_filter_rule(
                     }
                 }
 
-                // Re-run conflict detection; it may auto-resolve some conflicts
-                let auto_dispatch_ids = match conflict_detection.detect_and_mark_conflicts().await {
-                    Ok(result) => result.auto_dispatch_link_ids,
-                    Err(e) => {
-                        tracing::error!("conflict re-detection after filter create failed: {}", e);
-                        vec![]
-                    }
-                };
-
-                // Dispatch newly unfiltered links + auto-resolved conflict links
-                let mut to_dispatch = recalc.newly_unfiltered;
-                to_dispatch.extend(auto_dispatch_ids);
-                to_dispatch.sort_unstable();
-                to_dispatch.dedup();
-                if !to_dispatch.is_empty() {
-                    match dispatch_service.dispatch_new_links(to_dispatch).await {
-                        Ok(r) => tracing::info!(
-                            "Re-dispatched after filter create: {} dispatched, {} no_downloader, {} failed",
-                            r.dispatched, r.no_downloader, r.failed
-                        ),
-                        Err(e) => tracing::warn!("Failed to re-dispatch after filter create: {}", e),
-                    }
+                // Re-run conflict detection (it may auto-resolve some conflicts), then
+                // dispatch newly unfiltered links + auto-resolved conflict links
+                match dispatch_service
+                    .detect_conflicts_and_dispatch(&conflict_detection, recalc.newly_unfiltered)
+                    .await
+                {
+                    Ok(r) => tracing::info!(
+                        "Re-dispatched after filter create: {} dispatched, {} no_downloader, {} failed",
+                        r.dispatched, r.no_downloader, r.failed
+                    ),
+                    Err(e) => tracing::warn!("Failed to re-dispatch after filter create: {}", e),
                 }
             });
 
@@ -453,32 +442,20 @@ pub async fn delete_filter_rule(
                             }
                         }
 
-                        // Re-run conflict detection; it may auto-resolve some conflicts
-                        let auto_dispatch_ids =
-                            match conflict_detection.detect_and_mark_conflicts().await {
-                                Ok(result) => result.auto_dispatch_link_ids,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "conflict re-detection after filter delete failed: {}",
-                                        e
-                                    );
-                                    vec![]
-                                }
-                            };
-
-                        // Dispatch newly unfiltered links + auto-resolved conflict links
-                        let mut to_dispatch = recalc.newly_unfiltered;
-                        to_dispatch.extend(auto_dispatch_ids);
-                        to_dispatch.sort_unstable();
-                        to_dispatch.dedup();
-                        if !to_dispatch.is_empty() {
-                            match dispatch_service.dispatch_new_links(to_dispatch).await {
-                                Ok(r) => tracing::info!(
-                                    "Re-dispatched after filter delete: {} dispatched, {} no_downloader, {} failed",
-                                    r.dispatched, r.no_downloader, r.failed
-                                ),
-                                Err(e) => tracing::warn!("Failed to re-dispatch after filter delete: {}", e),
-                            }
+                        // Re-run conflict detection (it may auto-resolve some conflicts), then
+                        // dispatch newly unfiltered links + auto-resolved conflict links
+                        match dispatch_service
+                            .detect_conflicts_and_dispatch(
+                                &conflict_detection,
+                                recalc.newly_unfiltered,
+                            )
+                            .await
+                        {
+                            Ok(r) => tracing::info!(
+                                "Re-dispatched after filter delete: {} dispatched, {} no_downloader, {} failed",
+                                r.dispatched, r.no_downloader, r.failed
+                            ),
+                            Err(e) => tracing::warn!("Failed to re-dispatch after filter delete: {}", e),
                         }
                     });
                 }

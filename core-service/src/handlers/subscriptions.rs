@@ -1180,19 +1180,24 @@ pub async fn detect_conflicts_and_generate_filters(
     // 1. 先確保所有未解析的 raw items 都重新解析（避免 race condition：
     //    parser confirmation 的背景 rerun 可能尚未完成）
     let pool = Arc::new(state.db.clone());
-    if let Err(e) =
-        crate::handlers::pending_ai_results::rerun_unmatched_raw_items(pool.clone()).await
+    let new_link_ids = crate::handlers::pending_ai_results::rerun_unmatched_raw_items(pool.clone())
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(
+                "detect_conflicts_and_generate_filters: rerun_unmatched_raw_items 失敗: {}",
+                e
+            );
+            vec![]
+        });
+
+    // 2. 跑全局衝突偵測（標記衝突 flag），再派送 rerun 新建立的連結
+    if let Err(e) = state
+        .dispatch_service
+        .detect_conflicts_and_dispatch(&state.conflict_detection, new_link_ids)
+        .await
     {
         tracing::warn!(
-            "detect_conflicts_and_generate_filters: rerun_unmatched_raw_items 失敗: {}",
-            e
-        );
-    }
-
-    // 2. 跑全局衝突偵測（標記衝突 flag）
-    if let Err(e) = state.conflict_detection.detect_and_mark_conflicts().await {
-        tracing::warn!(
-            "detect_conflicts_and_generate_filters: conflict detection 失敗: {}",
+            "detect_conflicts_and_generate_filters: conflict detection / 派送失敗: {}",
             e
         );
     }

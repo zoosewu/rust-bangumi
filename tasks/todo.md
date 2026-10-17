@@ -65,8 +65,18 @@
   - 2026-10-16 17:37 UTC 部署（downloader 先、core 後）：core 沒有出現 downloader_error 或輪詢失敗；
     第一輪輪詢只更新有進度的 622/623，621（停在 99.7%）的 updated_at 沒變 → `is_distinct_from` 條件在 PG 上如預期
   - [ ] 待下一次派送確認：log 出現 `Torrent submitted…`，且沒有 `never appeared`
-- [ ] 9. 派送前一律先偵測衝突（稽核 E5）
+- [x] 9. 派送前一律先偵測衝突（稽核 E5）
   - `pending_ai_results.rs:471`（rerun）與 `raw_items.rs:347`（單筆 reparse）漏了；收斂到共用函式 / `dispatch_new_links` 內
+  - 實作：新增 `DownloadDispatchService::detect_conflicts_and_dispatch`（偵測 → 合併自動解除衝突的 link → 派送；
+    偵測失敗就不派送，因為衝突標記不可信）。建立／重新啟用 link 的 8 個路徑全部改走它
+    （fetcher_results ×2、links、filters ×2、pending_ai_results filter confirm、reparse service、單筆 reparse）
+  - `rerun_unmatched_raw_items` 改成回傳新 link id、不自己派送；兩個呼叫端（parser confirm、
+    subscription step 3）原本就在之後跑衝突偵測，現在改成偵測後才派送
+  - 不經過它的只剩：重派既有 link（retry_*、manual_retry，衝突已偵測過）與使用者解衝突後派送選中的 link
+  - 一併修正 `retry_completed_downloads`：`notify_viewer` 改回傳 `SyncNotice { Sent, Skipped, NoViewer }`，
+    因衝突被略過（Skipped）不再被當成「沒有 viewer」而中斷整個重試迴圈
+  - 驗證：cargo test 全過、clippy 警告數不變（131）
+  - [ ] 部署後觀察：下一次 parser 確認 / 單筆 reparse 產生同集多版本時，log 先出現 `Conflict detected` 且不派送
 - [ ] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
   - core：`failed` callback 不得覆蓋 `synced`（只在 `syncing` 時接受）；送出前先標 `syncing`，逾時不回退，交給 `recover_stale_syncing`
   - core：輪詢迴圈送出前重新確認狀態（避免拿 callback 前讀出的舊清單重送）

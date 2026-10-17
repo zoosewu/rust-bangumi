@@ -7,6 +7,7 @@ use tokio::time::interval;
 use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{anime_links, downloads, service_modules};
+use crate::services::SyncNotice;
 use shared::{
     build_default_chain, classify_files, collect_files_recursive, match_batch_files,
     pick_main_video, FileType, StatusQueryResponse,
@@ -393,12 +394,10 @@ impl DownloadScheduler {
 
         for download in completed {
             match self.sync_service.notify_viewer(&download).await {
-                Ok(true) => {
+                Ok(SyncNotice::Sent) => {
                     tracing::info!("Triggered sync for download {}", download.download_id);
                 }
-                Ok(false) => {
-                    // No viewer available, skip
-                }
+                Ok(SyncNotice::Skipped | SyncNotice::NoViewer) => {}
                 Err(e) => {
                     tracing::error!(
                         "Failed to trigger sync for download {}: {}",
