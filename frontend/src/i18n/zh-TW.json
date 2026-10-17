@@ -349,6 +349,11 @@
       "testSuccess": "連線成功",
       "testFailure": "連線失敗: {{error}}"
     },
+    "aiConcurrency": {
+      "title": "AI 請求併行數",
+      "description": "同時送出的 AI 生成請求數量。provider 每分鐘 token 額度較小時建議設為 1；遇到限流會依 provider 指定的時間等待後自動重試。",
+      "label": "同時送出"
+    },
     "parserPrompt": {
       "title": "Parser Prompt 設定",
       "description": "AI 生成解析器時使用的 Prompt",

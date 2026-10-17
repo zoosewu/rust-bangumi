@@ -112,7 +112,19 @@
   - 沒有 `module_id` 的舊資料不再送給「優先度最高的 downloader」，直接略過
   - 驗證：新增 qB mock 測試確認 `deleteFiles=true`（先看到失敗再修）、4 個分組／保留規則單元測試；cargo test 全過、clippy 警告數不變
   - [ ] 部署後觀察：下次過濾器或 purge 觸發取消時，/downloads 不再留下殘檔；合集只過濾一集時 torrent 仍在 qB
-- [ ] 2. AI 生成改為全域排隊（一次一個）+ 限流自動重試
+- [x] 2. AI 生成改為全域排隊（併行數可在設定頁調整，預設 1）+ 限流自動重試
+  - 根因：生產 55 筆 parser / filter 生成有 47 筆失敗，幾乎全是 Groq TPM 限流（每分鐘 8000 token，每次請求 3–4k）；
+    2026-10-15 12:48–12:49 一分鐘內同時送出 16 筆。錯誤訊息裡有「Please try again in 30.9s」，但程式沒有等待重試
+  - 實作：
+    - `ai/queue.rs` 全域佇列（可調上限；調高立即放行，調低不打斷執行中的請求），所有 AI 呼叫在 `AiProviderChain::run` 排隊
+    - 新增 `AiError::RateLimited`（rate_limit_exceeded JSON 或 HTTP 429，等待秒數取訊息或 Retry-After header）；
+      所有 provider 都限流時佔著名額等 provider 指定的秒數 +1s（未指定 30s、上限 120s）後重試，最多 5 次
+    - 最終仍限流時錯誤訊息以 `[rate_limit_exceeded:N]` 開頭，前端原本的倒數顯示終於對得上（以前前綴被包在 `provider unavailable: ...` 後面）
+    - migration `ai_prompt_settings.max_concurrent_requests`（1–10，預設 1）；啟動時套用；設定頁新增「AI 請求併行數」下拉選單
+    - `PUT /ai-prompt-settings` 改為只更新有送出的欄位：順手修掉既有 bug——儲存 parser prompt 會把 filter prompt 清成 NULL（反之亦然）
+  - 驗證：佇列 5 個測試、限流重試 5 個測試（tokio 暫停時間）、設定範圍 1 個；本機以暫存 DB 跑 core：migration 套用（預設 1）、
+    分開儲存併行數與 parser prompt 後 filter prompt 仍保留、改 3 立即生效、11 回 400、down/up 可重跑；前端 tsc、47 個測試通過
+  - [ ] 部署後觀察：log 出現 `All AI providers rate limited, retrying after wait` 後該筆最終成功；新的 failed 不再是限流
 - [x] 3. 待確認（pending_result_id 非空）的 filter rule 一律不套用
   - 根因：AI 產生的 filter 在確認前就以 `target_type='global'` 寫進 filter_rules，只靠 `pending_result_id` 標記；
     套用規則的 `collect_all_rules_for_link`（新 link 的 filtered_flag、所有 recalc）與 raw item 顯示都沒排除它 →

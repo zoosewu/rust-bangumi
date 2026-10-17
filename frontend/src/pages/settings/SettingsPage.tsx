@@ -19,6 +19,13 @@ import {
   CardDescription,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Loader2, RotateCcw, Plus, Pencil, Trash2, X, Check } from "lucide-react"
 import { toast } from "sonner"
 import type { ServiceModule } from "@/schemas/service-module"
@@ -52,6 +59,8 @@ export default function SettingsPage() {
       <DownloaderPrioritySection />
       <Separator />
       <AiProvidersSection />
+      <Separator />
+      <AiConcurrencySection />
       <Separator />
       <ParserPromptSection />
       <Separator />
@@ -138,6 +147,68 @@ function DownloaderPrioritySection() {
   )
 }
 
+
+const MAX_AI_CONCURRENCY = 10
+
+function AiConcurrencySection() {
+  const { t } = useTranslation()
+  const { data: settings, refetch } = useEffectQuery(
+    () => Effect.flatMap(CoreApi, (api) => api.getAiPromptSettings),
+    [],
+  )
+  const [value, setValue] = useState<number | null>(null)
+
+  const { mutate: save, isLoading: saving } = useEffectMutation(
+    (n: number) =>
+      Effect.flatMap(CoreApi, (api) =>
+        api.updateAiPromptSettings({ max_concurrent_requests: n }),
+      ),
+  )
+
+  const current = value ?? settings?.max_concurrent_requests ?? 1
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("settings.aiConcurrency.title")}</CardTitle>
+        <CardDescription>{t("settings.aiConcurrency.description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center gap-3">
+        <Label>{t("settings.aiConcurrency.label")}</Label>
+        <Select
+          value={String(current)}
+          onValueChange={(v) => {
+            const n = Number(v)
+            setValue(n)
+            save(n).then(
+              () => {
+                toast.success(t("settings.saved"))
+                refetch()
+              },
+              () => {
+                setValue(null)
+                toast.error(t("common.error"))
+              },
+            )
+          }}
+          disabled={!settings || saving}
+        >
+          <SelectTrigger className="w-24">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: MAX_AI_CONCURRENCY }, (_, i) => i + 1).map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {saving && <Loader2 className="size-4 animate-spin" />}
+      </CardContent>
+    </Card>
+  )
+}
 
 function ParserPromptSection() {
   const { t } = useTranslation()

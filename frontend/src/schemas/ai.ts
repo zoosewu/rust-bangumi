@@ -52,6 +52,7 @@ export interface AiPromptSettings {
   fixed_filter_prompt: string | null
   custom_parser_prompt: string | null
   custom_filter_prompt: string | null
+  max_concurrent_requests: number
   created_at: string
   updated_at: string
 }

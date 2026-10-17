@@ -3761,12 +3761,18 @@ components:
         custom_filter_prompt:
           type: string
           nullable: true
+        max_concurrent_requests:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: 同時送出的 AI 請求數（全域佇列），預設 1
         updated_at:
           type: string
           format: date-time
 
     UpdateAiPromptSettingsRequest:
       type: object
+      description: 只更新有送出的欄位，未送出的欄位維持原值
       properties:
         fixed_parser_prompt:
           type: string
@@ -3780,6 +3786,10 @@ components:
         custom_filter_prompt:
           type: string
           nullable: true
+        max_concurrent_requests:
+          type: integer
+          minimum: 1
+          maximum: 10
 
     # ============ PendingAiResults ============
     PendingAiResult:

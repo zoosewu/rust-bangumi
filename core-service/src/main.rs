@@ -49,6 +49,10 @@ async fn main() -> anyhow::Result<()> {
         Ok(_) => tracing::info!("數據庫遷移完成"),
         Err(e) => tracing::warn!("數據庫遷移失敗: {}", e),
     }
+    match pool.get() {
+        Ok(mut conn) => handlers::ai_settings::apply_saved_concurrency(&mut conn),
+        Err(e) => tracing::warn!("無法取得連線以載入 AI 請求併行數: {}", e),
+    }
 
     // 初始化應用狀態
     let registry = services::ServiceRegistry::new();

@@ -5,6 +5,23 @@ use serde_json::Value;
 
 use super::client::{AiClient, AiError};
 use super::factory::build_provider;
+use super::queue::ai_queue;
+use std::time::Duration;
+
+/// 所有 provider 都限流時最多重試幾次
+const MAX_RATE_LIMIT_RETRIES: u32 = 5;
+/// provider 沒說要等多久時的等待時間
+const DEFAULT_RATE_LIMIT_WAIT: Duration = Duration::from_secs(30);
+/// 單次等待上限
+const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(120);
+
+/// 限流後的等待時間：provider 指定的秒數多等 1 秒，未指定則用預設值，最多 `MAX_RATE_LIMIT_WAIT`。
+fn rate_limit_wait(retry_after_secs: Option<u32>) -> Duration {
+    retry_after_secs
+        .map(|secs| Duration::from_secs(u64::from(secs) + 1))
+        .unwrap_or(DEFAULT_RATE_LIMIT_WAIT)
+        .min(MAX_RATE_LIMIT_WAIT)
+}
 
 pub struct ChainEntry {
     pub id: i32,
@@ -34,6 +51,9 @@ impl AiProviderChain {
         self.entries.len()
     }
 
+    /// 排進全域 AI 佇列後依序嘗試各 provider。所有 provider 都限流時，佔著佇列名額
+    /// 等 provider 指定的時間再重試（最多 `MAX_RATE_LIMIT_RETRIES` 次）：放掉名額
+    /// 只會讓其他請求也撞上同一個額度。
     async fn run<'a, F, Fut>(
         &'a self,
         op: F,
@@ -45,10 +65,50 @@ impl AiProviderChain {
         if self.entries.is_empty() {
             return Err((AiError::NotConfigured, vec![]));
         }
+        let _permit = ai_queue().acquire().await;
         let mut attempts: Vec<AttemptRecord> = Vec::new();
+        let mut retries = 0;
+        loop {
+            match self.try_providers(&op, &mut attempts).await {
+                Ok(resp) => return Ok((resp, attempts)),
+                Err(AiError::RateLimited {
+                    retry_after_secs, ..
+                }) if retries < MAX_RATE_LIMIT_RETRIES => {
+                    retries += 1;
+                    let wait = rate_limit_wait(retry_after_secs);
+                    tracing::warn!(
+                        retry = retries,
+                        wait_secs = wait.as_secs(),
+                        "All AI providers rate limited, retrying after wait"
+                    );
+                    tokio::time::sleep(wait).await;
+                }
+                Err(e) => return Err((e, attempts)),
+            }
+        }
+    }
+
+    /// 依序嘗試各 provider 一輪。全部失敗時：都是限流 → 回傳 `RateLimited`
+    /// （等待時間取最短的那個）；否則回傳 `ProviderUnavailable`。
+    async fn try_providers<'a, F, Fut>(
+        &'a self,
+        op: &F,
+        attempts: &mut Vec<AttemptRecord>,
+    ) -> Result<String, AiError>
+    where
+        F: Fn(&'a dyn AiClient) -> Fut,
+        Fut: std::future::Future<Output = Result<String, AiError>>,
+    {
+        let mut rate_limits: Vec<Option<u32>> = Vec::new();
+        let mut last: Option<AiError> = None;
         for entry in &self.entries {
+            let record = |e: &AiError| AttemptRecord {
+                provider_id: entry.id,
+                provider_name: entry.name.clone(),
+                error: e.to_string(),
+            };
             match op(entry.client.as_ref()).await {
-                Ok(resp) if !resp.trim().is_empty() => return Ok((resp, attempts)),
+                Ok(resp) if !resp.trim().is_empty() => return Ok(resp),
                 Ok(_) => {
                     let e = AiError::ProviderUnavailable("empty response".into());
                     tracing::warn!(
@@ -57,11 +117,8 @@ impl AiProviderChain {
                         error = %e,
                         "AI provider returned empty response, falling back"
                     );
-                    attempts.push(AttemptRecord {
-                        provider_id: entry.id,
-                        provider_name: entry.name.clone(),
-                        error: e.to_string(),
-                    });
+                    attempts.push(record(&e));
+                    last = Some(e);
                 }
                 Err(e) if e.is_retryable() => {
                     tracing::warn!(
@@ -70,27 +127,35 @@ impl AiProviderChain {
                         error = %e,
                         "AI provider failed, falling back"
                     );
-                    attempts.push(AttemptRecord {
-                        provider_id: entry.id,
-                        provider_name: entry.name.clone(),
-                        error: e.to_string(),
-                    });
+                    attempts.push(record(&e));
+                    if let AiError::RateLimited {
+                        retry_after_secs, ..
+                    } = &e
+                    {
+                        rate_limits.push(*retry_after_secs);
+                    }
+                    last = Some(e);
                 }
                 Err(e) => {
-                    attempts.push(AttemptRecord {
-                        provider_id: entry.id,
-                        provider_name: entry.name.clone(),
-                        error: e.to_string(),
-                    });
-                    return Err((e, attempts));
+                    attempts.push(record(&e));
+                    return Err(e);
                 }
             }
         }
-        let last = attempts.last().map(|a| a.error.clone()).unwrap_or_default();
-        Err((
-            AiError::ProviderUnavailable(format!("all providers failed: {last}")),
-            attempts,
-        ))
+        match last {
+            Some(AiError::RateLimited { message, .. })
+                if rate_limits.len() == self.entries.len() =>
+            {
+                Err(AiError::RateLimited {
+                    retry_after_secs: rate_limits.into_iter().flatten().min(),
+                    message,
+                })
+            }
+            _ => Err(AiError::ProviderUnavailable(format!(
+                "all providers failed: {}",
+                last.map(|e| e.to_string()).unwrap_or_default()
+            ))),
+        }
     }
 
     pub async fn chat_completion(
@@ -265,5 +330,72 @@ mod tests {
         assert!(matches!(err, AiError::ApiError(_)));
         assert_eq!(attempts.len(), 1);
         assert_eq!(attempts[0].provider_name, "a");
+    }
+
+    fn rate_limited(secs: Option<u32>) -> Result<String, AiError> {
+        Err(AiError::RateLimited {
+            retry_after_secs: secs,
+            message: "TPM".into(),
+        })
+    }
+
+    #[test]
+    fn rate_limit_wait_follows_the_provider_with_a_margin() {
+        assert_eq!(rate_limit_wait(Some(31)), Duration::from_secs(32));
+        assert_eq!(rate_limit_wait(None), DEFAULT_RATE_LIMIT_WAIT);
+        assert_eq!(rate_limit_wait(Some(600)), MAX_RATE_LIMIT_WAIT);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn rate_limited_request_is_retried_after_the_wait() {
+        let chain = AiProviderChain::new(vec![entry(
+            1,
+            "a",
+            vec![rate_limited(Some(31)), Ok("ok".into())],
+        )]);
+        let started = tokio::time::Instant::now();
+        let (resp, attempts) = chain.chat_completion("s", "u").await.unwrap();
+        assert_eq!(resp, "ok");
+        assert_eq!(attempts.len(), 1);
+        assert!(started.elapsed() >= Duration::from_secs(32));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn waits_for_the_provider_that_frees_up_first() {
+        let chain = AiProviderChain::new(vec![
+            entry(1, "a", vec![rate_limited(Some(50)), Ok("a".into())]),
+            entry(2, "b", vec![rate_limited(Some(10))]),
+        ]);
+        let started = tokio::time::Instant::now();
+        let (resp, _) = chain.chat_completion("s", "u").await.unwrap();
+        assert_eq!(resp, "a");
+        assert!(started.elapsed() < Duration::from_secs(50));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn gives_up_after_the_retry_limit() {
+        let results = (0..=MAX_RATE_LIMIT_RETRIES)
+            .map(|_| rate_limited(Some(1)))
+            .chain([Ok("too late".into())])
+            .collect();
+        let chain = AiProviderChain::new(vec![entry(1, "a", results)]);
+        let (err, attempts) = unwrap_err_chain(chain.chat_completion("s", "u").await);
+        assert!(err.to_string().starts_with("[rate_limit_exceeded:1]"));
+        assert_eq!(attempts.len(), MAX_RATE_LIMIT_RETRIES as usize + 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn other_failures_are_not_retried() {
+        let chain = AiProviderChain::new(vec![
+            entry(1, "a", vec![rate_limited(Some(5)), Ok("never".into())]),
+            entry(
+                2,
+                "b",
+                vec![Err(AiError::ProviderUnavailable("503".into()))],
+            ),
+        ]);
+        let (err, attempts) = unwrap_err_chain(chain.chat_completion("s", "u").await);
+        assert!(matches!(err, AiError::ProviderUnavailable(_)));
+        assert_eq!(attempts.len(), 2);
     }
 }

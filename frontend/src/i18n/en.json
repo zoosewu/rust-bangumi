@@ -349,6 +349,11 @@
       "testSuccess": "Connection successful",
       "testFailure": "Connection failed: {{error}}"
     },
+    "aiConcurrency": {
+      "title": "AI request concurrency",
+      "description": "How many AI generation requests are sent at once. Keep it at 1 if your provider has a small tokens-per-minute quota; rate-limited requests are retried automatically after the wait the provider asks for.",
+      "label": "At once"
+    },
     "parserPrompt": {
       "title": "Parser Prompt Settings",
       "description": "Prompt used when AI generates parsers",

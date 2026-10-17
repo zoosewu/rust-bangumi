@@ -23,6 +23,7 @@ diesel::table! {
         custom_filter_prompt -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        max_concurrent_requests -> Int4,
     }
 }
 

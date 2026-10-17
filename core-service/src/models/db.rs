@@ -750,6 +750,7 @@ pub struct AiPromptSettings {
     pub created_at: NaiveDateTime,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
+    pub max_concurrent_requests: i32,
 }
 
 // ============ PendingAiResult ============

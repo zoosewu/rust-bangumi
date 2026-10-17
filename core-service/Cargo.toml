@@ -41,4 +41,5 @@ utoipa.workspace = true
 utoipa-axum.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 mockall.workspace = true

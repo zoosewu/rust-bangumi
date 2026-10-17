@@ -19,13 +19,21 @@ pub enum AiError {
     /// Provider 正常回應但內容問題（4xx auth / bad request 等）。不 fallback。
     #[error("provider error: {0}")]
     ApiError(String),
+
+    /// Provider 限流（HTTP 429）。可 fallback；所有 provider 都限流時，chain 會等
+    /// `retry_after_secs` 後重試。訊息前綴 `[rate_limit_exceeded:N]` 供前端顯示倒數。
+    #[error("[rate_limit_exceeded{}] {message}", retry_after_secs.map(|s| format!(":{s}")).unwrap_or_default())]
+    RateLimited {
+        retry_after_secs: Option<u32>,
+        message: String,
+    },
 }
 
 impl AiError {
     /// 是否應該 fallback 到下一個 provider
     pub fn is_retryable(&self) -> bool {
         match self {
-            AiError::ProviderUnavailable(_) => true,
+            AiError::ProviderUnavailable(_) | AiError::RateLimited { .. } => true,
             AiError::Http(e) => e.is_timeout() || e.is_connect() || e.is_request(),
             _ => false,
         }
@@ -57,6 +65,16 @@ mod tests {
     #[test]
     fn provider_unavailable_is_retryable() {
         assert!(AiError::ProviderUnavailable("503".into()).is_retryable());
+    }
+
+    #[test]
+    fn rate_limited_is_retryable_and_shows_the_wait() {
+        let e = AiError::RateLimited {
+            retry_after_secs: Some(31),
+            message: "TPM".into(),
+        };
+        assert!(e.is_retryable());
+        assert_eq!(e.to_string(), "[rate_limit_exceeded:31] TPM");
     }
 
     #[test]

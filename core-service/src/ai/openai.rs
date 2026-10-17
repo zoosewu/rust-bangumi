@@ -67,6 +67,12 @@ impl OpenAiClient {
 
         if !resp.status().is_success() {
             let status = resp.status();
+            let retry_after_header = resp
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.trim().parse::<f64>().ok())
+                .map(|secs| secs.ceil() as u32);
             let text = resp.text().await.unwrap_or_default();
 
             // 偵測 OpenAI 風格 rate limit JSON
@@ -78,18 +84,23 @@ impl OpenAiClient {
                         .pointer("/error/message")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Rate limit exceeded");
-                    let retry_secs = extract_retry_after_secs(msg);
-                    let prefix = match retry_secs {
-                        Some(s) => format!("[rate_limit_exceeded:{}]", s),
-                        None => "[rate_limit_exceeded]".to_string(),
-                    };
-                    return Err(AiError::ProviderUnavailable(format!("{} {}", prefix, msg)));
+                    return Err(AiError::RateLimited {
+                        retry_after_secs: extract_retry_after_secs(msg).or(retry_after_header),
+                        message: msg.to_string(),
+                    });
                 }
             }
 
-            // HTTP 狀態碼分類：5xx 與 429 → ProviderUnavailable（可 fallback）
+            if status.as_u16() == 429 {
+                return Err(AiError::RateLimited {
+                    retry_after_secs: retry_after_header,
+                    message: format!("HTTP {}: {}", status, text),
+                });
+            }
+
+            // HTTP 狀態碼分類：5xx → ProviderUnavailable（可 fallback）
             // 4xx 其餘（400/401/403/404 等）→ ApiError（不 fallback）
-            return if status.is_server_error() || status.as_u16() == 429 {
+            return if status.is_server_error() {
                 Err(AiError::ProviderUnavailable(format!(
                     "HTTP {}: {}",
                     status, text

@@ -349,6 +349,11 @@
       "testSuccess": "接続成功",
       "testFailure": "接続失敗: {{error}}"
     },
+    "aiConcurrency": {
+      "title": "AI リクエスト同時実行数",
+      "description": "同時に送信する AI 生成リクエストの数です。プロバイダーの 1 分あたりのトークン上限が小さい場合は 1 を推奨します。レート制限時はプロバイダー指定の時間待ってから自動で再試行します。",
+      "label": "同時送信数"
+    },
     "parserPrompt": {
       "title": "Parser Prompt設定",
       "description": "AIがパーサーを生成する際に使用するプロンプト",
