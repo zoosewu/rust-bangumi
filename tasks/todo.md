@@ -155,7 +155,14 @@
   - [x] 2026-10-17 先套用資料修復 SQL（UPDATE 12、UPDATE 1，兩個驗證皆 0 列），20:46 (+08) 再部署 core（6ddc608）：
     healthy、restarts=0，log 無 ERROR / WARN；12 個 parser 已綁訂閱、46 已停用、60 仍待確認
   - [ ] 部署後觀察：新集數仍由原 parser 解析；確認新 parser 後 `title_parsers.created_from_id` 有值
-- [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
+- [ ] 5. 作品身分 / metadata（計畫：`docs/superpowers/plans/2026-10-18-metadata-identity-v2.md`，spec 已於 2026-10-18 修訂）
+  - 2026-10-18 重新實測：媒體庫 18 個資料夾 0 NFO / 0 海報；core 每次同步都送 `bangumi_id: None`；viewer 不會寫 `tvshow.nfo`；
+    animes 簡介 / 日期全空；4 個訂閱被拆成兩個作品，其中 3 部的兩組 1–12 集逐位元組相同（重複約 19 GB）
+  - 使用者決定（2026-10-18）：名稱中文即可、各季統一（沿 bgm 前傳鏈取第一季中文名，手動可覆寫，不用 AI）；季數由 parser 決定；
+    沒有 bgm id 沿用現行做法 + log（不做待認領佇列）；重複集數保留合集版；合集集數都已下載則自動略過；殘骸作品看報表後 soft delete
+  - [ ] 階段 A：身分（A1–A10）
+  - [ ] 階段 B：Viewer 輸出（B1–B4）
+  - [ ] 階段 C：媒體庫整理（C1–C3）
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 

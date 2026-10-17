@@ -1,3 +1,5 @@
+> **已被 `2026-10-18-metadata-identity-v2.md` 取代**（2026-10-18）。本檔僅保留作程式碼片段參考，行號與範圍已過時。
+
 # 作品身分確定性化 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
