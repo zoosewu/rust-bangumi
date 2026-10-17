@@ -107,6 +107,24 @@ pub struct ConfirmRequest {
     pub target_id: Option<i32>,
 }
 
+/// The scope a confirmed result is bound to. A subscription-level confirmation without a
+/// target falls back to the subscription the result was generated for, so it never
+/// produces a subscription-scoped parser or rule bound to no subscription.
+fn confirm_target(
+    req: &ConfirmRequest,
+    pending_subscription_id: Option<i32>,
+) -> Result<(FilterTargetType, Option<i32>), String> {
+    match req.level.as_str() {
+        "subscription" => req
+            .target_id
+            .or(pending_subscription_id)
+            .map(|id| (FilterTargetType::Subscription, Some(id)))
+            .ok_or_else(|| "subscription level requires target_id".to_string()),
+        "anime_work" => Ok((FilterTargetType::AnimeWork, req.target_id)),
+        _ => Ok((FilterTargetType::Global, None)),
+    }
+}
+
 // POST /pending-ai-results/:id/confirm
 pub async fn confirm_pending(
     State(state): State<AppState>,
@@ -126,11 +144,8 @@ pub async fn confirm_pending(
         .first::<PendingAiResult>(&mut conn)
         .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
 
-    let target_type = match req.level.as_str() {
-        "subscription" => FilterTargetType::Subscription,
-        "anime_work" => FilterTargetType::AnimeWork,
-        _ => FilterTargetType::Global,
-    };
+    let (target_type, target_id) =
+        confirm_target(&req, pending.subscription_id).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     match pending.result_type.as_str() {
         "parser" => {
@@ -138,7 +153,7 @@ pub async fn confirm_pending(
                 .set((
                     title_parsers::pending_result_id.eq(None::<i32>),
                     title_parsers::created_from_type.eq(Some(target_type)),
-                    title_parsers::created_from_id.eq(req.target_id),
+                    title_parsers::created_from_id.eq(target_id),
                     title_parsers::updated_at.eq(now),
                 ))
                 .execute(&mut conn)
@@ -197,7 +212,7 @@ pub async fn confirm_pending(
                         .and_then(|v| v.as_bool())
                         .unwrap_or(true),
                     target_type,
-                    target_id: req.target_id,
+                    target_id,
                     created_at: now,
                     updated_at: now,
                 };
@@ -212,7 +227,6 @@ pub async fn confirm_pending(
             let conflict_detection = state.conflict_detection.clone();
             let cancel_service = state.cancel_service.clone();
             let dispatch_service = state.dispatch_service.clone();
-            let target_id = req.target_id;
             tokio::spawn(async move {
                 let recalc = if let Ok(mut conn) = db.get() {
                     match crate::services::filter_recalc::recalculate_filtered_flags(
@@ -412,7 +426,7 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
     let mut still_unmatched_subs: HashSet<i32> = HashSet::new();
     for item in &items {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
-        match TitleParserService::parse_title(&mut conn, &item.title) {
+        match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
                 match crate::handlers::fetcher_results::process_parsed_result(
                     &mut conn, item, &parsed,
@@ -477,4 +491,41 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
     }
 
     Ok(new_link_ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(level: &str, target_id: Option<i32>) -> ConfirmRequest {
+        ConfirmRequest {
+            level: level.to_string(),
+            target_id,
+        }
+    }
+
+    #[test]
+    fn subscription_confirm_without_target_binds_the_source_subscription() {
+        assert_eq!(
+            confirm_target(&req("subscription", None), Some(27)).unwrap(),
+            (FilterTargetType::Subscription, Some(27))
+        );
+        assert_eq!(
+            confirm_target(&req("subscription", Some(8)), Some(27)).unwrap(),
+            (FilterTargetType::Subscription, Some(8))
+        );
+    }
+
+    #[test]
+    fn subscription_confirm_with_no_subscription_is_rejected() {
+        assert!(confirm_target(&req("subscription", None), None).is_err());
+    }
+
+    #[test]
+    fn global_confirm_has_no_target() {
+        assert_eq!(
+            confirm_target(&req("global", Some(3)), Some(27)).unwrap(),
+            (FilterTargetType::Global, None)
+        );
+    }
 }

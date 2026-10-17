@@ -51,22 +51,33 @@ impl ParseStatus {
 pub struct TitleParserService;
 
 impl TitleParserService {
-    /// 取得所有已啟用且已確認（非 pending）的解析器（按 priority 降序）
-    pub fn get_enabled_parsers(conn: &mut PgConnection) -> Result<Vec<TitleParser>, String> {
+    /// 取得適用於此訂閱、已啟用且已確認（非 pending）的解析器（按 priority 降序）：
+    /// 全域解析器加上綁定此訂閱的解析器
+    pub fn get_enabled_parsers(
+        conn: &mut PgConnection,
+        subscription_id: i32,
+    ) -> Result<Vec<TitleParser>, String> {
         title_parsers::table
             .filter(title_parsers::is_enabled.eq(true))
             .filter(title_parsers::pending_result_id.is_null())
             .order(title_parsers::priority.desc())
             .load::<TitleParser>(conn)
+            .map(|parsers| {
+                parsers
+                    .into_iter()
+                    .filter(|p| p.applies_to_subscription(subscription_id))
+                    .collect()
+            })
             .map_err(|e| format!("Failed to load title parsers: {}", e))
     }
 
-    /// 嘗試使用所有解析器解析標題
+    /// 嘗試使用此訂閱適用的解析器解析標題
     pub fn parse_title(
         conn: &mut PgConnection,
         title: &str,
+        subscription_id: i32,
     ) -> Result<Option<ParsedResult>, String> {
-        let parsers = Self::get_enabled_parsers(conn)?;
+        let parsers = Self::get_enabled_parsers(conn, subscription_id)?;
 
         for parser in parsers {
             if let Some(result) = Self::try_parser(&parser, title)? {
@@ -82,9 +93,10 @@ impl TitleParserService {
         conn: &mut PgConnection,
         pool: std::sync::Arc<crate::db::DbPool>,
         title: &str,
+        subscription_id: i32,
         raw_item_id: Option<i32>,
     ) -> Result<Option<ParsedResult>, String> {
-        let result = Self::parse_title(conn, title)?;
+        let result = Self::parse_title(conn, title, subscription_id)?;
 
         if result.is_none() {
             use crate::schema::pending_ai_results;
@@ -345,6 +357,27 @@ mod tests {
             created_from_id: None,
             pending_result_id: None,
         }
+    }
+
+    #[test]
+    fn subscription_parser_parses_only_its_own_subscription() {
+        let mut parser = make_parser(1, ".", "(.+) - (\\d+)");
+        parser.created_from_type = Some(crate::models::FilterTargetType::Subscription);
+        parser.created_from_id = Some(7);
+        assert!(parser.applies_to_subscription(7));
+        assert!(!parser.applies_to_subscription(8));
+
+        parser.created_from_id = None;
+        assert!(!parser.applies_to_subscription(7));
+    }
+
+    #[test]
+    fn unbound_parsers_are_global() {
+        let mut parser = make_parser(1, ".", "(.+) - (\\d+)");
+        assert!(parser.applies_to_subscription(7));
+
+        parser.created_from_type = Some(crate::models::FilterTargetType::Global);
+        assert!(parser.applies_to_subscription(7));
     }
 
     fn make_batch_parser() -> TitleParser {

@@ -519,7 +519,11 @@ pub async fn receive_raw_fetcher_results(
                 };
 
                 // 嘗試解析標題
-                match TitleParserService::parse_title(&mut conn, &raw_item.title) {
+                match TitleParserService::parse_title(
+                    &mut conn,
+                    &raw_item.title,
+                    saved_item.subscription_id,
+                ) {
                     Ok(Some(parsed)) => {
                         // 解析成功，建立相關記錄
                         match process_parsed_result(&mut conn, &saved_item, &parsed) {

@@ -719,8 +719,8 @@ pub async fn preview_parser(
     // Process each item
     let mut results = Vec::new();
     for item in &items {
-        let before_match = find_matching_parser(&before_parsers, &item.title);
-        let after_match = find_matching_parser(&after_parsers, &item.title);
+        let before_match = find_matching_parser(&before_parsers, item);
+        let after_match = find_matching_parser(&after_parsers, item);
 
         let before_name = before_match.map(|p| p.name.clone());
 
@@ -790,14 +790,19 @@ pub async fn preview_parser(
     }))
 }
 
-/// Find the first parser that matches a title (parsers must be pre-sorted by priority desc)
-fn find_matching_parser<'a>(parsers: &[&'a TitleParser], title: &str) -> Option<&'a TitleParser> {
-    for parser in parsers {
-        if let Ok(Some(_)) = TitleParserService::try_parser(parser, title) {
-            return Some(parser);
-        }
-    }
-    None
+/// Find the first parser that applies to the item's subscription and matches its title
+/// (parsers must be pre-sorted by priority desc)
+fn find_matching_parser<'a>(
+    parsers: &[&'a TitleParser],
+    item: &RawAnimeItem,
+) -> Option<&'a TitleParser> {
+    parsers.iter().copied().find(|parser| {
+        parser.applies_to_subscription(item.subscription_id)
+            && matches!(
+                TitleParserService::try_parser(parser, &item.title),
+                Ok(Some(_))
+            )
+    })
 }
 
 /// Load raw_anime_items scoped by target_type/target_id.

@@ -590,6 +590,15 @@ pub struct TitleParser {
     pub pending_result_id: Option<i32>,
 }
 
+impl TitleParser {
+    /// A parser bound to a subscription parses only that subscription's items;
+    /// every other parser is global.
+    pub fn applies_to_subscription(&self, subscription_id: i32) -> bool {
+        self.created_from_type != Some(FilterTargetType::Subscription)
+            || self.created_from_id == Some(subscription_id)
+    }
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::title_parsers)]
 pub struct NewTitleParser {

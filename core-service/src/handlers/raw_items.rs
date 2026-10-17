@@ -328,7 +328,7 @@ pub async fn reparse_item(
         .first::<RawAnimeItem>(&mut conn)
         .map_err(|_| (StatusCode::NOT_FOUND, "Item not found".to_string()))?;
 
-    match TitleParserService::parse_title(&mut conn, &item.title) {
+    match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
         Ok(Some(parsed)) => {
             match super::fetcher_results::process_parsed_result(&mut conn, &item, &parsed) {
                 Ok(link_ids) => {

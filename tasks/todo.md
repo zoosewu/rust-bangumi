@@ -129,6 +129,15 @@
   - [x] 2026-10-17 14:51 (+08) 部署 core（94a6029）：migration `20261017000000droppendingfilterrules` 已套用，
     `filter_rules` 已無 `pending_result_id`、規則數維持 12；core healthy、restarts=0，log 無錯誤
 - [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
+  - 根因：parse 時載入所有已確認 parser、不看 `created_from_*`；而且待確認頁用訂閱層級確認時沒送 `target_id`，
+    13 個 parser 存成 `subscription` + `created_from_id=NULL`（22 號綁到已不存在的訂閱 14）
+  - [x] 程式：`TitleParser::applies_to_subscription`（綁訂閱的只解析該訂閱，其他都是全域）；`parse_title` 帶入
+    raw item 的 subscription_id（fetcher 收件、單筆 / 批次 reparse、parser 確認後重跑）；parser 預覽逐筆依訂閱挑 parser；
+    確認時訂閱層級沒給 target 就用 pending 的 subscription_id，都沒有則 400（filter 確認同樣適用）
+  - [x] 資料：`scripts/2026-10-17-bind-parsers-to-subscriptions.sql`，依 pending 結果與實際解析紀錄對應 12 個 parser 的訂閱、
+    停用沒有訂閱的 46；生產上以 ROLLBACK 試跑：更新 12 + 1 筆，兩個驗證查詢皆 0 列
+  - [ ] **先跑資料修復 SQL、再部署 core**（順序反了，未綁定的 parser 會失效）
+  - [ ] 部署後觀察：新集數仍由原 parser 解析；確認新 parser 後 `title_parsers.created_from_id` 有值
 - [ ] 5. 依 `docs/superpowers/plans/2026-07-16-metadata-identity.md` 實作作品身分 / metadata
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）

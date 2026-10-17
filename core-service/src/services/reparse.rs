@@ -142,7 +142,7 @@ pub async fn reparse_affected_items(
     let mut resync_link_ids: Vec<i32> = Vec::new();
 
     for item in &items {
-        match TitleParserService::parse_title(&mut conn, &item.title) {
+        match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
                 match upsert_anime_link(&mut conn, item, &parsed) {
                     Ok(result) => {
