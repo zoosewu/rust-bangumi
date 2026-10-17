@@ -9,3 +9,4 @@
 - 生產 DB 的狀態「不可能由程式產生」時（例如沒有任何路徑會寫入的狀態轉移），先做索引一致性檢查（seq scan 與 index scan 筆數比對、主鍵重複、序列是否落後 max(id)），再去推論程式 bug。
 - 交給使用者的重啟指令，若涉及有輪詢依賴的服務，要依「被依賴者先起」排序，而且要分成兩次 `up`（先 `up -d downloader…`，等 healthy 後再 `up -d core-service`）。同一次 `docker compose up -d --no-deps A B` 不保證啟動順序。2026-10-16 部署第 6 項時 core 先起、downloader 晚了 5 秒，core 一輪詢就把 4 筆標成 downloader_error（E3）；這次靠 downloader 註冊後的恢復流程自動救回，修好 E3 前不能指望每次都這麼幸運。
 - 比較「改動前後」的 clippy 警告數時不要用 `git stash` / `stash pop`：2026-10-17 一次 pop 撞上 `.git/index.lock`，變更雖已套回但 stash 沒被移除，差點以為改動遺失。改用 `git worktree add` 到 scratchpad 跑基準，或在動手前先記下基準數字。
+- 回覆使用者一律用繁體中文，包括長篇總結與部署說明；寫完英文為主的 commit 訊息或程式碼後，切回對話時特別容易漏掉。2026-10-17 項目 4 的完成報告整篇用了英文，被使用者糾正。
