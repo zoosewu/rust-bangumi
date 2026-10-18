@@ -105,6 +105,25 @@ pub async fn register(
                         });
                     }
 
+                    if payload.service_type == ServiceType::Metadata {
+                        match crate::services::identity::save_metadata_namespaces(
+                            &mut conn,
+                            &payload.service_name,
+                            &payload.capabilities.namespaces,
+                        ) {
+                            Ok(()) => tracing::info!(
+                                "Metadata service {} resolves namespaces {:?}",
+                                payload.service_name,
+                                payload.capabilities.namespaces
+                            ),
+                            Err(e) => tracing::error!(
+                                "Failed to save namespaces of metadata service {}: {}",
+                                payload.service_name,
+                                e
+                            ),
+                        }
+                    }
+
                     // Trigger sync of completed and sync_failed downloads when a viewer registers
                     if payload.service_type == ServiceType::Viewer {
                         let sync_service = state.sync_service.clone();
