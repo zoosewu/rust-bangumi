@@ -184,6 +184,15 @@ pub struct AnimeWork {
     pub title: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// 系列身分：第一季的 external id（例如 `bgm` / `430699`）
+    pub series_namespace: Option<String>,
+    pub series_external_id: Option<String>,
+    /// 名稱來源：`parser` | `bgm` | `manual`（manual 永不被自動覆寫）
+    pub title_source: String,
+    pub description: Option<String>,
+    pub premiered: Option<NaiveDate>,
+    pub is_active: bool,
+    pub soft_deleted_at: Option<NaiveDateTime>,
 }
 
 #[derive(Insertable)]
@@ -207,6 +216,9 @@ pub struct Anime {
     pub end_date: Option<NaiveDate>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// 季名（bgm 中文名，沒有則原名）
+    pub title: Option<String>,
+    pub original_title: Option<String>,
 }
 
 #[derive(Insertable)]
@@ -646,6 +658,19 @@ pub struct RawAnimeItem {
     pub error_message: Option<String>,
     pub parsed_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+    /// fetcher 回報的外部身分（`{namespace}/{id}`）
+    pub external_ids: Vec<Option<String>>,
+}
+
+impl RawAnimeItem {
+    /// fetcher 回報的外部身分；無法解析的值略過
+    pub fn external_ids(&self) -> Vec<shared::ExternalId> {
+        self.external_ids
+            .iter()
+            .flatten()
+            .filter_map(|id| id.parse().ok())
+            .collect()
+    }
 }
 
 #[derive(Insertable)]
@@ -675,6 +700,8 @@ pub struct AnimeCoverImage {
     pub is_default: bool,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub created_at: chrono::NaiveDateTime,
+    /// 有值：季的封面；None：系列海報
+    pub anime_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]
@@ -686,6 +713,37 @@ pub struct NewAnimeCoverImage {
     pub source_name: String,
     pub is_default: bool,
     pub created_at: chrono::NaiveDateTime,
+}
+
+// ============ AnimeExternalIds ============
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = crate::schema::anime_external_ids)]
+pub struct AnimeExternalId {
+    pub external_ref_id: i32,
+    pub anime_id: i32,
+    pub namespace: String,
+    pub external_id: String,
+    /// `fetcher` | `manual`（manual 永不被自動覆寫）
+    pub source: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::anime_external_ids)]
+pub struct NewAnimeExternalId {
+    pub anime_id: i32,
+    pub namespace: String,
+    pub external_id: String,
+    pub source: String,
+}
+
+// ============ MetadataNamespaces ============
+#[derive(Queryable, Selectable, Insertable, Debug, Clone)]
+#[diesel(table_name = crate::schema::metadata_namespaces)]
+pub struct MetadataNamespace {
+    pub module_id: i32,
+    pub namespace: String,
+    pub priority: i32,
 }
 
 // ============ AiProvider ============

@@ -225,6 +225,13 @@ pub mod mock {
                 title,
                 created_at: now,
                 updated_at: now,
+                series_namespace: None,
+                series_external_id: None,
+                title_source: "parser".to_string(),
+                description: None,
+                premiered: None,
+                is_active: true,
+                soft_deleted_at: None,
             };
             anime_works.push(anime_work.clone());
             Ok(anime_work)
@@ -277,6 +284,13 @@ pub mod mock {
                 title,
                 created_at: now,
                 updated_at: now,
+                series_namespace: None,
+                series_external_id: None,
+                title_source: "parser".to_string(),
+                description: None,
+                premiered: None,
+                is_active: true,
+                soft_deleted_at: None,
             };
             anime_works.push(anime_work.clone());
             Ok(anime_work)
@@ -306,6 +320,13 @@ pub mod mock {
                 title: "Existing Anime".to_string(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: Utc::now().naive_utc(),
+                series_namespace: None,
+                series_external_id: None,
+                title_source: "parser".to_string(),
+                description: None,
+                premiered: None,
+                is_active: true,
+                soft_deleted_at: None,
             };
             let repo = MockAnimeWorkRepository::with_data(vec![anime_work]);
 
@@ -324,6 +345,13 @@ pub mod mock {
                 title: "Original Title".to_string(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: Utc::now().naive_utc(),
+                series_namespace: None,
+                series_external_id: None,
+                title_source: "parser".to_string(),
+                description: None,
+                premiered: None,
+                is_active: true,
+                soft_deleted_at: None,
             };
             let repo = MockAnimeWorkRepository::with_data(vec![anime_work]);
 
@@ -341,6 +369,13 @@ pub mod mock {
                 title: "To Delete".to_string(),
                 created_at: Utc::now().naive_utc(),
                 updated_at: Utc::now().naive_utc(),
+                series_namespace: None,
+                series_external_id: None,
+                title_source: "parser".to_string(),
+                description: None,
+                premiered: None,
+                is_active: true,
+                soft_deleted_at: None,
             };
             let repo = MockAnimeWorkRepository::with_data(vec![anime_work]);
 

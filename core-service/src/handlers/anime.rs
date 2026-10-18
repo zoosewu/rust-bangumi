@@ -918,6 +918,13 @@ mod tests {
             title: "Test Anime".to_string(),
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            series_namespace: None,
+            series_external_id: None,
+            title_source: "parser".to_string(),
+            description: None,
+            premiered: None,
+            is_active: true,
+            soft_deleted_at: None,
         };
         let repo = MockAnimeWorkRepository::with_data(vec![work]);
 
@@ -936,12 +943,26 @@ mod tests {
             title: "Anime 1".to_string(),
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            series_namespace: None,
+            series_external_id: None,
+            title_source: "parser".to_string(),
+            description: None,
+            premiered: None,
+            is_active: true,
+            soft_deleted_at: None,
         };
         let work2 = AnimeWork {
             work_id: 2,
             title: "Anime 2".to_string(),
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            series_namespace: None,
+            series_external_id: None,
+            title_source: "parser".to_string(),
+            description: None,
+            premiered: None,
+            is_active: true,
+            soft_deleted_at: None,
         };
         let repo = MockAnimeWorkRepository::with_data(vec![work1, work2]);
 
@@ -956,6 +977,13 @@ mod tests {
             title: "To Delete".to_string(),
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            series_namespace: None,
+            series_external_id: None,
+            title_source: "parser".to_string(),
+            description: None,
+            premiered: None,
+            is_active: true,
+            soft_deleted_at: None,
         };
         let repo = MockAnimeWorkRepository::with_data(vec![work]);
 
@@ -1018,6 +1046,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let repo = MockAnimeRepository::with_data(vec![anime]);
 

@@ -273,6 +273,7 @@ pub mod mock {
                 error_message: None,
                 parsed_at: None,
                 created_at: now,
+                external_ids: vec![],
             };
             *next_id += 1;
             items.push(new_item.clone());
@@ -340,6 +341,7 @@ mod tests {
             error_message: None,
             parsed_at: None,
             created_at: now,
+            external_ids: vec![],
         };
         let item2 = RawAnimeItem {
             item_id: 2,
@@ -353,6 +355,7 @@ mod tests {
             error_message: None,
             parsed_at: Some(now),
             created_at: now,
+            external_ids: vec![],
         };
         let repo = MockRawItemRepository::with_data(vec![item1, item2]);
 
@@ -380,6 +383,7 @@ mod tests {
             error_message: None,
             parsed_at: None,
             created_at: now,
+            external_ids: vec![],
         };
         let repo = MockRawItemRepository::with_data(vec![item]);
 

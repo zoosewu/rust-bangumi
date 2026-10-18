@@ -260,6 +260,8 @@ pub mod mock {
                 end_date: params.end_date,
                 created_at: now,
                 updated_at: now,
+                title: None,
+                original_title: None,
             };
             *next_id += 1;
             series.push(new_anime.clone());
@@ -312,6 +314,8 @@ pub mod mock {
                 end_date: None,
                 created_at: now,
                 updated_at: now,
+                title: None,
+                original_title: None,
             };
             *next_id += 1;
             series.push(new_anime.clone());
@@ -358,6 +362,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let repo = MockAnimeRepository::with_data(vec![anime]);
 
@@ -381,6 +387,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let anime2 = Anime {
             anime_id: 2,
@@ -392,6 +400,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let anime3 = Anime {
             anime_id: 3,
@@ -403,6 +413,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let repo = MockAnimeRepository::with_data(vec![anime1, anime2, anime3]);
 
@@ -425,6 +437,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let repo = MockAnimeRepository::with_data(vec![existing]);
 
@@ -450,6 +464,8 @@ mod tests {
             end_date: None,
             created_at: Utc::now().naive_utc(),
             updated_at: Utc::now().naive_utc(),
+            title: None,
+            original_title: None,
         };
         let repo = MockAnimeRepository::with_data(vec![anime]);
 

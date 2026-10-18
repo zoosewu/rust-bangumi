@@ -54,6 +54,18 @@ diesel::table! {
         source_name -> Varchar,
         is_default -> Bool,
         created_at -> Timestamp,
+        anime_id -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
+    anime_external_ids (external_ref_id) {
+        external_ref_id -> Int4,
+        anime_id -> Int4,
+        namespace -> Text,
+        external_id -> Text,
+        source -> Text,
+        created_at -> Timestamp,
     }
 }
 
@@ -100,6 +112,13 @@ diesel::table! {
         title -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        series_namespace -> Nullable<Text>,
+        series_external_id -> Nullable<Text>,
+        title_source -> Text,
+        description -> Nullable<Text>,
+        premiered -> Nullable<Date>,
+        is_active -> Bool,
+        soft_deleted_at -> Nullable<Timestamp>,
     }
 }
 
@@ -114,6 +133,8 @@ diesel::table! {
         end_date -> Nullable<Date>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        title -> Nullable<Text>,
+        original_title -> Nullable<Text>,
     }
 }
 
@@ -179,6 +200,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    metadata_namespaces (module_id, namespace) {
+        module_id -> Int4,
+        namespace -> Text,
+        priority -> Int4,
+    }
+}
+
+diesel::table! {
     pending_ai_results (id) {
         id -> Int4,
         result_type -> Text,
@@ -213,6 +242,7 @@ diesel::table! {
         error_message -> Nullable<Text>,
         parsed_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
+        external_ids -> Array<Nullable<Text>>,
     }
 }
 
@@ -360,7 +390,9 @@ diesel::table! {
 }
 
 diesel::joinable!(anime_cover_images -> anime_works (work_id));
+diesel::joinable!(anime_cover_images -> animes (anime_id));
 diesel::joinable!(anime_cover_images -> service_modules (service_module_id));
+diesel::joinable!(anime_external_ids -> animes (anime_id));
 diesel::joinable!(anime_link_conflicts -> anime_links (chosen_link_id));
 diesel::joinable!(anime_link_conflicts -> animes (anime_id));
 diesel::joinable!(anime_link_conflicts -> subtitle_groups (group_id));
@@ -372,6 +404,7 @@ diesel::joinable!(animes -> seasons (season_id));
 diesel::joinable!(downloader_capabilities -> service_modules (module_id));
 diesel::joinable!(downloads -> anime_links (link_id));
 diesel::joinable!(downloads -> service_modules (module_id));
+diesel::joinable!(metadata_namespaces -> service_modules (module_id));
 diesel::joinable!(pending_ai_results -> raw_anime_items (raw_item_id));
 diesel::joinable!(pending_ai_results -> subscriptions (subscription_id));
 diesel::joinable!(raw_anime_items -> subscriptions (subscription_id));
@@ -384,6 +417,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     ai_prompt_settings,
     ai_providers,
     anime_cover_images,
+    anime_external_ids,
     anime_link_conflicts,
     anime_links,
     anime_works,
@@ -392,6 +426,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     downloader_capabilities,
     downloads,
     filter_rules,
+    metadata_namespaces,
     pending_ai_results,
     raw_anime_items,
     seasons,
