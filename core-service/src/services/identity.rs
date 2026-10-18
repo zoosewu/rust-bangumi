@@ -497,6 +497,54 @@ fn identify_series(
         .get_result(conn)
 }
 
+/// 依作品各季的身分重新取得封面（系列海報與各季封面）；作品沒有身分時不做任何事
+/// （不再拿作品名去模糊搜尋）。
+pub async fn fetch_covers_for_work(
+    db: &DbPool,
+    lookup: &dyn MetadataLookup,
+    work_id: i32,
+) -> Result<(), String> {
+    let seasons: Vec<(i32, String, String)> = {
+        let mut conn = db.get().map_err(|e| e.to_string())?;
+        anime_external_ids::table
+            .inner_join(animes::table)
+            .filter(animes::work_id.eq(work_id))
+            .select((
+                anime_external_ids::anime_id,
+                anime_external_ids::namespace,
+                anime_external_ids::external_id,
+            ))
+            .load(&mut conn)
+            .map_err(|e| e.to_string())?
+    };
+    for (anime_id, namespace, external_id) in seasons {
+        let id = ExternalId::new(namespace, external_id);
+        let Some(fetched) = lookup.enrich_anime(&id).await? else {
+            continue;
+        };
+        let mut conn = db.get().map_err(|e| e.to_string())?;
+        let meta = &fetched.meta;
+        store_covers(
+            &mut conn,
+            work_id,
+            None,
+            &meta.series.cover_images,
+            fetched.module_id,
+        )
+        .and_then(|_| {
+            store_covers(
+                &mut conn,
+                work_id,
+                Some(anime_id),
+                &meta.cover_images,
+                fetched.module_id,
+            )
+        })
+        .map_err(|e| format!("Failed to store covers of work {}: {}", work_id, e))?;
+    }
+    Ok(())
+}
+
 /// 封面：`anime_id = None` 是系列海報，作品還沒有預設封面時第一張設為預設。
 fn store_covers(
     conn: &mut PgConnection,
@@ -617,6 +665,25 @@ pub(crate) mod test_db {
         conn.begin_test_transaction()
             .expect("begin test transaction");
         conn
+    }
+
+    /// 只有一條連線、且該連線在 rollback 的 transaction 裡的 pool（給需要 `DbPool` 的函式用）
+    pub fn pool() -> crate::db::DbPool {
+        #[derive(Debug)]
+        struct TestTransaction;
+        impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for TestTransaction {
+            fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
+                conn.begin_test_transaction().unwrap();
+                Ok(())
+            }
+        }
+        let url = std::env::var("DATABASE_TEST_URL")
+            .expect("DATABASE_TEST_URL must point to a migrated dev database");
+        diesel::r2d2::Pool::builder()
+            .max_size(1)
+            .connection_customizer(Box::new(TestTransaction))
+            .build(diesel::r2d2::ConnectionManager::<PgConnection>::new(url))
+            .unwrap()
     }
 
     pub fn insert_module(conn: &mut PgConnection, name: &str, enabled: bool) -> i32 {
@@ -888,5 +955,54 @@ mod tests {
         assert_eq!(quarter(4), (2026, "spring"));
         assert_eq!(quarter(7), (2026, "summer"));
         assert_eq!(quarter(12), (2026, "fall"));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn covers_are_refetched_by_identity_not_by_title() {
+        let pool = test_db::pool();
+        let lookup = lookup();
+        let season = {
+            let mut conn = pool.get().unwrap();
+            with_bgm_service(&mut conn);
+            resolved(resolve(&mut conn, &lookup, &bgm("548818"), 2).await)
+        };
+        diesel::delete(
+            anime_cover_images::table.filter(anime_cover_images::work_id.eq(season.work_id)),
+        )
+        .execute(&mut pool.get().unwrap())
+        .unwrap();
+        fetch_covers_for_work(&pool, &lookup, season.work_id)
+            .await
+            .unwrap();
+        let count: i64 = anime_cover_images::table
+            .filter(anime_cover_images::work_id.eq(season.work_id))
+            .count()
+            .get_result(&mut pool.get().unwrap())
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn a_work_without_identity_gets_no_cover_lookup() {
+        let pool = test_db::pool();
+        let lookup = lookup();
+        let work_id: i32 = {
+            let now = chrono::Utc::now().naive_utc();
+            diesel::insert_into(anime_works::table)
+                .values(NewAnimeWork {
+                    title: "沒有身分".to_string(),
+                    created_at: now,
+                    updated_at: now,
+                })
+                .returning(anime_works::work_id)
+                .get_result(&mut pool.get().unwrap())
+                .unwrap()
+        };
+        fetch_covers_for_work(&pool, &lookup, work_id)
+            .await
+            .unwrap();
+        assert_eq!(lookup.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     }
 }

@@ -557,26 +557,6 @@ mod tests {
         }
     }
 
-    fn pool_for_test() -> DbPool {
-        // run_backfill 需要 pool；測試 transaction 綁在單一連線上，所以 pool 只放一條連線
-        let url = std::env::var("DATABASE_TEST_URL").unwrap();
-        let manager = diesel::r2d2::ConnectionManager::<PgConnection>::new(url);
-        diesel::r2d2::Pool::builder()
-            .max_size(1)
-            .connection_customizer(Box::new(TestTransaction))
-            .build(manager)
-            .unwrap()
-    }
-
-    #[derive(Debug)]
-    struct TestTransaction;
-    impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for TestTransaction {
-        fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
-            conn.begin_test_transaction().unwrap();
-            Ok(())
-        }
-    }
-
     fn download_status(conn: &mut PgConnection, id: i32) -> String {
         crate::schema::downloads::table
             .find(id)
@@ -586,7 +566,7 @@ mod tests {
     }
 
     async fn run(apply: bool) -> (BackfillReport, Fixture, DbPool) {
-        let pool = pool_for_test();
+        let pool = test_db::pool();
         let fx = fixture(&mut pool.get().unwrap());
         let report = run_backfill(&pool, &fx.source, &test_db::lookup(), apply)
             .await
@@ -719,7 +699,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs DATABASE_TEST_URL"]
     async fn running_it_again_changes_nothing_more() {
-        let pool = pool_for_test();
+        let pool = test_db::pool();
         let fx = fixture(&mut pool.get().unwrap());
         run_backfill(&pool, &fx.source, &test_db::lookup(), true)
             .await

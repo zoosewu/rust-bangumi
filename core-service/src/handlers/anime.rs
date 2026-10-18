@@ -43,10 +43,9 @@ pub async fn create_anime_work(
             tracing::info!("Created anime work: {}", anime_work.work_id);
             // 背景取得封面圖
             let db_clone = state.db.clone();
-            let title_clone = anime_work.title.clone();
             let wid = anime_work.work_id;
             tokio::spawn(async move {
-                fetch_and_store_covers(db_clone, wid, title_clone).await;
+                fetch_and_store_covers(db_clone, wid).await;
             });
             let response = AnimeWorkResponse {
                 anime_id: anime_work.work_id,
@@ -591,10 +590,10 @@ pub async fn list_all_anime(
 
         let work_ids_with_covers: std::collections::HashSet<i32> =
             cover_map.keys().cloned().collect();
-        let missing: Vec<(i32, String)> = results
+        let missing: std::collections::BTreeSet<i32> = results
             .iter()
             .filter(|r| !work_ids_with_covers.contains(&r.anime_id))
-            .map(|r| (r.anime_id, r.anime_title.clone()))
+            .map(|r| r.anime_id)
             .collect();
 
         if !missing.is_empty()
@@ -604,8 +603,8 @@ pub async fn list_all_anime(
         {
             let db_clone = state.db.clone();
             tokio::spawn(async move {
-                for (id, title) in missing {
-                    fetch_and_store_covers(db_clone.clone(), id, title).await;
+                for id in missing {
+                    fetch_and_store_covers(db_clone.clone(), id).await;
                 }
                 COVER_FETCH_IN_PROGRESS.store(false, Ordering::SeqCst);
             });
@@ -1199,117 +1198,10 @@ mod tests {
 
 // ============ Background Metadata Fetch ============
 
-pub async fn fetch_and_store_covers(db: crate::db::DbPool, work_id: i32, anime_title: String) {
-    use crate::models::db::{ModuleTypeEnum, NewAnimeCoverImage};
-    use crate::schema::{anime_cover_images, service_modules};
-
-    // 1. 從 DB 找所有啟用的 metadata service
-    let metadata_services: Vec<(String, i32)> = {
-        let mut conn = match db.get() {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::error!("DB pool error in metadata fetch: {}", e);
-                return;
-            }
-        };
-        match service_modules::table
-            .filter(service_modules::module_type.eq(ModuleTypeEnum::Metadata))
-            .filter(service_modules::is_enabled.eq(true))
-            .select((service_modules::base_url, service_modules::module_id))
-            .load::<(String, i32)>(&mut conn)
-        {
-            Ok(list) if list.is_empty() => {
-                tracing::debug!("No metadata service registered — skipping cover fetch");
-                return;
-            }
-            Ok(list) => list,
-            Err(e) => {
-                tracing::error!("DB query error for metadata service lookup: {}", e);
-                return;
-            }
-        }
-    };
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .unwrap();
-    let mut is_first_image = true;
-
-    // 2. 呼叫每個 metadata service
-    for (metadata_url, module_id) in &metadata_services {
-        let resp = client
-            .post(format!("{}/enrich/anime", metadata_url))
-            .json(&serde_json::json!({ "title": anime_title }))
-            .send()
-            .await;
-
-        let data: serde_json::Value = match resp {
-            Ok(r) if r.status().is_success() => match r.json().await {
-                Ok(v) => v,
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to parse metadata response from {}: {}",
-                        metadata_url,
-                        e
-                    );
-                    continue;
-                }
-            },
-            Ok(r) => {
-                tracing::warn!(
-                    "Metadata service {} returned HTTP {}",
-                    metadata_url,
-                    r.status()
-                );
-                continue;
-            }
-            Err(e) => {
-                tracing::error!("Metadata service {} unreachable: {}", metadata_url, e);
-                continue;
-            }
-        };
-
-        // 3. 儲存封面圖
-        let cover_images = data["cover_images"].as_array().cloned().unwrap_or_default();
-        if cover_images.is_empty() {
-            continue;
-        }
-
-        let mut conn = match db.get() {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-
-        for img in &cover_images {
-            let url = match img["url"].as_str() {
-                Some(u) => u.to_string(),
-                None => continue,
-            };
-            let source = img["source"].as_str().unwrap_or("bangumi").to_string();
-            let new_cover = NewAnimeCoverImage {
-                work_id,
-                anime_id: None,
-                image_url: url,
-                service_module_id: Some(*module_id),
-                source_name: source,
-                is_default: is_first_image,
-                created_at: chrono::Utc::now().naive_utc(),
-            };
-            if diesel::insert_into(anime_cover_images::table)
-                .values(&new_cover)
-                .on_conflict_do_nothing()
-                .execute(&mut conn)
-                .is_ok()
-            {
-                is_first_image = false;
-            }
-        }
-        tracing::info!(
-            "Stored {} cover image(s) from {} for work_id={}",
-            cover_images.len(),
-            metadata_url,
-            work_id
-        );
+/// 依作品各季的身分在背景補抓封面；沒有身分的作品不抓（不再用作品名模糊搜尋）。
+pub async fn fetch_and_store_covers(db: crate::db::DbPool, work_id: i32) {
+    let lookup = crate::services::identity::HttpMetadataLookup::new(db.clone());
+    if let Err(e) = crate::services::identity::fetch_covers_for_work(&db, &lookup, work_id).await {
+        tracing::warn!("Cover fetch for work {} failed: {}", work_id, e);
     }
 }
