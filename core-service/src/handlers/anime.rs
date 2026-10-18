@@ -1185,6 +1185,7 @@ pub async fn fetch_and_store_covers(db: crate::db::DbPool, work_id: i32, anime_t
             let source = img["source"].as_str().unwrap_or("bangumi").to_string();
             let new_cover = NewAnimeCoverImage {
                 work_id,
+                anime_id: None,
                 image_url: url,
                 service_module_id: Some(*module_id),
                 source_name: source,

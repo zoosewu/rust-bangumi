@@ -708,6 +708,8 @@ pub struct AnimeCoverImage {
 #[diesel(table_name = crate::schema::anime_cover_images)]
 pub struct NewAnimeCoverImage {
     pub work_id: i32,
+    /// 有值：季的封面；None：系列海報
+    pub anime_id: Option<i32>,
     pub image_url: String,
     pub service_module_id: Option<i32>,
     pub source_name: String,
