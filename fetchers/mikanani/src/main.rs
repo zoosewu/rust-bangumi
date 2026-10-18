@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/fetch", post(handlers::fetch))
         .route("/search", post(handlers::search))
         .route("/detail", post(handlers::detail))
+        .route("/identity/resolve", post(handlers::resolve_identity))
         .route("/health", get(handlers::health_check))
         .route(
             "/can-handle-subscription",

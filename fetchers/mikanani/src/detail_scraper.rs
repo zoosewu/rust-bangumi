@@ -73,6 +73,33 @@ async fn scrape_source(client: &reqwest::Client, query: &str) -> Result<DetailRe
     parse_source_detail(&html, query)
 }
 
+/// 從 mikan 作品頁抽出 bgm.tv subject id（「Bangumi番组计划链接」）。
+///
+/// mikan 在每個作品頁登載人工校對過的 bgm 對應，是取得作品身分的權威來源。
+/// 注意 mikan 自己的 `/Home/Bangumi/{id}` 是另一個 namespace，不是 bgm subject id。
+pub fn parse_bgm_subject_id(html: &str) -> Option<String> {
+    let document = Html::parse_document(html);
+    let links = Selector::parse("a[href]").ok()?;
+    document
+        .select(&links)
+        .filter_map(|a| a.value().attr("href"))
+        .find_map(bgm_subject_id_from_url)
+}
+
+fn bgm_subject_id_from_url(href: &str) -> Option<String> {
+    let url = reqwest::Url::parse(href).ok()?;
+    let host = url.host_str()?;
+    if !matches!(host, "bgm.tv" | "bangumi.tv" | "chii.in") {
+        return None;
+    }
+    let mut segments = url.path_segments()?;
+    (segments.next()? == "subject")
+        .then(|| segments.next())
+        .flatten()
+        .filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_digit()))
+        .map(str::to_string)
+}
+
 /// Parse bangumi detail page for per-subgroup RSS links.
 ///
 /// Real page structure from https://mikanani.me/Home/Bangumi/{id} has TWO variants:
@@ -240,6 +267,44 @@ pub mod mock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ==========================================================================
+    // MOCK_DATA: detail_scraper — 作品頁的 bgm.tv 連結
+    // Source  : https://mikanani.me/Home/Bangumi/3822 (金牌得主 第二季)
+    // Captured: 2026-10-18
+    // Update  : Refresh when mikanani changes the "Bangumi番组计划链接" block.
+    // ==========================================================================
+    static REAL_BGM_LINK_HTML: &str = r#"
+        <p class="bangumi-info">放送开始：1/24/2026</p>
+        <p class="bangumi-info">官方网站：<br /><a class="w-other-c" target="_blank" href="https://medalist-pr.com/tv/">https://medalist-pr.com/tv/</a></p>
+        <p class="bangumi-info">Bangumi番组计划链接：<br /><a class="w-other-c" target="_blank" href="https://bgm.tv/subject/548818">https://bgm.tv/subject/548818</a></p>
+    "#;
+
+    #[test]
+    fn extracts_bgm_subject_id_from_real_detail_page() {
+        assert_eq!(
+            parse_bgm_subject_id(REAL_BGM_LINK_HTML),
+            Some("548818".to_string())
+        );
+    }
+
+    #[test]
+    fn no_bgm_link_means_no_subject_id() {
+        let html = r#"<p class="bangumi-info">官方网站：<a href="https://example.com/">x</a></p>"#;
+        assert_eq!(parse_bgm_subject_id(html), None);
+    }
+
+    #[test]
+    fn mikan_own_id_is_not_a_bgm_subject_id() {
+        let html = r#"<a href="/Home/Bangumi/3822">x</a>"#;
+        assert_eq!(parse_bgm_subject_id(html), None);
+    }
+
+    #[test]
+    fn accepts_http_and_other_bgm_hosts() {
+        let html = r#"<a href="http://bangumi.tv/subject/325808/">x</a>"#;
+        assert_eq!(parse_bgm_subject_id(html), Some("325808".to_string()));
+    }
 
     // ==========================================================================
     // MOCK_DATA: detail_scraper — 番劇詳細頁面 HTML 結構

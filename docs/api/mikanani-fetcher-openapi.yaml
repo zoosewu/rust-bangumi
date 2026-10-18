@@ -174,6 +174,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /identity/resolve:
+    post:
+      tags:
+        - Search
+      summary: 解析訂閱對應的作品身分
+      description: |
+        從單作品 RSS URL（`RSS/Bangumi?bangumiId=`）取得 mikan id，再從 mikan 作品頁取得 bgm.tv subject id。
+        混合型 feed 回傳空陣列。fetch 時每個 raw item 的 `external_ids` 也是這個結果。
+      operationId: resolveMikananiIdentity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_url]
+              properties:
+                source_url:
+                  type: string
+            example:
+              source_url: "https://mikanani.me/RSS/Bangumi?bangumiId=3822&subgroupid=1236"
+      responses:
+        '200':
+          description: 作品的外部身分（`{namespace}/{id}`）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  external_ids:
+                    type: array
+                    items:
+                      type: string
+              example:
+                external_ids: ["mikan/3822", "bgm/548818"]
+
   /can-handle-subscription:
     post:
       tags:

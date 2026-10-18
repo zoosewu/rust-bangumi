@@ -1,7 +1,7 @@
 use axum::{extract::State, http::StatusCode, Json};
 use fetcher_mikanani::{
-    DetailScraper, FetchTask, RealDetailScraper, RealHttpClient, RealSearchScraper, RssParser,
-    SearchScraper,
+    DetailScraper, FetchTask, IdentityResolver, RealDetailPageFetcher, RealDetailScraper,
+    RealHttpClient, RealSearchScraper, RssParser, SearchScraper,
 };
 use serde::{Deserialize, Serialize};
 use shared::{
@@ -28,6 +28,7 @@ pub struct AppState {
     pub http_client: Arc<RealHttpClient>,
     pub search_scraper: Arc<dyn SearchScraper>,
     pub detail_scraper: Arc<dyn DetailScraper>,
+    pub identity: Arc<IdentityResolver>,
 }
 
 impl AppState {
@@ -37,6 +38,9 @@ impl AppState {
             http_client: Arc::new(RealHttpClient::new()),
             search_scraper: Arc::new(RealSearchScraper::new()),
             detail_scraper: Arc::new(RealDetailScraper::new()),
+            identity: Arc::new(IdentityResolver::new(
+                Arc::new(RealDetailPageFetcher::new()),
+            )),
         }
     }
 }
@@ -69,6 +73,7 @@ pub async fn fetch(
     // 在背景執行抓取任務
     let parser = state.parser.clone();
     let http_client = state.http_client.clone();
+    let identity = state.identity.clone();
     let subscription_id = payload.subscription_id;
     let rss_url = payload.rss_url.clone();
     let callback_url = payload.callback_url.clone();
@@ -76,7 +81,7 @@ pub async fn fetch(
     tokio::spawn(async move {
         tracing::info!("Starting background fetch for: {}", rss_url);
 
-        let task = FetchTask::new(parser, http_client, "mikanani".to_string());
+        let task = FetchTask::new(parser, http_client, identity, "mikanani".to_string());
 
         if let Err(e) = task
             .execute_and_send(subscription_id, &rss_url, &callback_url)
@@ -87,6 +92,26 @@ pub async fn fetch(
     });
 
     (StatusCode::ACCEPTED, Json(response))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IdentityResolveRequest {
+    pub source_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IdentityResolveResponse {
+    pub external_ids: Vec<shared::ExternalId>,
+}
+
+/// POST /identity/resolve — 訂閱 URL 對應的作品身分（回填既有訂閱用）
+pub async fn resolve_identity(
+    State(state): State<AppState>,
+    Json(payload): Json<IdentityResolveRequest>,
+) -> Json<IdentityResolveResponse> {
+    Json(IdentityResolveResponse {
+        external_ids: state.identity.resolve_rss_url(&payload.source_url).await,
+    })
 }
 
 pub async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
@@ -237,6 +262,9 @@ mod tests {
                 subgroup_name: "TestGroup".to_string(),
                 rss_url: "https://mikanani.me/RSS/Bangumi?bangumiId=1".to_string(),
             }])),
+            identity: Arc::new(IdentityResolver::new(
+                Arc::new(RealDetailPageFetcher::new()),
+            )),
         };
 
         let payload = Json(shared::DetailRequest {

@@ -2,7 +2,9 @@ use shared::models::RawFetcherResultsPayload;
 use std::sync::Arc;
 
 use crate::http_client::{HttpClient, HttpError};
+use crate::identity_resolver::IdentityResolver;
 use crate::RssParser;
+use shared::{ExternalId, RawAnimeItem};
 
 // Legacy payload for backwards compatibility with old handler
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -27,14 +29,32 @@ pub enum FetchTaskError {
 pub struct FetchTask<C: HttpClient> {
     parser: Arc<RssParser>,
     http_client: Arc<C>,
+    identity: Arc<IdentityResolver>,
     fetcher_source: String,
 }
 
+/// 單作品 feed 的每個 item 都是同一部作品，共用訂閱的身分。
+fn attach_external_ids(items: Vec<RawAnimeItem>, ids: &[ExternalId]) -> Vec<RawAnimeItem> {
+    items
+        .into_iter()
+        .map(|item| RawAnimeItem {
+            external_ids: ids.to_vec(),
+            ..item
+        })
+        .collect()
+}
+
 impl<C: HttpClient> FetchTask<C> {
-    pub fn new(parser: Arc<RssParser>, http_client: Arc<C>, fetcher_source: String) -> Self {
+    pub fn new(
+        parser: Arc<RssParser>,
+        http_client: Arc<C>,
+        identity: Arc<IdentityResolver>,
+        fetcher_source: String,
+    ) -> Self {
         Self {
             parser,
             http_client,
+            identity,
             fetcher_source,
         }
     }
@@ -48,6 +68,8 @@ impl<C: HttpClient> FetchTask<C> {
         match self.parser.fetch_raw_items(rss_url).await {
             Ok(items) => {
                 tracing::info!("Fetch successful: {} raw items", items.len());
+                let ids = self.identity.resolve_rss_url(rss_url).await;
+                let items = attach_external_ids(items, &ids);
                 Ok(RawFetcherResultsPayload {
                     subscription_id,
                     items,
@@ -131,7 +153,27 @@ mod tests {
     fn create_test_task(mock_client: MockHttpClient) -> FetchTask<MockHttpClient> {
         let parser = Arc::new(RssParser::new());
         let http_client = Arc::new(mock_client);
-        FetchTask::new(parser, http_client, "test-fetcher".to_string())
+        let identity = Arc::new(IdentityResolver::new(Arc::new(
+            crate::RealDetailPageFetcher::new(),
+        )));
+        FetchTask::new(parser, http_client, identity, "test-fetcher".to_string())
+    }
+
+    #[test]
+    fn every_item_carries_the_feed_identity() {
+        let item = |title: &str| RawAnimeItem {
+            title: title.to_string(),
+            description: None,
+            download_url: format!("magnet:?{}", title),
+            pub_date: None,
+            external_ids: vec![],
+        };
+        let ids = vec![
+            ExternalId::new("mikan", "3822"),
+            ExternalId::new("bgm", "548818"),
+        ];
+        let items = attach_external_ids(vec![item("ep1"), item("ep2")], &ids);
+        assert!(items.iter().all(|i| i.external_ids == ids));
     }
 
     #[tokio::test]
