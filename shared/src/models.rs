@@ -229,8 +229,36 @@ pub struct ViewerSyncRequest {
     pub video_path: String,
     pub subtitle_paths: Vec<String>,
     pub callback_url: String,
-    pub bangumi_id: Option<i32>, // bangumi subject id for episode metadata
-    pub cover_image_url: Option<String>, // default cover image URL for poster download
+    /// 季的外部身分（單集 NFO 用）；沒有身分時為 None
+    #[serde(default)]
+    pub external_id: Option<crate::ExternalId>,
+    /// 系列內容（tvshow.nfo、系列海報）
+    #[serde(default)]
+    pub series: Option<ViewerSeries>,
+    /// 季內容（season.nfo、季海報）
+    #[serde(default)]
+    pub season: Option<ViewerSeason>,
+}
+
+/// 系列（作品）層級、寫進 `tvshow.nfo` 的內容；`title` 也是媒體庫資料夾名
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ViewerSeries {
+    pub title: String,
+    pub summary: Option<String>,
+    /// YYYY-MM-DD
+    pub premiered: Option<String>,
+    pub poster_url: Option<String>,
+}
+
+/// 一季、寫進 `season.nfo` 的內容
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ViewerSeason {
+    pub title: Option<String>,
+    pub original_title: Option<String>,
+    pub summary: Option<String>,
+    /// YYYY-MM-DD
+    pub premiered: Option<String>,
+    pub poster_url: Option<String>,
 }
 
 /// Core → Viewer: request to resync a previously synced download with updated metadata
@@ -244,6 +272,12 @@ pub struct ViewerResyncRequest {
     pub subtitle_group: String,
     pub old_target_path: String,
     pub callback_url: String,
+    #[serde(default)]
+    pub external_id: Option<crate::ExternalId>,
+    #[serde(default)]
+    pub series: Option<ViewerSeries>,
+    #[serde(default)]
+    pub season: Option<ViewerSeason>,
 }
 
 /// Viewer → Core: callback after sync processing

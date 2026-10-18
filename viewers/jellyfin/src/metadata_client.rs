@@ -23,16 +23,18 @@ impl MetadataClient {
         }
     }
 
+    /// 指定季（external id）第幾集的內容；metadata 找不到時回傳 None
     pub async fn enrich_episodes(
         &self,
-        bangumi_id: i32,
+        season: &shared::ExternalId,
         episode_no: i32,
     ) -> Result<Option<EpisodeInfo>> {
         let resp = self
             .http
             .post(format!("{}/enrich/episodes", self.base_url))
             .json(&serde_json::json!({
-                "bangumi_id": bangumi_id,
+                "namespace": season.namespace,
+                "external_id": season.id,
                 "episode_no": episode_no
             }))
             .send()

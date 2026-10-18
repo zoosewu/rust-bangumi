@@ -1,11 +1,12 @@
 use crate::db::DbPool;
-use crate::models::{Anime, AnimeLink, Download, ModuleTypeEnum, ServiceModule};
+use crate::models::{Anime, AnimeLink, AnimeWork, Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{
-    anime_links, anime_works, animes, downloads, service_modules, subtitle_groups,
+    anime_cover_images, anime_links, anime_works, animes, downloads, service_modules,
+    subtitle_groups,
 };
 use crate::services::webhook_service::{WebhookContext, WebhookService};
 use diesel::prelude::*;
-use shared::ViewerSyncRequest;
+use shared::{ExternalId, ViewerSeason, ViewerSeries, ViewerSyncRequest};
 use std::sync::Arc;
 
 /// Download statuses in which the torrent must stay in the downloader:
@@ -60,6 +61,83 @@ fn release_sync_claim(conn: &mut diesel::PgConnection, download_id: i32) {
             e
         );
     }
+}
+
+/// 送給 viewer 的季身分、系列與季內容（spec 第 9 節）
+struct ViewerContent {
+    external_id: Option<ExternalId>,
+    series: ViewerSeries,
+    season: ViewerSeason,
+}
+
+/// 由查好的資料組出 viewer 的內容；系列名稱同時是媒體庫資料夾名
+fn viewer_content(
+    work: &AnimeWork,
+    season: &Anime,
+    bgm_id: Option<String>,
+    series_poster: Option<String>,
+    season_poster: Option<String>,
+) -> ViewerContent {
+    ViewerContent {
+        external_id: bgm_id.map(|id| ExternalId::new("bgm", id)),
+        series: ViewerSeries {
+            title: work.title.clone(),
+            summary: work.description.clone(),
+            premiered: work.premiered.map(|d| d.to_string()),
+            poster_url: series_poster,
+        },
+        season: ViewerSeason {
+            title: season.title.clone(),
+            original_title: season.original_title.clone(),
+            summary: season.description.clone(),
+            premiered: season.aired_date.map(|d| d.to_string()),
+            poster_url: season_poster,
+        },
+    }
+}
+
+/// 查出一季要送給 viewer 的內容。系列海報優先用系列層級（`anime_id IS NULL`）的封面，
+/// 沒有時用作品的預設封面；季海報只用該季自己的封面。
+fn load_viewer_content(
+    conn: &mut diesel::PgConnection,
+    season: &Anime,
+) -> Result<(AnimeWork, ViewerContent), String> {
+    let work: AnimeWork = anime_works::table
+        .find(season.work_id)
+        .first(conn)
+        .map_err(|e| format!("Failed to find anime work {}: {}", season.work_id, e))?;
+    let bgm_id = crate::services::identity::find_external_id(conn, season.anime_id, "bgm")
+        .map_err(|e| {
+            format!(
+                "Failed to find identity of anime {}: {}",
+                season.anime_id, e
+            )
+        })?;
+    let series_poster: Option<String> = anime_cover_images::table
+        .filter(anime_cover_images::work_id.eq(season.work_id))
+        .filter(
+            anime_cover_images::anime_id
+                .is_null()
+                .or(anime_cover_images::is_default.eq(true)),
+        )
+        .order((
+            anime_cover_images::anime_id.is_null().desc(),
+            anime_cover_images::is_default.desc(),
+            anime_cover_images::cover_id.asc(),
+        ))
+        .select(anime_cover_images::image_url)
+        .first(conn)
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let season_poster: Option<String> = anime_cover_images::table
+        .filter(anime_cover_images::anime_id.eq(season.anime_id))
+        .order(anime_cover_images::cover_id.asc())
+        .select(anime_cover_images::image_url)
+        .first(conn)
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let content = viewer_content(&work, season, bgm_id, series_poster, season_poster);
+    Ok((work, content))
 }
 
 pub struct SyncService {
@@ -227,12 +305,7 @@ impl SyncService {
             .first::<Anime>(conn)
             .map_err(|e| format!("Failed to find anime {}: {}", link.anime_id, e))?;
 
-        // Get anime title from anime_works
-        let anime_title: String = anime_works::table
-            .filter(anime_works::work_id.eq(series.work_id))
-            .select(anime_works::title)
-            .first::<String>(conn)
-            .map_err(|e| format!("Failed to find anime work {}: {}", series.work_id, e))?;
+        let (work, content) = load_viewer_content(conn, &series)?;
 
         // Get subtitle group name
         let subtitle_group: String = subtitle_groups::table
@@ -246,7 +319,7 @@ impl SyncService {
         Ok(ViewerSyncRequest {
             download_id: download.download_id,
             series_id: link.anime_id,
-            anime_title,
+            anime_title: work.title,
             series_no: series.series_no,
             episode_no: link.episode_no,
             subtitle_group,
@@ -260,8 +333,9 @@ impl SyncService {
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default(),
             callback_url,
-            bangumi_id: None,
-            cover_image_url: None,
+            external_id: content.external_id,
+            series: Some(content.series),
+            season: Some(content.season),
         })
     }
 
@@ -416,11 +490,7 @@ impl SyncService {
             .first::<Anime>(conn)
             .map_err(|e| format!("Failed to find anime {}: {}", link.anime_id, e))?;
 
-        let anime_title: String = anime_works::table
-            .filter(anime_works::work_id.eq(series.work_id))
-            .select(anime_works::title)
-            .first::<String>(conn)
-            .map_err(|e| format!("Failed to find anime work {}: {}", series.work_id, e))?;
+        let (work, content) = load_viewer_content(conn, &series)?;
 
         let subtitle_group: String = subtitle_groups::table
             .filter(subtitle_groups::group_id.eq(link.group_id))
@@ -438,12 +508,15 @@ impl SyncService {
         Ok(shared::ViewerResyncRequest {
             download_id: download.download_id,
             series_id: link.anime_id,
-            anime_title,
+            anime_title: work.title,
             series_no: series.series_no,
             episode_no: link.episode_no,
             subtitle_group,
             old_target_path,
             callback_url,
+            external_id: content.external_id,
+            series: Some(content.series),
+            season: Some(content.season),
         })
     }
 
@@ -652,6 +725,108 @@ impl SyncService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn work_and_season() -> (AnimeWork, Anime) {
+        let now = chrono::Utc::now().naive_utc();
+        let work = AnimeWork {
+            work_id: 16,
+            title: "金牌得主".to_string(),
+            created_at: now,
+            updated_at: now,
+            series_namespace: Some("bgm".to_string()),
+            series_external_id: Some("430699".to_string()),
+            title_source: "bgm".to_string(),
+            description: Some("系列簡介".to_string()),
+            premiered: chrono::NaiveDate::from_ymd_opt(2025, 1, 4),
+            is_active: true,
+            soft_deleted_at: None,
+        };
+        let season = Anime {
+            anime_id: 16,
+            work_id: 16,
+            series_no: 2,
+            season_id: 1,
+            description: Some("第二季簡介".to_string()),
+            aired_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 24),
+            end_date: None,
+            created_at: now,
+            updated_at: now,
+            title: Some("金牌得主 第二季".to_string()),
+            original_title: Some("メダリスト 第2期".to_string()),
+        };
+        (work, season)
+    }
+
+    #[test]
+    fn viewer_content_carries_the_identity_series_and_season() {
+        let (work, season) = work_and_season();
+        let content = viewer_content(
+            &work,
+            &season,
+            Some("548818".to_string()),
+            Some("https://img/s1.jpg".to_string()),
+            Some("https://img/s2.jpg".to_string()),
+        );
+        assert_eq!(content.external_id, Some(ExternalId::new("bgm", "548818")));
+        assert_eq!(
+            content.series,
+            ViewerSeries {
+                title: "金牌得主".to_string(),
+                summary: Some("系列簡介".to_string()),
+                premiered: Some("2025-01-04".to_string()),
+                poster_url: Some("https://img/s1.jpg".to_string()),
+            }
+        );
+        assert_eq!(content.season.title.as_deref(), Some("金牌得主 第二季"));
+        assert_eq!(content.season.premiered.as_deref(), Some("2026-01-24"));
+        assert_eq!(
+            content.season.poster_url.as_deref(),
+            Some("https://img/s2.jpg")
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn viewer_content_is_loaded_from_the_bound_season() {
+        use crate::services::identity::{
+            resolve_season, save_metadata_namespaces, test_db, IdentityContext, SeasonResolution,
+        };
+        let mut conn = test_db::conn();
+        test_db::insert_module(&mut conn, "meta-bgm", true);
+        save_metadata_namespaces(&mut conn, "meta-bgm", &["bgm".to_string()]).unwrap();
+        let ids = vec![ExternalId::new("bgm", "548818")];
+        let context =
+            IdentityContext::prepare(&mut conn, &test_db::lookup(), std::slice::from_ref(&ids))
+                .await
+                .unwrap();
+        let SeasonResolution::Resolved(season) =
+            resolve_season(&mut conn, &context, &ids, 2).unwrap()
+        else {
+            panic!("expected a season");
+        };
+
+        let (work, content) = load_viewer_content(&mut conn, &season).unwrap();
+        assert_eq!(work.title, "金牌得主");
+        assert_eq!(content.external_id, Some(ExternalId::new("bgm", "548818")));
+        assert_eq!(content.series.summary.as_deref(), Some("金牌得主 簡介"));
+        assert_eq!(
+            content.series.poster_url.as_deref(),
+            Some("https://img/430699.jpg")
+        );
+        assert_eq!(
+            content.season.poster_url.as_deref(),
+            Some("https://img/548818.jpg")
+        );
+        assert_eq!(content.season.title.as_deref(), Some("金牌得主 第二季"));
+    }
+
+    #[test]
+    fn a_season_without_identity_still_names_the_series() {
+        let (work, season) = work_and_season();
+        let content = viewer_content(&work, &season, None, None, None);
+        assert!(content.external_id.is_none());
+        assert_eq!(content.series.title, "金牌得主");
+    }
 
     fn statuses(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

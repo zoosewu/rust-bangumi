@@ -62,6 +62,52 @@ pub async fn generate_episode_nfo(
     Ok(())
 }
 
+fn tag(name: &str, value: Option<&str>) -> String {
+    value
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| format!("    <{name}>{}</{name}>\n", xml_escape(v)))
+        .unwrap_or_default()
+}
+
+/// 系列資料夾的 `tvshow.nfo`（每次覆寫成最新內容）
+pub async fn generate_tvshow_nfo(
+    series_dir: &Path,
+    series: &shared::ViewerSeries,
+) -> anyhow::Result<()> {
+    let content = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tvshow>\n{}{}{}</tvshow>\n",
+        tag("title", Some(&series.title)),
+        tag("plot", series.summary.as_deref()),
+        tag("premiered", series.premiered.as_deref()),
+    );
+    fs::create_dir_all(series_dir).await?;
+    let path = series_dir.join("tvshow.nfo");
+    fs::write(&path, content).await?;
+    tracing::info!("Generated series NFO at {}", path.display());
+    Ok(())
+}
+
+/// 季資料夾的 `season.nfo`（每次覆寫成最新內容）
+pub async fn generate_season_nfo(
+    season_dir: &Path,
+    season_no: i32,
+    season: &shared::ViewerSeason,
+) -> anyhow::Result<()> {
+    let content = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<season>\n{}{}    <seasonnumber>{}</seasonnumber>\n{}{}</season>\n",
+        tag("title", season.title.as_deref()),
+        tag("originaltitle", season.original_title.as_deref()),
+        season_no,
+        tag("plot", season.summary.as_deref()),
+        tag("premiered", season.premiered.as_deref()),
+    );
+    fs::create_dir_all(season_dir).await?;
+    let path = season_dir.join("season.nfo");
+    fs::write(&path, content).await?;
+    tracing::info!("Generated season NFO at {}", path.display());
+    Ok(())
+}
+
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -145,5 +191,59 @@ mod tests {
 
         let content = std::fs::read_to_string(video_path.with_extension("nfo")).unwrap();
         assert!(content.contains("Ep &amp; &lt;Test&gt;"));
+    }
+
+    fn series() -> shared::ViewerSeries {
+        shared::ViewerSeries {
+            title: "金牌得主".to_string(),
+            summary: Some("滑冰 & 夢想".to_string()),
+            premiered: Some("2025-01-04".to_string()),
+            poster_url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn tvshow_nfo_names_the_series_and_carries_its_summary() {
+        let dir = tempdir().unwrap();
+        generate_tvshow_nfo(dir.path(), &series()).await.unwrap();
+        let content = std::fs::read_to_string(dir.path().join("tvshow.nfo")).unwrap();
+        assert!(content.contains("<tvshow>"));
+        assert!(content.contains("<title>金牌得主</title>"));
+        assert!(content.contains("<plot>滑冰 &amp; 夢想</plot>"));
+        assert!(content.contains("<premiered>2025-01-04</premiered>"));
+    }
+
+    #[tokio::test]
+    async fn season_nfo_carries_the_season_number_name_and_summary() {
+        let dir = tempdir().unwrap();
+        let season = shared::ViewerSeason {
+            title: Some("金牌得主 第二季".to_string()),
+            original_title: Some("メダリスト 第2期".to_string()),
+            summary: Some("第二季簡介".to_string()),
+            premiered: Some("2026-01-24".to_string()),
+            poster_url: None,
+        };
+        generate_season_nfo(dir.path(), 2, &season).await.unwrap();
+        let content = std::fs::read_to_string(dir.path().join("season.nfo")).unwrap();
+        assert!(content.contains("<season>"));
+        assert!(content.contains("<title>金牌得主 第二季</title>"));
+        assert!(content.contains("<originaltitle>メダリスト 第2期</originaltitle>"));
+        assert!(content.contains("<seasonnumber>2</seasonnumber>"));
+        assert!(content.contains("<plot>第二季簡介</plot>"));
+        assert!(content.contains("<premiered>2026-01-24</premiered>"));
+    }
+
+    #[tokio::test]
+    async fn nfo_files_are_rewritten_with_the_latest_content() {
+        let dir = tempdir().unwrap();
+        generate_tvshow_nfo(dir.path(), &series()).await.unwrap();
+        let renamed = shared::ViewerSeries {
+            title: "舞冰的祈願".to_string(),
+            ..series()
+        };
+        generate_tvshow_nfo(dir.path(), &renamed).await.unwrap();
+        let content = std::fs::read_to_string(dir.path().join("tvshow.nfo")).unwrap();
+        assert!(content.contains("<title>舞冰的祈願</title>"));
+        assert!(!content.contains("<title>金牌得主</title>"));
     }
 }

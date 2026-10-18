@@ -134,4 +134,33 @@ mod tests {
         let caps: crate::Capabilities = serde_json::from_str("{}").unwrap();
         assert!(caps.namespaces.is_empty());
     }
+
+    #[test]
+    fn a_sync_request_from_an_older_core_carries_no_metadata() {
+        let req: crate::ViewerSyncRequest = serde_json::from_str(
+            r#"{"download_id":1,"series_id":2,"anime_title":"t","series_no":1,"episode_no":1,
+                "subtitle_group":"g","video_path":"/v.mkv","subtitle_paths":[],"callback_url":"http://c",
+                "bangumi_id":null,"cover_image_url":null}"#,
+        )
+        .unwrap();
+        assert!(req.external_id.is_none() && req.series.is_none() && req.season.is_none());
+    }
+
+    #[test]
+    fn a_sync_request_carries_the_season_identity_and_content() {
+        let req: crate::ViewerSyncRequest = serde_json::from_str(
+            r#"{"download_id":1,"series_id":2,"anime_title":"金牌得主","series_no":2,"episode_no":1,
+                "subtitle_group":"g","video_path":"/v.mkv","subtitle_paths":[],"callback_url":"http://c",
+                "external_id":"bgm/548818",
+                "series":{"title":"金牌得主","summary":"s","premiered":"2025-01-04","poster_url":null},
+                "season":{"title":"金牌得主 第二季","original_title":null,"summary":null,"premiered":null,"poster_url":null}}"#,
+        )
+        .unwrap();
+        assert_eq!(req.external_id, Some(ExternalId::new("bgm", "548818")));
+        assert_eq!(req.series.unwrap().title, "金牌得主");
+        assert_eq!(
+            req.season.unwrap().title.as_deref(),
+            Some("金牌得主 第二季")
+        );
+    }
 }

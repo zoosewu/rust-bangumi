@@ -222,6 +222,15 @@ components:
           format: uri
           description: 處理完成後的回呼 URL
           example: "http://core-service:8000/sync-callback"
+        external_id:
+          type: string
+          nullable: true
+          description: 季的外部身分（`{namespace}/{id}`），用來向 metadata 取單集資料；沒有時不產單集 NFO
+          example: "bgm/548818"
+        series:
+          $ref: '#/components/schemas/ViewerSeries'
+        season:
+          $ref: '#/components/schemas/ViewerSeason'
 
     ViewerResyncRequest:
       type: object
@@ -261,6 +270,58 @@ components:
           type: string
           format: uri
           example: "http://core-service:8000/sync-callback"
+        external_id:
+          type: string
+          nullable: true
+          description: 季的外部身分（`{namespace}/{id}`），用來向 metadata 取單集資料；沒有時不產單集 NFO
+          example: "bgm/548818"
+        series:
+          $ref: '#/components/schemas/ViewerSeries'
+        season:
+          $ref: '#/components/schemas/ViewerSeason'
+
+    ViewerSeries:
+      type: object
+      nullable: true
+      description: 系列內容，寫進系列資料夾的 tvshow.nfo；title 同時是資料夾名稱
+      properties:
+        title:
+          type: string
+          example: "金牌得主"
+        summary:
+          type: string
+          nullable: true
+        premiered:
+          type: string
+          nullable: true
+          example: "2025-01-04"
+        poster_url:
+          type: string
+          nullable: true
+          description: 系列海報（poster.jpg，已存在時不重新下載）
+
+    ViewerSeason:
+      type: object
+      nullable: true
+      description: 季內容，寫進季資料夾的 season.nfo
+      properties:
+        title:
+          type: string
+          nullable: true
+          example: "金牌得主 第二季"
+        original_title:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        premiered:
+          type: string
+          nullable: true
+        poster_url:
+          type: string
+          nullable: true
+          description: 季海報（Season NN/poster.jpg，已存在時不重新下載）
 
     ViewerDeleteRequest:
       type: object
