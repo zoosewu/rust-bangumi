@@ -96,6 +96,14 @@ async fn main() -> anyhow::Result<()> {
             "/admin/identity-backfill",
             post(handlers::admin::identity_backfill),
         )
+        .route(
+            "/admin/resync-library",
+            post(handlers::admin::resync_library).get(handlers::admin::resync_library_progress),
+        )
+        .route(
+            "/admin/merged-duplicates",
+            post(handlers::admin::merged_duplicates),
+        )
         // 服務註冊
         .route("/services/register", post(handlers::services::register))
         .route("/services", get(handlers::services::list_services))

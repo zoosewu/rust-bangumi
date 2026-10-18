@@ -7,6 +7,7 @@ pub mod filter;
 pub mod filter_recalc;
 pub mod identity;
 pub mod identity_backfill;
+pub mod library_maintenance;
 pub mod registry;
 pub mod reparse;
 pub mod scheduler;

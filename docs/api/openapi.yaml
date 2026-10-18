@@ -66,6 +66,68 @@ tags:
     description: 待確認 AI 結果管理
 
 paths:
+  /admin/resync-library:
+    post:
+      tags:
+        - Admin
+      summary: 依目前的系列名稱重新同步整個媒體庫
+      description: |
+        所有已同步、有媒體庫路徑的集數送 viewer resync：搬到目前作品名稱的資料夾、字幕跟著搬、
+        寫出 tvshow.nfo / season.nfo / 單集 NFO 與海報，清掉只剩產生檔案的舊資料夾。
+        多筆下載共用同一個檔案時只同步一筆（列在 shared_with）。
+        `apply=false`（預設）只回傳清單；套用時在背景一次一集進行（等 viewer 回報後才送下一集），回傳 202。
+      operationId: resyncLibrary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apply:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: dry-run 清單（total、items、shared_with）
+        '202':
+          description: 已開始
+        '409':
+          description: 已經有一輪在進行
+    get:
+      tags:
+        - Admin
+      summary: 媒體庫重新同步的進度
+      operationId: resyncLibraryProgress
+      responses:
+        '200':
+          description: running、total、done、failed、current
+
+  /admin/merged-duplicates:
+    post:
+      tags:
+        - Admin
+      summary: 刪除回填合併掉的重複檔案
+      description: |
+        列出回填時標為 `merged duplicate of download N` 的取消下載、仍留在媒體庫的檔案（與保留的那份共用檔案者除外），
+        `apply=true` 時由 viewer 刪除檔案與其 NFO、清理空資料夾，刪除成功的下載清掉 file_path。
+      operationId: deleteMergedDuplicates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apply:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: files（清單）；套用時另有 deleted（viewer 回報）
+        '502':
+          description: viewer 無法連線
+
   /admin/identity-backfill:
     post:
       tags:
