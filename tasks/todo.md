@@ -184,9 +184,19 @@
     - 驗證：core / viewer / shared 337 個測試通過；本機 viewer + metadata + 真實 bgm：金牌得主 S2 產出 NFO 與兩張海報，
       第 15 集正確對到第二季第 2 集「我的手牌」
     - 生產封面確認：沿用的舊作品（金牌得主、青之箱、藥屋）舊封面正好是第一季的圖，系列海報正確
-    - [ ] 部署：viewer-jellyfin → core-service
+    - [x] 2026-10-19 00:56 (+08) 部署 viewer-jellyfin → core-service（08c28ba）：兩者 healthy、restarts=0，core log 無 ERROR
     - [ ] 部署後觀察：下一集同步後該季資料夾出現 season.nfo、單集 NFO，系列資料夾出現 tvshow.nfo、poster.jpg
-  - [ ] 階段 C：媒體庫整理（C1–C3）
+  - [x] 階段 C：媒體庫整理（C1–C3），commit cdafdfc、3314191、d29940f
+    - C1 viewer：搬移時字幕跟著走；舊資料夾只剩產生的 NFO / 海報時一併清掉（有其他檔案就保留）
+    - 修正既有 bug：`resyncing` 不在 downloads 狀態約束內，resync 狀態從未寫入成功（viewer 照做、core 不知道）；
+      migration `20261019000000allowresyncingstatus`；改為送出前先搶占、resync 失敗回到 synced、5 分鐘沒回報回收為 synced
+    - C2 `POST /admin/resync-library`（GET 查進度）：一次一集、等 viewer 回報才送下一集
+    - C3 `POST /admin/merged-duplicates`：經 viewer 刪除回填合併掉的重複檔案（與保留檔案同路徑者不刪）
+    - 驗證（本機以**最新生產資料副本** + 依生產檔名建的假媒體庫 + 本機 viewer / metadata / 真實 bgm）：
+      C2 172/172 集成功（約 6 分鐘），15 個新資料夾都有 tvshow.nfo、season.nfo、單集 NFO、海報，劇場版字幕跟著搬；
+      C3 刪除 34 個重複檔案，てんびん 資料夾自動清掉；第二次 dry-run 為空
+    - 系統刪不到的 2 個殘檔（合集版已保留）：`Super no Ura…/S01E09`（無下載記錄，E7 孤兒）、`暴走千金…/S01E10`（下載 515 無路徑）→ 手動刪除
+    - [ ] 部署：viewer-jellyfin → core-service；C2 dry-run → 套用；C3 dry-run → 套用；手動刪 2 個殘檔
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
