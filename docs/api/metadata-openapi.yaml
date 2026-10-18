@@ -2,7 +2,8 @@ openapi: 3.0.0
 info:
   title: rustBangumi Metadata Service API
   description: |
-    Bangumi.tv metadata 查詢服務。Stateless 服務，呼叫方需自行快取結果。
+    Bangumi.tv metadata 查詢服務，依 external id（`bgm/{subject}`）查詢，不做標題模糊搜尋。
+    Stateless 服務，呼叫方需自行快取結果。
     服務啟動時向 Core 以 module_type=metadata 註冊。
   version: 0.1.0
   contact:
@@ -50,72 +51,56 @@ paths:
     post:
       tags:
         - Enrich
-      summary: 查詢動畫 metadata
-      description: 根據動畫標題從 bangumi.tv 取得封面圖片、簡介與首播日期
+      summary: 查詢一季的 metadata 與所屬系列
+      description: |
+        依 external id 從 bangumi.tv 取得一季的名稱、簡介、播出期間與封面。
+        並沿前傳鏈（只走 TV / WEB 動畫）找到第一季，回傳系列名稱與系列內容；劇場版、OVA 自成一部。
+        系列名稱：第一季往後第一個非空中文名去掉季別標記，沒有中文名時用第一季原名。
+        服務註冊時宣告 `capabilities.namespaces = ["bgm"]`。
       operationId: enrichAnime
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - title
-              properties:
-                title:
-                  type: string
-                  description: 動畫標題
-                  example: "進撃の巨人"
+              $ref: '#/components/schemas/ExternalIdRequest'
+            example:
+              namespace: "bgm"
+              external_id: "548818"
       responses:
         '200':
-          description: Metadata 查詢結果（找不到時 cover_images 為空陣列）
+          description: 一季的內容與系列
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EnrichAnimeResponse'
-              examples:
-                found:
-                  summary: 找到結果
-                  value:
-                    bangumi_id: 101
-                    cover_images:
-                      - url: "https://lain.bgm.tv/pic/cover/l/xx.jpg"
-                        source: "bangumi"
-                    summary: "侦探コナンは..."
-                    air_date: "2013-04-06"
-                notFound:
-                  summary: 找不到
-                  value:
-                    bangumi_id: null
-                    cover_images: []
-                    summary: null
-                    air_date: null
+        '404':
+          description: namespace 不是 bgm，或 subject 不存在
+        '502':
+          description: bangumi.tv 查詢失敗
 
   /enrich/episodes:
     post:
       tags:
         - Enrich
       summary: 查詢集數 metadata
-      description: 根據 bangumi_id 與集數編號從 bangumi.tv 取得集數標題與簡介
+      description: |
+        依 external id 與集數取得集數標題與簡介。集數先比對該季集數（ep），
+        找不到再比對跨季連續編號（sort），例如第二季第 1 集也可以用 14 查詢。
       operationId: enrichEpisodes
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - bangumi_id
-                - episode_no
-              properties:
-                bangumi_id:
-                  type: integer
-                  description: bangumi.tv 的動畫 ID
-                  example: 101
-                episode_no:
-                  type: integer
-                  description: 集數編號
-                  example: 5
+              allOf:
+                - $ref: '#/components/schemas/ExternalIdRequest'
+                - type: object
+                  required: [episode_no]
+                  properties:
+                    episode_no:
+                      type: integer
+                      example: 1
       responses:
         '200':
           description: 集數 metadata
@@ -123,16 +108,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EnrichEpisodesResponse'
-              examples:
-                found:
-                  value:
-                    episode_no: 5
-                    title: "第5話"
-                    title_cn: "第5集"
-                    air_date: "2013-05-04"
-                    summary: "..."
         '404':
-          description: 集數不存在
+          description: namespace 不是 bgm，或集數不存在
+        '502':
+          description: bangumi.tv 查詢失敗
 
 components:
   schemas:
@@ -151,27 +130,89 @@ components:
           description: 圖片來源
           example: "bangumi"
 
-    EnrichAnimeResponse:
+    ExternalIdRequest:
       type: object
+      required: [namespace, external_id]
       properties:
-        bangumi_id:
-          type: integer
+        namespace:
+          type: string
+          example: "bgm"
+        external_id:
+          type: string
+          example: "548818"
+
+    SeriesInfo:
+      type: object
+      description: 系列（第一季）的內容
+      properties:
+        namespace:
+          type: string
+          example: "bgm"
+        external_id:
+          type: string
+          description: 第一季的 subject id
+          example: "430699"
+        title:
+          type: string
+          description: 各季共用的系列名稱
+          example: "金牌得主"
+        original_title:
+          type: string
+          example: "メダリスト"
+        summary:
+          type: string
           nullable: true
-          description: bangumi.tv 動畫 ID
-          example: 101
+        air_date:
+          type: string
+          nullable: true
+          example: "2025-01-05"
         cover_images:
           type: array
           items:
             $ref: '#/components/schemas/CoverImageInfo'
+
+    EnrichAnimeResponse:
+      type: object
+      properties:
+        namespace:
+          type: string
+          example: "bgm"
+        external_id:
+          type: string
+          example: "548818"
+        title:
+          type: string
+          description: 原名
+          example: "メダリスト 第2期"
+        title_cn:
+          type: string
+          description: 中文名（可能為空字串）
+          example: "金牌得主 第二季"
         summary:
           type: string
           nullable: true
-          description: 動畫簡介
         air_date:
           type: string
           nullable: true
-          description: 首播日期（YYYY-MM-DD）
-          example: "2013-04-06"
+          example: "2026-01-24"
+        end_date:
+          type: string
+          nullable: true
+          description: 播放結束（取自 infobox）
+          example: "2026-03-21"
+        total_episodes:
+          type: integer
+          nullable: true
+          example: 9
+        platform:
+          type: string
+          example: "TV"
+        cover_images:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoverImageInfo'
+        series:
+          $ref: '#/components/schemas/SeriesInfo'
 
     EnrichEpisodesResponse:
       type: object

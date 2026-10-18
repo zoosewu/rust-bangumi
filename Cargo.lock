@@ -1712,6 +1712,7 @@ dependencies = [
  "anyhow",
  "axum",
  "dotenv",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
@@ -1719,7 +1720,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "urlencoding",
 ]
 
 [[package]]

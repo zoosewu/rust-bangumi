@@ -1,6 +1,7 @@
 mod bangumi_client;
 mod handlers;
 mod models;
+mod series;
 
 use axum::{
     routing::{get, post},
