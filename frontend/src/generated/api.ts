@@ -49,7 +49,11 @@ export interface paths {
         };
         /** Get anime work by ID */
         get: operations["get_anime_work"];
-        put?: never;
+        /**
+         * 手動改系列名稱；之後身分解析與回填都不再自動改它（title_source = manual）。
+         * @description 已同步的集數不會自動搬資料夾，需要時執行 resync。
+         */
+        put: operations["update_anime_work"];
         post?: never;
         /** Delete anime work by ID */
         delete: operations["delete_anime_work"];
@@ -127,6 +131,40 @@ export interface paths {
         get: operations["list_downloads"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/downloads/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /downloads/retry — bulk retry, optional filters in the body. */
+        post: operations["retry_bulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/core/downloads/{download_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /downloads/:download_id/retry — manually retry a single download. */
+        post: operations["retry_one"];
         delete?: never;
         options?: never;
         head?: never;
@@ -302,6 +340,18 @@ export interface components {
             /** Format: int32 */
             link_id: number;
             link_status: string;
+            /**
+             * Format: int32
+             * @description 此 link 來源的 raw_item_id（若有）
+             */
+            raw_item_id?: number | null;
+            /** @description 此 link 來源 raw_item 的標題（若有） */
+            raw_item_title?: string | null;
+            /**
+             * @description 同一 raw_item 下其他 episode_no（不含當前 conflict 的 episode），
+             *     用於前端提示「此來源同時涵蓋哪些其他集數」（batch raw_item 才會非空）
+             */
+            sibling_episodes: number[];
             source_hash: string;
             title?: string | null;
             url: string;
@@ -501,6 +551,44 @@ export interface components {
         ResolveAnimeLinkConflictRequest: {
             /** Format: int32 */
             chosen_link_id: number;
+        };
+        ResolveByRawItemRequest: {
+            /** Format: int32 */
+            anime_id: number;
+            /** Format: int32 */
+            chosen_raw_item_id: number;
+            /** Format: int32 */
+            group_id: number;
+        };
+        ResolveByRawItemResponse: {
+            dispatched_link_ids: number[];
+            resolved_conflicts: number[];
+            skipped_conflicts: number[];
+        };
+        RetryBulkRequest: {
+            /** @description 指定要重試的 download_ids；不傳則涵蓋所有 retryable downloads */
+            download_ids?: number[] | null;
+            /** @description 額外限定 downloader_type */
+            downloader_type?: string | null;
+            /** @description 額外限定 status 子集（仍會卡在 RETRYABLE_STATUSES 之內） */
+            status?: string[] | null;
+        };
+        RetryOneResponse: {
+            /** Format: int32 */
+            download_id: number;
+            /** Format: int32 */
+            link_id: number;
+            /** @description "dispatched" | "no_downloader" */
+            status: string;
+        };
+        RetryResultResponse: {
+            conflict_or_filtered: number;
+            dispatched: number;
+            downloads_matched: number;
+            failed: number;
+            no_downloader: number;
+            not_retryable: number;
+            unique_links: number;
         };
         SeasonInfo: {
             season: string;
@@ -715,6 +803,61 @@ export interface operations {
             };
         };
     };
+    update_anime_work: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Anime work ID */
+                work_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnimeWorkRequest"];
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnimeWorkResponse"];
+                };
+            };
+            /** @description Empty or too long title */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Another work already has this title */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     delete_anime_work: {
         parameters: {
             query?: never;
@@ -907,6 +1050,81 @@ export interface operations {
                 content?: never;
             };
             /** @description Database error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_bulk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryResultResponse"];
+                };
+            };
+            /** @description Dispatch failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_one: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Download ID to retry */
+                download_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryOneResponse"];
+                };
+            };
+            /** @description Download not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Download status not retryable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dispatch failed */
             500: {
                 headers: {
                     [name: string]: unknown;

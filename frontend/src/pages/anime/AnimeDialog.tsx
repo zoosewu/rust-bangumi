@@ -2,7 +2,10 @@ import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { formatDate } from "@/lib/datetime"
 import { Effect } from "effect"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Pencil, X } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { CoreApi } from "@/services/CoreApi"
 import { useEffectQuery } from "@/hooks/useEffectQuery"
 import { useEffectMutation } from "@/hooks/useEffectMutation"
@@ -27,6 +30,32 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
   const { t } = useTranslation()
   const [selectedSeries, setSelectedSeries] = useState<AnimeRich | null>(null)
   const [coverIndex, setCoverIndex] = useState(0)
+  const [title, setTitle] = useState(anime.title)
+  const [draftTitle, setDraftTitle] = useState<string | null>(null)
+
+  const { mutate: rename, isLoading: renaming } = useEffectMutation(
+    (newTitle: string) =>
+      Effect.gen(function* () {
+        const api = yield* CoreApi
+        return yield* api.renameAnimeWork(anime.anime_id, newTitle)
+      }),
+  )
+
+  const saveTitle = () => {
+    const newTitle = (draftTitle ?? "").trim()
+    if (!newTitle || newTitle === title) {
+      setDraftTitle(null)
+      return
+    }
+    rename(newTitle).then(
+      (work) => {
+        setTitle(work.title)
+        setDraftTitle(null)
+        toast.success(t("anime.renamed"))
+      },
+      () => toast.error(t("anime.renameFailed")),
+    )
+  }
 
   const { data: allSeries, refetch: refetchSeries } = useEffectQuery(
     () =>
@@ -77,7 +106,7 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
       <FullScreenDialog
         open={open}
         onOpenChange={onOpenChange}
-        title={anime.title}
+        title={title}
       >
         <div className="space-y-6">
           {/* Cover image switcher */}
@@ -125,7 +154,55 @@ export function AnimeWorkDialog({ anime, open, onOpenChange }: AnimeWorkDialogPr
           {/* Anime info */}
           <InfoSection>
             <InfoItem label={t("common.id")} value={String(anime.anime_id)} />
-            <InfoItem label={t("common.name")} value={anime.title} />
+            <InfoItem label={t("common.name")}>
+              {draftTitle === null ? (
+                <div className="flex items-center gap-1">
+                  <p className="text-sm font-medium">{title}</p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    aria-label={t("anime.rename")}
+                    onClick={() => setDraftTitle(title)}
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveTitle()
+                      if (e.key === "Escape") setDraftTitle(null)
+                    }}
+                    className="h-7 text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={t("common.save")}
+                    disabled={renaming}
+                    onClick={saveTitle}
+                  >
+                    <Check className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={t("common.cancel")}
+                    onClick={() => setDraftTitle(null)}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">{t("anime.renameHint")}</p>
+            </InfoItem>
             <InfoItem label={t("anime.created", "Created")} value={formatDate(anime.created_at)} />
           </InfoSection>
 

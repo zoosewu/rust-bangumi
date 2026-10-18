@@ -225,6 +225,99 @@ pub async fn get_anime_work(
     }
 }
 
+/// 系列名稱：去頭尾空白，不可空白、不可超過 255 字
+fn normalized_work_title(title: &str) -> Option<String> {
+    let title = title.trim();
+    (!title.is_empty() && title.chars().count() <= 255).then(|| title.to_string())
+}
+
+/// 手動改系列名稱；之後身分解析與回填都不再自動改它（title_source = manual）。
+/// 已同步的集數不會自動搬資料夾，需要時執行 resync。
+#[utoipa::path(
+    put,
+    path = "/api/core/anime-works/{work_id}",
+    tag = "AnimeWorks",
+    params(("work_id" = i32, Path, description = "Anime work ID")),
+    request_body = AnimeWorkRequest,
+    responses(
+        (status = 200, description = "Renamed", body = AnimeWorkResponse),
+        (status = 400, description = "Empty or too long title"),
+        (status = 404, description = "Not found"),
+        (status = 409, description = "Another work already has this title"),
+        (status = 500, description = "Database error")
+    )
+)]
+pub async fn update_anime_work(
+    State(state): State<AppState>,
+    Path(work_id): Path<i32>,
+    Json(req): Json<AnimeWorkRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let Some(title) = normalized_work_title(&req.title) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "invalid_title",
+                "message": "Title must be 1–255 characters"
+            })),
+        );
+    };
+    let mut conn = match state.db.get() {
+        Ok(conn) => conn,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "database_error", "message": e.to_string() })),
+            )
+        }
+    };
+    let updated = diesel::update(anime_works::table.find(work_id))
+        .set((
+            anime_works::title.eq(&title),
+            anime_works::title_source.eq("manual"),
+            anime_works::updated_at.eq(chrono::Utc::now().naive_utc()),
+        ))
+        .get_result::<AnimeWork>(&mut conn);
+    match updated {
+        Ok(work) => {
+            tracing::info!(
+                "Anime work {} renamed to '{}' (manual)",
+                work_id,
+                work.title
+            );
+            (
+                StatusCode::OK,
+                Json(json!(AnimeWorkResponse {
+                    anime_id: work.work_id,
+                    title: work.title,
+                    created_at: work.created_at,
+                    updated_at: work.updated_at,
+                })),
+            )
+        }
+        Err(diesel::NotFound) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "not_found",
+                "message": format!("Anime work {} not found", work_id)
+            })),
+        ),
+        Err(diesel::result::Error::DatabaseError(
+            diesel::result::DatabaseErrorKind::UniqueViolation,
+            _,
+        )) => (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "conflict",
+                "message": format!("Another anime work is already titled '{}'", title)
+            })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "database_error", "message": e.to_string() })),
+        ),
+    }
+}
+
 /// Delete anime work by ID
 #[utoipa::path(
     delete,
@@ -889,6 +982,17 @@ pub async fn delete_subtitle_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_work_title_is_trimmed_and_must_not_be_blank() {
+        assert_eq!(
+            normalized_work_title("  藥師少女的獨語 "),
+            Some("藥師少女的獨語".to_string())
+        );
+        assert_eq!(normalized_work_title("   "), None);
+        assert_eq!(normalized_work_title(&"字".repeat(256)), None);
+        assert!(normalized_work_title(&"字".repeat(255)).is_some());
+    }
     use crate::db::repository::anime::mock::MockAnimeRepository;
     use crate::db::repository::anime::AnimeRepository;
     use crate::db::repository::anime_work::mock::MockAnimeWorkRepository;

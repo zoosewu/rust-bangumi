@@ -121,6 +121,10 @@ async fn main() -> anyhow::Result<()> {
             "/anime-works/:work_id",
             axum::routing::delete(handlers::anime::delete_anime_work),
         )
+        .route(
+            "/anime-works/:work_id",
+            put(handlers::anime::update_anime_work),
+        )
         // Cover 圖片管理
         .route(
             "/anime-works/:work_id/covers",

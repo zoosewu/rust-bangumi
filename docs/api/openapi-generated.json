@@ -177,6 +177,60 @@
           }
         }
       },
+      "put": {
+        "tags": [
+          "AnimeWorks"
+        ],
+        "summary": "手動改系列名稱；之後身分解析與回填都不再自動改它（title_source = manual）。",
+        "description": "已同步的集數不會自動搬資料夾，需要時執行 resync。",
+        "operationId": "update_anime_work",
+        "parameters": [
+          {
+            "name": "work_id",
+            "in": "path",
+            "description": "Anime work ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimeWorkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeWorkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or too long title"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Another work already has this title"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      },
       "delete": {
         "tags": [
           "AnimeWorks"

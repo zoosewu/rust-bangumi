@@ -263,6 +263,46 @@ paths:
         '404':
           description: 動畫作品不存在
 
+    put:
+      tags:
+        - AnimeWorks
+      summary: 修改系列名稱
+      description: |
+        手動修改系列名稱，並將名稱來源設為 manual：之後身分解析與回填都不再自動改這個名稱。
+        已同步的集數不會自動搬到新資料夾，需要時執行 resync。
+      operationId: updateAnimeWork
+      parameters:
+        - name: work_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  description: 1–255 字，會去除頭尾空白
+                  example: "藥師少女的獨語"
+      responses:
+        '200':
+          description: 修改後的作品
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimeWorkResponse'
+        '400':
+          description: 名稱空白或過長
+        '404':
+          description: 動畫作品不存在
+        '409':
+          description: 已有其他作品使用這個名稱
+
     delete:
       tags:
         - AnimeWorks

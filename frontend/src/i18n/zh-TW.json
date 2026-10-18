@@ -132,7 +132,11 @@
     "deleteRule": "刪除篩選規則",
     "deleteRuleConfirm": "確定要刪除此篩選規則嗎？",
     "regexPattern": "正規表達式",
-    "ruleOrder": "規則順序"
+    "ruleOrder": "規則順序",
+    "rename": "修改名稱",
+    "renamed": "已修改名稱",
+    "renameFailed": "修改名稱失敗（可能已有同名作品）",
+    "renameHint": "修改後名稱會鎖定，不會被自動更新；已同步的集數需重新同步才會搬到新資料夾"
   },
   "subtitleGroups": {
     "title": "字幕組",

@@ -16,6 +16,7 @@ use crate::dto::{
         crate::handlers::anime::create_anime_work,
         crate::handlers::anime::list_anime_work,
         crate::handlers::anime::get_anime_work,
+        crate::handlers::anime::update_anime_work,
         crate::handlers::anime::delete_anime_work,
         crate::handlers::anime::create_season,
         crate::handlers::anime::list_seasons,

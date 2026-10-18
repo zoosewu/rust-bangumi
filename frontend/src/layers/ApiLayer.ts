@@ -65,6 +65,20 @@ const makeCoreApi = Effect.gen(function* () {
         .execute(HttpClientRequest.del(`/api/core/anime-works/${id}`))
         .pipe(Effect.asVoid, Effect.scoped, Effect.orDie),
 
+    renameAnimeWork: (id, title) =>
+      client
+        .execute(
+          HttpClientRequest.put(`/api/core/anime-works/${id}`).pipe(
+            HttpClientRequest.bodyUnsafeJson({ title }),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((response) => response.json),
+          Effect.flatMap(Schema.decodeUnknown(AnimeWork)),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
     getSubscriptions: fetchJson(
       HttpClientRequest.get("/api/core/subscriptions"),
       Schema.Struct({ subscriptions: Schema.Array(Subscription) }),

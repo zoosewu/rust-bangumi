@@ -132,7 +132,11 @@
     "deleteRule": "Delete Filter Rule",
     "deleteRuleConfirm": "Are you sure you want to delete this filter rule?",
     "regexPattern": "Regex Pattern",
-    "ruleOrder": "Rule Order"
+    "ruleOrder": "Rule Order",
+    "rename": "Rename",
+    "renamed": "Renamed",
+    "renameFailed": "Rename failed (another work may already use this name)",
+    "renameHint": "A renamed work keeps its name and is never renamed automatically; resync synced episodes to move them to the new folder"
   },
   "subtitleGroups": {
     "title": "Subtitle Groups",
