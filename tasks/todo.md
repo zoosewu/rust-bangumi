@@ -172,7 +172,10 @@
       合併 36（35 個重複下載取消 + 超市後門 ep9 未下載的單集 link）、soft delete 56 作品（39 殘骸 + 17 舊作品）；
       套用後 17 個作品、名稱全來自 bgm；剩下的同集多 link 只有原本就待決的青之箱 / 藥屋，回填沒有替使用者決定
     - 觀察到（既有問題，未處理）：藥屋 S3 一個字幕組用跨季連續集數（49、50），另一個用該季集數（1、2、3）
-    - [ ] 部署：core → metadata → fetcher-mikanani → frontend；回填 dry-run 報表確認後 `--apply`
+    - [x] 2026-10-18 13:38 (+08) 部署 core / metadata / fetcher-mikanani / frontend（86e4fc6）：migration `20261018000000metadataidentity`
+      已套用、metadata 註冊 `bgm`、四個服務 restarts=0；生產 dry-run 與副本結果一致且未寫入
+    - [x] 2026-10-18 13:51 套用回填：18 訂閱綁定、17 個作品（全部 `title_source=bgm`、各一季帶 bgm id）、56 作品 soft delete、
+      35 筆重複下載取消（`merged duplicate of download N`）＋ 1 個未下載 link 標 resolved；332 筆 raw item 全部帶 external_ids
     - [ ] 部署後觀察：新項目的 raw item 帶 external_ids、掛到 bgm 決定的季；log 沒有 `No usable identity` 警告（mikan 訂閱）
   - [ ] 階段 B：Viewer 輸出（B1–B4）
   - [ ] 階段 C：媒體庫整理（C1–C3）
