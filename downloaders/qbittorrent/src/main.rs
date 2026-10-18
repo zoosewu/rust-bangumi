@@ -114,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
                 download_endpoint: Some("/downloads".to_string()),
                 sync_endpoint: None,
                 supported_download_types: vec![DownloadType::Magnet, DownloadType::Torrent],
+                namespaces: vec![],
             },
         };
 

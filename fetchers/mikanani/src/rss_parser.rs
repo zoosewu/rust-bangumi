@@ -73,6 +73,7 @@ fn entry_to_raw_item(entry: Entry) -> Option<RawAnimeItem> {
         description,
         download_url,
         pub_date,
+        external_ids: vec![],
     })
 }
 

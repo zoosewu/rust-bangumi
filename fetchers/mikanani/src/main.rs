@@ -73,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],
+                namespaces: vec![],
             },
         };
         let core_url = config.register_url().replace("/services/register", "");
@@ -101,6 +102,7 @@ async fn register_to_core<C: fetcher_mikanani::HttpClient>(
             download_endpoint: None,
             sync_endpoint: None,
             supported_download_types: vec![],
+            namespaces: vec![],
         },
     };
 

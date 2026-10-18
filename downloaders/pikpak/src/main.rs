@@ -127,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
                 download_endpoint: Some("/downloads".to_string()),
                 sync_endpoint: None,
                 supported_download_types: vec![DownloadType::Magnet, DownloadType::Http],
+                namespaces: vec![],
             },
         };
         shared::register_with_core_backoff(&core_url, &registration).await;

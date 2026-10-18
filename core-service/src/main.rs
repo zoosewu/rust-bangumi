@@ -427,6 +427,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
+                                    namespaces: vec![],
                                 },
                             ),
                             ModuleTypeEnum::Downloader => (
@@ -438,6 +439,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     download_endpoint: Some("/downloads".to_string()),
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
+                                    namespaces: vec![],
                                 },
                             ),
                             ModuleTypeEnum::Viewer => (
@@ -449,6 +451,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     download_endpoint: None,
                                     sync_endpoint: Some("/sync".to_string()),
                                     supported_download_types: vec![],
+                                    namespaces: vec![],
                                 },
                             ),
                             ModuleTypeEnum::Metadata => (
@@ -460,6 +463,7 @@ async fn load_existing_services(app_state: &state::AppState) {
                                     download_endpoint: None,
                                     sync_endpoint: None,
                                     supported_download_types: vec![],
+                                    namespaces: vec![],
                                 },
                             ),
                         };

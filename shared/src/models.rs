@@ -69,6 +69,9 @@ pub struct Capabilities {
     pub sync_endpoint: Option<String>,
     #[serde(default)]
     pub supported_download_types: Vec<DownloadType>,
+    /// metadata service 能解析的 external id namespace，例如 `["bgm"]`
+    #[serde(default)]
+    pub namespaces: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -322,6 +325,9 @@ pub struct RawAnimeItem {
     pub description: Option<String>,     // RSS <description>
     pub download_url: String,            // RSS <enclosure> url
     pub pub_date: Option<DateTime<Utc>>, // RSS <pubDate>
+    /// fetcher 所知道的這部作品的外部身分，例如 `mikan/3822`、`bgm/548818`
+    #[serde(default)]
+    pub external_ids: Vec<crate::ExternalId>,
 }
 
 /// Fetcher 回傳的原始結果（新架構）

@@ -150,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
                 download_endpoint: None,
                 sync_endpoint: Some("/sync".to_string()),
                 supported_download_types: vec![],
+                namespaces: vec![],
             },
         };
 

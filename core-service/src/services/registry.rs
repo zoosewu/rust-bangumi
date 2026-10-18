@@ -102,6 +102,7 @@ mod tests {
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],
+                namespaces: vec![],
             },
             is_healthy: true,
             last_heartbeat: Utc::now(),

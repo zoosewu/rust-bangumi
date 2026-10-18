@@ -67,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
                 download_endpoint: None,
                 sync_endpoint: None,
                 supported_download_types: vec![],
+                namespaces: vec![],
             },
         };
 
