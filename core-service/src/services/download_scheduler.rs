@@ -434,6 +434,25 @@ impl DownloadScheduler {
             }
             _ => {}
         }
+
+        // 重新同步沒有回報：檔案仍在媒體庫，回到 synced
+        match diesel::update(
+            downloads::table
+                .filter(downloads::status.eq("resyncing"))
+                .filter(downloads::updated_at.lt(cutoff)),
+        )
+        .set((
+            downloads::status.eq("synced"),
+            downloads::updated_at.eq(now),
+        ))
+        .execute(conn)
+        {
+            Ok(count) if count > 0 => {
+                tracing::warn!("Reset {} stale resyncing downloads back to synced", count);
+            }
+            Err(e) => tracing::error!("Failed to recover stale resyncing downloads: {}", e),
+            _ => {}
+        }
     }
 
     /// Retry file matching for downloads in "batch_unmatched" status.

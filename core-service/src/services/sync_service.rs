@@ -42,6 +42,44 @@ fn accepts_failed_callback(current_status: &str) -> bool {
     SYNC_IN_FLIGHT_STATUSES.contains(&current_status)
 }
 
+/// 失敗回報之後的狀態與重試次數：重新同步失敗時檔案仍在原處，回到 synced 且不計入重試；
+/// 第一次同步失敗回到 completed 讓排程重試，三次後停在 sync_failed。
+fn status_after_failed_callback(current_status: &str, retry_count: i32) -> (&'static str, i32) {
+    if current_status == "resyncing" {
+        return ("synced", retry_count);
+    }
+    let retries = retry_count + 1;
+    (
+        if retries >= 3 {
+            "sync_failed"
+        } else {
+            "completed"
+        },
+        retries,
+    )
+}
+
+/// 撤回 `notify_viewer_resync` 的搶占（確定 viewer 沒收到請求時）。
+fn release_resync_claim(conn: &mut diesel::PgConnection, download_id: i32) {
+    if let Err(e) = diesel::update(
+        downloads::table
+            .filter(downloads::download_id.eq(download_id))
+            .filter(downloads::status.eq("resyncing")),
+    )
+    .set((
+        downloads::status.eq("synced"),
+        downloads::updated_at.eq(chrono::Utc::now().naive_utc()),
+    ))
+    .execute(conn)
+    {
+        tracing::warn!(
+            "Failed to release resync claim for download {}: {}",
+            download_id,
+            e
+        );
+    }
+}
+
 /// Undo `notify_viewer`'s claim when the viewer is known not to have taken the request.
 fn release_sync_claim(conn: &mut diesel::PgConnection, download_id: i32) {
     let released = diesel::update(
@@ -440,6 +478,25 @@ impl SyncService {
 
         let resync_request = self.build_resync_request(&mut conn, download)?;
 
+        // 先搶占再送出：viewer 回報得再快，也不會被之後的狀態更新蓋掉
+        let claimed = diesel::update(
+            downloads::table
+                .filter(downloads::download_id.eq(download.download_id))
+                .filter(downloads::status.eq("synced")),
+        )
+        .set((
+            downloads::status.eq("resyncing"),
+            downloads::updated_at.eq(chrono::Utc::now().naive_utc()),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to claim download for resync: {}", e))?;
+        if claimed == 0 {
+            return Err(format!(
+                "Download {} is not synced, not resyncing it",
+                download.download_id
+            ));
+        }
+
         let resync_url = format!("{}/resync", viewer.base_url);
         tracing::info!(
             "Notifying viewer {} for resync download {} at {}",
@@ -448,29 +505,28 @@ impl SyncService {
             resync_url
         );
 
-        let response = self
+        let response = match self
             .http_client
             .post(&resync_url)
             .json(&resync_request)
             .timeout(std::time::Duration::from_secs(10))
             .send()
             .await
-            .map_err(|e| format!("Failed to notify viewer for resync: {}", e))?;
+        {
+            Ok(response) => response,
+            Err(e) => {
+                // 連不上就確定 viewer 沒收到；逾時則可能已在處理，交給回報或逾時回收
+                if e.is_connect() {
+                    release_resync_claim(&mut conn, download.download_id);
+                }
+                return Err(format!("Failed to notify viewer for resync: {}", e));
+            }
+        };
 
         if response.status() == reqwest::StatusCode::ACCEPTED || response.status().is_success() {
-            let now = chrono::Utc::now().naive_utc();
-            diesel::update(
-                downloads::table.filter(downloads::download_id.eq(download.download_id)),
-            )
-            .set((
-                downloads::status.eq("resyncing"),
-                downloads::updated_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to update download status: {}", e))?;
-
             Ok(true)
         } else {
+            release_resync_claim(&mut conn, download.download_id);
             Err(format!("Viewer returned status: {}", response.status()))
         }
     }
@@ -684,12 +740,8 @@ impl SyncService {
                     return Ok(());
                 }
 
-                let new_retry_count = download.sync_retry_count + 1;
-                let new_status = if new_retry_count >= 3 {
-                    "sync_failed"
-                } else {
-                    "completed" // back to completed so scheduler will re-trigger
-                };
+                let (new_status, new_retry_count) =
+                    status_after_failed_callback(&download.status, download.sync_retry_count);
 
                 // Re-check the status: a `synced` callback may have landed since the read
                 diesel::update(
@@ -725,6 +777,20 @@ impl SyncService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_resync_leaves_the_episode_synced() {
+        assert_eq!(status_after_failed_callback("resyncing", 1), ("synced", 1));
+    }
+
+    #[test]
+    fn a_failed_first_sync_is_retried_then_given_up() {
+        assert_eq!(status_after_failed_callback("syncing", 0), ("completed", 1));
+        assert_eq!(
+            status_after_failed_callback("syncing", 2),
+            ("sync_failed", 3)
+        );
+    }
 
     fn work_and_season() -> (AnimeWork, Anime) {
         let now = chrono::Utc::now().naive_utc();
