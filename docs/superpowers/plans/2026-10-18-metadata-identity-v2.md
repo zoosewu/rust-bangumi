@@ -227,6 +227,8 @@ core 與 viewer 須同時部署（舊 viewer 會忽略新欄位，只是不產 N
 
 ### B4. core — 封面改掛季、依身分抓取
 
+> 2026-10-18：依身分抓封面（`identity::fetch_covers_for_work`）與作品列表的背景補抓已在階段 A 一併完成（新版 metadata 不再提供標題搜尋，不改會壞）。B4 剩下：同步請求帶上系列海報與季封面（併入 B2）。
+
 **Files:** 改 `core-service/src/handlers/anime.rs`（`fetch_and_store_covers`）及其呼叫端
 
 - 簽章改為 `(db, anime_id, ExternalId)`，請求 `/enrich/anime { namespace, external_id }`：

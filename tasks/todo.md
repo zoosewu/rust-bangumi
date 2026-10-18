@@ -160,7 +160,20 @@
     animes 簡介 / 日期全空；4 個訂閱被拆成兩個作品，其中 3 部的兩組 1–12 集逐位元組相同（重複約 19 GB）
   - 使用者決定（2026-10-18）：名稱中文即可、各季統一（沿 bgm 前傳鏈取第一季中文名，手動可覆寫，不用 AI）；季數由 parser 決定；
     沒有 bgm id 沿用現行做法 + log（不做待認領佇列）；重複集數保留合集版；合集集數都已下載則自動略過；殘骸作品看報表後 soft delete
-  - [ ] 階段 A：身分（A1–A10）
+  - [x] 階段 A：身分（A1–A10），commit 6901cf0…7b9bbbf 與封面修正
+    - A1 `ExternalId` / payload 欄位；A2 mikanani 回報 `mikan/` `bgm/`（實測 3822→548818、4027→456080）；A3 migration
+      （`anime_external_ids`、`metadata_namespaces`、作品系列身分 / 名稱來源 / soft delete、季名、`raw_anime_items.external_ids`）；
+      A4 namespace 註冊落地；A5 metadata 依 subject id 查詢、前傳鏈找第一季、刪除 `list[0]`（實測藥屋 S2/S3 → 系列 420628）；
+      A6 identity 服務；A7 攝入與所有 reparse 路徑接上身分；A8 合集集數都已下載自動略過；A9 手動改系列名稱（前端可編輯）；
+      A10 回填（admin endpoint + `bangumi backfill-identity`）；作品列表背景補封面改用身分（不再標題搜尋）
+    - 驗證：workspace 456 個測試通過（含 31 個 dev DB 測試，`DATABASE_TEST_URL` + `--include-ignored`）；
+      本機端對端（core + metadata + 真實 bgm）新項目依身分建季、忽略 parser 作品名
+    - 2026-10-18 以**生產資料副本**（pg_dump，不含 ai_providers / webhooks 資料）在本機跑回填：18/18 訂閱綁定、
+      合併 36（35 個重複下載取消 + 超市後門 ep9 未下載的單集 link）、soft delete 56 作品（39 殘骸 + 17 舊作品）；
+      套用後 17 個作品、名稱全來自 bgm；剩下的同集多 link 只有原本就待決的青之箱 / 藥屋，回填沒有替使用者決定
+    - 觀察到（既有問題，未處理）：藥屋 S3 一個字幕組用跨季連續集數（49、50），另一個用該季集數（1、2、3）
+    - [ ] 部署：core → metadata → fetcher-mikanani → frontend；回填 dry-run 報表確認後 `--apply`
+    - [ ] 部署後觀察：新項目的 raw item 帶 external_ids、掛到 bgm 決定的季；log 沒有 `No usable identity` 警告（mikan 訂閱）
   - [ ] 階段 B：Viewer 輸出（B1–B4）
   - [ ] 階段 C：媒體庫整理（C1–C3）
 
