@@ -177,7 +177,15 @@
     - [x] 2026-10-18 13:51 套用回填：18 訂閱綁定、17 個作品（全部 `title_source=bgm`、各一季帶 bgm id）、56 作品 soft delete、
       35 筆重複下載取消（`merged duplicate of download N`）＋ 1 個未下載 link 標 resolved；332 筆 raw item 全部帶 external_ids
     - [ ] 部署後觀察：新項目的 raw item 帶 external_ids、掛到 bgm 決定的季；log 沒有 `No usable identity` 警告（mikan 訂閱）
-  - [ ] 階段 B：Viewer 輸出（B1–B4）
+  - [x] 階段 B：Viewer 輸出（B1–B4），commit bcddb6b
+    - 同步 / resync 請求帶季的 `external_id`、系列（名稱、簡介、首播日、海報）與季（名稱、原名、簡介、播出日、海報）
+    - viewer 寫 `tvshow.nfo`、`Season NN/season.nfo`、系列與季的 `poster.jpg`（已存在不重抓）、單集 NFO（依 subject id 查，
+      支援該季集數與跨季連續集數）
+    - 驗證：core / viewer / shared 337 個測試通過；本機 viewer + metadata + 真實 bgm：金牌得主 S2 產出 NFO 與兩張海報，
+      第 15 集正確對到第二季第 2 集「我的手牌」
+    - 生產封面確認：沿用的舊作品（金牌得主、青之箱、藥屋）舊封面正好是第一季的圖，系列海報正確
+    - [ ] 部署：viewer-jellyfin → core-service
+    - [ ] 部署後觀察：下一集同步後該季資料夾出現 season.nfo、單集 NFO，系列資料夾出現 tvshow.nfo、poster.jpg
   - [ ] 階段 C：媒體庫整理（C1–C3）
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
