@@ -261,6 +261,7 @@ impl TitleParserService {
         download_url: &str,
         pub_date: Option<chrono::NaiveDateTime>,
         subscription_id: i32,
+        external_ids: &[shared::ExternalId],
     ) -> Result<RawAnimeItem, String> {
         let now = Utc::now().naive_utc();
 
@@ -275,6 +276,7 @@ impl TitleParserService {
             error_message: None,
             parsed_at: None,
             created_at: now,
+            external_ids: external_ids.iter().map(|id| Some(id.to_string())).collect(),
         };
 
         diesel::insert_into(raw_anime_items::table)

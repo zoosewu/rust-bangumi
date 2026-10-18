@@ -421,6 +421,11 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
             .map_err(|e| e.to_string())?
     };
 
+    let identity = {
+        let mut conn = pool.get().map_err(|e| e.to_string())?;
+        crate::handlers::fetcher_results::prepare_identity(&mut conn, &pool, &items).await
+    };
+
     // 先嘗試用現有解析器重新解析，並建立 anime_links
     let mut new_link_ids: Vec<i32> = Vec::new();
     let mut still_unmatched_subs: HashSet<i32> = HashSet::new();
@@ -429,7 +434,7 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
         match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
                 match crate::handlers::fetcher_results::process_parsed_result(
-                    &mut conn, item, &parsed,
+                    &mut conn, &identity, item, &parsed,
                 ) {
                     Ok(link_ids) => {
                         new_link_ids.extend(link_ids);

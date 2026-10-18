@@ -9,6 +9,9 @@ use crate::models::{
     RawAnimeItem, Season, Subscription, SubtitleGroup,
 };
 use crate::schema::{anime_links, anime_works, animes, seasons, subscriptions, subtitle_groups};
+use crate::services::identity::{
+    resolve_season, HttpMetadataLookup, IdentityContext, SeasonResolution,
+};
 use crate::services::title_parser::ParseStatus;
 use crate::services::TitleParserService;
 use crate::state::AppState;
@@ -255,6 +258,7 @@ pub(crate) fn create_or_get_anime(
         .filter(anime_works::title.eq(title))
         .first::<AnimeWork>(conn)
     {
+        Ok(work) if !work.is_active => reactivate_work(conn, work.work_id),
         Ok(work) => {
             tracing::debug!("Found existing anime work: {}", title);
             Ok(work)
@@ -275,6 +279,65 @@ pub(crate) fn create_or_get_anime(
         }
         Err(e) => Err(format!("Failed to query anime work: {}", e)),
     }
+}
+
+/// 回填時 soft delete 的作品，又有新項目以同名出現時重新啟用（作品名稱是唯一的）。
+fn reactivate_work(conn: &mut PgConnection, work_id: i32) -> Result<AnimeWork, String> {
+    tracing::info!("Reactivating soft-deleted anime work {}", work_id);
+    diesel::update(anime_works::table.find(work_id))
+        .set((
+            anime_works::is_active.eq(true),
+            anime_works::soft_deleted_at.eq(None::<chrono::NaiveDateTime>),
+            anime_works::updated_at.eq(Utc::now().naive_utc()),
+        ))
+        .get_result::<AnimeWork>(conn)
+        .map_err(|e| format!("Failed to reactivate anime work {}: {}", work_id, e))
+}
+
+/// raw item 屬於哪一季：有身分時由身分決定（spec 第 7 節）；
+/// 沒有可用身分時沿用 parser 解析出的作品名與季數。
+pub(crate) fn season_for(
+    conn: &mut PgConnection,
+    identity: &IdentityContext,
+    raw_item: &RawAnimeItem,
+    parsed: &crate::services::title_parser::ParsedResult,
+) -> Result<Anime, String> {
+    match resolve_season(conn, identity, &raw_item.external_ids(), parsed.series_no)? {
+        SeasonResolution::Resolved(anime) => Ok(anime),
+        SeasonResolution::Conflict(reason) => Err(reason),
+        SeasonResolution::NoIdentity => {
+            tracing::warn!(
+                "No usable identity for raw item {} (external ids {:?}); using parser title '{}'",
+                raw_item.item_id,
+                raw_item.external_ids(),
+                parsed.anime_title
+            );
+            let work = create_or_get_anime(conn, &parsed.anime_title)?;
+            let year = parsed
+                .year
+                .as_ref()
+                .and_then(|y| y.parse::<i32>().ok())
+                .unwrap_or_else(|| chrono::Datelike::year(&Utc::now()));
+            let season_name = parsed.season.as_deref().unwrap_or("unknown");
+            let season = create_or_get_season(conn, year, season_name)?;
+            create_or_get_series(conn, work.work_id, parsed.series_no, season.season_id, "")
+        }
+    }
+}
+
+/// 為一批 raw item 準備身分資料；查詢失敗時退回不使用身分（沿用 parser 作品名）。
+pub(crate) async fn prepare_identity(
+    conn: &mut PgConnection,
+    db: &crate::db::DbPool,
+    items: &[RawAnimeItem],
+) -> IdentityContext {
+    let ids: Vec<Vec<shared::ExternalId>> = items.iter().map(|i| i.external_ids()).collect();
+    IdentityContext::prepare(conn, &HttpMetadataLookup::new(db.clone()), &ids)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to prepare identities, using parser titles: {}", e);
+            IdentityContext::empty()
+        })
 }
 
 /// Create or get a season by year and season name
@@ -485,7 +548,7 @@ pub async fn receive_raw_fetcher_results(
         );
     }
 
-    let mut items_received = 0;
+    let items_received = payload.items.len();
     let mut items_parsed = 0;
     let mut items_failed = 0;
     let mut errors = Vec::new();
@@ -495,29 +558,29 @@ pub async fn receive_raw_fetcher_results(
 
     match state.db.get() {
         Ok(mut conn) => {
-            for raw_item in payload.items {
-                items_received += 1;
+            // 儲存原始項目（重複項目會因 UNIQUE 被略過）
+            let saved_items: Vec<RawAnimeItem> = payload
+                .items
+                .iter()
+                .filter_map(|raw_item| {
+                    TitleParserService::save_raw_item(
+                        &mut conn,
+                        &raw_item.title,
+                        raw_item.description.as_deref(),
+                        &raw_item.download_url,
+                        raw_item.pub_date.map(|dt| dt.naive_utc()),
+                        payload.subscription_id,
+                        &raw_item.external_ids,
+                    )
+                    .map_err(|e| tracing::debug!("Skipped item (possibly duplicate): {}", e))
+                    .ok()
+                })
+                .collect();
 
-                // 轉換 pub_date
-                let pub_date = raw_item.pub_date.map(|dt| dt.naive_utc());
+            let identity = prepare_identity(&mut conn, &state.db, &saved_items).await;
 
-                // 儲存原始項目
-                let saved_item = match TitleParserService::save_raw_item(
-                    &mut conn,
-                    &raw_item.title,
-                    raw_item.description.as_deref(),
-                    &raw_item.download_url,
-                    pub_date,
-                    payload.subscription_id,
-                ) {
-                    Ok(item) => item,
-                    Err(e) => {
-                        // 可能是重複項目（UNIQUE 違反），跳過
-                        tracing::debug!("Skipped item (possibly duplicate): {}", e);
-                        continue;
-                    }
-                };
-
+            for saved_item in saved_items {
+                let raw_item = &saved_item;
                 // 嘗試解析標題
                 match TitleParserService::parse_title(
                     &mut conn,
@@ -526,7 +589,7 @@ pub async fn receive_raw_fetcher_results(
                 ) {
                     Ok(Some(parsed)) => {
                         // 解析成功，建立相關記錄
-                        match process_parsed_result(&mut conn, &saved_item, &parsed) {
+                        match process_parsed_result(&mut conn, &identity, &saved_item, &parsed) {
                             Ok(ids) => {
                                 new_link_ids.extend(ids);
                                 TitleParserService::update_raw_item_status(
@@ -668,31 +731,14 @@ pub async fn receive_raw_fetcher_results(
 /// 回傳新建的 link_id 列表（批次合輯時為多個）
 pub(crate) fn process_parsed_result(
     conn: &mut PgConnection,
+    identity: &IdentityContext,
     raw_item: &RawAnimeItem,
     parsed: &crate::services::title_parser::ParsedResult,
 ) -> Result<Vec<i32>, String> {
     use sha2::{Digest, Sha256};
 
-    // 1. 建立或取得 anime work
-    let work = create_or_get_anime(conn, &parsed.anime_title)?;
-
-    // 2. 建立或取得 season（使用預設值）
-    let year = parsed
-        .year
-        .as_ref()
-        .and_then(|y| y.parse::<i32>().ok())
-        .unwrap_or(2025);
-    let season_name = parsed.season.as_deref().unwrap_or("unknown");
-    let season = create_or_get_season(conn, year, season_name)?;
-
-    // 3. 建立或取得 anime (formerly series)
-    let anime = create_or_get_series(
-        conn,
-        work.work_id,
-        parsed.series_no,
-        season.season_id,
-        "", // description
-    )?;
+    // 1–3. 決定季（身分優先，沒有身分時用 parser 作品名）
+    let anime = season_for(conn, identity, raw_item, parsed)?;
 
     // 4. 建立或取得 subtitle_group
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
@@ -774,4 +820,140 @@ pub(crate) fn process_parsed_result(
     }
 
     Ok(link_ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::identity::{save_metadata_namespaces, test_db, IdentityContext};
+    use crate::services::title_parser::ParsedResult;
+
+    fn parsed(title: &str, series_no: i32) -> ParsedResult {
+        ParsedResult {
+            anime_title: title.to_string(),
+            episode_no: 1,
+            episode_end: None,
+            series_no,
+            subtitle_group: Some("LoliHouse".to_string()),
+            resolution: None,
+            season: None,
+            year: None,
+            parser_id: 0,
+        }
+    }
+
+    fn raw_item(conn: &mut PgConnection, ids: &[shared::ExternalId]) -> RawAnimeItem {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let sub_id: i32 = diesel::sql_query(
+            "INSERT INTO subscriptions (fetcher_id, source_url, name, created_at, updated_at) \
+             SELECT module_id, $1, 's', now(), now() \
+             FROM service_modules LIMIT 1 RETURNING subscription_id",
+        )
+        .bind::<diesel::sql_types::Text, _>(format!(
+            "https://mikanani.me/RSS/Bangumi?bangumiId={n}"
+        ))
+        .get_result::<SubscriptionId>(conn)
+        .unwrap()
+        .subscription_id;
+        let url = format!("magnet:?t{n}");
+        TitleParserService::save_raw_item(conn, "[X] t [01]", None, &url, None, sub_id, ids)
+            .unwrap()
+    }
+
+    #[derive(diesel::QueryableByName)]
+    struct SubscriptionId {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        subscription_id: i32,
+    }
+
+    async fn context(conn: &mut PgConnection, item: &RawAnimeItem) -> IdentityContext {
+        IdentityContext::prepare(conn, &test_db::lookup(), &[item.external_ids()])
+            .await
+            .unwrap()
+    }
+
+    fn setup() -> PgConnection {
+        let mut conn = test_db::conn();
+        test_db::insert_module(&mut conn, "meta-bgm", true);
+        save_metadata_namespaces(&mut conn, "meta-bgm", &["bgm".to_string()]).unwrap();
+        conn
+    }
+
+    fn work_titled(conn: &mut PgConnection, title: &str) -> Option<AnimeWork> {
+        anime_works::table
+            .filter(anime_works::title.eq(title))
+            .first(conn)
+            .optional()
+            .unwrap()
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn an_item_with_identity_ignores_the_parser_title() {
+        let mut conn = setup();
+        let item = raw_item(&mut conn, &[shared::ExternalId::new("bgm", "548818")]);
+        let identity = context(&mut conn, &item).await;
+        let season = season_for(&mut conn, &identity, &item, &parsed("てんびん", 2)).unwrap();
+        assert_eq!(season.title.as_deref(), Some("金牌得主 第二季"));
+        assert!(work_titled(&mut conn, "てんびん").is_none());
+        assert_eq!(
+            item.external_ids(),
+            vec![shared::ExternalId::new("bgm", "548818")]
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn an_item_without_identity_keeps_the_parser_title() {
+        let mut conn = setup();
+        let item = raw_item(&mut conn, &[]);
+        let identity = context(&mut conn, &item).await;
+        let season = season_for(&mut conn, &identity, &item, &parsed("てんびん", 1)).unwrap();
+        let work = work_titled(&mut conn, "てんびん").expect("parser-titled work");
+        assert_eq!(season.work_id, work.work_id);
+        assert_eq!(work.title_source, "parser");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn a_season_number_conflict_is_an_error_with_the_reason() {
+        let mut conn = setup();
+        let s1 = raw_item(&mut conn, &[shared::ExternalId::new("bgm", "430699")]);
+        let identity = context(&mut conn, &s1).await;
+        season_for(&mut conn, &identity, &s1, &parsed("x", 1)).unwrap();
+
+        let s2 = raw_item(&mut conn, &[shared::ExternalId::new("bgm", "548818")]);
+        let identity = context(&mut conn, &s2).await;
+        let err = season_for(&mut conn, &identity, &s2, &parsed("x", 1)).unwrap_err();
+        assert!(err.contains("bgm/430699"), "{err}");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn a_soft_deleted_work_comes_back_when_its_title_reappears() {
+        let mut conn = setup();
+        let now = Utc::now().naive_utc();
+        let work: AnimeWork = diesel::insert_into(anime_works::table)
+            .values(NewAnimeWork {
+                title: "殘骸".to_string(),
+                created_at: now,
+                updated_at: now,
+            })
+            .get_result(&mut conn)
+            .unwrap();
+        diesel::update(anime_works::table.find(work.work_id))
+            .set((
+                anime_works::is_active.eq(false),
+                anime_works::soft_deleted_at.eq(Some(now)),
+            ))
+            .execute(&mut conn)
+            .unwrap();
+        let item = raw_item(&mut conn, &[]);
+        let identity = context(&mut conn, &item).await;
+        season_for(&mut conn, &identity, &item, &parsed("殘骸", 1)).unwrap();
+        let revived = work_titled(&mut conn, "殘骸").unwrap();
+        assert!(revived.is_active);
+        assert!(revived.soft_deleted_at.is_none());
+    }
 }

@@ -686,6 +686,7 @@ pub struct NewRawAnimeItem {
     pub error_message: Option<String>,
     pub parsed_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
+    pub external_ids: Vec<Option<String>>,
 }
 
 // ============ AnimeCoverImages ============

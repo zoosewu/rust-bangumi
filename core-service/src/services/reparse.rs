@@ -1,6 +1,6 @@
 //! Reparse 業務邏輯：重新解析 raw_anime_items 並 upsert anime_links
 
-use chrono::{Datelike, Utc};
+use chrono::Utc;
 use diesel::prelude::*;
 use serde::Serialize;
 use std::collections::HashSet;
@@ -8,10 +8,9 @@ use std::sync::Arc;
 
 use crate::db::DbPool;
 use crate::models::{
-    Anime, AnimeLink, AnimeWork, Download, NewAnime, NewAnimeLink, NewAnimeWork, NewSeason,
-    NewSubtitleGroup, RawAnimeItem, Season, SubtitleGroup,
+    AnimeLink, Download, NewAnimeLink, NewSubtitleGroup, RawAnimeItem, SubtitleGroup,
 };
-use crate::schema::{anime_links, anime_works, animes, raw_anime_items, seasons, subtitle_groups};
+use crate::schema::{anime_links, raw_anime_items, subtitle_groups};
 use crate::services::title_parser::{ParseStatus, ParsedResult, TitleParserService};
 use crate::services::{
     ConflictDetectionService, DownloadCancelService, DownloadDispatchService, SyncService,
@@ -141,10 +140,12 @@ pub async fn reparse_affected_items(
     let mut unmatched_series_ids: Vec<(i32, i32)> = Vec::new(); // (item_id, series_id) for cleanup
     let mut resync_link_ids: Vec<i32> = Vec::new();
 
+    let identity = crate::handlers::fetcher_results::prepare_identity(&mut conn, &db, &items).await;
+
     for item in &items {
         match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
-                match upsert_anime_link(&mut conn, item, &parsed) {
+                match upsert_anime_link(&mut conn, &identity, item, &parsed) {
                     Ok(result) => {
                         new_link_ids.extend(&result.new_link_ids);
                         updated_link_ids.extend(&result.updated_link_ids);
@@ -364,97 +365,6 @@ pub async fn reparse_affected_items(
     }
 }
 
-/// 建立或取得 anime work（依標題）
-fn create_or_get_anime(conn: &mut PgConnection, title: &str) -> Result<AnimeWork, String> {
-    match anime_works::table
-        .filter(anime_works::title.eq(title))
-        .first::<AnimeWork>(conn)
-    {
-        Ok(work) => Ok(work),
-        Err(diesel::NotFound) => {
-            let now = Utc::now().naive_utc();
-            let new_work = NewAnimeWork {
-                title: title.to_string(),
-                created_at: now,
-                updated_at: now,
-            };
-            diesel::insert_into(anime_works::table)
-                .values(&new_work)
-                .get_result::<AnimeWork>(conn)
-                .map_err(|e| format!("Failed to create anime work: {}", e))
-        }
-        Err(e) => Err(format!("Failed to query anime work: {}", e)),
-    }
-}
-
-/// 建立或取得 season（依 year + season_name）
-fn create_or_get_season(
-    conn: &mut PgConnection,
-    year: i32,
-    season_name: &str,
-) -> Result<Season, String> {
-    match seasons::table
-        .filter(seasons::year.eq(year))
-        .filter(seasons::season.eq(season_name))
-        .first::<Season>(conn)
-    {
-        Ok(season) => Ok(season),
-        Err(diesel::NotFound) => {
-            let now = Utc::now().naive_utc();
-            let new_season = NewSeason {
-                year,
-                season: season_name.to_string(),
-                created_at: now,
-            };
-            diesel::insert_into(seasons::table)
-                .values(&new_season)
-                .get_result::<Season>(conn)
-                .map_err(|e| format!("Failed to create season: {}", e))
-        }
-        Err(e) => Err(format!("Failed to query season: {}", e)),
-    }
-}
-
-/// 建立或取得 anime series（依 work_id + series_no）
-fn create_or_get_series(
-    conn: &mut PgConnection,
-    work_id: i32,
-    series_no: i32,
-    season_id: i32,
-    description: &str,
-) -> Result<Anime, String> {
-    // The database unique key is (work_id, series_no); season is editable metadata.
-    match animes::table
-        .filter(animes::work_id.eq(work_id))
-        .filter(animes::series_no.eq(series_no))
-        .first::<Anime>(conn)
-    {
-        Ok(anime) => Ok(anime),
-        Err(diesel::NotFound) => {
-            let now = Utc::now().naive_utc();
-            let new_anime = NewAnime {
-                work_id,
-                series_no,
-                season_id,
-                description: if description.is_empty() {
-                    None
-                } else {
-                    Some(description.to_string())
-                },
-                aired_date: None,
-                end_date: None,
-                created_at: now,
-                updated_at: now,
-            };
-            diesel::insert_into(animes::table)
-                .values(&new_anime)
-                .get_result::<Anime>(conn)
-                .map_err(|e| format!("Failed to create anime: {}", e))
-        }
-        Err(e) => Err(format!("Failed to query anime: {}", e)),
-    }
-}
-
 /// 建立或取得字幕組
 fn create_or_get_subtitle_group(
     conn: &mut PgConnection,
@@ -492,21 +402,14 @@ fn create_or_get_subtitle_group(
 /// - 新範圍中缺少的 episode → 新建 link
 fn upsert_anime_link(
     conn: &mut diesel::PgConnection,
+    identity: &crate::services::identity::IdentityContext,
     raw_item: &RawAnimeItem,
     parsed: &ParsedResult,
 ) -> Result<UpsertResult, String> {
     use sha2::{Digest, Sha256};
 
-    // 1. 建立或取得 anime / season / series / group
-    let anime = create_or_get_anime(conn, &parsed.anime_title)?;
-    let year = parsed
-        .year
-        .as_ref()
-        .and_then(|y| y.parse::<i32>().ok())
-        .unwrap_or_else(|| Utc::now().year());
-    let season_name = parsed.season.as_deref().unwrap_or("unknown");
-    let season = create_or_get_season(conn, year, season_name)?;
-    let series = create_or_get_series(conn, anime.work_id, parsed.series_no, season.season_id, "")?;
+    // 1. 決定季（身分優先，沒有身分時用 parser 作品名），取得字幕組
+    let series = crate::handlers::fetcher_results::season_for(conn, identity, raw_item, parsed)?;
     let group_name = parsed.subtitle_group.as_deref().unwrap_or("未知字幕組");
     let group = create_or_get_subtitle_group(conn, group_name)?;
 

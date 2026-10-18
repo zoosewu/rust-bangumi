@@ -330,7 +330,15 @@ pub async fn reparse_item(
 
     match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
         Ok(Some(parsed)) => {
-            match super::fetcher_results::process_parsed_result(&mut conn, &item, &parsed) {
+            let identity = super::fetcher_results::prepare_identity(
+                &mut conn,
+                &state.db,
+                std::slice::from_ref(&item),
+            )
+            .await;
+            match super::fetcher_results::process_parsed_result(
+                &mut conn, &identity, &item, &parsed,
+            ) {
                 Ok(link_ids) => {
                     TitleParserService::update_raw_item_status(
                         &mut conn,

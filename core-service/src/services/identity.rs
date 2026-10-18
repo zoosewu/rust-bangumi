@@ -532,7 +532,82 @@ fn store_covers(
 
 #[cfg(test)]
 pub(crate) mod test_db {
+    use super::{CoverImage, FetchedMeta, MetadataLookup, SeasonMeta, SeriesMeta};
+    use async_trait::async_trait;
     use diesel::prelude::*;
+    use shared::ExternalId;
+    use std::collections::HashMap;
+
+    pub struct FakeLookup {
+        pub metas: HashMap<String, SeasonMeta>,
+        pub calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait]
+    impl MetadataLookup for FakeLookup {
+        async fn enrich_anime(&self, id: &ExternalId) -> Result<Option<FetchedMeta>, String> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.metas.get(&id.id).cloned().map(|meta| FetchedMeta {
+                meta,
+                module_id: None,
+            }))
+        }
+    }
+
+    fn cover(url: &str) -> CoverImage {
+        CoverImage {
+            url: url.to_string(),
+            source: "bangumi".to_string(),
+        }
+    }
+
+    pub fn series(id: &str, title: &str) -> SeriesMeta {
+        SeriesMeta {
+            namespace: "bgm".to_string(),
+            external_id: id.to_string(),
+            title: title.to_string(),
+            original_title: format!("{title} (ja)"),
+            summary: Some(format!("{title} 簡介")),
+            air_date: Some("2025-01-05".to_string()),
+            cover_images: vec![cover(&format!("https://img/{id}.jpg"))],
+        }
+    }
+
+    pub fn season(id: &str, title_cn: &str, air_date: &str, series: SeriesMeta) -> SeasonMeta {
+        SeasonMeta {
+            namespace: "bgm".to_string(),
+            external_id: id.to_string(),
+            title: format!("{title_cn} (ja)"),
+            title_cn: title_cn.to_string(),
+            summary: Some(format!("{title_cn} 簡介")),
+            air_date: Some(air_date.to_string()),
+            end_date: None,
+            cover_images: vec![cover(&format!("https://img/{id}.jpg"))],
+            series,
+        }
+    }
+
+    /// 金牌得主兩季（同系列）與欺詐遊戲
+    pub fn lookup() -> FakeLookup {
+        let medalist = series("430699", "金牌得主");
+        let metas = [
+            season("430699", "金牌得主", "2025-01-05", medalist.clone()),
+            season("548818", "金牌得主 第二季", "2026-01-24", medalist),
+            season(
+                "580133",
+                "欺诈游戏",
+                "2026-04-06",
+                series("580133", "欺诈游戏"),
+            ),
+        ]
+        .into_iter()
+        .map(|m| (m.external_id.clone(), m))
+        .collect();
+        FakeLookup {
+            metas,
+            calls: Default::default(),
+        }
+    }
 
     /// 開發資料庫連線（`DATABASE_TEST_URL`），整個測試在 rollback 的 transaction 裡跑。
     pub fn conn() -> PgConnection {
@@ -614,76 +689,7 @@ mod tests {
 
     // ---------- 季與系列的解析 ----------
 
-    struct FakeLookup {
-        metas: HashMap<String, SeasonMeta>,
-        calls: std::sync::atomic::AtomicUsize,
-    }
-
-    #[async_trait]
-    impl MetadataLookup for FakeLookup {
-        async fn enrich_anime(&self, id: &ExternalId) -> Result<Option<FetchedMeta>, String> {
-            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(self.metas.get(&id.id).cloned().map(|meta| FetchedMeta {
-                meta,
-                module_id: None,
-            }))
-        }
-    }
-
-    fn cover(url: &str) -> CoverImage {
-        CoverImage {
-            url: url.to_string(),
-            source: "bangumi".to_string(),
-        }
-    }
-
-    fn series(id: &str, title: &str) -> SeriesMeta {
-        SeriesMeta {
-            namespace: "bgm".to_string(),
-            external_id: id.to_string(),
-            title: title.to_string(),
-            original_title: format!("{title} (ja)"),
-            summary: Some(format!("{title} 簡介")),
-            air_date: Some("2025-01-05".to_string()),
-            cover_images: vec![cover(&format!("https://img/{id}.jpg"))],
-        }
-    }
-
-    fn season(id: &str, title_cn: &str, air_date: &str, series: SeriesMeta) -> SeasonMeta {
-        SeasonMeta {
-            namespace: "bgm".to_string(),
-            external_id: id.to_string(),
-            title: format!("{title_cn} (ja)"),
-            title_cn: title_cn.to_string(),
-            summary: Some(format!("{title_cn} 簡介")),
-            air_date: Some(air_date.to_string()),
-            end_date: None,
-            cover_images: vec![cover(&format!("https://img/{id}.jpg"))],
-            series,
-        }
-    }
-
-    /// 金牌得主兩季（同系列）與欺詐遊戲
-    fn lookup() -> FakeLookup {
-        let medalist = series("430699", "金牌得主");
-        let metas = [
-            season("430699", "金牌得主", "2025-01-05", medalist.clone()),
-            season("548818", "金牌得主 第二季", "2026-01-24", medalist),
-            season(
-                "580133",
-                "欺诈游戏",
-                "2026-04-06",
-                series("580133", "欺诈游戏"),
-            ),
-        ]
-        .into_iter()
-        .map(|m| (m.external_id.clone(), m))
-        .collect();
-        FakeLookup {
-            metas,
-            calls: Default::default(),
-        }
-    }
+    use test_db::{lookup, FakeLookup};
 
     fn bgm(id: &str) -> Vec<ExternalId> {
         vec![ExternalId::new("mikan", "1"), ExternalId::new("bgm", id)]
