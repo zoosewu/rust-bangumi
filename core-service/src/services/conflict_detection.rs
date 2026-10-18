@@ -12,6 +12,46 @@ pub struct ConflictDetectionResult {
     pub auto_dispatch_link_ids: Vec<i32>,
 }
 
+/// 合集 torrent 涵蓋的每一集，在同一季都已有其他 link 的有效下載（不是 failed / cancelled），
+/// 而合集本身還沒有在下載 → 把合集的 link 標為 resolved（不派送、不列為衝突）。
+/// 只覆蓋部分集數的合集照常走衝突流程。回傳被略過的 link id。
+pub fn skip_redundant_batches(conn: &mut diesel::PgConnection) -> QueryResult<Vec<i32>> {
+    #[derive(QueryableByName)]
+    struct Skipped {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        link_id: i32,
+    }
+    let mut skipped: Vec<i32> = diesel::sql_query(
+        "WITH batch_links AS ( \
+             SELECT l.link_id, l.raw_item_id, l.anime_id, l.episode_no \
+             FROM anime_links l \
+             WHERE l.link_status = 'active' AND l.filtered_flag = false \
+               AND l.raw_item_id IS NOT NULL AND l.source_hash LIKE '%#ep%' \
+         ), redundant AS ( \
+             SELECT b.raw_item_id \
+             FROM batch_links b \
+             GROUP BY b.raw_item_id \
+             HAVING bool_and( \
+                 EXISTS (SELECT 1 FROM anime_links o JOIN downloads d ON d.link_id = o.link_id \
+                         WHERE o.anime_id = b.anime_id AND o.episode_no = b.episode_no \
+                           AND o.raw_item_id IS DISTINCT FROM b.raw_item_id \
+                           AND d.status NOT IN ('failed', 'cancelled')) \
+                 AND NOT EXISTS (SELECT 1 FROM downloads d \
+                                 WHERE d.link_id = b.link_id \
+                                   AND d.status NOT IN ('failed', 'cancelled'))) \
+         ) \
+         UPDATE anime_links SET link_status = 'resolved' \
+         WHERE link_id IN (SELECT b.link_id FROM batch_links b JOIN redundant r USING (raw_item_id)) \
+         RETURNING link_id",
+    )
+    .load::<Skipped>(conn)?
+    .into_iter()
+    .map(|s| s.link_id)
+    .collect();
+    skipped.sort_unstable();
+    Ok(skipped)
+}
+
 pub struct ConflictDetectionService {
     link_repo: Arc<dyn AnimeLinkRepository>,
     conflict_repo: Arc<dyn AnimeLinkConflictRepository>,
@@ -36,6 +76,21 @@ impl ConflictDetectionService {
     /// Also clears conflict_flag for groups that are no longer conflicting.
     /// When a conflict is auto-resolved, restores remaining links to 'active' status.
     pub async fn detect_and_mark_conflicts(&self) -> Result<ConflictDetectionResult, String> {
+        let pool = self.pool.clone();
+        let skipped = tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get().map_err(|e| e.to_string())?;
+            skip_redundant_batches(&mut conn).map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| format!("Batch skip task failed: {}", e))?
+        .map_err(|e| format!("Failed to skip redundant batches: {}", e))?;
+        if !skipped.is_empty() {
+            tracing::info!(
+                "Skipped {} links of batches whose episodes are all downloaded already",
+                skipped.len()
+            );
+        }
+
         // First, clear all existing conflict_flags so stale conflicts are removed
         let cleared = self
             .link_repo
@@ -457,5 +512,156 @@ mod tests {
         // verify the unrelated conflict still unresolved
         let still = conflict_repo.find_by_id(other.conflict_id).await.unwrap();
         assert_eq!(still.unwrap().resolution_status, "unresolved");
+    }
+
+    // ---------- 合集自動略過 ----------
+
+    mod redundant_batches {
+        use super::super::skip_redundant_batches;
+        use crate::services::identity::test_db;
+        use diesel::prelude::*;
+        use diesel::sql_types::{Integer, Text};
+
+        #[derive(QueryableByName)]
+        struct Id {
+            #[diesel(sql_type = Integer)]
+            id: i32,
+        }
+
+        fn insert(conn: &mut PgConnection, sql: &str) -> i32 {
+            diesel::sql_query(sql).get_result::<Id>(conn).unwrap().id
+        }
+
+        struct Season {
+            anime_id: i32,
+            group_id: i32,
+            sub_id: i32,
+        }
+
+        fn season(conn: &mut PgConnection) -> Season {
+            let fetcher = insert(conn, "INSERT INTO service_modules (module_type, name, version, is_enabled, priority, base_url, created_at, updated_at) VALUES ('fetcher', 'batch-test-fetcher', '1', true, 1, 'http://f', now(), now()) RETURNING module_id AS id");
+            let sub_id = insert(conn, &format!("INSERT INTO subscriptions (fetcher_id, source_url, name, created_at, updated_at) VALUES ({fetcher}, 'https://batch-test', 's', now(), now()) RETURNING subscription_id AS id"));
+            let work = insert(conn, "INSERT INTO anime_works (title, created_at, updated_at) VALUES ('合集測試', now(), now()) RETURNING work_id AS id");
+            let season_id = insert(conn, "INSERT INTO seasons (year, season, created_at) VALUES (2099, 'winter', now()) RETURNING season_id AS id");
+            let anime_id = insert(conn, &format!("INSERT INTO animes (work_id, series_no, season_id, created_at, updated_at) VALUES ({work}, 1, {season_id}, now(), now()) RETURNING anime_id AS id"));
+            let group_id = insert(conn, "INSERT INTO subtitle_groups (group_name) VALUES ('合集測試組') RETURNING group_id AS id");
+            Season {
+                anime_id,
+                group_id,
+                sub_id,
+            }
+        }
+
+        /// 一個 raw item 及其展開的 link；回傳 link id（依集數順序）
+        fn release(
+            conn: &mut PgConnection,
+            s: &Season,
+            name: &str,
+            eps: std::ops::RangeInclusive<i32>,
+        ) -> Vec<i32> {
+            let batch = eps.start() != eps.end();
+            let item = diesel::sql_query("INSERT INTO raw_anime_items (title, download_url, subscription_id, status, created_at) VALUES ($1, $1, $2, 'parsed', now()) RETURNING item_id AS id")
+                .bind::<Text, _>(name)
+                .bind::<Integer, _>(s.sub_id)
+                .get_result::<Id>(conn)
+                .unwrap()
+                .id;
+            eps.map(|ep| {
+                let hash = if batch { format!("{name}#ep{ep}") } else { name.to_string() };
+                diesel::sql_query("INSERT INTO anime_links (anime_id, group_id, episode_no, url, source_hash, raw_item_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING link_id AS id")
+                    .bind::<Integer, _>(s.anime_id)
+                    .bind::<Integer, _>(s.group_id)
+                    .bind::<Integer, _>(ep)
+                    .bind::<Text, _>(name)
+                    .bind::<Text, _>(hash)
+                    .bind::<Integer, _>(item)
+                    .get_result::<Id>(conn)
+                    .unwrap()
+                    .id
+            })
+            .collect()
+        }
+
+        fn download(conn: &mut PgConnection, link_id: i32, status: &str) {
+            diesel::sql_query("INSERT INTO downloads (link_id, downloader_type, status) VALUES ($1, 'qbittorrent', $2)")
+                .bind::<Integer, _>(link_id)
+                .bind::<Text, _>(status)
+                .execute(conn)
+                .unwrap();
+        }
+
+        fn statuses(conn: &mut PgConnection, links: &[i32]) -> Vec<String> {
+            use crate::schema::anime_links;
+            links
+                .iter()
+                .map(|id| {
+                    anime_links::table
+                        .find(id)
+                        .select(anime_links::link_status)
+                        .first(conn)
+                        .unwrap()
+                })
+                .collect()
+        }
+
+        #[test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        fn a_batch_whose_episodes_are_all_downloaded_is_skipped() {
+            let mut conn = test_db::conn();
+            let s = season(&mut conn);
+            for ep in 1..=3 {
+                let single = release(&mut conn, &s, &format!("single-{ep}"), ep..=ep);
+                download(
+                    &mut conn,
+                    single[0],
+                    if ep == 1 { "synced" } else { "downloading" },
+                );
+            }
+            let batch = release(&mut conn, &s, "batch", 1..=3);
+            let skipped = skip_redundant_batches(&mut conn).unwrap();
+            assert_eq!(skipped, batch);
+            assert_eq!(statuses(&mut conn, &batch), vec!["resolved"; 3]);
+        }
+
+        #[test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        fn a_batch_with_new_episodes_is_left_for_the_user() {
+            let mut conn = test_db::conn();
+            let s = season(&mut conn);
+            for ep in 1..=2 {
+                let single = release(&mut conn, &s, &format!("single-{ep}"), ep..=ep);
+                download(&mut conn, single[0], "synced");
+            }
+            let batch = release(&mut conn, &s, "batch", 1..=3);
+            assert!(skip_redundant_batches(&mut conn).unwrap().is_empty());
+            assert_eq!(statuses(&mut conn, &batch), vec!["active"; 3]);
+        }
+
+        #[test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        fn failed_or_cancelled_downloads_do_not_count() {
+            let mut conn = test_db::conn();
+            let s = season(&mut conn);
+            let first = release(&mut conn, &s, "single-1", 1..=1);
+            download(&mut conn, first[0], "failed");
+            let second = release(&mut conn, &s, "single-2", 2..=2);
+            download(&mut conn, second[0], "cancelled");
+            release(&mut conn, &s, "batch", 1..=2);
+            assert!(skip_redundant_batches(&mut conn).unwrap().is_empty());
+        }
+
+        #[test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        fn a_batch_already_being_downloaded_is_untouched() {
+            let mut conn = test_db::conn();
+            let s = season(&mut conn);
+            for ep in 1..=2 {
+                let single = release(&mut conn, &s, &format!("single-{ep}"), ep..=ep);
+                download(&mut conn, single[0], "synced");
+            }
+            let batch = release(&mut conn, &s, "batch", 1..=2);
+            download(&mut conn, batch[0], "downloading");
+            assert!(skip_redundant_batches(&mut conn).unwrap().is_empty());
+        }
     }
 }
