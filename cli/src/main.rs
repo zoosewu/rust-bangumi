@@ -101,6 +101,14 @@ enum Commands {
         action: commands::subtitle_group::SubtitleGroupAction,
     },
 
+    /// 依 fetcher 回報的身分回填既有作品與季（預設只產出報表）
+    #[command(name = "backfill-identity")]
+    BackfillIdentity {
+        /// 實際寫入資料庫
+        #[arg(long)]
+        apply: bool,
+    },
+
     /// qBittorrent 連線設定
     #[command(name = "qb-config")]
     QbConfig {
@@ -133,6 +141,7 @@ async fn main() {
             commands::subtitle_group::run(&client, action, json).await
         }
         Commands::QbConfig { action } => commands::qb_config::run(&client, action, json).await,
+        Commands::BackfillIdentity { apply } => commands::backfill::run(&client, apply, json).await,
     };
 
     if let Err(e) = result {

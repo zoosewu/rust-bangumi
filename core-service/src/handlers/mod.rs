@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod ai_providers;
 pub mod ai_settings;
 pub mod anime;

@@ -1,5 +1,6 @@
 // cli/src/commands/mod.rs
 pub mod anime;
+pub mod backfill;
 pub mod conflict;
 pub mod download;
 pub mod filter;

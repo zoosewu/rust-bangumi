@@ -66,6 +66,33 @@ tags:
     description: 待確認 AI 結果管理
 
 paths:
+  /admin/identity-backfill:
+    post:
+      tags:
+        - Admin
+      summary: 回填既有資料的作品身分
+      description: |
+        每個有 link 的訂閱向 fetcher 取得身分（`/identity/resolve`）、向 metadata 取得內容，
+        在同一個 transaction 裡：把訂閱的 link 改掛到身分決定的季；合併這次回填產生的同集重複
+        （保留已下載的合集版，另一份 link 標為 resolved、下載標為 cancelled；原本就在同一季的重複不動）；
+        soft delete 沒有任何 link 的作品。`apply=false`（預設）時最後 rollback，只回傳報表。
+        不搬檔案。可重複執行，第二次不會再有變更。
+      operationId: identityBackfill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apply:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: 回填報表（subscriptions、merged_duplicates、soft_deleted_works）
+        '500':
+          description: 失敗，已 rollback
   # ============ Health ============
   /health:
     get:

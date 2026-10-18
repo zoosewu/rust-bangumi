@@ -6,6 +6,7 @@ pub mod download_type_detector;
 pub mod filter;
 pub mod filter_recalc;
 pub mod identity;
+pub mod identity_backfill;
 pub mod registry;
 pub mod reparse;
 pub mod scheduler;

@@ -91,6 +91,11 @@ async fn main() -> anyhow::Result<()> {
 
     // 構建應用路由
     let mut app = Router::new()
+        // 維運
+        .route(
+            "/admin/identity-backfill",
+            post(handlers::admin::identity_backfill),
+        )
         // 服務註冊
         .route("/services/register", post(handlers::services::register))
         .route("/services", get(handlers::services::list_services))
