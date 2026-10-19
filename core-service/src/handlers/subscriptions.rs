@@ -1207,8 +1207,9 @@ pub async fn detect_conflicts_and_generate_filters(
                 .unwrap_or_default();
 
             // 對每個衝突的 (anime_id, group_id, episode_no)，找出所有衝突 links 的標題
-            let mut groups: std::collections::HashMap<(i32, i32, i32), Vec<String>> =
-                std::collections::HashMap::new();
+            // 依 (季, 字幕組, 集數) 排序，送給 AI 時才能取「前幾集」
+            let mut groups: std::collections::BTreeMap<(i32, i32, i32), Vec<String>> =
+                std::collections::BTreeMap::new();
             for link in &my_conflict_links {
                 let key = (link.anime_id, link.group_id, link.episode_no);
                 // 取得該集衝突的所有 links（不限本訂閱）

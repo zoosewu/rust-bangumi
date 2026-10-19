@@ -220,7 +220,16 @@ pub async fn generate_filters_for_subscription_batch(
         load_filter_prompts(&mut conn, None, None)?
     };
 
-    let mut remaining: Vec<(Vec<String>, String)> = conflict_groups;
+    // 只送前幾集的衝突；確認後的規則會套用到其餘集數，還有衝突時再重新產生
+    let total_groups = conflict_groups.len();
+    let mut remaining: Vec<(Vec<String>, String)> = first_episodes(conflict_groups);
+    if remaining.len() < total_groups {
+        tracing::info!(
+            "AI 過濾規則只送前 {} 集的衝突（共 {} 集）",
+            remaining.len(),
+            total_groups
+        );
+    }
 
     for iteration in 1..=MAX_ITERATIONS {
         if remaining.is_empty() {

@@ -291,6 +291,15 @@ pub fn build_parser_user_prompt(title: &str, custom: Option<&str>) -> String {
 }
 
 /// 組裝 parser 的 batch user prompt（多個標題，用於批次生成）
+/// 一次送給 AI 的集數。同一部作品各集標題的格式相同，前幾集就足以歸納出規則；
+/// 送更多只會多耗 token（Groq 免費方案每分鐘 8K token），規則確認後會套用到其餘集數。
+pub const AI_SAMPLE_EPISODES: usize = 3;
+
+/// 依集數排好的項目中，取送給 AI 的前幾集
+pub fn first_episodes<T>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+    items.into_iter().take(AI_SAMPLE_EPISODES).collect()
+}
+
 pub fn build_parser_batch_user_prompt(titles: &[String], custom: Option<&str>) -> String {
     let list = titles
         .iter()
@@ -361,4 +370,15 @@ pub fn build_filter_batch_user_prompt(groups: &[Vec<String>], custom: Option<&st
         }
     }
     s
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_first_episodes_are_sent() {
+        assert_eq!(first_episodes(1..=26), vec![1, 2, 3]);
+        assert_eq!(first_episodes(vec!["only"]), vec!["only"]);
+    }
 }

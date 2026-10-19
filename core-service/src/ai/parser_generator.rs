@@ -288,6 +288,10 @@ pub async fn generate_parsers_for_subscription_batch(
             raw_anime_items::table
                 .filter(raw_anime_items::subscription_id.eq(subscription_id))
                 .filter(raw_anime_items::status.eq(ParseStatus::NoMatch.as_str()))
+                .order((
+                    raw_anime_items::pub_date.asc(),
+                    raw_anime_items::item_id.asc(),
+                ))
                 .load::<RawAnimeItem>(&mut conn)
                 .map_err(|e| e.to_string())?
         };
@@ -301,15 +305,15 @@ pub async fn generate_parsers_for_subscription_batch(
             return Ok(());
         }
 
-        // 去重標題，最多取 24 個（避免佔用過多 token）
+        // 去重後只送最早的幾集（避免佔用過多 token；確認後的解析器會套用到其餘集數）
         let unique_titles: Vec<String> = {
             let mut seen = std::collections::HashSet::new();
-            unmatched
-                .iter()
-                .filter(|item| seen.insert(item.title.clone()))
-                .take(24)
-                .map(|item| item.title.clone())
-                .collect()
+            first_episodes(
+                unmatched
+                    .iter()
+                    .filter(|item| seen.insert(item.title.clone()))
+                    .map(|item| item.title.clone()),
+            )
         };
 
         tracing::info!(
