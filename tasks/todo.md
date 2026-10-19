@@ -196,7 +196,9 @@
       C2 172/172 集成功（約 6 分鐘），15 個新資料夾都有 tvshow.nfo、season.nfo、單集 NFO、海報，劇場版字幕跟著搬；
       C3 刪除 34 個重複檔案，てんびん 資料夾自動清掉；第二次 dry-run 為空
     - 系統刪不到的 2 個殘檔（合集版已保留）：`Super no Ura…/S01E09`（無下載記錄，E7 孤兒）、`暴走千金…/S01E10`（下載 515 無路徑）→ 手動刪除
-    - [ ] 部署：viewer-jellyfin → core-service；C2 dry-run → 套用；C3 dry-run → 套用；手動刪 2 個殘檔
+    - [x] 2026-10-19 14:10 (+08) 部署 viewer-jellyfin → core-service（3d4924a）：migration `20261019000000allowresyncingstatus` 已套用、
+      兩者 healthy、restarts=0；生產 C2 dry-run：172 集、15 個系列，與副本一致
+    - [ ] C2 套用 → C3 dry-run → 套用 → 手動刪 2 個殘檔
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
