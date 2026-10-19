@@ -39,6 +39,13 @@ export interface UpdateAiProviderRequest {
   is_enabled?: boolean
 }
 
+/** 取得模型列表：編輯既有 provider 時 api_key 留空就用它已存的 key */
+export interface ListAiModelsRequest {
+  existing_provider_id?: number
+  base_url: string
+  api_key: string
+}
+
 export interface TestAiProviderResult {
   ok: boolean
   error?: string

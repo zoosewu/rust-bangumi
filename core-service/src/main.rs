@@ -319,6 +319,14 @@ async fn main() -> anyhow::Result<()> {
             post(handlers::ai_providers::test_ai_provider_config),
         )
         .route(
+            "/ai-providers/models",
+            post(handlers::ai_providers::list_provider_models),
+        )
+        .route(
+            "/ai-providers/:id/duplicate",
+            post(handlers::ai_providers::duplicate_ai_provider),
+        )
+        .route(
             "/ai-providers/:id/test",
             post(handlers::ai_providers::test_ai_provider),
         )

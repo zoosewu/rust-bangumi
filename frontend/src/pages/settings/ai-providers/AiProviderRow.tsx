@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Loader2, Pencil, Trash2 } from "lucide-react"
+import { Copy, GripVertical, Loader2, Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
@@ -14,9 +14,19 @@ export interface AiProviderRowProps {
   onDelete: (id: number) => void
   onToggle: (id: number, is_enabled: boolean) => void
   onTest: (id: number) => Promise<TestAiProviderResult>
+  /** 在伺服器端複製這組設定（含 API key） */
+  onDuplicate: (id: number) => void
 }
 
-export function AiProviderRow({ provider, index, onEdit, onDelete, onToggle, onTest }: AiProviderRowProps) {
+export function AiProviderRow({
+  provider,
+  index,
+  onEdit,
+  onDelete,
+  onToggle,
+  onTest,
+  onDuplicate,
+}: AiProviderRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: provider.id,
   })
@@ -77,6 +87,15 @@ export function AiProviderRow({ provider, index, onEdit, onDelete, onToggle, onT
       <Button variant="outline" size="sm" disabled={testing} onClick={handleTest}>
         {testing && <Loader2 className="mr-1 size-3 animate-spin" />}
         測試
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onDuplicate(provider.id)}
+        aria-label="複製"
+        title="複製這組設定（含 API key）"
+      >
+        <Copy className="size-3" />
       </Button>
       <Button variant="outline" size="sm" onClick={() => onEdit(provider)} aria-label="編輯">
         <Pencil className="size-3" />

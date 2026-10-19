@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { ChevronDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,6 +18,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type {
   AiProvider,
   AiProviderKind,
@@ -25,6 +31,7 @@ import type {
   ResponseFormatMode,
   UpdateAiProviderRequest,
   TestAiProviderResult,
+  ListAiModelsRequest,
 } from "@/schemas/ai"
 
 const KINDS: AiProviderKind[] = ["openai_compatible"]
@@ -36,13 +43,22 @@ export interface AiProviderEditDialogProps {
   onClose: () => void
   onSubmit: (req: CreateAiProviderRequest | UpdateAiProviderRequest) => Promise<void>
   onTestConfig: (req: CreateAiProviderRequest) => Promise<TestAiProviderResult>
+  /** 向 provider 取得模型列表（失敗時 reject 並帶錯誤訊息） */
+  onListModels: (req: ListAiModelsRequest) => Promise<readonly string[]>
 }
+
+type ModelList =
+  | { state: "idle" }
+  | { state: "loading"; source: string }
+  | { state: "loaded"; source: string; models: readonly string[] }
+  | { state: "error"; source: string; message: string }
 
 export function AiProviderEditDialog({
   provider,
   onClose,
   onSubmit,
   onTestConfig,
+  onListModels,
 }: AiProviderEditDialogProps) {
   const isEdit = provider !== null
   const [name, setName] = useState("")
@@ -56,6 +72,7 @@ export function AiProviderEditDialog({
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<TestAiProviderResult | null>(null)
+  const [modelList, setModelList] = useState<ModelList>({ state: "idle" })
 
   useEffect(() => {
     if (provider) {
@@ -78,7 +95,37 @@ export function AiProviderEditDialog({
       setEnabled(true)
     }
     setTestResult(null)
+    setModelList({ state: "idle" })
   }, [provider])
+
+  // 列表跟著撈取時的 Base URL 與 Key；兩者改了就視為還沒撈過
+  const source = `${baseUrl}\n${apiKey}`
+  const current: ModelList =
+    modelList.state !== "idle" && modelList.source !== source ? { state: "idle" } : modelList
+
+  const loadModels = async () => {
+    setModelList({ state: "loading", source })
+    try {
+      const models = await onListModels({
+        existing_provider_id: provider?.id,
+        base_url: baseUrl,
+        api_key: apiKey,
+      })
+      setModelList({ state: "loaded", source, models })
+    } catch (e) {
+      setModelList({
+        state: "error",
+        source,
+        message: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const filter = modelName.trim().toLowerCase()
+  const shownModels =
+    current.state === "loaded"
+      ? current.models.filter((m) => !filter || m.toLowerCase().includes(filter))
+      : []
 
   const buildTestRequest = (): CreateAiProviderRequest => ({
     existing_provider_id: provider?.id,
@@ -194,11 +241,54 @@ export function AiProviderEditDialog({
           </div>
           <div className="space-y-1">
             <Label>Model 名稱</Label>
-            <Input
-              value={modelName}
-              onChange={(e) => setModelName(e.target.value)}
-              placeholder="gpt-4o-mini"
-            />
+            <div className="flex gap-1">
+              <Input
+                value={modelName}
+                onChange={(e) => setModelName(e.target.value)}
+                placeholder="gpt-4o-mini"
+              />
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (open && current.state !== "loaded") void loadModels()
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="選擇模型"
+                    disabled={!baseUrl}
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-72 w-80 overflow-y-auto">
+                  {current.state === "loading" && (
+                    <div className="flex items-center gap-2 p-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" /> 載入模型列表…
+                    </div>
+                  )}
+                  {current.state === "error" && (
+                    <div className="p-2 text-sm text-destructive">{current.message}</div>
+                  )}
+                  {current.state === "loaded" && shownModels.length === 0 && (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      {current.models.length === 0 ? "provider 沒有回傳任何模型" : "沒有符合的模型"}
+                    </div>
+                  )}
+                  {shownModels.map((m) => (
+                    <DropdownMenuItem key={m} onSelect={() => setModelName(m)}>
+                      <span className="truncate font-mono text-xs">{m}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            {current.state === "loaded" && (
+              <p className="text-xs text-muted-foreground">
+                共 {current.models.length} 個模型，可在輸入框打字篩選
+              </p>
+            )}
           </div>
           <div className="space-y-1">
             <Label>Max Tokens</Label>

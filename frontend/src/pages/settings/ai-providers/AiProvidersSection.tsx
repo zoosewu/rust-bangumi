@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { Plus } from "lucide-react"
 import { useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -14,6 +15,7 @@ import { useEffectQuery } from "@/hooks/useEffectQuery"
 import type {
   AiProvider,
   CreateAiProviderRequest,
+  ListAiModelsRequest,
   TestAiProviderResult,
   UpdateAiProviderRequest,
 } from "@/schemas/ai"
@@ -50,7 +52,26 @@ export function AiProvidersSection() {
     Effect.flatMap(CoreApi, (api) => api.testAiProviderConfig(req)),
   )
 
+  const { mutate: doDuplicate } = useEffectMutation((id: number) =>
+    Effect.flatMap(CoreApi, (api) => api.duplicateAiProvider(id)),
+  )
+  const { mutate: doListModels } = useEffectMutation((req: ListAiModelsRequest) =>
+    Effect.flatMap(CoreApi, (api) => api.listAiProviderModels(req)),
+  )
+
   const list = providers ?? []
+
+  const handleDuplicate = async (id: number) => {
+    try {
+      const copy = await doDuplicate(id)
+      await refetch()
+      // 直接打開複本的編輯視窗，改模型名稱後啟用
+      if (copy) setEditing(copy)
+      toast.success("已複製，複本預設停用")
+    } catch {
+      toast.error("複製失敗")
+    }
+  }
 
   const handleTest = async (id: number): Promise<TestAiProviderResult> => {
     const r = await doTest(id)
@@ -87,6 +108,7 @@ export function AiProvidersSection() {
               await refetch()
             }}
             onTest={handleTest}
+            onDuplicate={handleDuplicate}
           />
         )}
 
@@ -98,6 +120,7 @@ export function AiProvidersSection() {
           <AiProviderEditDialog
             provider={editing}
             onClose={() => setEditing(undefined)}
+            onListModels={async (req) => (await doListModels(req)) ?? []}
             onTestConfig={async (req) => {
               const r = await doTestConfig(req)
               return r ?? { ok: false, error: "no response" }

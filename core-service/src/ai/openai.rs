@@ -119,6 +119,51 @@ impl OpenAiClient {
     }
 }
 
+/// OpenAI 相容的 `GET {base_url}/models` 回應中的模型 id（排序、去重）。
+/// 同時接受 `{"data": [...]}` 與直接回傳陣列兩種格式。
+pub fn parse_model_ids(body: &Value) -> Vec<String> {
+    let mut ids: Vec<String> = body
+        .get("data")
+        .unwrap_or(body)
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|m| m.get("id").and_then(|id| id.as_str()))
+        .map(str::to_string)
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
+/// 向 provider 取得可用的模型列表
+pub async fn list_models(base_url: &str, api_key: &str) -> Result<Vec<String>, String> {
+    let mut request = reqwest::Client::new()
+        .get(format!("{}/models", base_url.trim_end_matches('/')))
+        .timeout(std::time::Duration::from_secs(20));
+    if let Some(token) = bearer_token(Some(api_key)) {
+        request = request.bearer_auth(token);
+    }
+    let resp = request
+        .send()
+        .await
+        .map_err(|e| format!("無法連線到 provider：{}", e.without_url()))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!(
+            "provider 回應 HTTP {}：{}",
+            status,
+            text.chars().take(200).collect::<String>()
+        ));
+    }
+    let body: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("模型列表格式無法解析：{}", e))?;
+    Ok(parse_model_ids(&body))
+}
+
 fn bearer_token(api_key: Option<&str>) -> Option<&str> {
     api_key.and_then(|key| {
         let trimmed = key.trim();
@@ -218,6 +263,40 @@ fn extract_retry_after_secs(msg: &str) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_ids_are_read_sorted_and_unique() {
+        let body = json!({"object": "list", "data": [
+            {"id": "openai/gpt-oss-120b"}, {"id": "llama-3.3-70b"}, {"id": "openai/gpt-oss-120b"}, {"name": "no id"}
+        ]});
+        assert_eq!(
+            parse_model_ids(&body),
+            vec!["llama-3.3-70b", "openai/gpt-oss-120b"]
+        );
+        assert_eq!(parse_model_ids(&json!([{"id": "m1"}])), vec!["m1"]);
+        assert!(parse_model_ids(&json!({"error": "x"})).is_empty());
+    }
+
+    #[tokio::test]
+    async fn model_list_is_fetched_with_the_api_key() {
+        use axum::{http::HeaderMap, routing::get, Json, Router};
+        let app = Router::new().route(
+            "/v1/models",
+            get(|headers: HeaderMap| async move {
+                if headers.get("authorization").and_then(|v| v.to_str().ok()) == Some("Bearer k1") {
+                    Ok(Json(json!({"data": [{"id": "b"}, {"id": "a"}]})))
+                } else {
+                    Err(axum::http::StatusCode::UNAUTHORIZED)
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}/v1", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        assert_eq!(list_models(&base, "k1").await.unwrap(), vec!["a", "b"]);
+        assert!(list_models(&base, "").await.unwrap_err().contains("401"));
+    }
 
     #[test]
     fn extracts_retry_seconds() {

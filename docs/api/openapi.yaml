@@ -2001,6 +2001,70 @@ paths:
         '404':
           description: existing_provider_id 不存在
 
+  /ai-providers/models:
+    post:
+      tags:
+        - AiProviders
+      summary: 取得 provider 的模型列表
+      description: |
+        向 provider 呼叫 OpenAI 相容的 `GET {base_url}/models`，回傳排序後的模型 id。
+        編輯既有 provider 時帶 `existing_provider_id`，`api_key` 留空就用它已存的 key（前端不需要知道 key）。
+      operationId: listAiProviderModels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_url]
+              properties:
+                existing_provider_id:
+                  type: integer
+                  nullable: true
+                base_url:
+                  type: string
+                  example: "https://api.groq.com/openai/v1"
+                api_key:
+                  type: string
+                  description: 留空時使用 existing_provider_id 已存的 key
+      responses:
+        '200':
+          description: 模型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      type: string
+                example:
+                  models: ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
+        '400':
+          description: 缺少 Base URL
+        '502':
+          description: provider 無法連線或回應錯誤（訊息為 provider 的錯誤摘要）
+
+  /ai-providers/{id}/duplicate:
+    post:
+      tags:
+        - AiProviders
+      summary: 複製 provider 設定
+      description: 在伺服器端複製設定（含 API key，回應中的 key 會遮蔽）。複本名稱加上「（複本）」、預設停用、排在最後。
+      operationId: duplicateAiProvider
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 新建立的複本（api_key 已遮蔽）
+        '404':
+          description: 來源 provider 不存在
+
   /ai-providers/{id}/test:
     parameters:
       - name: id

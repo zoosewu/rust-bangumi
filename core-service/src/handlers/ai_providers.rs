@@ -372,6 +372,93 @@ pub async fn test_ai_provider_config(
     run_provider_test(provider).await
 }
 
+/// 複本的名稱
+fn copy_name(name: &str) -> String {
+    format!("{name}（複本）")
+}
+
+/// 複製一個 provider（含 API key），複本停用並排在最後；來源不存在時回傳 None
+fn duplicate_provider(conn: &mut PgConnection, id: i32) -> QueryResult<Option<AiProvider>> {
+    let Some(source) = ai_providers::table
+        .find(id)
+        .first::<AiProvider>(conn)
+        .optional()?
+    else {
+        return Ok(None);
+    };
+    let next_priority: Option<i32> = ai_providers::table
+        .select(diesel::dsl::max(ai_providers::priority))
+        .first(conn)?;
+    diesel::insert_into(ai_providers::table)
+        .values(&NewAiProvider {
+            name: copy_name(&source.name),
+            provider_kind: source.provider_kind,
+            base_url: source.base_url,
+            api_key: source.api_key,
+            model_name: source.model_name,
+            max_tokens: source.max_tokens,
+            response_format_mode: source.response_format_mode,
+            is_enabled: false,
+            priority: next_priority.map(|v| v + 1).unwrap_or(0),
+        })
+        .get_result(conn)
+        .map(Some)
+}
+
+/// POST /ai-providers/:id/duplicate — 在伺服器端複製設定（含 API key，前端不會看到 key）。
+/// 複本預設停用並排在最後，改好模型名稱等設定後再啟用。
+pub async fn duplicate_ai_provider(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<Json<AiProvider>, (StatusCode, String)> {
+    let mut conn = state
+        .db
+        .get()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    duplicate_provider(&mut conn, id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(|copy| Json(mask(copy)))
+        .ok_or((StatusCode::NOT_FOUND, format!("provider {id} not found")))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListModelsRequest {
+    /// 編輯既有 provider 時帶入；api_key 留空就用它已存的 key
+    pub existing_provider_id: Option<i32>,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ListModelsResponse {
+    pub models: Vec<String>,
+}
+
+/// POST /ai-providers/models — 向 provider 取得模型列表（OpenAI 相容的 `GET /models`）
+pub async fn list_provider_models(
+    State(state): State<AppState>,
+    Json(req): Json<ListModelsRequest>,
+) -> Result<Json<ListModelsResponse>, (StatusCode, String)> {
+    if req.base_url.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Base URL is required".into()));
+    }
+    let api_key = if req.api_key.trim().is_empty() {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        load_provider_api_key(&mut conn, req.existing_provider_id)?.unwrap_or_default()
+    } else {
+        req.api_key
+    };
+    crate::ai::openai::list_models(&req.base_url, &api_key)
+        .await
+        .map(|models| Json(ListModelsResponse { models }))
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,6 +479,41 @@ mod tests {
             created_at: NaiveDateTime::default(),
             updated_at: NaiveDateTime::default(),
         }
+    }
+
+    #[test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    fn a_duplicate_keeps_the_key_but_starts_disabled_at_the_end() {
+        let mut conn = crate::services::identity::test_db::conn();
+        let source: AiProvider = diesel::insert_into(ai_providers::table)
+            .values(&NewAiProvider {
+                name: "Groq".into(),
+                provider_kind: "openai_compatible".into(),
+                base_url: "https://api.groq.com/openai/v1".into(),
+                api_key: "gsk-secret".into(),
+                model_name: "openai/gpt-oss-120b".into(),
+                max_tokens: 4096,
+                response_format_mode: "strict".into(),
+                is_enabled: true,
+                priority: 900,
+            })
+            .get_result(&mut conn)
+            .unwrap();
+
+        let copy = duplicate_provider(&mut conn, source.id).unwrap().unwrap();
+        assert_ne!(copy.id, source.id);
+        assert_eq!(copy.name, "Groq（複本）");
+        assert_eq!(copy.api_key, "gsk-secret");
+        assert_eq!(copy.model_name, source.model_name);
+        assert!(!copy.is_enabled);
+        assert!(copy.priority > source.priority);
+        assert_eq!(mask(copy).api_key, MASKED_API_KEY);
+        assert!(duplicate_provider(&mut conn, -1).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_copy_is_named_after_its_source() {
+        assert_eq!(copy_name("Groq"), "Groq（複本）");
     }
 
     #[test]

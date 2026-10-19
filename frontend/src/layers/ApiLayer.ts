@@ -20,6 +20,7 @@ import type {
   TestAiProviderConfigRequest,
   UpdateAiProviderRequest,
   TestAiProviderResult,
+  ListAiModelsRequest,
   AiPromptSettings,
   PendingAiResult,
   ConfirmPendingRequest,
@@ -455,6 +456,41 @@ const makeCoreApi = Effect.gen(function* () {
         .pipe(
           Effect.flatMap((r) => r.json),
           Effect.map((r) => r as TestAiProviderResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    duplicateAiProvider: (id) =>
+      client
+        .execute(
+          HttpClientRequest.post(`/api/core/ai-providers/${id}/duplicate`).pipe(
+            HttpClientRequest.bodyUnsafeJson({}),
+          ),
+        )
+        .pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.map((r) => r as AiProvider),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    listAiProviderModels: (req) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/ai-providers/models").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          // 失敗時後端回傳說明文字（例如 provider 的錯誤），原樣帶給畫面
+          Effect.flatMap((r) =>
+            r.status >= 400
+              ? Effect.flatMap(r.text, (text) =>
+                  Effect.fail(new Error(text || `HTTP ${r.status}`)),
+                )
+              : r.json,
+          ),
+          Effect.map((r) => (r as { models: string[] }).models),
           Effect.scoped,
           Effect.orDie,
         ),
