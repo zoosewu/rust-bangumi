@@ -300,6 +300,45 @@ pub fn first_episodes<T>(items: impl IntoIterator<Item = T>) -> Vec<T> {
     items.into_iter().take(AI_SAMPLE_EPISODES).collect()
 }
 
+/// 從還沒解析的標題粗略猜出集數（`[05]`、` - 05 `、`第05話`、`[01-12]`），
+/// 只用來把同一集的不同版本放在一起，不是解析。猜不出來時回傳 None。
+pub fn guess_episode_key(title: &str) -> Option<String> {
+    static EPISODE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let episode = EPISODE.get_or_init(|| {
+        regex::Regex::new(
+            r"(?:\[|【|第|\s-\s*|\sEP?)(\d{1,3}(?:\s*[-~]\s*\d{1,3})?)(?:v\d+)?(?:\]|】|話|话|集|\s|\(|\[|$)",
+        )
+        .expect("valid episode regex")
+    });
+    episode.captures(title).map(|c| {
+        c[1].split_whitespace()
+            .collect::<String>()
+            .replace('~', "-")
+    })
+}
+
+/// 依發布順序排好的標題中，取前幾集的**所有版本**（一集有三個版本就會有三個標題）。
+/// 猜不出集數的標題各自算一集。
+pub fn titles_of_first_episodes(titles: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut episodes: Vec<String> = Vec::new();
+    titles
+        .into_iter()
+        .enumerate()
+        .filter(|(i, title)| {
+            let key = guess_episode_key(title).unwrap_or_else(|| format!("#{i}"));
+            if episodes.contains(&key) {
+                true
+            } else if episodes.len() < AI_SAMPLE_EPISODES {
+                episodes.push(key);
+                true
+            } else {
+                false
+            }
+        })
+        .map(|(_, title)| title)
+        .collect()
+}
+
 pub fn build_parser_batch_user_prompt(titles: &[String], custom: Option<&str>) -> String {
     let list = titles
         .iter()
@@ -380,5 +419,79 @@ mod sample_tests {
     fn only_the_first_episodes_are_sent() {
         assert_eq!(first_episodes(1..=26), vec![1, 2, 3]);
         assert_eq!(first_episodes(vec!["only"]), vec!["only"]);
+    }
+
+    #[test]
+    fn episode_numbers_are_guessed_from_common_title_styles() {
+        let cases = [
+            (
+                "[LoliHouse] Super no Ura - 05 [WebRip 1080p HEVC-10bit AAC][简繁内封字幕]",
+                Some("05"),
+            ),
+            (
+                "【喵萌奶茶屋】★04月新番★[欺诈游戏 / LIAR GAME][01][1080p][繁日双语]",
+                Some("01"),
+            ),
+            (
+                "[绿茶字幕组] 青之箱 第二季 / Ao no Hako S2 [01][WebRip][1080p][繁日内嵌]",
+                Some("01"),
+            ),
+            (
+                "【豌豆字幕组】[药屋少女的呢喃 S3][01(49)][繁体][1080P][MP4]",
+                Some("01"),
+            ),
+            (
+                "[绿茶字幕组] 金牌得主 第二季 / Medalist S2 [14-22][WebRip][1080p]",
+                Some("14-22"),
+            ),
+            ("[字幕组] 某动画 第12話 [1080p]", Some("12")),
+            (
+                "[黒ネズミたち] 罗梅莉亚战记 - 01 (CR 1920x1080 AVC AAC MKV)",
+                Some("01"),
+            ),
+            (
+                "[樱桃花字幕组]尼古喵喵 Yanineko -2[1080p][简日内嵌]",
+                Some("2"),
+            ),
+            (
+                "[樱桃花字幕组]尼古喵喵 Yanineko  - 1[1080p][简日内嵌]",
+                Some("1"),
+            ),
+            ("Some Movie [1080p][BDRip]", None),
+        ];
+        for (title, expected) in cases {
+            assert_eq!(guess_episode_key(title).as_deref(), expected, "{title}");
+        }
+    }
+
+    #[test]
+    fn every_version_of_the_first_three_episodes_is_sent() {
+        let titles = [
+            "[G] T [01][简日]",
+            "[G] T [01][繁日]",
+            "[G] T [01][简繁日内封]",
+            "[G] T [02][简日]",
+            "[G] T [02][繁日]",
+            "[G] T [03][繁日]",
+            "[G] T [04][繁日]",
+            "[G] T [02][简繁日内封]",
+        ]
+        .map(String::from);
+        let sent = titles_of_first_episodes(titles);
+        assert_eq!(sent.len(), 7);
+        assert!(sent.iter().all(|t| !t.contains("[04]")));
+        assert!(sent.contains(&"[G] T [02][简繁日内封]".to_string()));
+    }
+
+    #[test]
+    fn titles_without_an_episode_number_count_as_their_own_episode() {
+        let titles = [
+            "Movie A [1080p]",
+            "Movie B [1080p]",
+            "Movie C [1080p]",
+            "Movie D [1080p]",
+        ]
+        .map(String::from);
+        assert_eq!(titles_of_first_episodes(titles).len(), 3);
     }
 }
