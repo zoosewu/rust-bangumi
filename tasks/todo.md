@@ -155,7 +155,7 @@
   - [x] 2026-10-17 先套用資料修復 SQL（UPDATE 12、UPDATE 1，兩個驗證皆 0 列），20:46 (+08) 再部署 core（6ddc608）：
     healthy、restarts=0，log 無 ERROR / WARN；12 個 parser 已綁訂閱、46 已停用、60 仍待確認
   - [ ] 部署後觀察：新集數仍由原 parser 解析；確認新 parser 後 `title_parsers.created_from_id` 有值
-- [ ] 5. 作品身分 / metadata（計畫：`docs/superpowers/plans/2026-10-18-metadata-identity-v2.md`，spec 已於 2026-10-18 修訂）
+- [x] 5. 作品身分 / metadata（計畫：`docs/superpowers/plans/2026-10-18-metadata-identity-v2.md`，spec 已於 2026-10-18 修訂）
   - 2026-10-18 重新實測：媒體庫 18 個資料夾 0 NFO / 0 海報；core 每次同步都送 `bangumi_id: None`；viewer 不會寫 `tvshow.nfo`；
     animes 簡介 / 日期全空；4 個訂閱被拆成兩個作品，其中 3 部的兩組 1–12 集逐位元組相同（重複約 19 GB）
   - 使用者決定（2026-10-18）：名稱中文即可、各季統一（沿 bgm 前傳鏈取第一季中文名，手動可覆寫，不用 AI）；季數由 parser 決定；
@@ -206,7 +206,7 @@
     - 發現：viewer 刪檔依自己的 sync_tasks 路徑，與 core 的 file_path 可能不同。下載 507（暴怒千金 ep9 單集版）在 viewer
       記錄為 `てんびん/S01E09`（當初同步到錯的資料夾），core 記錄為 `暴走千金…/S01E09` → 刪到的是 てんびん/S01E09
       （本身也是重複副本，沒有刪錯），`暴走千金…/S01E09` 留下
-    - [ ] 手動刪 3 個殘檔（合集版都已在新資料夾）：Super no Ura… S01E09（無下載記錄）、暴走千金… S01E09（507）、S01E10（515）
+    - [x] 2026-10-19 使用者手動刪除 3 個殘檔與空資料夾：媒體庫剩 15 個系列資料夾
 - [ ] 後續：viewer `/delete` 改為由 core 帶要刪的路徑並核對與 viewer 記錄一致（不一致就不刪、回報），避免兩邊記錄分歧時刪錯檔
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
