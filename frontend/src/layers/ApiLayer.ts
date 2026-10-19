@@ -21,6 +21,8 @@ import type {
   UpdateAiProviderRequest,
   TestAiProviderResult,
   ListAiModelsRequest,
+  PromptTestRequest,
+  PromptTestResult,
   AiPromptSettings,
   PendingAiResult,
   ConfirmPendingRequest,
@@ -491,6 +493,27 @@ const makeCoreApi = Effect.gen(function* () {
               : r.json,
           ),
           Effect.map((r) => (r as { models: string[] }).models),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    testAiProviderPrompt: (req) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/ai-providers/test-prompt").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          // 取樣失敗（例如訂閱沒有標題）時後端回傳說明文字
+          Effect.flatMap((r) =>
+            r.status >= 400
+              ? Effect.flatMap(r.text, (text) =>
+                  Effect.fail(new Error(text || `HTTP ${r.status}`)),
+                )
+              : r.json,
+          ),
+          Effect.map((r) => r as PromptTestResult),
           Effect.scoped,
           Effect.orDie,
         ),

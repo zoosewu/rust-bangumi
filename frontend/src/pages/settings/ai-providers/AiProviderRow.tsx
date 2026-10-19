@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Copy, GripVertical, Loader2, Pencil, Trash2 } from "lucide-react"
+import { Copy, FlaskConical, GripVertical, Loader2, Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { TagBadge } from "@/components/shared/TagBadge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,8 @@ export interface AiProviderRowProps {
   onTest: (id: number) => Promise<TestAiProviderResult>
   /** 在伺服器端複製這組設定（含 API key） */
   onDuplicate: (id: number) => void
+  /** 用真實 prompt 測試 */
+  onPromptTest: (p: AiProvider) => void
 }
 
 export function AiProviderRow({
@@ -26,6 +28,7 @@ export function AiProviderRow({
   onToggle,
   onTest,
   onDuplicate,
+  onPromptTest,
 }: AiProviderRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: provider.id,
@@ -87,6 +90,15 @@ export function AiProviderRow({
       <Button variant="outline" size="sm" disabled={testing} onClick={handleTest}>
         {testing && <Loader2 className="mr-1 size-3 animate-spin" />}
         測試
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPromptTest(provider)}
+        aria-label="真實 prompt 測試"
+        title="用設定的 prompt 與訂閱的真實標題測試"
+      >
+        <FlaskConical className="size-3" />
       </Button>
       <Button
         variant="outline"

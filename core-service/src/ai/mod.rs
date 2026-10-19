@@ -4,6 +4,7 @@ pub mod factory;
 pub mod filter_generator;
 pub mod openai;
 pub mod parser_generator;
+pub mod prompt_test;
 pub mod prompts;
 pub mod queue;
 

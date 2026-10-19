@@ -46,6 +46,40 @@ export interface ListAiModelsRequest {
   api_key: string
 }
 
+export type PromptTestKind = "parser" | "filter"
+
+/** 用真實 prompt 測試：provider 設定（與測試連線相同）＋類型＋訂閱 */
+export interface PromptTestRequest {
+  existing_provider_id?: number
+  provider_kind: AiProviderKind
+  base_url: string
+  api_key: string
+  model_name: string
+  max_tokens: number
+  response_format_mode: ResponseFormatMode
+  kind: PromptTestKind
+  subscription_id: number
+}
+
+export interface TitleEvaluation {
+  title: string
+  /** parser: match / no_match；filter: keep / drop */
+  outcome: "match" | "no_match" | "keep" | "drop"
+  detail: string | null
+}
+
+export interface PromptTestResult {
+  ok: boolean
+  elapsed_ms: number
+  system_prompt: string
+  user_prompt: string
+  titles: string[]
+  raw_response: string | null
+  parsed: unknown
+  evaluations: TitleEvaluation[]
+  error: string | null
+}
+
 export interface TestAiProviderResult {
   ok: boolean
   error?: string

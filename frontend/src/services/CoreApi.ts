@@ -14,6 +14,8 @@ import type {
   UpdateAiProviderRequest,
   TestAiProviderResult,
   ListAiModelsRequest,
+  PromptTestRequest,
+  PromptTestResult,
   AiPromptSettings,
   PendingAiResult,
   ConfirmPendingRequest,
@@ -125,6 +127,7 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly testAiProviderConfig: (req: CreateAiProviderRequest) => Effect.Effect<TestAiProviderResult>
     readonly duplicateAiProvider: (id: number) => Effect.Effect<AiProvider>
     readonly listAiProviderModels: (req: ListAiModelsRequest) => Effect.Effect<readonly string[]>
+    readonly testAiProviderPrompt: (req: PromptTestRequest) => Effect.Effect<PromptTestResult>
     readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
     readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>
     readonly revertParserPrompt: Effect.Effect<{ value: string }>

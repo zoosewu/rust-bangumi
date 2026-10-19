@@ -372,6 +372,86 @@ pub async fn test_ai_provider_config(
     run_provider_test(provider).await
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PromptTestRequest {
+    /// 要測試的 provider 設定（與 `/ai-providers/test` 相同；api_key 留空就用已存的 key）
+    #[serde(flatten)]
+    pub provider: TestAiProviderRequest,
+    pub kind: crate::ai::prompt_test::PromptKind,
+    pub subscription_id: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PromptTestResponse {
+    pub ok: bool,
+    pub elapsed_ms: u128,
+    pub system_prompt: String,
+    pub user_prompt: String,
+    pub titles: Vec<String>,
+    pub raw_response: Option<String>,
+    pub parsed: Option<serde_json::Value>,
+    pub evaluations: Vec<crate::ai::prompt_test::TitleEvaluation>,
+    pub error: Option<String>,
+}
+
+/// POST /ai-providers/test-prompt — 用設定好的真實 prompt 與某訂閱的真實標題測試一個 provider。
+/// 只送給這個 provider（不 fallback）、不建立待確認結果；會排進全域 AI 佇列，避免和正在跑的生成搶額度。
+pub async fn test_provider_with_real_prompt(
+    State(state): State<AppState>,
+    Json(req): Json<PromptTestRequest>,
+) -> Result<Json<PromptTestResponse>, (StatusCode, String)> {
+    use crate::ai::prompt_test::{build_sample, evaluate, parse_response};
+    let (fallback_api_key, sample) = {
+        let mut conn = state
+            .db
+            .get()
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let key = load_provider_api_key(&mut conn, req.provider.existing_provider_id)?;
+        let sample = build_sample(&mut conn, req.kind, req.subscription_id)
+            .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+        (key, sample)
+    };
+    let provider = provider_from_test_request(req.provider, fallback_api_key)?;
+    let client =
+        crate::ai::factory::build_provider(&provider).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    let _permit = crate::ai::queue::ai_queue().acquire().await;
+    let started = std::time::Instant::now();
+    let result = client
+        .chat_completion_structured(&sample.system_prompt, &sample.user_prompt, &sample.schema)
+        .await;
+    let elapsed_ms = started.elapsed().as_millis();
+
+    let mut response = PromptTestResponse {
+        ok: false,
+        elapsed_ms,
+        system_prompt: sample.system_prompt,
+        user_prompt: sample.user_prompt,
+        titles: sample.titles,
+        raw_response: None,
+        parsed: None,
+        evaluations: vec![],
+        error: None,
+    };
+    match result {
+        Err(e) => response.error = Some(e.to_string()),
+        Ok(raw) => {
+            match parse_response(req.kind, &raw)
+                .and_then(|data| evaluate(req.kind, &data, &response.titles).map(|ev| (data, ev)))
+            {
+                Ok((data, evaluations)) => {
+                    response.ok = true;
+                    response.parsed = Some(data);
+                    response.evaluations = evaluations;
+                }
+                Err(e) => response.error = Some(e),
+            }
+            response.raw_response = Some(raw);
+        }
+    }
+    Ok(Json(response))
+}
+
 /// 複本的名稱
 fn copy_name(name: &str) -> String {
     format!("{name}（複本）")

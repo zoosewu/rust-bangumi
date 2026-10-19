@@ -323,6 +323,10 @@ async fn main() -> anyhow::Result<()> {
             post(handlers::ai_providers::list_provider_models),
         )
         .route(
+            "/ai-providers/test-prompt",
+            post(handlers::ai_providers::test_provider_with_real_prompt),
+        )
+        .route(
             "/ai-providers/:id/duplicate",
             post(handlers::ai_providers::duplicate_ai_provider),
         )

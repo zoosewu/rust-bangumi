@@ -16,12 +16,14 @@ import type {
   AiProvider,
   CreateAiProviderRequest,
   ListAiModelsRequest,
+  PromptTestRequest,
   TestAiProviderResult,
   UpdateAiProviderRequest,
 } from "@/schemas/ai"
 import { CoreApi } from "@/services/CoreApi"
 import { AiProviderEditDialog } from "./AiProviderEditDialog"
 import { AiProviderList } from "./AiProviderList"
+import { AiPromptTestDialog } from "./AiPromptTestDialog"
 
 export function AiProvidersSection() {
   const { data: providers, refetch } = useEffectQuery(
@@ -58,6 +60,11 @@ export function AiProvidersSection() {
   const { mutate: doListModels } = useEffectMutation((req: ListAiModelsRequest) =>
     Effect.flatMap(CoreApi, (api) => api.listAiProviderModels(req)),
   )
+
+  const { mutate: doPromptTest } = useEffectMutation((req: PromptTestRequest) =>
+    Effect.flatMap(CoreApi, (api) => api.testAiProviderPrompt(req)),
+  )
+  const [promptTesting, setPromptTesting] = useState<AiProvider | null>(null)
 
   const list = providers ?? []
 
@@ -109,12 +116,25 @@ export function AiProvidersSection() {
             }}
             onTest={handleTest}
             onDuplicate={handleDuplicate}
+            onPromptTest={setPromptTesting}
           />
         )}
 
         <Button size="sm" onClick={() => setEditing(null)}>
           <Plus className="mr-1 size-3" /> 新增 Provider
         </Button>
+
+        {promptTesting && (
+          <AiPromptTestDialog
+            provider={promptTesting}
+            onClose={() => setPromptTesting(null)}
+            onRun={async (req) => {
+              const r = await doPromptTest(req)
+              if (!r) throw new Error("no response")
+              return r
+            }}
+          />
+        )}
 
         {editing !== undefined && (
           <AiProviderEditDialog

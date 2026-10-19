@@ -24,6 +24,7 @@ export interface AiProviderListProps {
   onToggle: (id: number, is_enabled: boolean) => void
   onTest: (id: number) => Promise<TestAiProviderResult>
   onDuplicate: (id: number) => void
+  onPromptTest: (p: AiProvider) => void
 }
 
 export function AiProviderList(props: AiProviderListProps) {
@@ -58,6 +59,7 @@ export function AiProviderList(props: AiProviderListProps) {
               onToggle={props.onToggle}
               onTest={props.onTest}
               onDuplicate={props.onDuplicate}
+              onPromptTest={props.onPromptTest}
             />
           ))}
         </div>

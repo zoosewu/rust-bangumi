@@ -2046,6 +2046,52 @@ paths:
         '502':
           description: provider 無法連線或回應錯誤（訊息為 provider 的錯誤摘要）
 
+  /ai-providers/test-prompt:
+    post:
+      tags:
+        - AiProviders
+      summary: 用真實 prompt 測試 provider
+      description: |
+        用設定頁的 prompt（固定＋自訂）與所選訂閱的真實標題組出和正式生成相同的請求：
+        parser 送最早三集的所有版本；filter 送同一集有多個版本的前三集。只送給這個 provider（不 fallback）、
+        不建立待確認結果；會排進全域 AI 佇列。回應包含 prompt、AI 原始回應、解析後的 JSON，
+        以及把產生的 regex 套到每個標題的結果。
+      operationId: testAiProviderPrompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_kind, base_url, model_name, kind, subscription_id]
+              properties:
+                existing_provider_id:
+                  type: integer
+                  nullable: true
+                  description: api_key 留空時使用這個 provider 已存的 key
+                provider_kind:
+                  type: string
+                base_url:
+                  type: string
+                api_key:
+                  type: string
+                model_name:
+                  type: string
+                max_tokens:
+                  type: integer
+                response_format_mode:
+                  type: string
+                kind:
+                  type: string
+                  enum: [parser, filter]
+                subscription_id:
+                  type: integer
+      responses:
+        '200':
+          description: 測試結果（ok、elapsed_ms、system_prompt、user_prompt、titles、raw_response、parsed、evaluations、error）
+        '400':
+          description: 訂閱沒有可測試的標題，或 provider 設定不完整
+
   /ai-providers/{id}/duplicate:
     post:
       tags:
