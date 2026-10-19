@@ -5,7 +5,9 @@ use shared::BatchCancelRequest;
 use std::collections::{BTreeMap, HashSet};
 
 /// Download statuses whose torrent is still in the downloader and can be cancelled.
-const CANCELLABLE_STATUSES: [&str; 2] = ["downloading", "downloader_error"];
+/// `completed` is downloaded but not yet in the library: a conflict loser or a newly
+/// filtered link in that state would otherwise keep its torrent and files forever.
+const CANCELLABLE_STATUSES: [&str; 3] = ["downloading", "downloader_error", "completed"];
 
 /// Download statuses that no longer need their torrent or its files: nothing will be
 /// downloaded for them again, and a synced episode has already been moved to the library.
@@ -159,6 +161,13 @@ mod tests {
 
     fn target(id: i32, module: Option<i32>, hash: Option<&str>) -> TorrentRef {
         (id, module, hash.map(str::to_string))
+    }
+
+    #[test]
+    fn a_downloaded_but_unsynced_torrent_can_be_cancelled() {
+        assert!(CANCELLABLE_STATUSES.contains(&"completed"));
+        // 已經在媒體庫的集數不在這裡處理（刪檔走 viewer）
+        assert!(!CANCELLABLE_STATUSES.contains(&"synced"));
     }
 
     #[test]
