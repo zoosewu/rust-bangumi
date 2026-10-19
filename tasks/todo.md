@@ -144,7 +144,7 @@
     → **沒有被誤過濾的 link，不需修資料**
   - [x] 2026-10-17 14:51 (+08) 部署 core（94a6029）：migration `20261017000000droppendingfilterrules` 已套用，
     `filter_rules` 已無 `pending_result_id`、規則數維持 12；core healthy、restarts=0，log 無錯誤
-- [ ] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
+- [x] 4. 解析器綁定建立它的訂閱（parse 時只用 global + 本訂閱的 parser）
   - 根因：parse 時載入所有已確認 parser、不看 `created_from_*`；而且待確認頁用訂閱層級確認時沒送 `target_id`，
     13 個 parser 存成 `subscription` + `created_from_id=NULL`（22 號綁到已不存在的訂閱 14）
   - [x] 程式：`TitleParser::applies_to_subscription`（綁訂閱的只解析該訂閱，其他都是全域）；`parse_title` 帶入
