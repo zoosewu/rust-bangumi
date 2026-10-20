@@ -599,8 +599,24 @@ impl SyncService {
             }
         };
 
+        // 帶上 core 記錄的媒體庫路徑，viewer 的記錄和它不一致時不刪
+        let expected_paths: std::collections::HashMap<i32, String> = downloads::table
+            .filter(downloads::download_id.eq_any(&download_ids))
+            .filter(downloads::file_path.is_not_null())
+            .select((
+                downloads::download_id,
+                downloads::file_path.assume_not_null(),
+            ))
+            .load::<(i32, String)>(&mut conn)
+            .map_err(|e| format!("Failed to load download paths: {}", e))?
+            .into_iter()
+            .collect();
+
         let delete_url = format!("{}/delete", viewer.base_url);
-        let request = shared::ViewerDeleteRequest { download_ids };
+        let request = shared::ViewerDeleteRequest {
+            download_ids,
+            expected_paths,
+        };
 
         let response = self
             .http_client

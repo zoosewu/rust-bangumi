@@ -531,7 +531,8 @@ pub async fn delete_synced(
     let mut results = Vec::new();
 
     for download_id in &req.download_ids {
-        let result = delete_single_download(&state, *download_id).await;
+        let expected = req.expected_paths.get(download_id).map(String::as_str);
+        let result = delete_single_download(&state, *download_id, expected).await;
         results.push(result);
     }
 
@@ -548,7 +549,42 @@ pub async fn delete_synced(
     )
 }
 
-async fn delete_single_download(state: &AppState, download_id: i32) -> shared::ViewerDeleteResult {
+/// 決定要刪哪個檔案：viewer 的同步記錄與 core 帶來的路徑一致才刪；只有一邊有記錄時用那一邊。
+/// 任何路徑都必須在媒體庫底下（不允許 `..`），避免刪到媒體庫以外的檔案。
+fn resolve_delete_target(
+    viewer_path: Option<&str>,
+    core_path: Option<&str>,
+    library_dir: &std::path::Path,
+) -> Result<PathBuf, String> {
+    let path = match (viewer_path, core_path) {
+        (Some(v), Some(c)) if v != c => {
+            return Err(format!(
+                "路徑不一致，未刪除：viewer 記錄 {v}，core 記錄 {c}"
+            ))
+        }
+        (Some(p), _) | (None, Some(p)) => PathBuf::from(p),
+        (None, None) => return Err("No completed sync task found for this download".to_string()),
+    };
+    let inside_library = path.starts_with(library_dir)
+        && !path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+    if inside_library {
+        Ok(path)
+    } else {
+        Err(format!(
+            "{} 不在媒體庫 {} 底下，未刪除",
+            path.display(),
+            library_dir.display()
+        ))
+    }
+}
+
+async fn delete_single_download(
+    state: &AppState,
+    download_id: i32,
+    expected_path: Option<&str>,
+) -> shared::ViewerDeleteResult {
     // Find the latest completed sync task for this download_id
     let target_path: Option<String> = match state.db.get() {
         Ok(mut conn) => sync_tasks::table
@@ -562,19 +598,23 @@ async fn delete_single_download(state: &AppState, download_id: i32) -> shared::V
         Err(_) => None,
     };
 
-    let target_path = match target_path {
-        Some(p) => p,
-        None => {
+    let file_path = match resolve_delete_target(
+        target_path.as_deref(),
+        expected_path,
+        state.organizer.get_library_dir(),
+    ) {
+        Ok(p) => p,
+        Err(reason) => {
+            tracing::warn!("Not deleting download {}: {}", download_id, reason);
             return shared::ViewerDeleteResult {
                 download_id,
                 success: false,
                 deleted_path: None,
-                error_message: Some("No completed sync task found for this download".to_string()),
+                error_message: Some(reason),
             };
         }
     };
-
-    let file_path = PathBuf::from(&target_path);
+    let target_path = file_path.display().to_string();
 
     // Delete the episode file
     if file_path.exists() {
@@ -609,6 +649,34 @@ async fn delete_single_download(state: &AppState, download_id: i32) -> shared::V
 mod tests {
     use super::*;
     use axum::{routing::get, routing::post, Router};
+
+    #[test]
+    fn delete_targets_must_agree_and_stay_inside_the_library() {
+        let lib = std::path::Path::new("/media/jellyfin");
+        let a = "/media/jellyfin/X/Season 01/X - S01E01.mkv";
+        let b = "/media/jellyfin/Y/Season 01/Y - S01E09.mkv";
+        assert_eq!(
+            resolve_delete_target(Some(a), Some(a), lib).unwrap(),
+            PathBuf::from(a)
+        );
+        // 507 的情況：兩邊記錄不同就不刪
+        assert!(resolve_delete_target(Some(a), Some(b), lib)
+            .unwrap_err()
+            .contains("不一致"));
+        // 只有一邊有記錄時用那一邊
+        assert_eq!(
+            resolve_delete_target(Some(a), None, lib).unwrap(),
+            PathBuf::from(a)
+        );
+        assert_eq!(
+            resolve_delete_target(None, Some(b), lib).unwrap(),
+            PathBuf::from(b)
+        );
+        assert!(resolve_delete_target(None, None, lib).is_err());
+        // 媒體庫以外的路徑一律不刪
+        assert!(resolve_delete_target(None, Some("/downloads/x.mkv"), lib).is_err());
+        assert!(resolve_delete_target(None, Some("/media/jellyfin/../etc/passwd"), lib).is_err());
+    }
 
     /// 模擬 metadata service：第 1 集有資料，海報回傳固定位元組
     async fn mock_metadata() -> String {

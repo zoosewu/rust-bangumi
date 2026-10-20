@@ -390,6 +390,9 @@ pub struct RawFetcherResultsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewerDeleteRequest {
     pub download_ids: Vec<i32>,
+    /// core 記錄的媒體庫路徑（download_id → 路徑）。viewer 自己的記錄與它不一致時不刪除
+    #[serde(default)]
+    pub expected_paths: std::collections::HashMap<i32, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
