@@ -19,8 +19,9 @@
   3. `start`：全部服務 healthy，postgres 無錯誤
 - [ ] 2026-10-23 前後：確認無異常後刪除舊目錄 `data/postgres`、根目錄 `postgres-data/`、主機 `/tmp/override.prod-backup.yaml`；
   備份 `data/backups/2026-10-16-pg/` 保留
-- [ ] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
-  寫完以 pg_restore --list 驗證）；本機實測備份 / 失敗不留殘檔 / 保留規則皆正確；待部署 `docker compose up -d db-backup`
+- [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
+  寫完以 pg_restore --list 驗證）；本機實測備份 / 失敗不留殘檔 / 保留規則皆正確；
+  2026-10-20 14:39 部署：首次備份 bangumi 772K（23 張表資料）、viewer_jellyfin 20K（5 張表資料），皆可讀取
 
 ## 階段 1：程式修正（依序，一次一項）
 
@@ -230,8 +231,8 @@
 - [x] AI provider fallback 修正（使用者 2026-10-19）：任何一家失敗（含 400/401/403/404 設定錯誤）都換下一家；
   一輪全部失敗且其中有限流就等待後重跑（最多 5 次）；最終錯誤列出每一家的錯誤；2026-10-20 01:07 已部署（core healthy、restarts=0）
 - [x] 2026-10-20 使用者修正 provider 設定：OpenRouter 兩組 max_tokens 改 8192、Mistral 改 ministral-14b-latest / 4096；四組皆啟用
-- [ ] viewer `/delete` 由 core 帶要刪的路徑並核對（eeccaf5）：一致才刪、不一致回報不刪、viewer 沒記錄時用 core 的、
-  媒體庫外一律不刪；生產 176 筆已同步下載兩邊路徑全部一致（不會誤擋）；待部署 viewer-jellyfin + core-service
+- [x] viewer `/delete` 由 core 帶要刪的路徑並核對（eeccaf5）：一致才刪、不一致回報不刪、viewer 沒記錄時用 core 的、
+  媒體庫外一律不刪；生產 176 筆已同步下載兩邊路徑全部一致（不會誤擋）；2026-10-20 14:39 部署（core / viewer healthy、restarts=0）
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
