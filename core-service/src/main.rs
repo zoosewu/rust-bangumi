@@ -104,6 +104,10 @@ async fn main() -> anyhow::Result<()> {
             "/admin/merged-duplicates",
             post(handlers::admin::merged_duplicates),
         )
+        .route(
+            "/admin/download-orphans",
+            post(handlers::admin::download_orphans),
+        )
         // 服務註冊
         .route("/services/register", post(handlers::services::register))
         .route("/services", get(handlers::services::list_services))
