@@ -61,6 +61,11 @@ Postgres 的資料目錄是 bind mount：`/Volumes/Expansion/docker/rust-bangumi
 3. **把 Postgres 資料搬到 OrbStack 的 named volume**（VM 內的 ext4），不要再放在外接硬碟的 bind mount 上。用 `initdb --data-checksums`（`POSTGRES_INITDB_ARGS`）建立新 cluster，再 restore。
 4. restore 之後把所有序列 `setval` 到 `max(id)`，再做一次下方的檢查。
 5. 備份改用定期 `pg_dump` 寫到外接硬碟，不要拿 bind mount 上的資料目錄當備份。
+   - 2026-10-20：compose 新增 `db-backup` 服務（`scripts/db-backup.sh`）：每天備份 `bangumi` 與 `viewer_jellyfin` 到
+     `./data/backups`（外接硬碟），每份先用 `pg_restore --list` 確認能讀取；保留 14 天、每個資料庫至少留最新 3 份。
+     - 看備份紀錄：`docker logs bangumi-db-backup`
+     - 立即備份一次：`docker exec -e BACKUP_ONCE=1 bangumi-db-backup sh /usr/local/bin/db-backup.sh`
+     - 還原：`docker exec -i bangumi-postgres pg_restore -U "$POSTGRES_USER" -d bangumi --clean --if-exists < data/backups/bangumi-<時間>.dump`
 
 ### 如何檢查（正常時應該沒有任何輸出列）
 
