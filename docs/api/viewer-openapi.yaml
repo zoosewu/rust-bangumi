@@ -334,6 +334,15 @@ components:
           items:
             type: integer
           example: [42, 43, 44]
+        expected_paths:
+          type: object
+          description: |
+            core 記錄的媒體庫路徑（key 為 download_id）。viewer 的同步記錄與它不一致時不刪除並回報原因；
+            viewer 沒有記錄時改用這個路徑。任何路徑都必須在媒體庫底下才會刪除。
+          additionalProperties:
+            type: string
+          example:
+            "42": "/media/jellyfin/金牌得主/Season 02/金牌得主 - S02E01.mkv"
 
     ViewerDeleteResponse:
       type: object
