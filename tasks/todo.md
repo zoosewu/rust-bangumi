@@ -100,7 +100,7 @@
 - [x] 13. webhook URL（含 token）以明文寫進 core log（`webhook_service` 的 `Webhook N fired to …`）→ 只記 webhook id；
   已外洩到 log 的 token 建議在 Discord 重新產生
   - 實作：log 只記 webhook id；送出失敗時的 reqwest 錯誤用 `without_url()`（錯誤訊息預設會帶 URL）
-  - [ ] 使用者：在 Discord 重新產生 webhook URL，並在 UI 更新（舊 token 仍在既有 log 裡）
+  - [x] 使用者：在 Discord 重新產生 webhook URL，並在 UI 更新（2026-10-20 13:28 更新完成）
 - [x] 11. 取消時清除殘檔（稽核 E7）
   - 未完成的下載取消時 `deleteFiles=true`
   - 訂閱 purge 依各 download 的 `module_id` 送到正確的 downloader
@@ -216,7 +216,7 @@
   - 發現：藥屋 S3 同時訂閱豌豆（該季集數 1、2、3）與綠茶（跨季集數 49、50），同一集在媒體庫出現兩次（S03E01 與 S03E49）
   - [x] 2026-10-19 15:18 使用者決定移除豌豆訂閱（27），purge：viewer 刪除媒體庫 3 集（3/3 成功）、qB 移除 5 個 torrent、
     刪除 5 筆下載 / 6 個 link / 6 筆原始項目；藥屋第三季資料夾只剩綠茶的 S03E49、S03E50。綁定 27 的 parser 47/51/52/59 保留（不再被使用）
-- [ ] 待決：綠茶的藥屋 S3 用跨季集數，媒體庫為 S03E49、S03E50（應為第三季第 1、2 集）；可用 bgm 的 ep/sort 對照在解析時換成該季集數
+- [ ] 暫緩（使用者 2026-10-20：等常發生再處理）：綠茶的藥屋 S3 用跨季集數，媒體庫為 S03E49、S03E50（應為第三季第 1、2 集）；可用 bgm 的 ep/sort 對照在解析時換成該季集數
 - [x] AI 輸入縮減（使用者 2026-10-19，已部署）：過濾規則與解析器都只送前 3 集的標題（ada5bb5）；待部署 core
   - 依據：Groq 免費方案 gpt-oss-120b 每分鐘 8K token、每天 200K；生產的限流錯誤顯示單次請求就 3–4K token（Requested 3058–4121）
   - 自訂過濾 prompt 早已寫明偏好：繁日 > 繁 > 簡，解析度越高越好 → 先前失敗是限流，不是 AI 判斷問題
