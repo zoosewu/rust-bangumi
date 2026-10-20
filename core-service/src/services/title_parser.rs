@@ -279,6 +279,18 @@ impl TitleParserService {
             external_ids: external_ids.iter().map(|id| Some(id.to_string())).collect(),
         };
 
+        // 已存在的項目只補上之前沒抓到的發佈時間（RSS 還列著的舊項目會逐步補齊）
+        if let Some(date) = pub_date {
+            diesel::update(
+                raw_anime_items::table
+                    .filter(raw_anime_items::download_url.eq(download_url))
+                    .filter(raw_anime_items::pub_date.is_null()),
+            )
+            .set(raw_anime_items::pub_date.eq(date))
+            .execute(conn)
+            .map_err(|e| format!("Failed to fill pub_date: {}", e))?;
+        }
+
         diesel::insert_into(raw_anime_items::table)
             .values(&new_item)
             .on_conflict(raw_anime_items::download_url)

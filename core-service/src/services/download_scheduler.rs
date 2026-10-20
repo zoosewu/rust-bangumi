@@ -7,6 +7,7 @@ use tokio::time::interval;
 use crate::db::DbPool;
 use crate::models::{Download, ModuleTypeEnum, ServiceModule};
 use crate::schema::{anime_links, downloads, service_modules};
+use crate::services::sync_service::SETTLED_TORRENT_SWEEP_INTERVAL;
 use crate::services::SyncNotice;
 use shared::{
     build_default_chain, classify_files, collect_files_recursive, match_batch_files,
@@ -61,6 +62,8 @@ pub struct DownloadScheduler {
     failed_polls: Mutex<HashMap<i32, u32>>,
     /// When each (module_id, torrent hash) was first reported `not_found` in a row of polls.
     missing_since: Mutex<HashMap<(i32, String), Instant>>,
+    /// When settled torrents were last swept out of the downloaders.
+    last_settled_sweep: Mutex<Option<Instant>>,
 }
 
 impl DownloadScheduler {
@@ -80,6 +83,7 @@ impl DownloadScheduler {
             sync_service,
             failed_polls: Mutex::new(HashMap::new()),
             missing_since: Mutex::new(HashMap::new()),
+            last_settled_sweep: Mutex::new(None),
         }
     }
 
@@ -130,7 +134,25 @@ impl DownloadScheduler {
             self.retry_batch_unmatched(&mut conn);
         }
 
+        if self.settled_sweep_due() {
+            match self.sync_service.release_settled_torrents().await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("Removed {} settled torrents with their files", n),
+                Err(e) => tracing::warn!("Failed to sweep settled torrents: {}", e),
+            }
+        }
+
         Ok(())
+    }
+
+    /// True once per `SETTLED_TORRENT_SWEEP_INTERVAL` (and on the first poll after start).
+    fn settled_sweep_due(&self) -> bool {
+        let mut last = self.last_settled_sweep.lock().unwrap();
+        let due = last.map_or(true, |at| at.elapsed() >= SETTLED_TORRENT_SWEEP_INTERVAL);
+        if due {
+            *last = Some(Instant::now());
+        }
+        due
     }
 
     async fn poll_downloader(

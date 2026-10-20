@@ -43,3 +43,4 @@ utoipa-axum.workspace = true
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 mockall.workspace = true
+tempfile = "3.8"

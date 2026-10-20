@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::services::identity::HttpMetadataLookup;
 use crate::services::identity_backfill::{run_backfill, HttpIdentitySource};
-use crate::services::library_maintenance;
+use crate::services::{download_dir_cleanup, library_maintenance};
 use crate::state::AppState;
 
 #[derive(Debug, Default, Deserialize)]
@@ -145,6 +145,66 @@ pub async fn merged_duplicates(
         Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(serde_json::json!({ "error": "viewer_error", "message": e })),
+        ),
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct DownloadOrphansRequest {
+    #[serde(default)]
+    pub apply: bool,
+    /// 只刪這些項目（仍須是孤兒）；沒給時刪除全部孤兒
+    #[serde(default)]
+    pub names: Option<Vec<String>>,
+}
+
+/// POST /admin/download-orphans — 下載目錄裡沒有 torrent 或下載在用的項目（dry-run 只列清單）。
+/// 套用時重新掃描，只刪仍是孤兒的項目，由 viewer 刪除。
+pub async fn download_orphans(
+    State(state): State<AppState>,
+    Json(req): Json<DownloadOrphansRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap_or_default();
+    let dir = download_dir_cleanup::downloads_dir();
+
+    if !req.apply {
+        return match download_dir_cleanup::find_orphans(&state.db, &http_client, &dir).await {
+            Ok(orphans) => (
+                StatusCode::OK,
+                Json(serde_json::json!({ "applied": false, "orphans": orphans })),
+            ),
+            Err(e) => (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({ "error": "scan_failed", "message": e })),
+            ),
+        };
+    }
+
+    match download_dir_cleanup::delete_orphans(&state.db, &http_client, &dir, req.names.as_deref())
+        .await
+    {
+        Ok((orphans, result)) => {
+            let ok = result.results.iter().filter(|r| r.success).count();
+            tracing::info!(
+                "Removed {} of {} orphans from the download directory",
+                ok,
+                orphans.len()
+            );
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "applied": true,
+                    "orphans": orphans,
+                    "results": result.results,
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": "cleanup_failed", "message": e })),
         ),
     }
 }

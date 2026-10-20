@@ -1,5 +1,6 @@
 pub mod conflict_detection;
 pub mod download_cancel;
+pub mod download_dir_cleanup;
 pub mod download_dispatch;
 pub mod download_scheduler;
 pub mod download_type_detector;

@@ -110,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/sync", post(handlers::sync))
         .route("/resync", post(handlers::resync))
         .route("/delete", post(handlers::delete_synced))
+        .route("/downloads/cleanup", post(handlers::cleanup_download_dir))
         .route("/health", get(handlers::health_check))
         .with_state(state);
 

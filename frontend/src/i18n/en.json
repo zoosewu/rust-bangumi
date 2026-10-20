@@ -395,6 +395,18 @@
       "testSuccess": "Test succeeded",
       "testFailure": "Test failed",
       "renderedPayload": "Rendered payload (sample data):"
+    },
+    "downloadCleanup": {
+      "title": "Download folder cleanup",
+      "description": "Lists files and folders in the download folder that no torrent or download uses any more and that have not changed for 24 hours (e.g. unsubscribed episodes of a batch, extras, fonts). Each is checked again before it is deleted.",
+      "scan": "Scan",
+      "deleteSelected": "Delete {{count}} selected ({{size}})",
+      "empty": "Nothing to clean up",
+      "scanFailed": "Scan failed",
+      "deleteFailed": "Delete failed",
+      "deleted": "Deleted {{count}} items",
+      "confirmTitle": "Delete from the download folder",
+      "confirmDescription": "The {{count}} selected items ({{size}}) will be deleted. This cannot be undone."
     }
   },
   "aiResult": {

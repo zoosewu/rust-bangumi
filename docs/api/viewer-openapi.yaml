@@ -159,6 +159,33 @@ paths:
                         deleted_path: null
                         error_message: "File not found"
 
+  /downloads/cleanup:
+    post:
+      tags:
+        - Sync
+      summary: 刪除下載目錄的孤兒項目
+      description: |
+        刪除下載目錄（`DOWNLOADS_DIR`）裡指定名稱的直接子項目：檔案、符號連結（只刪連結）或整個資料夾。
+        哪些是孤兒由 core 判斷（`POST /admin/download-orphans`）；名稱含路徑分隔或為 `.` / `..` 時拒絕。
+      operationId: cleanupDownloadDir
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DownloadDirCleanupRequest'
+            examples:
+              cleanup:
+                value:
+                  names: ["[ANi] Show - 01 [1080P].mp4", "[Group] Batch [01-12]"]
+      responses:
+        '200':
+          description: 每個項目的刪除結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadDirCleanupResponse'
+
 components:
   schemas:
     HealthResponse:
@@ -376,6 +403,38 @@ components:
           nullable: true
           description: 錯誤訊息（失敗時回傳）
           example: null
+
+    DownloadDirCleanupRequest:
+      type: object
+      required:
+        - names
+      properties:
+        names:
+          type: array
+          description: 下載目錄裡的項目名稱（不是路徑）
+          items:
+            type: string
+
+    DownloadDirCleanupResponse:
+      type: object
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - success
+            properties:
+              name:
+                type: string
+              success:
+                type: boolean
+              error_message:
+                type: string
+                nullable: true
 
     ViewerSyncCallback:
       type: object

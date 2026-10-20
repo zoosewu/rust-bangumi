@@ -549,6 +549,60 @@ pub async fn delete_synced(
     )
 }
 
+/// POST /downloads/cleanup — 刪除下載目錄第一層的孤兒項目（檔案或整個資料夾）。
+///
+/// 哪些是孤兒由 core 判斷；這裡只確保刪的是下載目錄裡的直接子項目。
+pub async fn cleanup_download_dir(
+    State(state): State<AppState>,
+    Json(req): Json<shared::DownloadDirCleanupRequest>,
+) -> (StatusCode, Json<shared::DownloadDirCleanupResponse>) {
+    let source_dir = state.organizer.get_source_dir().to_path_buf();
+    let mut results = Vec::with_capacity(req.names.len());
+    for name in req.names {
+        let outcome = match download_dir_entry(&source_dir, &name) {
+            Ok(path) => remove_entry(&path).await,
+            Err(e) => Err(e),
+        };
+        match &outcome {
+            Ok(()) => tracing::info!("Removed orphan {} from the download directory", name),
+            Err(e) => tracing::warn!("Did not remove orphan {}: {}", name, e),
+        }
+        results.push(shared::DownloadDirCleanupResult {
+            name,
+            success: outcome.is_ok(),
+            error_message: outcome.err(),
+        });
+    }
+    (
+        StatusCode::OK,
+        Json(shared::DownloadDirCleanupResponse { results }),
+    )
+}
+
+/// 下載目錄裡名為 `name` 的直接子項目；名稱含路徑分隔或 `.` / `..` 時拒絕。
+fn download_dir_entry(source_dir: &std::path::Path, name: &str) -> Result<PathBuf, String> {
+    let mut components = std::path::Path::new(name).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(_)), None) if !name.contains('\\') => {
+            Ok(source_dir.join(name))
+        }
+        _ => Err(format!("{name} 不是下載目錄裡的項目名稱，未刪除")),
+    }
+}
+
+/// 刪除檔案、符號連結（只刪連結本身）或整個資料夾
+async fn remove_entry(path: &std::path::Path) -> Result<(), String> {
+    let metadata = tokio::fs::symlink_metadata(path)
+        .await
+        .map_err(|e| format!("{}: {}", path.display(), e))?;
+    let removed = if metadata.is_dir() {
+        tokio::fs::remove_dir_all(path).await
+    } else {
+        tokio::fs::remove_file(path).await
+    };
+    removed.map_err(|e| format!("{}: {}", path.display(), e))
+}
+
 /// 決定要刪哪個檔案：viewer 的同步記錄與 core 帶來的路徑一致才刪；只有一邊有記錄時用那一邊。
 /// 任何路徑都必須在媒體庫底下（不允許 `..`），避免刪到媒體庫以外的檔案。
 fn resolve_delete_target(
@@ -676,6 +730,33 @@ mod tests {
         // 媒體庫以外的路徑一律不刪
         assert!(resolve_delete_target(None, Some("/downloads/x.mkv"), lib).is_err());
         assert!(resolve_delete_target(None, Some("/media/jellyfin/../etc/passwd"), lib).is_err());
+    }
+
+    #[test]
+    fn cleanup_accepts_only_direct_entries_of_the_download_dir() {
+        let dir = std::path::Path::new("/downloads");
+        assert_eq!(
+            download_dir_entry(dir, "[Group] Show - 01 [1080p].mkv").unwrap(),
+            PathBuf::from("/downloads/[Group] Show - 01 [1080p].mkv")
+        );
+        ["", ".", "..", "a/b", "../etc", "/etc", "a\\b"]
+            .iter()
+            .for_each(|name| assert!(download_dir_entry(dir, name).is_err(), "{name:?}"));
+    }
+
+    #[tokio::test]
+    async fn cleanup_removes_files_and_whole_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("leftover.mkv");
+        let folder = dir.path().join("Batch");
+        std::fs::write(&file, b"x").unwrap();
+        std::fs::create_dir_all(folder.join("Fonts")).unwrap();
+        std::fs::write(folder.join("Fonts/a.ttf"), b"x").unwrap();
+
+        remove_entry(&file).await.unwrap();
+        remove_entry(&folder).await.unwrap();
+        assert!(!file.exists() && !folder.exists());
+        assert!(remove_entry(&file).await.is_err());
     }
 
     /// 模擬 metadata service：第 1 集有資料，海報回傳固定位元組

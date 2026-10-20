@@ -408,6 +408,25 @@ pub struct ViewerDeleteResult {
     pub error_message: Option<String>,
 }
 
+/// Core → Viewer: remove entries directly inside the download directory
+/// (orphans no torrent or download uses any more). Names, not paths.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadDirCleanupRequest {
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadDirCleanupResponse {
+    pub results: Vec<DownloadDirCleanupResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadDirCleanupResult {
+    pub name: String,
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
 // ============ Batch Download API DTOs ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

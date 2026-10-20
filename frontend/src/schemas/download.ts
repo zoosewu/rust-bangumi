@@ -64,3 +64,23 @@ export const DownloadRow = Schema.Struct({
   updated_at: Schema.String,
 })
 export type DownloadRow = typeof DownloadRow.Type
+
+/** 下載目錄裡沒有 torrent 或下載在用的項目 */
+export interface DownloadOrphan {
+  name: string
+  is_dir: boolean
+  size_bytes: number
+  modified_at: string
+}
+
+export interface DownloadOrphanCleanupResult {
+  name: string
+  success: boolean
+  error_message: string | null
+}
+
+export interface DownloadOrphansResponse {
+  applied: boolean
+  orphans: DownloadOrphan[]
+  results?: DownloadOrphanCleanupResult[]
+}

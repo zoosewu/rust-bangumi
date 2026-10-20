@@ -9,16 +9,65 @@ use diesel::prelude::*;
 use shared::{ExternalId, ViewerSeason, ViewerSeries, ViewerSyncRequest};
 use std::sync::Arc;
 
-/// Download statuses in which the torrent must stay in the downloader:
-/// it is still being fetched, or is waiting to be polled again after an outage.
-const TORRENT_IN_USE_STATUSES: [&str; 3] = ["pending", "downloading", "downloader_error"];
+/// Download statuses that still need the torrent and its files in the download directory:
+/// it is still being fetched (or polled again after an outage), or its files are still
+/// waiting to be synced, retried or matched to episodes.
+pub const NEEDS_DOWNLOAD_FILES: [&str; 7] = [
+    "pending",
+    "downloading",
+    "downloader_error",
+    "completed",
+    "syncing",
+    "sync_failed",
+    "batch_unmatched",
+];
 
-/// A torrent can leave the downloader once no download sharing it still needs it.
-/// Batch torrents are shared by one download per episode.
-fn torrent_releasable(sibling_statuses: &[String]) -> bool {
+/// How often the download scheduler removes torrents that settled without being released.
+pub const SETTLED_TORRENT_SWEEP_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(60 * 60);
+
+/// Downloader statuses of a torrent that may be in the middle of being (re)added.
+const TORRENT_BUSY_STATUSES: [&str; 2] = ["downloading", "checking"];
+
+/// A torrent can leave the downloader, files included, once no download sharing it
+/// still needs those files. Batch torrents are shared by one download per episode.
+pub fn torrent_releasable(sibling_statuses: &[String]) -> bool {
     !sibling_statuses
         .iter()
-        .any(|s| TORRENT_IN_USE_STATUSES.contains(&s.as_str()))
+        .any(|s| NEEDS_DOWNLOAD_FILES.contains(&s.as_str()))
+}
+
+/// How many hashes go into one downloader status query (keeps the URL short).
+const STATUS_QUERY_CHUNK: usize = 50;
+
+/// The torrents among `hashes` that a downloader still keeps, with their status and files.
+pub async fn tracked_torrents(
+    http_client: &reqwest::Client,
+    base_url: &str,
+    hashes: &[String],
+) -> Result<Vec<shared::DownloadStatusItem>, String> {
+    let mut tracked = Vec::new();
+    for chunk in hashes.chunks(STATUS_QUERY_CHUNK) {
+        let url = format!("{}/downloads?hashes={}", base_url, chunk.join(","));
+        let response = http_client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to query torrents: {}", e))?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "Downloader returned status {} for torrent query",
+                response.status()
+            ));
+        }
+        let statuses = response
+            .json::<shared::StatusQueryResponse>()
+            .await
+            .map_err(|e| format!("Failed to parse torrent query: {}", e))?
+            .statuses;
+        tracked.extend(statuses.into_iter().filter(|s| s.status != "not_found"));
+    }
+    Ok(tracked)
 }
 
 /// What `notify_viewer` did with a download.
@@ -640,11 +689,13 @@ impl SyncService {
         }
     }
 
-    /// Remove a synced download's torrent from its downloader, keeping the files.
+    /// Remove a synced download's torrent from its downloader together with its files.
     ///
-    /// The viewer moves media out of the download directory, so a torrent left
-    /// behind turns into "missingFiles" and can re-download from scratch.
-    /// Skipped while another download sharing the torrent still needs it.
+    /// The viewer moves the matched media out of the download directory, so a torrent
+    /// left behind turns into "missingFiles" and can re-download from scratch, and what
+    /// the viewer did not take (other episodes of a batch, extras, fonts) would stay in
+    /// the download directory forever. Skipped while another download sharing the
+    /// torrent still needs its files.
     /// Returns Ok(true) if the downloader removed the torrent.
     pub async fn release_torrent_if_settled(&self, download_id: i32) -> Result<bool, String> {
         let (hash, base_url) = {
@@ -691,7 +742,13 @@ impl SyncService {
             }
         };
 
-        let url = format!("{}/downloads/{}?delete_files=false", base_url, hash);
+        self.remove_torrent_with_files(&base_url, &hash).await?;
+        tracing::info!("Removed torrent {} and its leftover files after sync", hash);
+        Ok(true)
+    }
+
+    async fn remove_torrent_with_files(&self, base_url: &str, hash: &str) -> Result<(), String> {
+        let url = format!("{}/downloads/{}?delete_files=true", base_url, hash);
         let response = self
             .http_client
             .delete(&url)
@@ -700,8 +757,7 @@ impl SyncService {
             .map_err(|e| format!("Failed to remove torrent {}: {}", hash, e))?;
 
         if response.status().is_success() {
-            tracing::info!("Removed torrent {} from downloader after sync", hash);
-            Ok(true)
+            Ok(())
         } else {
             Err(format!(
                 "Downloader returned status {} removing torrent {}",
@@ -709,6 +765,86 @@ impl SyncService {
                 hash
             ))
         }
+    }
+
+    /// Remove torrents whose downloads no longer need their files but that a downloader
+    /// still keeps, files included.
+    ///
+    /// Catches releases missed after sync (the downloader was unreachable during the
+    /// callback) and torrents whose last download settled without a `synced` callback
+    /// (batch_failed, failed, cancelled). Torrents the downloader reports as busy are
+    /// left alone: one may just have been re-added for a new download not yet recorded.
+    /// Returns how many torrents were removed.
+    pub async fn release_settled_torrents(&self) -> Result<usize, String> {
+        let downloaders: Vec<(i32, String)> = {
+            let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+            service_modules::table
+                .filter(service_modules::module_type.eq(ModuleTypeEnum::Downloader))
+                .filter(service_modules::is_enabled.eq(true))
+                .select((service_modules::module_id, service_modules::base_url))
+                .load(&mut conn)
+                .map_err(|e| format!("Failed to query downloaders: {}", e))?
+        };
+
+        let mut removed = 0;
+        for (module_id, base_url) in downloaders {
+            let settled = self.settled_hashes(module_id)?;
+            let tracked = match tracked_torrents(&self.http_client, &base_url, &settled).await {
+                Ok(tracked) => tracked,
+                Err(e) => {
+                    tracing::warn!("Skipping settled torrents of {}: {}", base_url, e);
+                    continue;
+                }
+            };
+
+            for item in tracked
+                .iter()
+                .filter(|s| !TORRENT_BUSY_STATUSES.contains(&s.status.as_str()))
+            {
+                // Re-check right before removing: a new download may have claimed the torrent
+                if !self.settled_hashes(module_id)?.contains(&item.hash) {
+                    continue;
+                }
+                match self.remove_torrent_with_files(&base_url, &item.hash).await {
+                    Ok(()) => {
+                        removed += 1;
+                        tracing::info!(
+                            "Removed settled torrent {} ({}) and its files",
+                            item.hash,
+                            item.content_path.as_deref().unwrap_or("no path")
+                        );
+                    }
+                    Err(e) => tracing::warn!("{}", e),
+                }
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Torrent hashes of a downloader whose downloads all no longer need their files.
+    fn settled_hashes(&self, module_id: i32) -> Result<Vec<String>, String> {
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+        let rows: Vec<(String, String)> = downloads::table
+            .filter(downloads::module_id.eq(module_id))
+            .filter(downloads::torrent_hash.is_not_null())
+            .filter(downloads::torrent_hash.ne(""))
+            .select((downloads::torrent_hash.assume_not_null(), downloads::status))
+            .load(&mut conn)
+            .map_err(|e| {
+                format!(
+                    "Failed to query torrents of downloader {}: {}",
+                    module_id, e
+                )
+            })?;
+
+        let mut by_hash: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        rows.into_iter()
+            .for_each(|(hash, status)| by_hash.entry(hash).or_default().push(status));
+        Ok(by_hash
+            .into_iter()
+            .filter(|(_, statuses)| torrent_releasable(statuses))
+            .map(|(hash, _)| hash)
+            .collect())
     }
 
     /// Handle sync callback from viewer
@@ -930,15 +1066,26 @@ mod tests {
     }
 
     #[test]
-    fn batch_releases_once_no_episode_needs_downloader() {
-        // completed / syncing / batch_unmatched work from files on disk, which are kept
+    fn batch_waits_for_episodes_whose_files_are_still_needed() {
+        // the torrent goes with its files, so episodes still to be synced or matched keep it
+        ["completed", "syncing", "sync_failed", "batch_unmatched"]
+            .iter()
+            .for_each(|status| {
+                assert!(
+                    !torrent_releasable(&statuses(&["synced", status])),
+                    "{status} still needs the torrent's files"
+                )
+            });
+    }
+
+    #[test]
+    fn batch_releases_once_every_episode_has_settled() {
         assert!(torrent_releasable(&statuses(&[
             "synced",
-            "completed",
-            "syncing",
-            "batch_unmatched",
+            "resyncing",
             "batch_failed",
-            "sync_failed",
+            "failed",
+            "cancelled",
         ])));
     }
 

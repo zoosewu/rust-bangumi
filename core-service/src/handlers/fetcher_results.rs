@@ -888,6 +888,39 @@ mod tests {
             .unwrap()
     }
 
+    #[test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    fn a_fetched_again_item_only_fills_a_missing_pub_date() {
+        let mut conn = setup();
+        let item = raw_item(&mut conn, &[]);
+        assert!(item.pub_date.is_none());
+        let date = |s: &str| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M").unwrap();
+        let save_again = |conn: &mut PgConnection, d: &str| {
+            TitleParserService::save_raw_item(
+                conn,
+                &item.title,
+                None,
+                &item.download_url,
+                Some(date(d)),
+                item.subscription_id,
+                &[],
+            )
+        };
+        let stored = |conn: &mut PgConnection| {
+            crate::schema::raw_anime_items::table
+                .find(item.item_id)
+                .select(crate::schema::raw_anime_items::pub_date)
+                .first::<Option<chrono::NaiveDateTime>>(conn)
+                .unwrap()
+        };
+
+        // 仍視為重複（不重新解析），但補上發佈時間；已有的時間不再改
+        assert!(save_again(&mut conn, "2026-10-10 02:08").is_err());
+        assert_eq!(stored(&mut conn), Some(date("2026-10-10 02:08")));
+        assert!(save_again(&mut conn, "2026-10-11 00:00").is_err());
+        assert_eq!(stored(&mut conn), Some(date("2026-10-10 02:08")));
+    }
+
     #[tokio::test]
     #[ignore = "needs DATABASE_TEST_URL"]
     async fn an_item_with_identity_ignores_the_parser_title() {

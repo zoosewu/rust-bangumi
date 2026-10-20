@@ -6,7 +6,7 @@ import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
 import type { ServiceModule } from "@/schemas/service-module"
-import type { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse, RetryBulkRequest } from "@/schemas/download"
+import type { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse, RetryBulkRequest, DownloadOrphansResponse } from "@/schemas/download"
 import type { DashboardStats } from "@/schemas/dashboard"
 import type {
   AiProvider,
@@ -128,6 +128,8 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly duplicateAiProvider: (id: number) => Effect.Effect<AiProvider>
     readonly listAiProviderModels: (req: ListAiModelsRequest) => Effect.Effect<readonly string[]>
     readonly testAiProviderPrompt: (req: PromptTestRequest) => Effect.Effect<PromptTestResult>
+    /** apply=false 只列出下載目錄的孤兒項目；apply=true 刪除 names（沒給時全部） */
+    readonly downloadOrphans: (req: { apply: boolean; names?: string[] }) => Effect.Effect<DownloadOrphansResponse>
     readonly getAiPromptSettings: Effect.Effect<AiPromptSettings>
     readonly updateAiPromptSettings: (req: Partial<Omit<AiPromptSettings, "id" | "created_at" | "updated_at">>) => Effect.Effect<void>
     readonly revertParserPrompt: Effect.Effect<{ value: string }>

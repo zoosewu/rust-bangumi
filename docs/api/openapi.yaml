@@ -128,6 +128,40 @@ paths:
         '502':
           description: viewer 無法連線
 
+  /admin/download-orphans:
+    post:
+      tags:
+        - Admin
+      summary: 清理下載目錄的孤兒項目
+      description: |
+        列出下載目錄第一層中，不屬於任何 downloader 仍保留的 torrent、也沒有仍需要檔案的下載
+        （pending、downloading、downloader_error、completed、syncing、sync_failed、batch_unmatched）引用、
+        且超過 24 小時沒有變動的檔案與資料夾。任何一個 downloader 查不到 torrent 時不判斷，回傳 502。
+        `apply=true` 時重新掃描，只把仍是孤兒的項目（有給 `names` 時只取其中這些）交給 viewer 刪除。
+        同步完成的 torrent 會連同殘檔一起移除，下載排程每小時也會移除已結束卻仍留在 downloader 的 torrent；
+        這個端點處理之前留下或其他原因產生的殘檔。
+      operationId: cleanupDownloadOrphans
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apply:
+                  type: boolean
+                  default: false
+                names:
+                  type: array
+                  items:
+                    type: string
+                  description: 只刪除這些項目名稱（仍須是孤兒）；沒給時刪除全部孤兒
+      responses:
+        '200':
+          description: orphans（name、is_dir、size_bytes、modified_at）；套用時另有 results（viewer 回報的 name、success、error_message）
+        '502':
+          description: downloader 或 viewer 無法連線、下載目錄無法讀取（error 為 scan_failed 或 cleanup_failed）
+
   /admin/identity-backfill:
     post:
       tags:
@@ -3894,8 +3928,7 @@ components:
           type: string
         api_key:
           type: string
-          description: Optional；留空時不送 Authorization header，適用於 local LLM。
-          description: 實際回傳時為遮罩（••••••••）
+          description: Optional；留空時不送 Authorization header，適用於 local LLM。實際回傳時為遮罩（••••••••）
         model_name:
           type: string
         max_tokens:

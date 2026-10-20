@@ -233,6 +233,30 @@
 - [x] 2026-10-20 使用者修正 provider 設定：OpenRouter 兩組 max_tokens 改 8192、Mistral 改 ministral-14b-latest / 4096；四組皆啟用
 - [x] viewer `/delete` 由 core 帶要刪的路徑並核對（eeccaf5）：一致才刪、不一致回報不刪、viewer 沒記錄時用 core 的、
   媒體庫外一律不刪；生產 176 筆已同步下載兩邊路徑全部一致（不會誤擋）；2026-10-20 14:39 部署（core / viewer healthy、restarts=0）
+- [x] 2026-10-20 下載目錄殘檔（使用者要求：清掉現有的，也要讓之後不再累積）— 已實作，待部署
+  - 現況：/downloads 35 個項目，qB 只剩 622 一個 torrent（卡 99.7%，使用者決定再等一兩天），其餘 34 個沒有任何 torrent 在用
+  - 根因：同步後以 `delete_files=false` 移除 torrent，viewer 只搬走配對到的影片/字幕，合集裡沒訂閱的集數、特典、字型、音軌留在原地；
+    而且只要沒有 `pending/downloading/downloader_error` 就提早移除，之後才同步的同 torrent 集數也一樣留下檔案
+  - [x] 防止：同 torrent 的所有下載都不再需要下載目錄的檔案時（排除 pending、downloading、downloader_error、completed、
+    syncing、sync_failed、batch_unmatched）才移除 torrent，並且 `delete_files=true`（已搬走的檔案不在原處，只會刪掉殘檔）
+  - [x] 補救：下載排程每小時找「下載都已結束、但 downloader 仍保留」的 torrent，連檔案一起移除（涵蓋 callback 時 downloader 連不上、
+    最後一集停在 batch_failed / cancelled 等沒有 synced 回報的情況）
+  - [ ] 清理工具：core 掃描下載目錄，列出不屬於任何 downloader 仍保留的 torrent、也不被需要檔案的下載引用、且超過 24 小時沒變動的項目
+    （dry-run）；確認後由 viewer（唯一可寫入下載目錄的服務）刪除，只接受下載目錄第一層、且刪除前重新掃描確認仍是孤兒；
+    API + 設定頁按鈕
+  - 實作：`sync_service`（`NEEDS_DOWNLOAD_FILES`、`release_settled_torrents`，downloader 回報 downloading/checking 的不動、刪前重查 DB）、
+    `download_dir_cleanup`（`POST /admin/download-orphans`）、viewer `POST /downloads/cleanup`、設定頁「下載目錄清理」卡片
+  - 驗證：假 downloader 的 DB 測試（只移除已結束的 torrent 且 delete_files=true、忙碌中的不動、保護清單正確）、掃描/刪除單元測試
+  - 已知取捨：同 torrent 還有 completed / sync_failed 的集數時 torrent 會留著；qB 重啟時可能重抓已搬走的集數，最後移除時一併刪掉
+  - 已知限制：使用者手動加進 qB、core 沒有記錄的 torrent 不在保護清單裡（靠 24 小時與刪除前確認）
+  - [ ] 部署後：dry-run 清單應為 34 個（622 的檔案不在內）；使用者確認後刪除；之後新同步的 log 出現 `Removed torrent … and its leftover files after sync`
+- [x] 2026-10-20 fetcher 的 pub_date 全部是 NULL — 已實作，待部署
+  - 根因：mikanani 的發佈時間放在 `<torrent xmlns="https://mikanani.me/0.1/"><pubDate>`（無時區、UTC+8，
+    已用 torrent 的 Last-Modified 比對確認），feed-rs 與 rss crate 都略過這個元素
+  - [x] fetcher 用 quick-xml 讀出每個 item 的 enclosure URL 與 torrent/pubDate，以 UTC+8 轉換；標準 pubDate 仍優先
+  - [x] core 收到已存在的項目時補上缺少的 pub_date（RSS 還列著的舊項目會自動補齊）
+  - [ ] 部署後：下一輪抓取後 `raw_anime_items.pub_date` 非 NULL 的筆數增加
+- [x] 2026-10-20 確認：下載排程對 qB `not_found` 已有處理（連續失蹤超過 10 分鐘標 failed），舊紀錄的 `_ => continue` 已不存在
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 

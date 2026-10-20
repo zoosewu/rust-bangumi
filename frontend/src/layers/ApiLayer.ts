@@ -12,7 +12,7 @@ import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
 import { ServiceModule } from "@/schemas/service-module"
-import { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse } from "@/schemas/download"
+import { RawAnimeItem, DownloadRow, RetryOneResponse, RetryResultResponse, type DownloadOrphansResponse } from "@/schemas/download"
 import { DashboardStats } from "@/schemas/dashboard"
 import type {
   AiProvider,
@@ -20,8 +20,6 @@ import type {
   TestAiProviderConfigRequest,
   UpdateAiProviderRequest,
   TestAiProviderResult,
-  ListAiModelsRequest,
-  PromptTestRequest,
   PromptTestResult,
   AiPromptSettings,
   PendingAiResult,
@@ -514,6 +512,29 @@ const makeCoreApi = Effect.gen(function* () {
               : r.json,
           ),
           Effect.map((r) => r as PromptTestResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
+
+    downloadOrphans: (req) =>
+      client
+        .execute(
+          HttpClientRequest.post("/api/core/admin/download-orphans").pipe(
+            HttpClientRequest.bodyUnsafeJson(req),
+          ),
+        )
+        .pipe(
+          // 掃描失敗（例如 downloader 連不上）時後端回傳 { error, message }
+          Effect.flatMap((r) =>
+            r.status >= 400
+              ? Effect.flatMap(r.json, (body) =>
+                  Effect.fail(
+                    new Error((body as { message?: string }).message ?? `HTTP ${r.status}`),
+                  ),
+                )
+              : r.json,
+          ),
+          Effect.map((r) => r as DownloadOrphansResponse),
           Effect.scoped,
           Effect.orDie,
         ),

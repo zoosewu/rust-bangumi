@@ -395,6 +395,18 @@
       "testSuccess": "テスト成功",
       "testFailure": "テスト失敗",
       "renderedPayload": "レンダリング済みペイロード（サンプルデータ）："
+    },
+    "downloadCleanup": {
+      "title": "ダウンロードフォルダの整理",
+      "description": "torrent やダウンロードで使われておらず、24 時間以上変更のないダウンロードフォルダ内のファイルとフォルダを一覧表示します（まとめ版の未購読エピソード、特典、フォントなど）。削除前に再確認します。",
+      "scan": "スキャン",
+      "deleteSelected": "選択した {{count}} 件を削除（{{size}}）",
+      "empty": "整理する項目はありません",
+      "scanFailed": "スキャンに失敗しました",
+      "deleteFailed": "削除に失敗しました",
+      "deleted": "{{count}} 件を削除しました",
+      "confirmTitle": "ダウンロードフォルダから削除",
+      "confirmDescription": "選択した {{count}} 件（合計 {{size}}）を削除します。元に戻せません。"
     }
   },
   "aiResult": {

@@ -34,6 +34,7 @@ futures.workspace = true
 # RSS 解析
 rss = "2.0"
 feed-rs = "2.3"
+quick-xml = "0.37"
 url = "2.5"
 
 # HTML 解析

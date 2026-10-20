@@ -31,6 +31,7 @@ import { toast } from "sonner"
 import type { ServiceModule } from "@/schemas/service-module"
 import type { Webhook } from "@/schemas/webhook"
 import { AiProvidersSection } from "./ai-providers/AiProvidersSection"
+import { DownloadDirCleanupSection } from "./DownloadDirCleanupSection"
 
 function PromptTextarea({
   value,
@@ -57,6 +58,8 @@ export default function SettingsPage() {
     <div className="space-y-6 max-w-2xl">
       <PageHeader title={t("settings.title")} />
       <DownloaderPrioritySection />
+      <Separator />
+      <DownloadDirCleanupSection />
       <Separator />
       <AiProvidersSection />
       <Separator />

@@ -395,6 +395,18 @@
       "testSuccess": "測試成功",
       "testFailure": "測試失敗",
       "renderedPayload": "渲染後的 Payload（範例資料）："
+    },
+    "downloadCleanup": {
+      "title": "下載目錄清理",
+      "description": "列出下載目錄裡已經沒有 torrent 或下載在用、且超過 24 小時沒有變動的檔案與資料夾（例如合集裡沒訂閱的集數、特典、字型）。刪除前會重新確認仍沒有人在用。",
+      "scan": "掃描",
+      "deleteSelected": "刪除選取的 {{count}} 項（{{size}}）",
+      "empty": "沒有需要清理的項目",
+      "scanFailed": "掃描失敗",
+      "deleteFailed": "刪除失敗",
+      "deleted": "已刪除 {{count}} 項",
+      "confirmTitle": "刪除下載目錄的項目",
+      "confirmDescription": "將刪除選取的 {{count}} 項（共 {{size}}），無法復原。"
     }
   },
   "aiResult": {
