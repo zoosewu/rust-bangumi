@@ -111,6 +111,10 @@ export const AnimeLinkRich = Schema.Struct({
   source_hash: Schema.String,
   filtered_flag: Schema.Boolean,
   conflict_flag: Schema.Boolean,
+  /** active：採用中；resolved：同集選了別的版本 */
+  link_status: Schema.String,
+  /** 使用者手動指定的版本 */
+  manual_choice: Schema.Boolean,
   conflicting_link_ids: Schema.Array(Schema.Number),
   download: Schema.NullOr(DownloadInfo),
   created_at: Schema.String,
@@ -146,3 +150,13 @@ export const ConflictingLink = Schema.Struct({
 export type ConflictingLink = typeof ConflictingLink.Type
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _CheckConflictingLink = AssertExtends<components["schemas"]["ConflictingLinkResponse"], ConflictingLink>
+
+/** POST /links/:id/choose 的結果 */
+export interface ChooseLinkVersionResult {
+  chosen_link_id: number
+  other_link_ids: number[]
+  cancelled_downloads: number
+  dispatched: number
+  /** 其他版本已在媒體庫的下載（檔案保留） */
+  kept_in_library: number[]
+}

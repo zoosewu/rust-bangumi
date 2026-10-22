@@ -43,9 +43,10 @@ pub fn recalculate_filtered_flags(
         let rules = collect_all_rules_for_link(conn, link)?;
         let engine = FilterEngine::with_priority_sorted(rules);
         let title = link.title.as_deref().unwrap_or("");
-        // filtered_flag = true means filtered OUT (should NOT be included)
+        // filtered_flag = true means filtered OUT (should NOT be included);
+        // a manually chosen version is never filtered out
         let should_include = engine.should_include(title);
-        let new_flag = !should_include;
+        let new_flag = !link.manual_choice && !should_include;
 
         if new_flag != link.filtered_flag {
             diesel::update(anime_links::table.filter(anime_links::link_id.eq(link.link_id)))

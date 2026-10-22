@@ -212,6 +212,10 @@ async fn main() -> anyhow::Result<()> {
             get(handlers::links::list_conflicting_links),
         )
         .route("/links/:series_id", get(handlers::links::get_anime_links))
+        .route(
+            "/links/:link_id/choose",
+            post(handlers::links::choose_link_version),
+        )
         // 訂閱管理
         .route(
             "/subscriptions",

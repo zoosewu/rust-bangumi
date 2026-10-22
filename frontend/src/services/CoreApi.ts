@@ -1,7 +1,7 @@
 import { Effect, Context } from "effect"
 import type { Webhook, CreateWebhookRequest, UpdateWebhookRequest } from "@/schemas/webhook"
 import type { AggregatedSearchResponse, DetailResponse } from "@/schemas/search"
-import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
+import type { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink, ChooseLinkVersionResult } from "@/schemas/anime"
 import type { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import type { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import type { Subscription } from "@/schemas/subscription"
@@ -84,6 +84,8 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly getAllAnime: (params?: { excludeEmpty?: boolean }) => Effect.Effect<readonly AnimeRich[]>
     readonly getDashboardStats: Effect.Effect<DashboardStats>
     readonly getAnimeLinksRich: (animeId: number) => Effect.Effect<readonly AnimeLinkRich[]>
+    /** 這一集改用指定的版本（不受過濾規則影響，同集其他版本不採用） */
+    readonly chooseLinkVersion: (linkId: number) => Effect.Effect<ChooseLinkVersionResult>
     readonly updateAnime: (animeId: number, req: {
       season_id?: number | null
       description?: string | null

@@ -161,6 +161,8 @@ pub async fn confirm_pending(
 
             // 觸發 re-run + conflict detection + 派送（背景非同步）
             let pool_arc = Arc::new(pool.clone());
+            let pool_arc_for_filters = pool_arc.clone();
+            let subscription_id = pending.subscription_id;
             let conflict_detection = state.conflict_detection.clone();
             let dispatch_service = state.dispatch_service.clone();
             tokio::spawn(async move {
@@ -175,12 +177,20 @@ pub async fn confirm_pending(
                     .detect_conflicts_and_dispatch(&conflict_detection, new_link_ids)
                     .await
                 {
-                    Ok(r) => tracing::info!(
-                        "parser confirm 後派送：dispatched={}, no_downloader={}, failed={}",
-                        r.dispatched,
-                        r.no_downloader,
-                        r.failed
-                    ),
+                    Ok(r) => {
+                        tracing::info!(
+                            "parser confirm 後派送：dispatched={}, no_downloader={}, failed={}",
+                            r.dispatched,
+                            r.no_downloader,
+                            r.failed
+                        );
+                        if let Some(sub_id) = subscription_id {
+                            crate::ai::auto_trigger::spawn_filter_generation_if_due(
+                                pool_arc_for_filters,
+                                sub_id,
+                            );
+                        }
+                    }
                     Err(e) => tracing::warn!("parser confirm 後派送失敗: {}", e),
                 }
             });

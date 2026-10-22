@@ -437,5 +437,18 @@
       "loading": "Loading...",
       "noItems": "No RSS feeds found"
     }
+  },
+  "animeLink": {
+    "chooseVersion": "Use this version",
+    "chooseTitle": "Use this version for episode {{episode}}",
+    "chooseDescription": "Filter rules no longer apply to this version. Other versions of the episode are set aside: their downloads in progress or not yet synced are cancelled together with their torrents and files, files already in the library are kept, and later versions of this episode are skipped.",
+    "chooseConfirm": "Use it",
+    "chosen": "Episode {{episode}} now uses the chosen version",
+    "chosenCancelled": "Cancelled {{count}} downloads of other versions",
+    "chosenDispatched": "Started downloading this version",
+    "chosenKeptInLibrary": "Library files of other versions are kept; the new version is synced into the same episode",
+    "chooseFailed": "Could not switch versions",
+    "manualChoice": "Chosen",
+    "notUsed": "Not used"
   }
 }

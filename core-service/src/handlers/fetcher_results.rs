@@ -650,8 +650,14 @@ pub async fn receive_raw_fetcher_results(
                 }
             }
 
-            // 若有未匹配項目，背景觸發批次 AI 解析器生成
-            if items_failed > 0 {
+            // 若有未匹配項目、且沒有等待確認的解析器，背景觸發批次 AI 解析器生成
+            let parser_due = items_failed > 0
+                && crate::ai::auto_trigger::parser_due(&mut conn, payload.subscription_id)
+                    .unwrap_or_else(|e| {
+                        tracing::warn!("無法判斷是否產生解析器: {}", e);
+                        false
+                    });
+            if parser_due {
                 let pool_clone = pool.clone();
                 let sub_id = payload.subscription_id;
                 tokio::spawn(async move {
@@ -683,6 +689,11 @@ pub async fn receive_raw_fetcher_results(
                         tracing::info!(
                             "Download dispatch: {} links -> {} dispatched, {} no_downloader, {} failed",
                             link_count, result.dispatched, result.no_downloader, result.failed
+                        );
+                        // 新連結造成衝突時請 AI 產生過濾規則（已有等待確認的就不再產生）
+                        crate::ai::auto_trigger::spawn_filter_generation_if_due(
+                            pool.clone(),
+                            payload.subscription_id,
                         );
                     }
                     Err(e) => {

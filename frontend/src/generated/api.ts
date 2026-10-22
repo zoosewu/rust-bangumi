@@ -240,6 +240,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/core/links/{link_id}/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 某一集改用這個版本（手動指定）
+         * @description 被選版本不受過濾規則影響；同集其他版本不再採用，它們下載中或已下載未同步的下載
+         *     會連 torrent 與檔案一起取消，已在媒體庫的檔案保留；之後同集出現的新版本也不採用。
+         */
+        post: operations["choose_link_version"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/core/links/{series_id}": {
         parameters: {
             query?: never;
@@ -396,6 +417,10 @@ export interface components {
             group_name: string;
             /** Format: int32 */
             link_id: number;
+            /** @description active：採用中；resolved：同集選了別的版本 */
+            link_status: string;
+            /** @description 使用者手動指定的版本 */
+            manual_choice: boolean;
             /** Format: int32 */
             series_id: number;
             source_hash: string;
@@ -1286,6 +1311,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ConflictingLinkResponse"][];
                 };
+            };
+            /** @description Database error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    choose_link_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 要改用的版本 */
+                link_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已改用；回傳取消與派送的結果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description link 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Database error */
             500: {

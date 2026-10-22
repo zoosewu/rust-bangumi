@@ -7,7 +7,7 @@ import {
   AggregatedSearchResponseSchema,
   DetailResponseSchema,
 } from "@/schemas/search"
-import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink } from "@/schemas/anime"
+import { AnimeWork, Anime, Season, SubtitleGroup, AnimeLink, AnimeRich, AnimeLinkRich, AnimeCoverImage, ConflictingLink, type ChooseLinkVersionResult } from "@/schemas/anime"
 import { FilterRule, FilterPreviewResponse } from "@/schemas/filter"
 import { TitleParser, ParserPreviewResponse, ParserWithReparseResponse, DeleteWithReparseResponse } from "@/schemas/parser"
 import { Subscription } from "@/schemas/subscription"
@@ -248,6 +248,24 @@ const makeCoreApi = Effect.gen(function* () {
         HttpClientRequest.get(`/api/core/links/${animeId}`),
         Schema.Struct({ links: Schema.Array(AnimeLinkRich) }),
       ).pipe(Effect.map((r) => r.links)),
+
+    chooseLinkVersion: (linkId) =>
+      client
+        .execute(HttpClientRequest.post(`/api/core/links/${linkId}/choose`))
+        .pipe(
+          Effect.flatMap((r) =>
+            r.status >= 400
+              ? Effect.flatMap(r.json, (body) =>
+                  Effect.fail(
+                    new Error((body as { message?: string }).message ?? `HTTP ${r.status}`),
+                  ),
+                )
+              : r.json,
+          ),
+          Effect.map((r) => r as ChooseLinkVersionResult),
+          Effect.scoped,
+          Effect.orDie,
+        ),
 
     updateAnime: (animeId, req) =>
       client

@@ -185,6 +185,8 @@ pub async fn get_anime_links(
             source_hash: link.source_hash.clone(),
             filtered_flag: link.filtered_flag,
             conflict_flag: link.conflict_flag,
+            link_status: link.link_status.clone(),
+            manual_choice: link.manual_choice,
             conflicting_link_ids,
             download: download_info,
             created_at: link.created_at,
@@ -197,6 +199,85 @@ pub async fn get_anime_links(
         series_id
     );
     (StatusCode::OK, Json(json!({ "links": results })))
+}
+
+/// 某一集改用這個版本（手動指定）
+///
+/// 被選版本不受過濾規則影響；同集其他版本不再採用，它們下載中或已下載未同步的下載
+/// 會連 torrent 與檔案一起取消，已在媒體庫的檔案保留；之後同集出現的新版本也不採用。
+#[utoipa::path(
+    post,
+    path = "/api/core/links/{link_id}/choose",
+    tag = "Links",
+    params(("link_id" = i32, Path, description = "要改用的版本")),
+    responses(
+        (status = 200, description = "已改用；回傳取消與派送的結果"),
+        (status = 404, description = "link 不存在"),
+        (status = 500, description = "Database error")
+    )
+)]
+pub async fn choose_link_version(
+    State(state): State<AppState>,
+    Path(link_id): Path<i32>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let choice = match state
+        .db
+        .get()
+        .map_err(|e| e.to_string())
+        .and_then(|mut conn| crate::services::version_choice::choose_version(&mut conn, link_id))
+    {
+        Ok(choice) => choice,
+        Err(e) if e.contains("不存在") => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": "not_found", "message": e })),
+            )
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "database_error", "message": e })),
+            )
+        }
+    };
+
+    let cancelled = state
+        .cancel_service
+        .cancel_downloads_for_links(&choice.other_link_ids)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!("Failed to cancel other versions of link {}: {}", link_id, e);
+            0
+        });
+    let dispatched = match state
+        .dispatch_service
+        .dispatch_new_links(vec![link_id])
+        .await
+    {
+        Ok(r) => r.dispatched,
+        Err(e) => {
+            tracing::warn!("Failed to dispatch chosen link {}: {}", link_id, e);
+            0
+        }
+    };
+    tracing::info!(
+        "Link {} chosen for its episode: {} other versions set aside, {} downloads cancelled, dispatched={}",
+        link_id,
+        choice.other_link_ids.len(),
+        cancelled,
+        dispatched
+    );
+
+    (
+        StatusCode::OK,
+        Json(json!({
+            "chosen_link_id": link_id,
+            "other_link_ids": choice.other_link_ids,
+            "cancelled_downloads": cancelled,
+            "dispatched": dispatched,
+            "kept_in_library": choice.kept_in_library,
+        })),
+    )
 }
 
 /// List all anime links with conflict_flag = true, enriched with series/anime/subscription info

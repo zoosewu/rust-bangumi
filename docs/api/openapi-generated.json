@@ -708,6 +708,39 @@
         }
       }
     },
+    "/api/core/links/{link_id}/choose": {
+      "post": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "某一集改用這個版本（手動指定）",
+        "description": "被選版本不受過濾規則影響；同集其他版本不再採用，它們下載中或已下載未同步的下載\n會連 torrent 與檔案一起取消，已在媒體庫的檔案保留；之後同集出現的新版本也不採用。",
+        "operationId": "choose_link_version",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "description": "要改用的版本",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "已改用；回傳取消與派送的結果"
+          },
+          "404": {
+            "description": "link 不存在"
+          },
+          "500": {
+            "description": "Database error"
+          }
+        }
+      }
+    },
     "/api/core/links/{series_id}": {
       "get": {
         "tags": [
@@ -1091,6 +1124,8 @@
           "source_hash",
           "filtered_flag",
           "conflict_flag",
+          "link_status",
+          "manual_choice",
           "conflicting_link_ids",
           "created_at"
         ],
@@ -1134,6 +1169,14 @@
           "link_id": {
             "type": "integer",
             "format": "int32"
+          },
+          "link_status": {
+            "type": "string",
+            "description": "active：採用中；resolved：同集選了別的版本"
+          },
+          "manual_choice": {
+            "type": "boolean",
+            "description": "使用者手動指定的版本"
           },
           "series_id": {
             "type": "integer",

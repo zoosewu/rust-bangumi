@@ -872,6 +872,48 @@ paths:
                     items:
                       $ref: '#/components/schemas/AnimeLinkResponse'
 
+  /links/{link_id}/choose:
+    post:
+      tags:
+        - Links
+      summary: 這一集改用指定的版本
+      description: |
+        把這個 link 設為它那一集（同季、同字幕組、同集數）的手動指定版本（`manual_choice`）：
+        不受過濾規則影響；同集其他版本改為 `resolved`，它們下載中或已下載未同步的下載連 torrent 與檔案一起取消，
+        已在媒體庫的檔案保留；該集的衝突標為已解決；之後同集出現的新版本也自動不採用。最後派送被選版本。
+      operationId: chooseLinkVersion
+      parameters:
+        - name: link_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 已改用
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chosen_link_id:
+                    type: integer
+                  other_link_ids:
+                    type: array
+                    items:
+                      type: integer
+                  cancelled_downloads:
+                    type: integer
+                  dispatched:
+                    type: integer
+                  kept_in_library:
+                    type: array
+                    description: 其他版本已在媒體庫的下載（檔案保留）
+                    items:
+                      type: integer
+        '404':
+          description: link 不存在
+
   # ============ Subscriptions ============
   /subscriptions:
     post:

@@ -269,6 +269,28 @@
   - 下載目錄 20 個孤兒尚未刪除（使用者在設定頁操作）
   - 備份 10/20、10/21 皆成功；部署後沒有新的下載 / 同步，同步相關的觀察項目仍無資料
 
+- [x] 2026-10-22 使用者決定（1. 功能做好後自己把 622 換成 CR；2. 目前偏好內嵌，未來可能改；3. 自動產生過濾規則與防重複照方案做）
+  - [x] 「改用這個版本」（手動指定該集版本）
+    - migration：`anime_links.manual_choice BOOLEAN NOT NULL DEFAULT false`
+    - `POST /links/:link_id/choose`：被選版本 manual_choice=true、filtered_flag=false、active、清 conflict_flag；
+      同集（同季、同字幕組、同集數）其他版本 resolved、manual_choice=false；該集的衝突紀錄標為已解決（選這個版本）；
+      取消其他版本的下載（下載中 / 已下載未同步，連 torrent 與檔案）；派送被選版本。已同步進媒體庫的舊版本保留（與解衝突一致），回應裡註明
+    - 過濾重算時 manual_choice 的版本一律不過濾
+    - 衝突偵測前：集數有 active 的手動指定版本時，其他 active 版本自動改 resolved（之後的新版本不再產生衝突）
+    - 前端：作品季對話框每個版本加「改用此版本」（確認視窗說明影響），顯示「手動指定」「未採用」標籤；DTO 加 link_status、manual_choice
+  - [x] 衝突重新打開時清掉 resolved_at、chosen_link_id，created_at 改為重新打開的時間（只在原本是 resolved 時）
+  - [x] 自動產生過濾規則：抓取 / 解析器確認後若訂閱有未解決衝突就請 AI 產生（結果進待確認清單）
+  - [x] 防重複（過濾規則與解析器共用判斷）：同訂閱最新一筆是 generating / pending → 不產生；最新一筆 failed 且未滿 6 小時 → 不產生；
+    最新一筆 confirmed / rejected 且之後沒有新的衝突 / 未匹配項目 → 不產生
+  - [ ] 內嵌偏好：在設定頁的過濾 prompt 補上「內嵌優先於內封」（使用者自行貼上，給文字）
+  - 實作：`services/version_choice.rs`、`POST /links/:link_id/choose`、`ai/auto_trigger.rs`（`should_generate`、`parser_due`、
+    `spawn_filter_generation_if_due`；抓取派送後與解析器確認後觸發）、`anime_link_conflict` upsert 重新打開時清欄位、作品季對話框按鈕
+  - 驗證：DB 測試（指定版本、之後新版本不採用、過濾重算不影響指定版本、重新打開清欄位、解析器等待中不再產生、衝突分組）、
+    判斷邏輯單元測試；本機起 core 打 `/links/0/choose` 回 404、`/links/1` 回含新欄位的列表
+  - [ ] 部署後：使用者在無自覺聖女第 11 集對 CR 版按「改用此版本」→ 622 取消（qB 移除、半成品刪除）、CR 派送、同步後媒體庫 S01E11 出現
+  - [ ] 部署後：下一次抓到新衝突時 log 出現「自動請 AI 產生過濾規則」，待確認清單出現結果；同訂閱不會再出第二筆
+- [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
+
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
 | 對象 | 前提 | 動作 |

@@ -34,6 +34,7 @@ use crate::dto::{
         crate::handlers::links::create_anime_link,
         crate::handlers::links::get_anime_links,
         crate::handlers::links::list_conflicting_links,
+        crate::handlers::links::choose_link_version,
         crate::handlers::downloads::list_downloads,
         crate::handlers::downloads::retry_one,
         crate::handlers::downloads::retry_bulk,

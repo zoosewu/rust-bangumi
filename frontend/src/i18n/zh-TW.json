@@ -437,5 +437,18 @@
       "loading": "載入中...",
       "noItems": "找不到可訂閱的 RSS"
     }
+  },
+  "animeLink": {
+    "chooseVersion": "改用此版本",
+    "chooseTitle": "第 {{episode}} 集改用這個版本",
+    "chooseDescription": "這個版本不受過濾規則影響。同一集的其他版本不再採用：下載中或已下載未同步的會連種子和檔案一起取消，已在媒體庫的檔案保留；之後這一集出現的新版本也會自動略過。",
+    "chooseConfirm": "改用",
+    "chosen": "第 {{episode}} 集已改用指定版本",
+    "chosenCancelled": "取消了 {{count}} 個其他版本的下載",
+    "chosenDispatched": "已開始下載這個版本",
+    "chosenKeptInLibrary": "其他版本已在媒體庫的檔案保留，新版本同步後會放進同一集",
+    "chooseFailed": "改用版本失敗",
+    "manualChoice": "手動指定",
+    "notUsed": "未採用"
   }
 }

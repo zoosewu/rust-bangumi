@@ -104,6 +104,20 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             let now = Utc::now().naive_utc();
+            // 已解決的衝突又出現新版本時重新打開：清掉上次的選擇，偵測時間改為現在
+            diesel::update(
+                anime_link_conflicts::table
+                    .filter(anime_link_conflicts::anime_id.eq(anime_id))
+                    .filter(anime_link_conflicts::group_id.eq(group_id))
+                    .filter(anime_link_conflicts::episode_no.eq(episode_no))
+                    .filter(anime_link_conflicts::resolution_status.eq("resolved")),
+            )
+            .set((
+                anime_link_conflicts::chosen_link_id.eq(None::<i32>),
+                anime_link_conflicts::resolved_at.eq(None::<chrono::NaiveDateTime>),
+                anime_link_conflicts::created_at.eq(now),
+            ))
+            .execute(&mut conn)?;
             diesel::insert_into(anime_link_conflicts::table)
                 .values((
                     anime_link_conflicts::anime_id.eq(anime_id),

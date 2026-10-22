@@ -738,6 +738,7 @@ mod tests {
             download_type: Some("magnet".to_string()),
             conflict_flag: false,
             link_status: "active".to_string(),
+            manual_choice: false,
         }
     }
 

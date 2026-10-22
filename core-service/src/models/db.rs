@@ -267,6 +267,8 @@ pub struct AnimeLink {
     pub download_type: Option<String>,
     pub conflict_flag: bool,
     pub link_status: String,
+    /// 使用者手動指定的版本（不受過濾規則影響，同集其他版本不採用）
+    pub manual_choice: bool,
 }
 
 #[derive(Insertable)]

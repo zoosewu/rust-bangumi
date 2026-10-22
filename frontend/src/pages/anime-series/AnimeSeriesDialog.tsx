@@ -13,6 +13,7 @@ import { InfoItem } from "@/components/shared/InfoItem"
 import { DownloadBadge } from "@/components/shared/DownloadBadge"
 import { CopyButton } from "@/components/shared/CopyButton"
 import { TagBadge } from "@/components/shared/TagBadge"
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -26,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
 import { AnimeLinkDetailDialog } from "@/pages/anime-series/AnimeLinkDetailDialog"
 import { cn } from "@/lib/utils"
-import { Save, X, AlertTriangle } from "lucide-react"
+import { Save, X, AlertTriangle, ArrowRightLeft } from "lucide-react"
 import { toast } from "sonner"
 import type { AnimeRich, AnimeLinkRich } from "@/schemas/anime"
 
@@ -40,6 +41,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
   const { t } = useTranslation()
   const [groupDialog, setGroupDialog] = useState<{ id: number; name: string } | null>(null)
   const [detailLink, setDetailLink] = useState<AnimeLinkRich | null>(null)
+  const [chooseTarget, setChooseTarget] = useState<AnimeLinkRich | null>(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({
     season_id: "",
@@ -134,6 +136,35 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
     }).catch(() => {
       toast.error(t("common.saveFailed", "Save failed"))
     })
+  }
+
+  const { mutate: chooseVersion, isLoading: choosing } = useEffectMutation((linkId: number) =>
+    Effect.flatMap(CoreApi, (api) => api.chooseLinkVersion(linkId)),
+  )
+
+  const confirmChoose = () => {
+    if (!chooseTarget) return
+    chooseVersion(chooseTarget.link_id).then(
+      (r) => {
+        setChooseTarget(null)
+        toast.success(t("animeLink.chosen", { episode: chooseTarget.episode_no }), {
+          description: [
+            t("animeLink.chosenCancelled", { count: r.cancelled_downloads }),
+            r.dispatched > 0 ? t("animeLink.chosenDispatched") : null,
+            r.kept_in_library.length > 0 ? t("animeLink.chosenKeptInLibrary") : null,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        })
+        refetchLinks()
+      },
+      (e) => {
+        setChooseTarget(null)
+        toast.error(t("animeLink.chooseFailed"), {
+          description: e instanceof Error ? e.message : String(e),
+        })
+      },
+    )
   }
 
   const passedLinks = (links ?? []).filter((l) => !l.filtered_flag)
@@ -329,10 +360,10 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
             <TabsContent value="links" className="mt-4">
               <div className="rounded-md border divide-y text-sm font-mono">
                 {passedLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed onGroupClick={setGroupDialog} onConflictClick={setDetailLink} />
+                  <LinkRow key={link.link_id} link={link} passed onGroupClick={setGroupDialog} onConflictClick={setDetailLink} onChoose={setChooseTarget} />
                 ))}
                 {filteredLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed={false} onGroupClick={setGroupDialog} onConflictClick={setDetailLink} />
+                  <LinkRow key={link.link_id} link={link} passed={false} onGroupClick={setGroupDialog} onConflictClick={setDetailLink} onChoose={setChooseTarget} />
                 ))}
                 {(links ?? []).length === 0 && (
                   <div className="px-3 py-4 text-center text-muted-foreground font-sans">
@@ -356,6 +387,21 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!chooseTarget}
+        onOpenChange={(open) => {
+          if (!open) setChooseTarget(null)
+        }}
+        title={t("animeLink.chooseTitle", { episode: chooseTarget?.episode_no })}
+        description={t("animeLink.chooseDescription")}
+        loading={choosing}
+        confirmVariant="default"
+        confirmLabel={t("animeLink.chooseConfirm")}
+        onConfirm={confirmChoose}
+      >
+        <p className="break-all font-mono text-xs">{chooseTarget?.title}</p>
+      </ConfirmDialog>
 
       {/* Detail dialog for conflicted links */}
       {detailLink && (
@@ -401,11 +447,13 @@ function LinkRow({
   passed,
   onGroupClick,
   onConflictClick,
+  onChoose,
 }: {
   link: AnimeLinkRich
   passed: boolean
   onGroupClick: (g: { id: number; name: string }) => void
   onConflictClick: (link: AnimeLinkRich) => void
+  onChoose: (link: AnimeLinkRich) => void
 }) {
   const { t } = useTranslation()
   const dl = link.download
@@ -438,10 +486,24 @@ function LinkRow({
           <AlertTriangle className="h-3.5 w-3.5" />
         </button>
       )}
+      {link.manual_choice ? (
+        <TagBadge tone="info">{t("animeLink.manualChoice")}</TagBadge>
+      ) : (
+        <button
+          type="button"
+          title={t("animeLink.chooseVersion")}
+          className="shrink-0 opacity-50 hover:opacity-100"
+          onClick={() => onChoose(link)}
+        >
+          <ArrowRightLeft className="h-3.5 w-3.5" />
+        </button>
+      )}
       <CopyButton text={link.url} />
       <span className="shrink-0">
         {passed && dl ? (
           <DownloadBadge status={dl.status} progress={dl.progress} />
+        ) : passed && link.link_status === "resolved" ? (
+          <TagBadge tone="muted">{t("animeLink.notUsed")}</TagBadge>
         ) : passed ? (
           <TagBadge tone="warning">{t("tags.download.pending")}</TagBadge>
         ) : (

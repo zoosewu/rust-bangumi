@@ -1149,7 +1149,6 @@ pub async fn detect_conflicts_and_generate_filters(
     State(state): State<AppState>,
     Path(subscription_id): Path<i32>,
 ) -> (StatusCode, Json<serde_json::Value>) {
-    use crate::models::AnimeLink;
     use std::sync::Arc;
 
     // 1. 先確保所有未解析的 raw items 都重新解析（避免 race condition：
@@ -1178,66 +1177,19 @@ pub async fn detect_conflicts_and_generate_filters(
     }
 
     // 3. 查詢此訂閱的衝突連結，組成衝突群組
-    let conflict_groups: Vec<(Vec<String>, String)> = {
-        let mut conn = match pool.get() {
-            Ok(c) => c,
+    let conflict_groups: Vec<(Vec<String>, String)> =
+        match pool.get().map_err(|e| e.to_string()).and_then(|mut conn| {
+            crate::ai::auto_trigger::conflict_groups_for_subscription(&mut conn, subscription_id)
+                .map_err(|e| e.to_string())
+        }) {
+            Ok(groups) => groups,
             Err(e) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({ "error": "db_error", "message": e.to_string() })),
+                    Json(json!({ "error": "db_error", "message": e })),
                 )
             }
         };
-
-        // 查詢此訂閱的 raw_item_ids
-        let raw_item_ids: Vec<i32> = raw_anime_items::table
-            .filter(raw_anime_items::subscription_id.eq(subscription_id))
-            .select(raw_anime_items::item_id)
-            .load::<i32>(&mut conn)
-            .unwrap_or_default();
-
-        if raw_item_ids.is_empty() {
-            vec![]
-        } else {
-            // 查詢這些 raw_items 對應的衝突 links
-            let my_conflict_links: Vec<AnimeLink> = anime_links::table
-                .filter(anime_links::raw_item_id.eq_any(&raw_item_ids))
-                .filter(anime_links::conflict_flag.eq(true))
-                .load::<AnimeLink>(&mut conn)
-                .unwrap_or_default();
-
-            // 對每個衝突的 (anime_id, group_id, episode_no)，找出所有衝突 links 的標題
-            // 依 (季, 字幕組, 集數) 排序，送給 AI 時才能取「前幾集」
-            let mut groups: std::collections::BTreeMap<(i32, i32, i32), Vec<String>> =
-                std::collections::BTreeMap::new();
-            for link in &my_conflict_links {
-                let key = (link.anime_id, link.group_id, link.episode_no);
-                // 取得該集衝突的所有 links（不限本訂閱）
-                let all_conflict_titles: Vec<String> = anime_links::table
-                    .filter(anime_links::anime_id.eq(link.anime_id))
-                    .filter(anime_links::group_id.eq(link.group_id))
-                    .filter(anime_links::episode_no.eq(link.episode_no))
-                    .filter(anime_links::conflict_flag.eq(true))
-                    .select(anime_links::title)
-                    .load::<Option<String>>(&mut conn)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .flatten()
-                    .collect();
-                if all_conflict_titles.len() > 1 {
-                    groups.entry(key).or_insert(all_conflict_titles);
-                }
-            }
-
-            groups
-                .into_values()
-                .map(|titles| {
-                    let source = titles[0].clone();
-                    (titles, source)
-                })
-                .collect()
-        }
-    };
 
     let groups_count = conflict_groups.len();
 

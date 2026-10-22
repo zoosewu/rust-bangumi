@@ -185,6 +185,10 @@ pub struct AnimeLinkRichResponse {
     pub source_hash: String,
     pub filtered_flag: bool,
     pub conflict_flag: bool,
+    /// active：採用中；resolved：同集選了別的版本
+    pub link_status: String,
+    /// 使用者手動指定的版本
+    pub manual_choice: bool,
     pub conflicting_link_ids: Vec<i32>,
     pub download: Option<DownloadInfo>,
     #[schema(value_type = String, format = DateTime)]

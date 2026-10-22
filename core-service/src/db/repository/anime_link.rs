@@ -327,6 +327,7 @@ pub mod mock {
                 download_type: link.download_type,
                 conflict_flag: link.conflict_flag,
                 link_status: link.link_status,
+                manual_choice: false,
             };
             *next_id += 1;
             links.push(new_link.clone());
@@ -467,6 +468,7 @@ mod tests {
             download_type: Some("http".to_string()),
             conflict_flag: false,
             link_status: "active".to_string(),
+            manual_choice: false,
         };
         let link2 = AnimeLink {
             link_id: 2,
@@ -482,6 +484,7 @@ mod tests {
             download_type: Some("http".to_string()),
             conflict_flag: false,
             link_status: "active".to_string(),
+            manual_choice: false,
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link1, link2]);
 
@@ -511,6 +514,7 @@ mod tests {
             download_type: Some("http".to_string()),
             conflict_flag: false,
             link_status: "active".to_string(),
+            manual_choice: false,
         };
         let repo = MockAnimeLinkRepository::with_data(vec![link]);
 

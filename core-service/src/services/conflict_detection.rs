@@ -79,6 +79,14 @@ impl ConflictDetectionService {
         let pool = self.pool.clone();
         let skipped = tokio::task::spawn_blocking(move || {
             let mut conn = pool.get().map_err(|e| e.to_string())?;
+            let deferred = crate::services::version_choice::defer_to_manual_choices(&mut conn)
+                .map_err(|e| format!("Failed to defer to manual choices: {}", e))?;
+            if !deferred.is_empty() {
+                tracing::info!(
+                    "Set aside {} links of episodes with a manually chosen version",
+                    deferred.len()
+                );
+            }
             skip_redundant_batches(&mut conn).map_err(|e| e.to_string())
         })
         .await
@@ -432,6 +440,7 @@ mod tests {
             download_type: Some("magnet".to_string()),
             conflict_flag: true,
             link_status: "active".to_string(),
+            manual_choice: false,
         }
     }
 

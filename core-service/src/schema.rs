@@ -102,6 +102,7 @@ diesel::table! {
         conflict_flag -> Bool,
         #[max_length = 20]
         link_status -> Varchar,
+        manual_choice -> Bool,
     }
 }
 

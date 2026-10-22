@@ -1,3 +1,4 @@
+pub mod auto_trigger;
 pub mod chain;
 pub mod client;
 pub mod factory;
