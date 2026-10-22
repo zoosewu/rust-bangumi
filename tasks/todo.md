@@ -78,7 +78,8 @@
   - 一併修正 `retry_completed_downloads`：`notify_viewer` 改回傳 `SyncNotice { Sent, Skipped, NoViewer }`，
     因衝突被略過（Skipped）不再被當成「沒有 viewer」而中斷整個重試迴圈
   - 驗證：cargo test 全過、clippy 警告數不變（131）
-  - [ ] 部署後觀察：下一次 parser 確認 / 單筆 reparse 產生同集多版本時，log 先出現 `Conflict detected` 且不派送
+  - [x] 部署後觀察：下一次 parser 確認 / 單筆 reparse 產生同集多版本時，log 先出現 `Conflict detected` 且不派送
+    - 2026-10-22 確認：10/21 抓到藥屋 51 繁日/簡日兩版，log `Conflict detected … episode_no=51`、`0 dispatched`
 - [x] 10. 同步不重複、結果不倒退（稽核 E6，2026-10-16 以 589/598 重現確認根因）
   - core：`failed` callback 不得覆蓋 `synced`（只在 `syncing` 時接受）；送出前先標 `syncing`，逾時不回退，交給 `recover_stale_syncing`
   - core：輪詢迴圈送出前重新確認狀態（避免拿 callback 前讀出的舊清單重送）
@@ -255,8 +256,18 @@
     已用 torrent 的 Last-Modified 比對確認），feed-rs 與 rss crate 都略過這個元素
   - [x] fetcher 用 quick-xml 讀出每個 item 的 enclosure URL 與 torrent/pubDate，以 UTC+8 轉換；標準 pubDate 仍優先
   - [x] core 收到已存在的項目時補上缺少的 pub_date（RSS 還列著的舊項目會自動補齊）
-  - [ ] 部署後：下一輪抓取後 `raw_anime_items.pub_date` 非 NULL 的筆數增加
+  - [x] 部署後：下一輪抓取後 `raw_anime_items.pub_date` 非 NULL 的筆數增加
+    - 2026-10-22 確認：332/332 全部有值（舊項目也由 RSS 補齊），範圍 2018-02-28 ~ 2026-10-21
 - [x] 2026-10-20 確認：下載排程對 qB `not_found` 已有處理（連續失蹤超過 10 分鐘標 failed），舊紀錄的 `_ => continue` 已不存在
+
+- [ ] 2026-10-22 狀態檢查發現
+  - 待決衝突實際 4 筆（不是 1 筆）：新的「简繁日内封」版本把 10/19 已解決的青之箱 ep2、藥屋 49、50 重新打開
+    （status 改回 unresolved，resolved_at / chosen_link_id 保留舊值，已選版本早已 synced），加上藥屋 51（繁日 / 簡日）
+  - 訂閱 28（青之箱）、30（藥屋）沒有任何過濾規則：AI 過濾規則只在訂閱精靈第 3 步或手動重新生成時產生，
+    10/15 那次因限流失敗後就沒再產生；排程抓到的新衝突不會觸發 AI
+  - 622 已卡 6 天（99.7%）；另一個版本 CR（link 1621）被過濾規則排除
+  - 下載目錄 20 個孤兒尚未刪除（使用者在設定頁操作）
+  - 備份 10/20、10/21 皆成功；部署後沒有新的下載 / 同步，同步相關的觀察項目仍無資料
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
