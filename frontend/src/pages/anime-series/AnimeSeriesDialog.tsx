@@ -26,6 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
 import { AnimeLinkDetailDialog } from "@/pages/anime-series/AnimeLinkDetailDialog"
+import { linkUsage, sortByUsage, type LinkUsage } from "@/pages/anime-series/linkUsage"
 import { cn } from "@/lib/utils"
 import { Save, X, AlertTriangle, ArrowRightLeft } from "lucide-react"
 import { toast } from "sonner"
@@ -149,6 +150,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
         setChooseTarget(null)
         toast.success(t("animeLink.chosen", { episode: chooseTarget.episode_no }), {
           description: [
+            chooseTarget.title,
             t("animeLink.chosenCancelled", { count: r.cancelled_downloads }),
             r.dispatched > 0 ? t("animeLink.chosenDispatched") : null,
             r.kept_in_library.length > 0 ? t("animeLink.chosenKeptInLibrary") : null,
@@ -167,8 +169,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
     )
   }
 
-  const passedLinks = (links ?? []).filter((l) => !l.filtered_flag)
-  const filteredLinks = (links ?? []).filter((l) => l.filtered_flag)
+  const sortedLinks = sortByUsage(links ?? [])
 
   return (
     <>
@@ -359,11 +360,8 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
 
             <TabsContent value="links" className="mt-4">
               <div className="rounded-md border divide-y text-sm font-mono">
-                {passedLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed onGroupClick={setGroupDialog} onConflictClick={setDetailLink} onChoose={setChooseTarget} />
-                ))}
-                {filteredLinks.map((link) => (
-                  <LinkRow key={link.link_id} link={link} passed={false} onGroupClick={setGroupDialog} onConflictClick={setDetailLink} onChoose={setChooseTarget} />
+                {sortedLinks.map((link) => (
+                  <LinkRow key={link.link_id} link={link} onGroupClick={setGroupDialog} onConflictClick={setDetailLink} onChoose={setChooseTarget} />
                 ))}
                 {(links ?? []).length === 0 && (
                   <div className="px-3 py-4 text-center text-muted-foreground font-sans">
@@ -442,31 +440,35 @@ function EditItem({
   )
 }
 
+const USAGE_STYLE: Record<LinkUsage, { row: string; sign: string }> = {
+  used: {
+    row: "bg-green-50 text-green-900 dark:bg-green-950/30 dark:text-green-300",
+    sign: "+",
+  },
+  unused: { row: "bg-muted/40 text-muted-foreground", sign: "·" },
+  filtered: {
+    row: "bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-300",
+    sign: "-",
+  },
+}
+
 function LinkRow({
   link,
-  passed,
   onGroupClick,
   onConflictClick,
   onChoose,
 }: {
   link: AnimeLinkRich
-  passed: boolean
   onGroupClick: (g: { id: number; name: string }) => void
   onConflictClick: (link: AnimeLinkRich) => void
   onChoose: (link: AnimeLinkRich) => void
 }) {
   const { t } = useTranslation()
   const dl = link.download
+  const usage = linkUsage(link)
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 px-3 py-2",
-        passed
-          ? "bg-green-50 text-green-900 dark:bg-green-950/30 dark:text-green-300"
-          : "bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-300",
-      )}
-    >
-      <span className="shrink-0 w-4 text-center font-bold">{passed ? "+" : "-"}</span>
+    <div className={cn("flex items-center gap-2 px-3 py-2", USAGE_STYLE[usage].row)}>
+      <span className="shrink-0 w-4 text-center font-bold">{USAGE_STYLE[usage].sign}</span>
       <span className="w-12 shrink-0">Ep{link.episode_no}</span>
       <EntityLink
         type="subtitle_group"
@@ -487,25 +489,26 @@ function LinkRow({
         </button>
       )}
       {link.manual_choice ? (
-        <TagBadge tone="info">{t("animeLink.manualChoice")}</TagBadge>
+        <TagBadge tone="success">{t("animeLink.manualChoice")}</TagBadge>
       ) : (
-        <button
-          type="button"
-          title={t("animeLink.chooseVersion")}
-          className="shrink-0 opacity-50 hover:opacity-100"
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 shrink-0 gap-1 px-2 font-sans text-xs"
           onClick={() => onChoose(link)}
         >
-          <ArrowRightLeft className="h-3.5 w-3.5" />
-        </button>
+          <ArrowRightLeft className="h-3 w-3" />
+          {t("animeLink.chooseVersion")}
+        </Button>
       )}
       <CopyButton text={link.url} />
       <span className="shrink-0">
-        {passed && dl ? (
+        {usage === "used" && dl ? (
           <DownloadBadge status={dl.status} progress={dl.progress} />
-        ) : passed && link.link_status === "resolved" ? (
-          <TagBadge tone="muted">{t("animeLink.notUsed")}</TagBadge>
-        ) : passed ? (
+        ) : usage === "used" ? (
           <TagBadge tone="warning">{t("tags.download.pending")}</TagBadge>
+        ) : usage === "unused" ? (
+          <TagBadge tone="muted">{t("animeLink.notUsed")}</TagBadge>
         ) : (
           <TagBadge tone="muted">{t("tags.status.eliminated")}</TagBadge>
         )}
