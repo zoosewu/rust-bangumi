@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { linkUsage, sortByUsage } from "./linkUsage"
+import { linkUsage } from "./linkUsage"
 
 const link = (filtered_flag: boolean, link_status: string, manual_choice = false) => ({
   filtered_flag,
@@ -20,12 +20,4 @@ describe("linkUsage", () => {
     expect(linkUsage(link(true, "active", true))).toBe("used")
   })
 
-  it("lists used versions first", () => {
-    const sorted = sortByUsage([
-      { ...link(true, "active"), id: "cr" },
-      { ...link(false, "resolved"), id: "old" },
-      { ...link(false, "active"), id: "abema" },
-    ])
-    expect(sorted.map((l) => l.id)).toEqual(["abema", "old", "cr"])
-  })
 })

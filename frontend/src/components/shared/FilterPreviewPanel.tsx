@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils"
 import { Check, X, Plus, Minus } from "lucide-react"
 import type { PreviewItem } from "@/schemas/common"
+import { sortByTitle } from "@/lib/sort"
 
 interface PreviewPanel {
   passed_items: readonly PreviewItem[]
@@ -82,15 +83,7 @@ function mergeItems(
     result.push({ item_id, ...data, afterState })
   }
 
-  result.sort((a, b) => {
-    const order = { passed: 0, filtered: 1 }
-    const ao = order[a.beforeState]
-    const bo = order[b.beforeState]
-    if (ao !== bo) return ao - bo
-    return a.title.localeCompare(b.title)
-  })
-
-  return result
+  return sortByTitle(result)
 }
 
 function ItemMeta({ item }: { item: MergedItem }) {

@@ -8,6 +8,7 @@ import {
 import { TagBadge } from "@/components/shared/TagBadge"
 import { CopyButton } from "@/components/shared/CopyButton"
 import type { AnimeLinkRich } from "@/schemas/anime"
+import { sortByTitle } from "@/lib/sort"
 
 interface AnimeLinkDetailDialogProps {
   link: AnimeLinkRich
@@ -24,8 +25,8 @@ export function AnimeLinkDetailDialog({
 }: AnimeLinkDetailDialogProps) {
   const { t } = useTranslation()
 
-  const conflictingLinks = allLinks.filter((l) =>
-    link.conflicting_link_ids.includes(l.link_id)
+  const conflictingLinks = sortByTitle(
+    allLinks.filter((l) => link.conflicting_link_ids.includes(l.link_id)),
   )
 
   return (

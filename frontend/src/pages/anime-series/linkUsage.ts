@@ -15,10 +15,3 @@ export function linkUsage(link: UsageFields): LinkUsage {
   if (link.filtered_flag) return "filtered"
   return link.link_status === "resolved" ? "unused" : "used"
 }
-
-const USAGE_ORDER: Record<LinkUsage, number> = { used: 0, unused: 1, filtered: 2 }
-
-/** 採用中、未採用、被過濾依序排列；同一組內維持原本順序（集數） */
-export function sortByUsage<T extends UsageFields>(links: readonly T[]): T[] {
-  return [...links].sort((a, b) => USAGE_ORDER[linkUsage(a)] - USAGE_ORDER[linkUsage(b)])
-}

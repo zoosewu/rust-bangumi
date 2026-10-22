@@ -26,7 +26,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SubtitleGroupDialog } from "@/pages/subtitle-groups/SubtitleGroupDialog"
 import { AnimeLinkDetailDialog } from "@/pages/anime-series/AnimeLinkDetailDialog"
-import { linkUsage, sortByUsage, type LinkUsage } from "@/pages/anime-series/linkUsage"
+import { linkUsage, type LinkUsage } from "@/pages/anime-series/linkUsage"
+import { sortByTitle } from "@/lib/sort"
 import { cn } from "@/lib/utils"
 import { Save, X, AlertTriangle, ArrowRightLeft } from "lucide-react"
 import { toast } from "sonner"
@@ -169,7 +170,7 @@ export function AnimeDialog({ series, open, onOpenChange }: AnimeDialogProps) {
     )
   }
 
-  const sortedLinks = sortByUsage(links ?? [])
+  const sortedLinks = sortByTitle(links ?? [])
 
   return (
     <>
