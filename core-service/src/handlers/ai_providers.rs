@@ -379,6 +379,9 @@ pub struct PromptTestRequest {
     pub provider: TestAiProviderRequest,
     pub kind: crate::ai::prompt_test::PromptKind,
     pub subscription_id: i32,
+    /// 只用於這次測試的 prompt（比較不同寫法用，不寫進設定）
+    #[serde(flatten)]
+    pub overrides: crate::ai::prompt_test::PromptOverrides,
 }
 
 #[derive(Debug, Serialize)]
@@ -407,7 +410,7 @@ pub async fn test_provider_with_real_prompt(
             .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         let key = load_provider_api_key(&mut conn, req.provider.existing_provider_id)?;
-        let sample = build_sample(&mut conn, req.kind, req.subscription_id)
+        let sample = build_sample(&mut conn, req.kind, req.subscription_id, &req.overrides)
             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
         (key, sample)
     };

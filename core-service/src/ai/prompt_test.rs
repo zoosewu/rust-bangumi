@@ -36,16 +36,26 @@ pub struct TitleEvaluation {
     pub detail: Option<String>,
 }
 
+/// 只用於這次測試的 prompt（不寫進設定）。沒給的部分沿用設定；`custom_prompt` 給空字串代表不加自訂 prompt。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct PromptOverrides {
+    #[serde(default)]
+    pub fixed_prompt: Option<String>,
+    #[serde(default)]
+    pub custom_prompt: Option<String>,
+}
+
 fn load_prompts(
     conn: &mut PgConnection,
     kind: PromptKind,
+    overrides: &PromptOverrides,
 ) -> Result<(String, Option<String>), String> {
     let settings = crate::schema::ai_prompt_settings::table
         .first::<crate::models::AiPromptSettings>(conn)
         .optional()
         .map_err(|e| e.to_string())?;
     let non_empty = |s: Option<String>| s.filter(|v| !v.trim().is_empty());
-    Ok(match kind {
+    let (fixed, custom) = match kind {
         PromptKind::Parser => (
             non_empty(
                 settings
@@ -64,7 +74,14 @@ fn load_prompts(
             .unwrap_or_else(|| DEFAULT_FIXED_FILTER_PROMPT.to_string()),
             non_empty(settings.and_then(|p| p.custom_filter_prompt)),
         ),
-    })
+    };
+    Ok((
+        non_empty(overrides.fixed_prompt.clone()).unwrap_or(fixed),
+        match &overrides.custom_prompt {
+            Some(c) => non_empty(Some(c.clone())),
+            None => custom,
+        },
+    ))
 }
 
 /// 依正式流程組出 prompt：parser 送訂閱最早三集的所有標題；filter 送同一集有多個版本的前三集。
@@ -72,8 +89,9 @@ pub fn build_sample(
     conn: &mut PgConnection,
     kind: PromptKind,
     subscription_id: i32,
+    overrides: &PromptOverrides,
 ) -> Result<PromptSample, String> {
-    let (fixed, custom) = load_prompts(conn, kind)?;
+    let (fixed, custom) = load_prompts(conn, kind, overrides)?;
     let system_prompt = build_system_prompt(Some(&fixed));
     match kind {
         PromptKind::Parser => {
@@ -392,10 +410,61 @@ mod tests {
             {
                 item(&mut conn, sub, title, i as i32);
             }
-            let sample = build_sample(&mut conn, PromptKind::Parser, sub).unwrap();
+            let sample = build_sample(
+                &mut conn,
+                PromptKind::Parser,
+                sub,
+                &PromptOverrides::default(),
+            )
+            .unwrap();
             assert_eq!(sample.titles.len(), 5);
             assert!(!sample.titles.iter().any(|t| t.contains("[04]")));
             assert!(sample.user_prompt.contains("[G] T [02][简日]"));
+        }
+
+        #[test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        fn a_test_can_try_other_prompts_without_saving_them() {
+            let mut conn = test_db::conn();
+            let (sub, _, _) = subscription(&mut conn);
+            item(&mut conn, sub, "[G] T [01][繁日]", 0);
+            diesel::sql_query(
+                "UPDATE ai_prompt_settings SET custom_parser_prompt = 'saved custom'",
+            )
+            .execute(&mut conn)
+            .unwrap();
+            let sample = |o: PromptOverrides, conn: &mut PgConnection| {
+                build_sample(conn, PromptKind::Parser, sub, &o).unwrap()
+            };
+
+            let saved = sample(PromptOverrides::default(), &mut conn);
+            assert_eq!(saved.system_prompt, DEFAULT_FIXED_PARSER_PROMPT);
+            assert!(saved.user_prompt.ends_with("saved custom"));
+
+            let tried = sample(
+                PromptOverrides {
+                    fixed_prompt: Some("shorter prompt".to_string()),
+                    custom_prompt: Some(String::new()),
+                },
+                &mut conn,
+            );
+            assert_eq!(tried.system_prompt, "shorter prompt");
+            assert!(
+                !tried.user_prompt.contains("saved custom"),
+                "empty custom means none"
+            );
+
+            let only_fixed = sample(
+                PromptOverrides {
+                    fixed_prompt: Some("shorter prompt".to_string()),
+                    custom_prompt: None,
+                },
+                &mut conn,
+            );
+            assert!(
+                only_fixed.user_prompt.ends_with("saved custom"),
+                "custom falls back to settings"
+            );
         }
 
         #[test]
@@ -414,7 +483,13 @@ mod tests {
             let single = item(&mut conn, sub, "[G] T [00][繁日]", 0);
             link(&mut conn, anime, group, 0, single, "[G] T [00][繁日]");
 
-            let sample = build_sample(&mut conn, PromptKind::Filter, sub).unwrap();
+            let sample = build_sample(
+                &mut conn,
+                PromptKind::Filter,
+                sub,
+                &PromptOverrides::default(),
+            )
+            .unwrap();
             assert_eq!(sample.titles.len(), 6);
             assert!(sample.user_prompt.contains("--- Group 3 ---"));
             assert!(!sample.user_prompt.contains("[04]"));
@@ -426,8 +501,20 @@ mod tests {
         fn a_subscription_without_versions_cannot_test_filters() {
             let mut conn = test_db::conn();
             let (sub, _, _) = subscription(&mut conn);
-            assert!(build_sample(&mut conn, PromptKind::Filter, sub).is_err());
-            assert!(build_sample(&mut conn, PromptKind::Parser, sub).is_err());
+            assert!(build_sample(
+                &mut conn,
+                PromptKind::Filter,
+                sub,
+                &PromptOverrides::default()
+            )
+            .is_err());
+            assert!(build_sample(
+                &mut conn,
+                PromptKind::Parser,
+                sub,
+                &PromptOverrides::default()
+            )
+            .is_err());
         }
     }
 }
