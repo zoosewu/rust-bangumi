@@ -31,6 +31,15 @@
   - 可能也解釋了：E1 資料損壞、無自覺聖女第 7 集反覆下載、/downloads 的孤兒檔、qB 的 missingFiles
   - Docker Desktop 也還有 dufs、etherpad、rustdesk、claude-code-hub dev、bgmi、karaoke-eternal、upsnap；OrbStack 的 etherpad 在重啟循環（疑似連接埠被佔）
   - [ ] 使用者：停止並取消自動重啟 Docker Desktop 的 bangumi-* 容器（指令見對話）
+    - 2026-10-23 19:36 下的 `docker update/stop` 卡住沒有生效：Docker Desktop 的 VM 約 10/23 14:31 已整個停掉
+      （找不到 VM 程序，`data/postgres/postmaster.opts` 最後寫入 14:31:37），所有容器（含 claude-code-hub 的兩個 postgres）都已不在跑；
+      restart=always 沒改到，Docker Desktop 下次啟動會全部復活 → 要關掉 Docker Desktop 並取消開機啟動
+  - 2026-10-24 qBittorrent 共用設定檢查（`data/qbittorrent/qBittorrent/BT_backup` 18 組）：
+    - OrbStack qB 載入 4 個：630（CR 第 11 集，保留）；3 個 DB 沒有紀錄的舊種子（Super no Ura 09 error、藥屋 49/50 簡日版 completed）
+    - 14 個 OrbStack qB 沒載入、續傳檔卻在 10/23 04:20–13:20 還在更新 → 是 Docker Desktop qB 在跑的已同步 / 已取消舊種子
+      （無自覺聖女 07/09/10、尖帽子三個合集、暴走千金、Super no Ura、轉校生、欺詐遊戲 22、二十世紀電氣目錄、魔法科劇場版）
+      → 解釋了第 7 集反覆下載與 /downloads 的孤兒檔、0 MB 合集資料夾；OrbStack qB 重啟時會載入它們重新下載
+    - [ ] 使用者：14 個續傳檔移到 `BT_backup.stale-20261024/`（不刪）；3 個 DB 沒紀錄的舊種子用 downloader API 連檔案移除
   - [ ] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
   - [ ] 之後才刪 `data/postgres`；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
 - [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
