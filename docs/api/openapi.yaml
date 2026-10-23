@@ -2162,6 +2162,12 @@ paths:
                   enum: [parser, filter]
                 subscription_id:
                   type: integer
+                fixed_prompt:
+                  type: string
+                  description: 只用於這次測試的固定 prompt（不寫進設定）；沒給或空字串時用設定的
+                custom_prompt:
+                  type: string
+                  description: 只用於這次測試的自訂 prompt；沒給時用設定的，空字串代表不加
       responses:
         '200':
           description: 測試結果（ok、elapsed_ms、system_prompt、user_prompt、titles、raw_response、parsed、evaluations、error）
