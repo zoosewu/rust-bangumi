@@ -39,7 +39,9 @@
     - 14 個 OrbStack qB 沒載入、續傳檔卻在 10/23 04:20–13:20 還在更新 → 是 Docker Desktop qB 在跑的已同步 / 已取消舊種子
       （無自覺聖女 07/09/10、尖帽子三個合集、暴走千金、Super no Ura、轉校生、欺詐遊戲 22、二十世紀電氣目錄、魔法科劇場版）
       → 解釋了第 7 集反覆下載與 /downloads 的孤兒檔、0 MB 合集資料夾；OrbStack qB 重啟時會載入它們重新下載
-    - [ ] 使用者：14 個續傳檔移到 `BT_backup.stale-20261024/`（不刪）；3 個 DB 沒紀錄的舊種子用 downloader API 連檔案移除
+    - [x] 使用者：14 個續傳檔移到 `BT_backup.stale-20261024/`（不刪）；3 個 DB 沒紀錄的舊種子用 downloader API 連檔案移除
+      - 2026-10-24 完成：三個移除都回 200、qB 查詢為 not_found；BT_backup 只剩 630；/downloads 只剩 CR 第 11 集；
+        630 在舊 qB 停掉後開始有進度（0% → 0.34%）
   - [ ] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
   - [ ] 之後才刪 `data/postgres`；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
 - [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
