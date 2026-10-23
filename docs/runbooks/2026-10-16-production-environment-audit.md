@@ -23,6 +23,14 @@
 ## E1：PostgreSQL 資料損壞（儲存層）
 
 > **狀態：已修復（2026-10-16）**：資料庫已搬到 named volume `rust-bangumi_postgres_data`，並開啟 data_checksums，驗證全部通過。過程與重啟後的觀察記在 `tasks/todo.md` 階段 0。
+>
+> **2026-10-23 找到根因**：主機同時開著 Docker Desktop 與 OrbStack，Docker Desktop 裡還有一整套 2026-07-15 建立的
+> rust-bangumi（`restart: always`，9/1 開機後自動啟動）。兩邊的 `bangumi-postgres` 都 bind 掛載 `data/postgres`，
+> 跨 VM 的檔案共享讓 postmaster.pid 鎖失效，兩個 postmaster 同時寫同一個資料目錄 → 索引遺失、主鍵重複、序列倒退。
+> 10/16 OrbStack 改用 named volume 後，Docker Desktop 的 postgres 每分鐘重啟失敗一次（到 10/23 已 10044 次，每次重寫
+> `data/postgres/postmaster.opts`）。兩邊的 qBittorrent 也共用 `data/qbittorrent` 設定與 `data/downloads`
+> （Docker Desktop 那個 7 週內收 16.9 GB、送 7.7 GB），兩邊的 core 在 10/16 前也各自排程派送。
+> 檢查：`docker context ls` 有多個 context 時，逐一 `docker --context <name> ps -a`。
 
 ### 證據
 

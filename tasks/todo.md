@@ -19,6 +19,20 @@
   3. `start`：全部服務 healthy，postgres 無錯誤
 - [ ] 2026-10-23 前後：確認無異常後刪除舊目錄 `data/postgres`、根目錄 `postgres-data/`、主機 `/tmp/override.prod-backup.yaml`；
   備份 `data/backups/2026-10-16-pg/` 保留
+  - 2026-10-23 檢查：兩個 DB 的主鍵 seq/index 筆數一致（23 + 5 張表）、checksum 失敗 0、序列正常；postgres log 的 ERROR 都是手動查詢打錯；
+    `/tmp/override.prod-backup.yaml` 已不存在（主機重開清掉）
+  - **暫停刪除**：`data/postgres` 每分鐘被寫一次 → 發現 Docker Desktop 裡還有一整套舊的 rust-bangumi 在跑（見下方 E0）
+- [ ] **E0（2026-10-23 發現，最高）主機同時跑 Docker Desktop 與 OrbStack 兩套 rust-bangumi**
+  - Docker Desktop（context `desktop-linux`）：2026-07-15 建立的 bangumi-core / postgres / qbittorrent / jellyfin / viewer / fetcher /
+    metadata / 兩個 downloader，`restart: always`，9/1 開機自動啟動、Up 7 週
+  - 共用：postgres 的 `data/postgres`（E1 根因）、qBittorrent 的 `data/qbittorrent` 設定與 `data/downloads`、viewer 的媒體庫與下載目錄
+  - 現況：Docker Desktop 的 postgres 從 10/16 起每分鐘重啟失敗（10044 次），所以那邊的 core 沒有 DB 可用；
+    但它的 qBittorrent 仍在跑（7 週累計收 16.9 GB / 送 7.7 GB），可能把舊 torrent 寫回共用設定、在共用下載目錄產生檔案
+  - 可能也解釋了：E1 資料損壞、無自覺聖女第 7 集反覆下載、/downloads 的孤兒檔、qB 的 missingFiles
+  - Docker Desktop 也還有 dufs、etherpad、rustdesk、claude-code-hub dev、bgmi、karaoke-eternal、upsnap；OrbStack 的 etherpad 在重啟循環（疑似連接埠被佔）
+  - [ ] 使用者：停止並取消自動重啟 Docker Desktop 的 bangumi-* 容器（指令見對話）
+  - [ ] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
+  - [ ] 之後才刪 `data/postgres`；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
 - [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
   寫完以 pg_restore --list 驗證）；本機實測備份 / 失敗不留殘檔 / 保留規則皆正確；
   2026-10-20 14:39 部署：首次備份 bangumi 772K（23 張表資料）、viewer_jellyfin 20K（5 張表資料），皆可讀取
