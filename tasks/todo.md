@@ -34,6 +34,8 @@
     - 2026-10-23 19:36 下的 `docker update/stop` 卡住沒有生效：Docker Desktop 的 VM 約 10/23 14:31 已整個停掉
       （找不到 VM 程序，`data/postgres/postmaster.opts` 最後寫入 14:31:37），所有容器（含 claude-code-hub 的兩個 postgres）都已不在跑；
       restart=always 沒改到，Docker Desktop 下次啟動會全部復活 → 要關掉 Docker Desktop 並取消開機啟動
+    - 2026-10-24 使用者已結束 Docker Desktop（程序全數結束），`settings-store.json` 的 AutoStart 改為 false（備份 `.bak-20261024`）；
+      注意：之後若再打開 Docker Desktop，裡面的 bangumi-* 與 claude-code-hub 兩個 postgres 會自動啟動，要先刪掉
   - 2026-10-24 qBittorrent 共用設定檢查（`data/qbittorrent/qBittorrent/BT_backup` 18 組）：
     - OrbStack qB 載入 4 個：630（CR 第 11 集，保留）；3 個 DB 沒有紀錄的舊種子（Super no Ura 09 error、藥屋 49/50 簡日版 completed）
     - 14 個 OrbStack qB 沒載入、續傳檔卻在 10/23 04:20–13:20 還在更新 → 是 Docker Desktop qB 在跑的已同步 / 已取消舊種子
