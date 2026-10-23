@@ -328,7 +328,20 @@
     - 解析器評分：JSON / regex 有效、標題匹配率、擷取的集數與 DB 既有連結一致的比例
     - 過濾評分：每個衝突群組恰好保留一個、且保留的是偏好版本（繁日 > 繁 > 簡，內嵌優先）
     - 預算：OpenRouter 兩組共用帳號免費額度（每天約 50 次），Groq 每分鐘 8K token → 依序執行、限流時等待重試
-  - [ ] 整理結果與建議，由使用者決定是否換成簡化版
+  - [x] 2026-10-24 測試完成（每格：解析器＝集數正確 / 標題數，過濾＝選對的群組 / 群組數）
+    | provider | 解析器 目前 | 解析器 簡化 v1 / v2 / v3 | 過濾 目前 | 過濾 簡化 v1 / v2 |
+    |---|---|---|---|---|
+    | groq gpt-oss-120b | 23/23 | 17/23 / 23/23 / 23/23 | 9/9 | 9/9 / 9/9 |
+    | mistral ministral-14b | 46/46（跑兩輪） | 6/23 / 14/23 / 26/46（兩輪） | 0/9 | 0/9 / **9/9** |
+    | openRouter nemotron-3-super:free | 全部 404（上游 `Function … Not found`，模型已不可用） | | | |
+    | openRouter（複本）nemotron-3.5-super-vl:free | 3/23 | 0/23 | 3/9 | 0/9 |
+    - v1 的 `(also 【】)` 是我寫錯：讓模型寫出 `\【`，Rust regex 不接受
+    - mistral 過濾失敗原因：每個版本各寫一條正向規則（以為是 OR），實際是 AND → 一個都不保留；v2 明講「只寫一條正向規則」後全對
+    - mistral 解析器只有長 prompt 穩定（兩輪 8/8）；短 prompt 會寫出跟 parse_regex 不一致的 condition_regex、多餘的擷取群組
+    - openRouter（複本）回應要 30–50 秒，常超過 AI client 的 60 秒逾時（`openai.rs:26`）→ `error decoding response body`
+    - 目前預設解析器 prompt 的單集範例錯誤（`$2`/`$3`）仍在
+    - 候選 prompt：scratchpad `prompt-eval/parser_simple3.txt`、`filter_simple2.txt`；結果 `results.jsonl`、`repeat.jsonl`
+  - [ ] 使用者決定：過濾 prompt 換成 v2？解析器維持長版（修範例）或做「全域 → 模型 → 客製化」三層？openRouter 兩組怎麼處理？
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
