@@ -17,7 +17,7 @@
      data_checksums=on；PK 21、FK 21、UNIQUE 11、CHECK 6 全部重建成功；505 可經 PK 與 hash 索引查到；
      `cron_logs` 1165 筆、`sync_tasks` 2 筆（508→220、510→221）重新編號
   3. `start`：全部服務 healthy，postgres 無錯誤
-- [ ] 2026-10-23 前後：確認無異常後刪除舊目錄 `data/postgres`、根目錄 `postgres-data/`、主機 `/tmp/override.prod-backup.yaml`；
+- [x] 2026-10-23 前後：確認無異常後刪除舊目錄 `data/postgres`、根目錄 `postgres-data/`、主機 `/tmp/override.prod-backup.yaml`；
   備份 `data/backups/2026-10-16-pg/` 保留
   - 2026-10-23 檢查：兩個 DB 的主鍵 seq/index 筆數一致（23 + 5 張表）、checksum 失敗 0、序列正常；postgres log 的 ERROR 都是手動查詢打錯；
     `/tmp/override.prod-backup.yaml` 已不存在（主機重開清掉）
@@ -45,7 +45,7 @@
       - 2026-10-24 完成：三個移除都回 200、qB 查詢為 not_found；BT_backup 只剩 630；/downloads 只剩 CR 第 11 集；
         630 在舊 qB 停掉後開始有進度（0% → 0.34%）
   - [ ] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
-  - [ ] 之後才刪 `data/postgres`；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
+  - [x] 2026-10-24 已刪 `data/postgres`、`postgres-data/`（使用者操作，備份保留）；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
 - [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
   寫完以 pg_restore --list 驗證）；本機實測備份 / 失敗不留殘檔 / 保留規則皆正確；
   2026-10-20 14:39 部署：首次備份 bangumi 772K（23 張表資料）、viewer_jellyfin 20K（5 張表資料），皆可讀取
