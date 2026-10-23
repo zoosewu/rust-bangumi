@@ -44,7 +44,8 @@
     - [x] 使用者：14 個續傳檔移到 `BT_backup.stale-20261024/`（不刪）；3 個 DB 沒紀錄的舊種子用 downloader API 連檔案移除
       - 2026-10-24 完成：三個移除都回 200、qB 查詢為 not_found；BT_backup 只剩 630；/downloads 只剩 CR 第 11 集；
         630 在舊 qB 停掉後開始有進度（0% → 0.34%）
-  - [ ] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
+  - [x] 停止後：確認 OrbStack qBittorrent 的 torrent 清單沒有被舊 torrent 污染，再決定 Docker Desktop 本身要不要關閉 / 取消開機啟動
+    - 2026-10-24 使用者決定：Docker Desktop 上的其他服務（bgmi、karaoke-eternal 等）與 claude-code-hub 都不需要，已自行刪除資料夾；不搬移、不做檢查
   - [x] 2026-10-24 已刪 `data/postgres`、`postgres-data/`（使用者操作，備份保留）；`data/jellyfin-config`、`data/jellyfin-cache` 也只有 Docker Desktop 在用，可一併評估
 - [x] 定期 `pg_dump` 到外接硬碟作為備份：compose 新增 `db-backup`（每天、bangumi + viewer_jellyfin、保留 14 天且至少 3 份、
   寫完以 pg_restore --list 驗證）；本機實測備份 / 失敗不留殘檔 / 保留規則皆正確；
