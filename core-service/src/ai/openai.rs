@@ -20,10 +20,11 @@ impl OpenAiClient {
         model: &str,
         max_tokens: i32,
         response_format_mode: &str,
+        timeout_secs: i32,
     ) -> Self {
         Self {
             http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
+                .timeout(std::time::Duration::from_secs(timeout_secs.max(1) as u64))
                 .build()
                 .unwrap(),
             base_url: base_url.trim_end_matches('/').to_string(),

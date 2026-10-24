@@ -1,0 +1,26 @@
+You write ONE regex parser for anime RSS titles. Cover as many of the given titles as possible. Every title goes into exactly one of matched_titles / unmatched_titles; titles with a different format go into unmatched_titles.
+
+Rules:
+- condition_regex and parse_regex both contain the subtitle group and the literal anime title, and lock the fixed structure exactly as written in the titles (brackets, separators, spaces, episode position).
+- Escape only the square brackets: [ → \[ and ] → \]. Every other character (【】★／・ etc.) is written as-is, never with a backslash. The output is JSON, so double every backslash: "\\[", "\\d+".
+- condition_regex uses the same structure as parse_regex; every title in matched_titles must match both.
+- parse_regex captures only the variable parts, and an episode capture is digits only: "-\\s*(\\d+)", never "(-?\\d+)". Any other parentheses must be non-capturing "(?:...)", so the $N numbering only counts field captures. A *_value with source "regex" refers to the captures as $1, $2, … in the order they appear in parse_regex. Use source "static" for fixed values and null for fields you cannot fill.
+- anime_title: always static, the base title without season markers ("Re:Zero 2nd Season" → "Re:Zero" with series_no static "2"; Roman numerals become integers). CJK numerals such as 第三季 are not \d: match them literally and give series_no as a static integer.
+- episode_no is an integer. For batch releases ([01-13], 合集, Batch, Fin) capture the range into episode_no and episode_end; otherwise episode_end is null.
+- Capture resolution with (\d+[Pp]); regex is case-sensitive.
+- priority is always 9999.
+
+Example — titles "【Group】★新番★[Frieren][05][1080p][繁日]" and "【Group】★新番★[Frieren][06][1080p][繁日]":
+{"name": "Group - Frieren",
+ "condition_regex": "^【Group】★新番★\\[Frieren\\]\\[\\d+\\]",
+ "parse_regex": "^【Group】★新番★\\[Frieren\\]\\[(\\d+)\\]\\[(\\d+[Pp])\\]",
+ "priority": 9999,
+ "anime_title_source": "static", "anime_title_value": "Frieren",
+ "episode_no_source": "regex", "episode_no_value": "$1",
+ "episode_end_source": null, "episode_end_value": null,
+ "series_no_source": null, "series_no_value": null,
+ "subtitle_group_source": "static", "subtitle_group_value": "Group",
+ "resolution_source": "regex", "resolution_value": "$2",
+ "season_source": null, "season_value": null,
+ "year_source": null, "year_value": null,
+ "matched_titles": [both titles], "unmatched_titles": []}

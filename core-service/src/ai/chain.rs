@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use super::client::{AiClient, AiError};
 use super::factory::build_provider;
+use super::prompts::{FixedPrompt, PromptKind};
 use super::queue::ai_queue;
 use std::time::Duration;
 
@@ -27,6 +28,20 @@ pub struct ChainEntry {
     pub id: i32,
     pub name: String,
     pub client: Box<dyn AiClient>,
+    /// 模型層的固定 prompt（沒設定時用全域的）
+    pub parser_prompt: Option<String>,
+    pub filter_prompt: Option<String>,
+}
+
+impl ChainEntry {
+    /// 這個 provider 這次要用的固定 prompt
+    fn system_prompt<'a>(&'a self, fixed: &'a FixedPrompt) -> &'a str {
+        let model_prompt = match fixed.kind {
+            PromptKind::Parser => self.parser_prompt.as_deref(),
+            PromptKind::Filter => self.filter_prompt.as_deref(),
+        };
+        fixed.for_provider(model_prompt)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -57,9 +72,9 @@ impl AiProviderChain {
     async fn run<'a, F, Fut>(
         &'a self,
         op: F,
-    ) -> Result<(String, Vec<AttemptRecord>), (AiError, Vec<AttemptRecord>)>
+    ) -> Result<(String, Vec<AttemptRecord>, &'a ChainEntry), (AiError, Vec<AttemptRecord>)>
     where
-        F: Fn(&'a dyn AiClient) -> Fut,
+        F: Fn(&'a ChainEntry) -> Fut,
         Fut: std::future::Future<Output = Result<String, AiError>>,
     {
         if self.entries.is_empty() {
@@ -70,7 +85,7 @@ impl AiProviderChain {
         let mut retries = 0;
         loop {
             match self.try_providers(&op, &mut attempts).await {
-                Ok(resp) => return Ok((resp, attempts)),
+                Ok((resp, entry)) => return Ok((resp, attempts, entry)),
                 Err(AiError::RateLimited {
                     retry_after_secs, ..
                 }) if retries < MAX_RATE_LIMIT_RETRIES => {
@@ -95,16 +110,16 @@ impl AiProviderChain {
         &'a self,
         op: &F,
         attempts: &mut Vec<AttemptRecord>,
-    ) -> Result<String, AiError>
+    ) -> Result<(String, &'a ChainEntry), AiError>
     where
-        F: Fn(&'a dyn AiClient) -> Fut,
+        F: Fn(&'a ChainEntry) -> Fut,
         Fut: std::future::Future<Output = Result<String, AiError>>,
     {
         let mut rate_limits: Vec<Option<u32>> = Vec::new();
         let mut failures: Vec<String> = Vec::new();
         for entry in &self.entries {
-            let error = match op(entry.client.as_ref()).await {
-                Ok(resp) if !resp.trim().is_empty() => return Ok(resp),
+            let error = match op(entry).await {
+                Ok(resp) if !resp.trim().is_empty() => return Ok((resp, entry)),
                 Ok(_) => AiError::ProviderUnavailable("empty response".into()),
                 Err(e) => e,
             };
@@ -145,8 +160,9 @@ impl AiProviderChain {
         system_prompt: &str,
         user_prompt: &str,
     ) -> Result<(String, Vec<AttemptRecord>), (AiError, Vec<AttemptRecord>)> {
-        self.run(|c| c.chat_completion(system_prompt, user_prompt))
+        self.run(|e| e.client.chat_completion(system_prompt, user_prompt))
             .await
+            .map(|(resp, attempts, _)| (resp, attempts))
     }
 
     pub async fn chat_completion_structured(
@@ -155,8 +171,28 @@ impl AiProviderChain {
         user_prompt: &str,
         schema: &Value,
     ) -> Result<(String, Vec<AttemptRecord>), (AiError, Vec<AttemptRecord>)> {
-        self.run(|c| c.chat_completion_structured(system_prompt, user_prompt, schema))
-            .await
+        self.run(|e| {
+            e.client
+                .chat_completion_structured(system_prompt, user_prompt, schema)
+        })
+        .await
+        .map(|(resp, attempts, _)| (resp, attempts))
+    }
+
+    /// 結構化輸出，每個 provider 用自己的固定 prompt（模型 > 全域；`fixed.pinned` 時都用 `fixed.text`）。
+    /// 成功時另外回傳實際用的固定 prompt。
+    pub async fn chat_completion_layered(
+        &self,
+        fixed: &FixedPrompt,
+        user_prompt: &str,
+        schema: &Value,
+    ) -> Result<(String, Vec<AttemptRecord>, String), (AiError, Vec<AttemptRecord>)> {
+        self.run(|e| {
+            e.client
+                .chat_completion_structured(e.system_prompt(fixed), user_prompt, schema)
+        })
+        .await
+        .map(|(resp, attempts, entry)| (resp, attempts, entry.system_prompt(fixed).to_string()))
     }
 }
 
@@ -176,6 +212,8 @@ pub fn build_ai_chain(conn: &mut PgConnection) -> Result<Option<AiProviderChain>
                 id: p.id,
                 name: p.name.clone(),
                 client,
+                parser_prompt: p.parser_prompt.clone(),
+                filter_prompt: p.filter_prompt.clone(),
             })
         })
         .collect::<Result<_, _>>()?;
@@ -218,6 +256,8 @@ mod tests {
             id,
             name: name.into(),
             client: Box::new(MockAiClient::new(results)),
+            parser_prompt: None,
+            filter_prompt: None,
         }
     }
 
@@ -409,5 +449,83 @@ mod tests {
         assert_eq!(resp, "a");
         assert_eq!(attempts.len(), 2);
         assert!(started.elapsed() >= Duration::from_secs(6));
+    }
+
+    /// 回傳收到的固定 prompt，用來確認每個 provider 拿到哪一份
+    struct EchoSystemPrompt;
+
+    #[async_trait]
+    impl AiClient for EchoSystemPrompt {
+        async fn chat_completion(&self, system: &str, _: &str) -> Result<String, AiError> {
+            Ok(system.to_string())
+        }
+    }
+
+    fn echo(id: i32, parser_prompt: Option<&str>, filter_prompt: Option<&str>) -> ChainEntry {
+        ChainEntry {
+            id,
+            name: format!("echo-{id}"),
+            client: Box::new(EchoSystemPrompt),
+            parser_prompt: parser_prompt.map(String::from),
+            filter_prompt: filter_prompt.map(String::from),
+        }
+    }
+
+    fn fixed(kind: PromptKind, pinned: bool) -> FixedPrompt {
+        FixedPrompt {
+            kind,
+            text: "global prompt".into(),
+            pinned,
+        }
+    }
+
+    #[tokio::test]
+    async fn each_provider_uses_its_own_model_prompt_after_a_fallback() {
+        let chain = AiProviderChain::new(vec![
+            entry(1, "down", vec![Err(AiError::ApiError("500".into()))]),
+            echo(2, None, Some("model filter prompt")),
+        ]);
+        let (resp, attempts, used) = chain
+            .chat_completion_layered(&fixed(PromptKind::Filter, false), "u", &Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(resp, "model filter prompt");
+        assert_eq!(used, "model filter prompt");
+        assert_eq!(attempts.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_provider_without_a_model_prompt_uses_the_global_one() {
+        let chain = AiProviderChain::new(vec![echo(1, None, Some("model filter prompt"))]);
+        let (resp, _, _) = chain
+            .chat_completion_layered(&fixed(PromptKind::Parser, false), "u", &Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(
+            resp, "global prompt",
+            "only a filter prompt is set for this model"
+        );
+        let blank = AiProviderChain::new(vec![echo(1, Some("  "), None)]);
+        let (resp, _, _) = blank
+            .chat_completion_layered(&fixed(PromptKind::Parser, false), "u", &Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(
+            resp, "global prompt",
+            "a blank model prompt counts as unset"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pinned_prompt_overrides_model_prompts() {
+        let chain = AiProviderChain::new(vec![echo(1, Some("model parser prompt"), None)]);
+        let (resp, _, used) = chain
+            .chat_completion_layered(&fixed(PromptKind::Parser, true), "u", &Value::Null)
+            .await
+            .unwrap();
+        assert_eq!(
+            (resp.as_str(), used.as_str()),
+            ("global prompt", "global prompt")
+        );
     }
 }

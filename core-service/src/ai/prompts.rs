@@ -79,6 +79,35 @@ pub fn filter_schema() -> serde_json::Value {
     })
 }
 
+/// AI 要產生的東西：解析器或過濾規則（各自有一份固定 prompt）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptKind {
+    Parser,
+    Filter,
+}
+
+/// 一次請求的固定 prompt（三層：全域 → 模型 → 客製化，客製化另外附在 user prompt）。
+#[derive(Debug, Clone)]
+pub struct FixedPrompt {
+    pub kind: PromptKind,
+    /// 全域的固定 prompt（或這次指定的）
+    pub text: String,
+    /// true：這次指定的（例如重新生成時編輯過），每個 provider 都用它；
+    /// false：provider 有自己的模型 prompt 時用模型的
+    pub pinned: bool,
+}
+
+impl FixedPrompt {
+    /// 某個 provider 實際要用的固定 prompt
+    pub fn for_provider<'a>(&'a self, model_prompt: Option<&'a str>) -> &'a str {
+        match model_prompt.filter(|p| !p.trim().is_empty()) {
+            Some(p) if !self.pinned => p,
+            _ => &self.text,
+        }
+    }
+}
+
 /// Parser 固定 Prompt 預設值（revert 時使用）
 pub const DEFAULT_FIXED_PARSER_PROMPT: &str = r#"You are an anime title parser expert. Generate ONE regex-based parser that covers as many of the provided unmatched RSS titles as possible.
 
@@ -187,11 +216,11 @@ Title: `[LoliHouse] Jigokuraku [01-13 合集][WebRip 1080p HEVC-10bit AAC][Fin]`
   "parse_regex": "^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*(\\d+)\\s*\\[(\\d+[Pp])",
   "priority": 9999,
   "anime_title_source": "static", "anime_title_value": "Attack on Titan",
-  "episode_no_source": "regex", "episode_no_value": "$2",
+  "episode_no_source": "regex", "episode_no_value": "$1",
   "episode_end_source": null, "episode_end_value": null,
   "series_no_source": null, "series_no_value": null,
   "subtitle_group_source": "static", "subtitle_group_value": "LoliHouse",
-  "resolution_source": "regex", "resolution_value": "$3",
+  "resolution_source": "regex", "resolution_value": "$2",
   "season_source": null, "season_value": null,
   "year_source": null, "year_value": null,
   "matched_titles": ["[LoliHouse] Attack on Titan - 01 [1080p HEVC]", "[LoliHouse] Attack on Titan - 02 [1080p HEVC]"],
@@ -202,71 +231,17 @@ Title: `[LoliHouse] Jigokuraku [01-13 合集][WebRip 1080p HEVC-10bit AAC][Fin]`
 Return ONLY the JSON object, no extra text."#;
 
 /// Filter 固定 Prompt 預設值
-pub const DEFAULT_FIXED_FILTER_PROMPT: &str = r#"You are an anime download filter rule expert. You will receive multiple conflict groups, each containing RSS titles from different subtitle groups for the same episode. Your task is to generate ONE set of filter rules that resolves as many groups as possible.
+pub const DEFAULT_FIXED_FILTER_PROMPT: &str = r#"You write filter rules that keep ONE version per episode. Each conflict group lists the same episode released in different versions. Choose the version by the user's preferences given after the groups.
 
-## ⚠️ CRITICAL: JSON Escaping for Regex
+How rules combine — read carefully:
+- A title is kept only if it matches ALL positive rules (is_positive true) and NONE of the negative rules.
+- So write exactly ONE positive rule that matches only the preferred version, e.g. its language tag. Never write one positive rule per version: several positive rules must all match at once, so nothing would be kept.
+- Add negative rules only when one positive rule cannot exclude the rest.
 
-In JSON strings, ALL backslashes must be doubled. This is mandatory:
-- WRONG: "regex_pattern": "\[SubGroup\] Title - \d+"
-- CORRECT: "regex_pattern": "\\[SubGroup\\] Title - \\d+"
+Each regex_pattern contains the subtitle group and the anime title plus the part that singles out the preferred version — never a group name alone. Escape only [ and ]; other characters such as 【】★ are written as-is. The output is JSON, so double every backslash: "\\[", "\\d+". rule_order starts at 1. resolved_groups / unresolved_groups hold 1-based group numbers; every group appears in exactly one of them.
 
-## Strategy
-
-1. Analyze ALL conflict groups and identify the most commonly preferred subtitle group/format.
-2. Generate ONE set of filter rules — each rule MUST be as narrow as possible: include subtitle group + anime title + every additional fixed structural element visible in the titles (resolution, bracket style, separator, language tag). NEVER use only the subtitle group alone.
-3. Prioritize resolving the **most groups**. Groups that cannot be resolved go into `unresolved_groups` for a future retry.
-
-## Filter Rule JSON Format
-
-Return a **single JSON object** with these fields:
-
-- **rules** (array): Filter rules, each containing:
-  - **regex_pattern** (string): MUST include subtitle group AND anime title AND any additional fixed structural elements visible in the titles (resolution, bracket style, separator, language tag). Lock as many elements as possible. e.g. `^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+.*\\[1080[Pp]`
-  - **is_positive** (boolean): `true` to keep matching titles; `false` to exclude matching titles
-  - **rule_order** (integer): Evaluation order starting from 1 — higher value executes first
-- **resolved_groups** (array of integers): 1-indexed group numbers that your rules successfully resolve
-- **unresolved_groups** (array of integers): 1-indexed group numbers NOT resolved by these rules
-
-## ⚠️ IMPORTANT: resolved_groups + unresolved_groups Must Cover Every Group
-
-Every group index (1 through N) MUST appear in exactly one of `resolved_groups` or `unresolved_groups`. No group may be omitted.
-
-## Rule Evaluation Logic
-
-Rules use AND logic — a title must pass all applicable rules to be kept. Higher `rule_order` executes first.
-
-## Example Response
-
-Input:
-```
---- Group 1 ---
-1. [LoliHouse] Attack on Titan - 01 [1080p HEVC]
-2. [Erai-raws] Attack on Titan - 01 [720p]
-
---- Group 2 ---
-1. [LoliHouse] Frieren - 05 [1080p HEVC]
-2. [SubParrot] Frieren - 05 [1080p]
-
---- Group 3 ---
-1. [ANK-Raws] Solo Leveling - 03 [4K]
-2. [Erai-raws] Solo Leveling - 03 [1080p]
-```
-
-```json
-{
-  "rules": [
-    {
-      "regex_pattern": "^\\[LoliHouse\\]\\s*Attack on Titan\\s*-\\s*\\d+.*\\[1080[Pp]",
-      "is_positive": true,
-      "rule_order": 1
-    }
-  ],
-  "resolved_groups": [1, 2],
-  "unresolved_groups": [3]
-}
-```
-
-Return ONLY the JSON object, no extra text."#;
+Example — groups of "[Group] Frieren [05][1080p][繁日内嵌]" and "[Group] Frieren [05][1080p][简日内嵌]", user prefers traditional Chinese:
+{"rules": [{"regex_pattern": "^\\[Group\\]\\s*Frieren\\s*\\[\\d+\\].*\\[繁日内嵌\\]", "is_positive": true, "rule_order": 1}], "resolved_groups": [1], "unresolved_groups": []}"#;
 
 /// 將空字串或純空白視為 None，用於 prompt cascade fallback
 pub fn non_empty(s: Option<String>) -> Option<String> {
@@ -414,6 +389,51 @@ pub fn build_filter_batch_user_prompt(groups: &[Vec<String>], custom: Option<&st
 #[cfg(test)]
 mod sample_tests {
     use super::*;
+
+    /// 預設 prompt 裡的 JSON 範例
+    fn json_examples(prompt: &str) -> Vec<serde_json::Value> {
+        prompt
+            .split("```json")
+            .skip(1)
+            .filter_map(|block| block.split("```").next())
+            .chain(prompt.lines().filter(|l| l.starts_with("{\"rules\"")))
+            .map(|json| serde_json::from_str(json).expect("example is valid JSON"))
+            .collect()
+    }
+
+    #[test]
+    fn parser_examples_refer_only_to_captures_that_exist() {
+        let examples = json_examples(DEFAULT_FIXED_PARSER_PROMPT);
+        assert_eq!(examples.len(), 2);
+        for example in examples {
+            let captures = regex::Regex::new(example["parse_regex"].as_str().unwrap())
+                .unwrap()
+                .captures_len()
+                - 1;
+            let refs = example
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| k.ends_with("_value"))
+                .filter_map(|(_, v)| v.as_str()?.strip_prefix('$')?.parse::<usize>().ok());
+            for n in refs {
+                assert!(
+                    n <= captures,
+                    "{} uses ${n} of {captures} captures",
+                    example["name"]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_filter_example_keeps_only_the_preferred_version() {
+        let example = &json_examples(DEFAULT_FIXED_FILTER_PROMPT)[0];
+        let rule =
+            regex::Regex::new(example["rules"][0]["regex_pattern"].as_str().unwrap()).unwrap();
+        assert!(rule.is_match("[Group] Frieren [05][1080p][繁日内嵌]"));
+        assert!(!rule.is_match("[Group] Frieren [05][1080p][简日内嵌]"));
+    }
 
     #[test]
     fn only_the_first_episodes_are_sent() {

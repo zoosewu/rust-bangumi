@@ -42,6 +42,28 @@ fn validate_mode(mode: &str) -> Result<(), (StatusCode, String)> {
     Ok(())
 }
 
+const TIMEOUT_RANGE: std::ops::RangeInclusive<i32> = 5..=600;
+const DEFAULT_TIMEOUT_SECS: i32 = 60;
+
+fn validate_timeout(secs: i32) -> Result<(), (StatusCode, String)> {
+    if !TIMEOUT_RANGE.contains(&secs) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "timeout_secs must be between {} and {}",
+                TIMEOUT_RANGE.start(),
+                TIMEOUT_RANGE.end()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// 空白的模型 prompt 視為沒設定（沿用全域）
+fn model_prompt(prompt: Option<String>) -> Option<String> {
+    prompt.filter(|p| !p.trim().is_empty())
+}
+
 fn validate_required_config(base_url: &str, model_name: &str) -> Result<(), (StatusCode, String)> {
     if base_url.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "Base URL is required".into()));
@@ -52,21 +74,27 @@ fn validate_required_config(base_url: &str, model_name: &str) -> Result<(), (Sta
     Ok(())
 }
 
-fn load_provider_api_key(
+fn load_stored_provider(
     conn: &mut PgConnection,
     id: Option<i32>,
-) -> Result<Option<String>, (StatusCode, String)> {
+) -> Result<Option<AiProvider>, (StatusCode, String)> {
     match id {
         Some(id) => ai_providers::table
             .find(id)
-            .select(ai_providers::api_key)
-            .first::<String>(conn)
+            .first::<AiProvider>(conn)
             .optional()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
             .ok_or((StatusCode::NOT_FOUND, format!("provider {id} not found")))
             .map(Some),
         None => Ok(None),
     }
+}
+
+fn load_provider_api_key(
+    conn: &mut PgConnection,
+    id: Option<i32>,
+) -> Result<Option<String>, (StatusCode, String)> {
+    load_stored_provider(conn, id).map(|p| p.map(|p| p.api_key))
 }
 
 pub async fn list_ai_providers(
@@ -117,8 +145,17 @@ pub struct CreateAiProviderRequest {
     pub response_format_mode: String,
     #[serde(default = "default_true")]
     pub is_enabled: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout_secs: i32,
+    #[serde(default)]
+    pub parser_prompt: Option<String>,
+    #[serde(default)]
+    pub filter_prompt: Option<String>,
 }
 
+fn default_timeout() -> i32 {
+    DEFAULT_TIMEOUT_SECS
+}
 fn default_max_tokens() -> i32 {
     4096
 }
@@ -135,6 +172,7 @@ pub async fn create_ai_provider(
 ) -> Result<Json<AiProvider>, (StatusCode, String)> {
     validate_kind(&req.provider_kind)?;
     validate_mode(&req.response_format_mode)?;
+    validate_timeout(req.timeout_secs)?;
 
     let mut conn = state
         .db
@@ -157,6 +195,9 @@ pub async fn create_ai_provider(
         response_format_mode: req.response_format_mode,
         is_enabled: req.is_enabled,
         priority,
+        timeout_secs: req.timeout_secs,
+        parser_prompt: model_prompt(req.parser_prompt),
+        filter_prompt: model_prompt(req.filter_prompt),
     };
     let inserted: AiProvider = diesel::insert_into(ai_providers::table)
         .values(&new_p)
@@ -175,6 +216,10 @@ pub struct UpdateAiProviderRequest {
     pub max_tokens: Option<i32>,
     pub response_format_mode: Option<String>,
     pub is_enabled: Option<bool>,
+    pub timeout_secs: Option<i32>,
+    /// 有給就更新；空字串代表清除（改回沿用全域）
+    pub parser_prompt: Option<String>,
+    pub filter_prompt: Option<String>,
 }
 
 pub async fn update_ai_provider(
@@ -187,6 +232,9 @@ pub async fn update_ai_provider(
     }
     if let Some(ref mode) = req.response_format_mode {
         validate_mode(mode)?;
+    }
+    if let Some(secs) = req.timeout_secs {
+        validate_timeout(secs)?;
     }
 
     let mut conn = state
@@ -208,6 +256,9 @@ pub async fn update_ai_provider(
         is_enabled: req.is_enabled,
         priority: None,
         updated_at: Utc::now().naive_utc(),
+        timeout_secs: req.timeout_secs,
+        parser_prompt: req.parser_prompt.map(|p| model_prompt(Some(p))),
+        filter_prompt: req.filter_prompt.map(|p| model_prompt(Some(p))),
     };
 
     let updated: AiProvider = diesel::update(ai_providers::table.find(id))
@@ -326,16 +377,28 @@ pub struct TestAiProviderRequest {
     pub max_tokens: i32,
     #[serde(default = "default_format_mode")]
     pub response_format_mode: String,
+    /// 編輯中、還沒儲存的逾時；沒給時用已存的（新 provider 用預設值）
+    #[serde(default)]
+    pub timeout_secs: Option<i32>,
 }
 
+/// 依測試請求組出 provider；api_key 留空、逾時沒給時沿用已存的設定（含模型 prompt）
 fn provider_from_test_request(
     req: TestAiProviderRequest,
-    fallback_api_key: Option<String>,
+    stored: Option<AiProvider>,
 ) -> Result<AiProvider, (StatusCode, String)> {
     validate_kind(&req.provider_kind)?;
     validate_mode(&req.response_format_mode)?;
+    let timeout_secs = req
+        .timeout_secs
+        .or(stored.as_ref().map(|p| p.timeout_secs))
+        .unwrap_or(DEFAULT_TIMEOUT_SECS);
+    validate_timeout(timeout_secs)?;
+    let (stored_key, parser_prompt, filter_prompt) = stored
+        .map(|p| (Some(p.api_key), p.parser_prompt, p.filter_prompt))
+        .unwrap_or_default();
     let api_key = if req.api_key.trim().is_empty() {
-        fallback_api_key.unwrap_or_default()
+        stored_key.unwrap_or_default()
     } else {
         req.api_key
     };
@@ -354,6 +417,9 @@ fn provider_from_test_request(
         priority: 0,
         created_at: Utc::now().naive_utc(),
         updated_at: Utc::now().naive_utc(),
+        timeout_secs,
+        parser_prompt,
+        filter_prompt,
     })
 }
 
@@ -361,14 +427,14 @@ pub async fn test_ai_provider_config(
     State(state): State<AppState>,
     Json(req): Json<TestAiProviderRequest>,
 ) -> Result<Json<TestResponse>, (StatusCode, String)> {
-    let fallback_api_key = {
+    let stored = {
         let mut conn = state
             .db
             .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        load_provider_api_key(&mut conn, req.existing_provider_id)?
+        load_stored_provider(&mut conn, req.existing_provider_id)?
     };
-    let provider = provider_from_test_request(req, fallback_api_key)?;
+    let provider = provider_from_test_request(req, stored)?;
     run_provider_test(provider).await
 }
 
@@ -403,18 +469,26 @@ pub async fn test_provider_with_real_prompt(
     State(state): State<AppState>,
     Json(req): Json<PromptTestRequest>,
 ) -> Result<Json<PromptTestResponse>, (StatusCode, String)> {
-    use crate::ai::prompt_test::{build_sample, evaluate, parse_response};
-    let (fallback_api_key, sample) = {
+    use crate::ai::prompt_test::{build_sample, evaluate, parse_response, PromptKind};
+    let (stored, sample) = {
         let mut conn = state
             .db
             .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let key = load_provider_api_key(&mut conn, req.provider.existing_provider_id)?;
-        let sample = build_sample(&mut conn, req.kind, req.subscription_id, &req.overrides)
+        let stored = load_stored_provider(&mut conn, req.provider.existing_provider_id)?;
+        // 固定 prompt：這次測試指定的 > 這個 provider 的模型 prompt > 全域
+        let mut overrides = req.overrides.clone();
+        if model_prompt(overrides.fixed_prompt.clone()).is_none() {
+            overrides.fixed_prompt = stored.as_ref().and_then(|p| match req.kind {
+                PromptKind::Parser => p.parser_prompt.clone(),
+                PromptKind::Filter => p.filter_prompt.clone(),
+            });
+        }
+        let sample = build_sample(&mut conn, req.kind, req.subscription_id, &overrides)
             .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-        (key, sample)
+        (stored, sample)
     };
-    let provider = provider_from_test_request(req.provider, fallback_api_key)?;
+    let provider = provider_from_test_request(req.provider, stored)?;
     let client =
         crate::ai::factory::build_provider(&provider).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
@@ -483,6 +557,9 @@ fn duplicate_provider(conn: &mut PgConnection, id: i32) -> QueryResult<Option<Ai
             response_format_mode: source.response_format_mode,
             is_enabled: false,
             priority: next_priority.map(|v| v + 1).unwrap_or(0),
+            timeout_secs: source.timeout_secs,
+            parser_prompt: source.parser_prompt,
+            filter_prompt: source.filter_prompt,
         })
         .get_result(conn)
         .map(Some)
@@ -561,6 +638,9 @@ mod tests {
             priority: 0,
             created_at: NaiveDateTime::default(),
             updated_at: NaiveDateTime::default(),
+            timeout_secs: 60,
+            parser_prompt: None,
+            filter_prompt: None,
         }
     }
 
@@ -579,6 +659,9 @@ mod tests {
                 response_format_mode: "strict".into(),
                 is_enabled: true,
                 priority: 900,
+                timeout_secs: 120,
+                parser_prompt: Some("groq parser prompt".into()),
+                filter_prompt: None,
             })
             .get_result(&mut conn)
             .unwrap();
@@ -588,6 +671,8 @@ mod tests {
         assert_eq!(copy.name, "Groq（複本）");
         assert_eq!(copy.api_key, "gsk-secret");
         assert_eq!(copy.model_name, source.model_name);
+        assert_eq!(copy.timeout_secs, 120);
+        assert_eq!(copy.parser_prompt.as_deref(), Some("groq parser prompt"));
         assert!(!copy.is_enabled);
         assert!(copy.priority > source.priority);
         assert_eq!(mask(copy).api_key, MASKED_API_KEY);
@@ -652,6 +737,7 @@ mod tests {
             model_name: "gpt-test".into(),
             max_tokens: 4096,
             response_format_mode: "non_strict".into(),
+            timeout_secs: None,
         };
 
         let p = provider_from_test_request(req, None).unwrap();
@@ -668,9 +754,35 @@ mod tests {
             model_name: "gpt-test".into(),
             max_tokens: 4096,
             response_format_mode: "non_strict".into(),
+            timeout_secs: None,
         };
 
-        let p = provider_from_test_request(req, Some("saved-key".into())).unwrap();
+        let stored = AiProvider {
+            api_key: "saved-key".into(),
+            timeout_secs: 180,
+            parser_prompt: Some("model prompt".into()),
+            ..provider()
+        };
+        let p = provider_from_test_request(req, Some(stored)).unwrap();
         assert_eq!(p.api_key, "saved-key");
+        assert_eq!(
+            p.timeout_secs, 180,
+            "the saved timeout is used when none is given"
+        );
+        assert_eq!(p.parser_prompt.as_deref(), Some("model prompt"));
+    }
+
+    #[test]
+    fn timeouts_outside_five_to_six_hundred_seconds_are_rejected() {
+        assert!(validate_timeout(5).is_ok() && validate_timeout(600).is_ok());
+        assert_eq!(validate_timeout(4).unwrap_err().0, StatusCode::BAD_REQUEST);
+        assert!(validate_timeout(601).is_err());
+    }
+
+    #[test]
+    fn a_blank_model_prompt_means_use_the_global_one() {
+        assert_eq!(model_prompt(Some("  \n".into())), None);
+        assert_eq!(model_prompt(Some("x".into())).as_deref(), Some("x"));
+        assert_eq!(model_prompt(None), None);
     }
 }

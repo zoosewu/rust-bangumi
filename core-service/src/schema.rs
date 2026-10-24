@@ -41,6 +41,9 @@ diesel::table! {
         priority -> Int4,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        timeout_secs -> Int4,
+        parser_prompt -> Nullable<Text>,
+        filter_prompt -> Nullable<Text>,
     }
 }
 

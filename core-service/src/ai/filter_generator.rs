@@ -19,6 +19,8 @@ pub async fn generate_filter_for_conflict(
     temp_fixed_prompt: Option<String>,
 ) -> Result<PendingAiResult, String> {
     let now = Utc::now().naive_utc();
+    // 重新生成時編輯過的固定 prompt 套用到每個 provider，否則各 provider 可用自己的模型 prompt
+    let pinned = non_empty(temp_fixed_prompt.clone()).is_some();
 
     let (fixed_prompt, custom_prompt) = {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
@@ -72,13 +74,18 @@ pub async fn generate_filter_for_conflict(
 
     let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
         Ok(Some(chain)) => {
-            let system = build_system_prompt(Some(&fixed_prompt));
+            let fixed = FixedPrompt {
+                kind: PromptKind::Filter,
+                text: build_system_prompt(Some(&fixed_prompt)),
+                pinned,
+            };
             let user = build_filter_user_prompt(&conflict_titles, custom_prompt.as_deref());
             match chain
-                .chat_completion_structured(&system, &user, &filter_schema())
+                .chat_completion_layered(&fixed, &user, &filter_schema())
                 .await
             {
-                Ok((resp, attempts)) => {
+                Ok((resp, attempts, used)) => {
+                    super::record_used_fixed_prompt(&pool, pending_id, &used);
                     if !attempts.is_empty() {
                         tracing::info!(
                             pending_id,
@@ -264,7 +271,11 @@ pub async fn generate_filters_for_subscription_batch(
         };
 
         let all_groups: Vec<Vec<String>> = remaining.iter().map(|(t, _)| t.clone()).collect();
-        let system = build_system_prompt(Some(&fixed_prompt));
+        let fixed = FixedPrompt {
+            kind: PromptKind::Filter,
+            text: build_system_prompt(Some(&fixed_prompt)),
+            pinned: false,
+        };
         let user = build_filter_batch_user_prompt(&all_groups, custom_prompt.as_deref());
 
         let chain_result = {
@@ -275,10 +286,11 @@ pub async fn generate_filters_for_subscription_batch(
         let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
             Ok(Some(chain)) => {
                 match chain
-                    .chat_completion_structured(&system, &user, &filter_schema())
+                    .chat_completion_layered(&fixed, &user, &filter_schema())
                     .await
                 {
-                    Ok((resp, attempts)) => {
+                    Ok((resp, attempts, used)) => {
+                        super::record_used_fixed_prompt(&pool, pending_id, &used);
                         if !attempts.is_empty() {
                             tracing::info!(
                                 pending_id,

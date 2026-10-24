@@ -769,6 +769,12 @@ pub struct AiProvider {
     pub created_at: NaiveDateTime,
     #[serde(serialize_with = "crate::serde_utils::naive_datetime_utc::serialize")]
     pub updated_at: NaiveDateTime,
+    /// 請求逾時（秒）
+    pub timeout_secs: i32,
+    /// 模型層的解析器固定 prompt；沒設定時用全域的
+    pub parser_prompt: Option<String>,
+    /// 模型層的過濾固定 prompt；沒設定時用全域的
+    pub filter_prompt: Option<String>,
 }
 
 #[derive(Insertable, Debug)]
@@ -783,6 +789,9 @@ pub struct NewAiProvider {
     pub response_format_mode: String,
     pub is_enabled: bool,
     pub priority: i32,
+    pub timeout_secs: i32,
+    pub parser_prompt: Option<String>,
+    pub filter_prompt: Option<String>,
 }
 
 #[derive(AsChangeset, Debug)]
@@ -798,6 +807,10 @@ pub struct UpdateAiProvider {
     pub is_enabled: Option<bool>,
     pub priority: Option<i32>,
     pub updated_at: NaiveDateTime,
+    pub timeout_secs: Option<i32>,
+    /// `Some(None)` 清除（改回沿用全域）
+    pub parser_prompt: Option<Option<String>>,
+    pub filter_prompt: Option<Option<String>>,
 }
 
 // ============ AiPromptSettings ============

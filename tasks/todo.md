@@ -341,7 +341,21 @@
     - openRouter（複本）回應要 30–50 秒，常超過 AI client 的 60 秒逾時（`openai.rs:26`）→ `error decoding response body`
     - 目前預設解析器 prompt 的單集範例錯誤（`$2`/`$3`）仍在
     - 候選 prompt：scratchpad `prompt-eval/parser_simple3.txt`、`filter_simple2.txt`；結果 `results.jsonl`、`repeat.jsonl`
-  - [ ] 使用者決定：過濾 prompt 換成 v2？解析器維持長版（修範例）或做「全域 → 模型 → 客製化」三層？openRouter 兩組怎麼處理？
+  - [x] 使用者決定：過濾 prompt 換成 v2？解析器維持長版（修範例）或做「全域 → 模型 → 客製化」三層？openRouter 兩組怎麼處理？
+    - 2026-10-24 使用者決定：解析器與過濾都改成「全域 → 模型 → 客製化」三層；逾時改為可手動設定
+- [ ] 三層 prompt 與可設定逾時
+  - [x] migration：`ai_providers` 加 `timeout_secs`（預設 60，5–600）、`parser_prompt`、`filter_prompt`（NULL / 空白 = 用全域）
+  - [x] chain：每個 provider 用自己的 prompt（模型 > 全域），手動重新生成時編輯的 prompt 仍套用到所有 provider；
+    pending 的 used_fixed_prompt 記實際成功那家用的 prompt
+  - [x] OpenAiClient 用 provider 的 timeout_secs；連線測試 / prompt 測試可帶未儲存的逾時
+  - [x] prompt 測試：測試指定 > 該 provider 的模型 prompt > 全域；回應顯示實際用的
+  - [x] API / 複製 / DTO 帶新欄位；前端 provider 編輯視窗加逾時與兩個模型 prompt
+  - [x] 內建預設：過濾換成 v2；解析器維持長版但修正範例的 `$1` / `$2`
+  - 驗證：chain 三個新測試（fallback 後用自己的模型 prompt、空白視為沒設定、重新生成指定的覆蓋模型 prompt）、
+    預設 prompt 範例檢查測試（$N 不超過擷取群組數、過濾範例只留偏好版本）、handler 逾時範圍 / 空白 prompt 測試、
+    複製帶新欄位的 DB 測試、前端對話框測試；本機起 core 實際打 API（逾時 3 → 400、建立 / 清除 / 複製 / 部分更新）
+  - [ ] 部署（含 migration）
+  - [ ] 使用者在 UI 把 groq 的解析器 prompt 設成 `docs/prompts/parser-short.txt`；openRouter 兩組停用或調逾時
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 

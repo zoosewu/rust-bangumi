@@ -2164,7 +2164,7 @@ paths:
                   type: integer
                 fixed_prompt:
                   type: string
-                  description: 只用於這次測試的固定 prompt（不寫進設定）；沒給或空字串時用設定的
+                  description: 只用於這次測試的固定 prompt（不寫進設定）；沒給或空字串時依序用該 provider 的模型 prompt、全域的
                 custom_prompt:
                   type: string
                   description: 只用於這次測試的自訂 prompt；沒給時用設定的，空字串代表不加
@@ -3995,6 +3995,17 @@ components:
         updated_at:
           type: string
           format: date-time
+        timeout_secs:
+          type: integer
+          description: 請求逾時（秒，5–600）
+        parser_prompt:
+          type: string
+          nullable: true
+          description: 模型層的解析器固定 prompt；null 時用全域的（三層：全域 → 模型 → 客製化）
+        filter_prompt:
+          type: string
+          nullable: true
+          description: 模型層的過濾固定 prompt；null 時用全域的
 
     CreateAiProviderRequest:
       type: object
@@ -4022,6 +4033,17 @@ components:
         is_enabled:
           type: boolean
           default: true
+        timeout_secs:
+          type: integer
+          default: 60
+          minimum: 5
+          maximum: 600
+        parser_prompt:
+          type: string
+          description: 模型層的解析器固定 prompt；空白視為沒設定
+        filter_prompt:
+          type: string
+          description: 模型層的過濾固定 prompt；空白視為沒設定
 
     UpdateAiProviderRequest:
       type: object
@@ -4046,6 +4068,16 @@ components:
           enum: [strict, non_strict, inject_schema]
         is_enabled:
           type: boolean
+        timeout_secs:
+          type: integer
+          minimum: 5
+          maximum: 600
+        parser_prompt:
+          type: string
+          description: 有給就更新；空字串代表清除（改回沿用全域）
+        filter_prompt:
+          type: string
+          description: 有給就更新；空字串代表清除（改回沿用全域）
 
     TestAiProviderRequest:
       allOf:
@@ -4054,7 +4086,7 @@ components:
           properties:
             existing_provider_id:
               type: integer
-              description: 編輯模式可傳既有 provider id；api_key 留空時沿用該 provider 已儲存的 key，既有 key 也允許為空。
+              description: 編輯模式可傳既有 provider id；api_key 留空、timeout_secs 沒給時沿用該 provider 已儲存的設定（prompt 測試也會用它的模型 prompt），既有 key 也允許為空。
 
     TestAiProviderResponse:
       type: object

@@ -10,6 +10,7 @@ pub fn build_provider(p: &AiProvider) -> Result<Box<dyn AiClient>, String> {
             &p.model_name,
             p.max_tokens,
             &p.response_format_mode,
+            p.timeout_secs,
         ))),
         other => Err(format!("unknown provider_kind: {other}")),
     }
@@ -34,6 +35,9 @@ mod tests {
             priority: 0,
             created_at: NaiveDateTime::default(),
             updated_at: NaiveDateTime::default(),
+            timeout_secs: 60,
+            parser_prompt: None,
+            filter_prompt: None,
         }
     }
 

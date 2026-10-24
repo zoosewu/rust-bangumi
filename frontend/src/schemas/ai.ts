@@ -14,6 +14,11 @@ export interface AiProvider {
   priority: number
   created_at: string
   updated_at: string
+  /** 請求逾時（秒，5–600） */
+  timeout_secs: number
+  /** 模型層的固定 prompt；null = 沿用全域 */
+  parser_prompt: string | null
+  filter_prompt: string | null
 }
 
 export interface CreateAiProviderRequest {
@@ -26,6 +31,9 @@ export interface CreateAiProviderRequest {
   max_tokens?: number
   response_format_mode?: ResponseFormatMode
   is_enabled?: boolean
+  timeout_secs?: number
+  parser_prompt?: string
+  filter_prompt?: string
 }
 
 export interface UpdateAiProviderRequest {
@@ -37,6 +45,10 @@ export interface UpdateAiProviderRequest {
   max_tokens?: number
   response_format_mode?: ResponseFormatMode
   is_enabled?: boolean
+  timeout_secs?: number
+  /** 空字串 = 清除（改回沿用全域） */
+  parser_prompt?: string
+  filter_prompt?: string
 }
 
 /** 取得模型列表：編輯既有 provider 時 api_key 留空就用它已存的 key */

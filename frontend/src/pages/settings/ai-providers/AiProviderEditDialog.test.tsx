@@ -64,6 +64,9 @@ describe("AiProviderEditDialog", () => {
           priority: 0,
           created_at: "",
           updated_at: "",
+          timeout_secs: 60,
+          parser_prompt: null,
+          filter_prompt: null,
         }}
         onClose={vi.fn()}
         onSubmit={vi.fn()}
@@ -102,4 +105,57 @@ describe("AiProviderEditDialog", () => {
     fireEvent.keyDown(screen.getByRole("button", { name: "選擇模型" }), { key: "Enter" })
     expect(await screen.findByText("provider 回應 HTTP 401")).toBeInTheDocument()
   })
+
+  it("saves the timeout and the model prompts, and blocks an out-of-range timeout", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    render(
+      <AiProviderEditDialog
+        provider={{
+          id: 3,
+          name: "mistral",
+          provider_kind: "openai_compatible",
+          base_url: "https://api.mistral.ai/v1",
+          api_key: "••••••••",
+          model_name: "ministral-14b-latest",
+          max_tokens: 4096,
+          response_format_mode: "strict",
+          is_enabled: true,
+          priority: 2,
+          created_at: "",
+          updated_at: "",
+          timeout_secs: 120,
+          parser_prompt: "long parser prompt",
+          filter_prompt: null,
+        }}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        onTestConfig={vi.fn()}
+        onListModels={vi.fn().mockResolvedValue([])}
+      />,
+    )
+
+    const timeout = screen.getByDisplayValue("120")
+    fireEvent.change(timeout, { target: { value: "3" } })
+    expect(screen.getByRole("button", { name: "儲存" })).toBeDisabled()
+
+    fireEvent.change(timeout, { target: { value: "90" } })
+    fireEvent.change(screen.getByDisplayValue("long parser prompt"), {
+      target: { value: "" },
+    })
+    fireEvent.change(screen.getByPlaceholderText("留空：使用全域的過濾固定 prompt"), {
+      target: { value: "short filter prompt" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "儲存" }))
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          timeout_secs: 90,
+          parser_prompt: "",
+          filter_prompt: "short filter prompt",
+        }),
+      ),
+    )
+  })
+
 })

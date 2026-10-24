@@ -360,7 +360,7 @@
     },
     "parserPrompt": {
       "title": "Parser Prompt Settings",
-      "description": "Prompt used when AI generates parsers",
+      "description": "Prompt used when AI generates parsers. The fixed prompt is global; each AI provider can replace it with its own model prompt in its edit dialog. The custom prompt is appended for every model",
       "fixedPrompt": "Fixed Prompt",
       "fixedPromptPlaceholder": "Leave blank to use system default",
       "customPrompt": "Custom Prompt (appended after fixed prompt)",
@@ -369,7 +369,7 @@
     },
     "filterPrompt": {
       "title": "Filter Prompt Settings",
-      "description": "Prompt used when AI generates filter rules",
+      "description": "Prompt used when AI generates filter rules. The fixed prompt is global; each AI provider can replace it with its own model prompt in its edit dialog. The custom prompt is appended for every model",
       "fixedPrompt": "Fixed Prompt",
       "fixedPromptPlaceholder": "Leave blank to use system default",
       "customPrompt": "Custom Prompt (appended after fixed prompt)",

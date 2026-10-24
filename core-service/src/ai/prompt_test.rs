@@ -8,12 +8,7 @@ use serde_json::Value;
 use super::prompts::*;
 use crate::schema::{anime_links, raw_anime_items};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PromptKind {
-    Parser,
-    Filter,
-}
+pub use super::prompts::PromptKind;
 
 /// 要送給 AI 的完整內容
 #[derive(Debug, Clone, Serialize)]

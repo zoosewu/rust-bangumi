@@ -360,7 +360,7 @@
     },
     "parserPrompt": {
       "title": "Parser Prompt設定",
-      "description": "AIがパーサーを生成する際に使用するプロンプト",
+      "description": "AIがパーサーを生成する際に使用するプロンプト。固定Promptはグローバル設定で、各AIプロバイダーは編集画面の「モデル専用prompt」で置き換えられます。カスタムPromptはすべてのモデルに追加されます",
       "fixedPrompt": "固定Prompt",
       "fixedPromptPlaceholder": "空欄でシステムデフォルトを使用",
       "customPrompt": "カスタムPrompt（固定Promptの後に追加）",
@@ -369,7 +369,7 @@
     },
     "filterPrompt": {
       "title": "Filter Prompt設定",
-      "description": "AIがフィルタールールを生成する際に使用するプロンプト",
+      "description": "AIがフィルタールールを生成する際に使用するプロンプト。固定Promptはグローバル設定で、各AIプロバイダーは編集画面の「モデル専用prompt」で置き換えられます。カスタムPromptはすべてのモデルに追加されます",
       "fixedPrompt": "固定Prompt",
       "fixedPromptPlaceholder": "空欄でシステムデフォルトを使用",
       "customPrompt": "カスタムPrompt（固定Promptの後に追加）",

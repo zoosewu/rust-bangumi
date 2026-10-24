@@ -360,7 +360,7 @@
     },
     "parserPrompt": {
       "title": "Parser Prompt 設定",
-      "description": "AI 生成解析器時使用的 Prompt",
+      "description": "AI 生成解析器時使用的 Prompt。固定 Prompt 是全域的，各 AI Provider 可以在編輯視窗設定自己的「模型專屬 prompt」取代它；自訂 Prompt 會附加在所有模型後面",
       "fixedPrompt": "固定 Prompt",
       "fixedPromptPlaceholder": "留空則使用系統預設值",
       "customPrompt": "自訂 Prompt（追加在固定 Prompt 之後）",
@@ -369,7 +369,7 @@
     },
     "filterPrompt": {
       "title": "Filter Prompt 設定",
-      "description": "AI 生成過濾規則時使用的 Prompt",
+      "description": "AI 生成過濾規則時使用的 Prompt。固定 Prompt 是全域的，各 AI Provider 可以在編輯視窗設定自己的「模型專屬 prompt」取代它；自訂 Prompt 會附加在所有模型後面",
       "fixedPrompt": "固定 Prompt",
       "fixedPromptPlaceholder": "留空則使用系統預設值",
       "customPrompt": "自訂 Prompt（追加在固定 Prompt 之後）",

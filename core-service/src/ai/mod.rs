@@ -13,6 +13,20 @@ pub use chain::{build_ai_chain, AiProviderChain, AttemptRecord};
 pub use client::{AiClient, AiError};
 pub use openai::OpenAiClient;
 
+/// 記下實際成功的 provider 用的固定 prompt（三層 prompt 下可能是那家的模型 prompt），
+/// 重新生成時編輯的就是這份。
+pub(crate) fn record_used_fixed_prompt(pool: &crate::db::DbPool, pending_id: i32, used: &str) {
+    use crate::schema::pending_ai_results;
+    use diesel::prelude::*;
+    if let Ok(mut conn) = pool.get() {
+        diesel::update(pending_ai_results::table.find(pending_id))
+            .set(pending_ai_results::used_fixed_prompt.eq(used))
+            .execute(&mut conn)
+            .map_err(|e| tracing::warn!("無法記錄 pending {} 用的 prompt: {}", pending_id, e))
+            .ok();
+    }
+}
+
 /// 修正結構化輸出模式下模型雙重轉義 regex 的問題。
 ///
 /// 部分模型在 JSON Schema 強制輸出時，會對 regex 字串中的反斜線雙重 escape：

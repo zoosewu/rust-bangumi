@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { AutoResizeTextarea } from "@/components/shared/AutoResizeTextarea"
 import {
   Select,
   SelectContent,
@@ -53,6 +54,10 @@ type ModelList =
   | { state: "loaded"; source: string; models: readonly string[] }
   | { state: "error"; source: string; message: string }
 
+const DEFAULT_TIMEOUT_SECS = 60
+const MIN_TIMEOUT_SECS = 5
+const MAX_TIMEOUT_SECS = 600
+
 export function AiProviderEditDialog({
   provider,
   onClose,
@@ -67,6 +72,9 @@ export function AiProviderEditDialog({
   const [apiKey, setApiKey] = useState("")
   const [modelName, setModelName] = useState("")
   const [maxTokens, setMaxTokens] = useState("4096")
+  const [timeoutSecs, setTimeoutSecs] = useState(String(DEFAULT_TIMEOUT_SECS))
+  const [parserPrompt, setParserPrompt] = useState("")
+  const [filterPrompt, setFilterPrompt] = useState("")
   const [mode, setMode] = useState<ResponseFormatMode>("non_strict")
   const [enabled, setEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -82,6 +90,9 @@ export function AiProviderEditDialog({
       setApiKey("") // 編輯模式留空 = 不更新
       setModelName(provider.model_name)
       setMaxTokens(String(provider.max_tokens))
+      setTimeoutSecs(String(provider.timeout_secs))
+      setParserPrompt(provider.parser_prompt ?? "")
+      setFilterPrompt(provider.filter_prompt ?? "")
       setMode(provider.response_format_mode)
       setEnabled(provider.is_enabled)
     } else {
@@ -91,6 +102,9 @@ export function AiProviderEditDialog({
       setApiKey("")
       setModelName("")
       setMaxTokens("4096")
+      setTimeoutSecs(String(DEFAULT_TIMEOUT_SECS))
+      setParserPrompt("")
+      setFilterPrompt("")
       setMode("non_strict")
       setEnabled(true)
     }
@@ -121,6 +135,10 @@ export function AiProviderEditDialog({
     }
   }
 
+  const timeout = Number(timeoutSecs)
+  const timeoutValid =
+    Number.isInteger(timeout) && timeout >= MIN_TIMEOUT_SECS && timeout <= MAX_TIMEOUT_SECS
+
   const filter = modelName.trim().toLowerCase()
   const shownModels =
     current.state === "loaded"
@@ -137,6 +155,7 @@ export function AiProviderEditDialog({
     max_tokens: Number(maxTokens) || 4096,
     response_format_mode: mode,
     is_enabled: enabled,
+    timeout_secs: timeout,
   })
 
   const handleTest = async () => {
@@ -167,6 +186,9 @@ export function AiProviderEditDialog({
           max_tokens: Number(maxTokens) || 4096,
           response_format_mode: mode,
           is_enabled: enabled,
+          timeout_secs: timeout,
+          parser_prompt: parserPrompt,
+          filter_prompt: filterPrompt,
         }
         await onSubmit(req)
       } else {
@@ -179,6 +201,9 @@ export function AiProviderEditDialog({
           max_tokens: Number(maxTokens) || 4096,
           response_format_mode: mode,
           is_enabled: enabled,
+          timeout_secs: timeout,
+          parser_prompt: parserPrompt,
+          filter_prompt: filterPrompt,
         }
         await onSubmit(req)
       }
@@ -194,7 +219,7 @@ export function AiProviderEditDialog({
         if (!o) onClose()
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "編輯 Provider" : "新增 Provider"}</DialogTitle>
         </DialogHeader>
@@ -290,16 +315,35 @@ export function AiProviderEditDialog({
               </p>
             )}
           </div>
-          <div className="space-y-1">
-            <Label>Max Tokens</Label>
-            <Input
-              type="number"
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(e.target.value)}
-              min={256}
-              max={128000}
-              className="w-40"
-            />
+          <div className="flex gap-4">
+            <div className="space-y-1">
+              <Label>Max Tokens</Label>
+              <Input
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(e.target.value)}
+                min={256}
+                max={128000}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>逾時（秒）</Label>
+              <Input
+                type="number"
+                value={timeoutSecs}
+                onChange={(e) => setTimeoutSecs(e.target.value)}
+                min={MIN_TIMEOUT_SECS}
+                max={MAX_TIMEOUT_SECS}
+                aria-invalid={!timeoutValid}
+                className="w-28"
+              />
+              {!timeoutValid && (
+                <p className="text-xs text-destructive">
+                  {MIN_TIMEOUT_SECS}–{MAX_TIMEOUT_SECS} 秒
+                </p>
+              )}
+            </div>
           </div>
           <div className="space-y-1">
             <Label>Response Format</Label>
@@ -319,6 +363,32 @@ export function AiProviderEditDialog({
               </SelectContent>
             </Select>
           </div>
+          <details className="rounded-md border p-3" open={Boolean(parserPrompt || filterPrompt) || undefined}>
+            <summary className="cursor-pointer text-sm font-medium">模型專屬 prompt</summary>
+            <p className="mt-2 text-xs text-muted-foreground">
+              取代設定頁的固定 prompt，只用在這個模型；留空就沿用全域。自訂 prompt 一樣會附加在後面。
+            </p>
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1">
+                <Label>解析器 prompt</Label>
+                <AutoResizeTextarea
+                  value={parserPrompt}
+                  onChange={(e) => setParserPrompt(e.target.value)}
+                  placeholder="留空：使用全域的解析器固定 prompt"
+                  className="max-h-64 font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>過濾 prompt</Label>
+                <AutoResizeTextarea
+                  value={filterPrompt}
+                  onChange={(e) => setFilterPrompt(e.target.value)}
+                  placeholder="留空：使用全域的過濾固定 prompt"
+                  className="max-h-64 font-mono text-xs"
+                />
+              </div>
+            </div>
+          </details>
           <div className="flex items-center gap-2">
             <Switch checked={enabled} onCheckedChange={setEnabled} />
             <Label>啟用</Label>
@@ -342,12 +412,12 @@ export function AiProviderEditDialog({
           <Button
             variant="secondary"
             onClick={handleTest}
-            disabled={saving || testing || !baseUrl || !modelName}
+            disabled={saving || testing || !baseUrl || !modelName || !timeoutValid}
           >
             {testing ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             測試
           </Button>
-          <Button onClick={handleSubmit} disabled={saving || testing || !name}>
+          <Button onClick={handleSubmit} disabled={saving || testing || !name || !timeoutValid}>
             儲存
           </Button>
         </DialogFooter>

@@ -20,6 +20,8 @@ pub async fn generate_parser_for_title(
     temp_fixed_prompt: Option<String>,
 ) -> Result<PendingAiResult, String> {
     let now = Utc::now().naive_utc();
+    // 重新生成時編輯過的固定 prompt 套用到每個 provider，否則各 provider 可用自己的模型 prompt
+    let pinned = non_empty(temp_fixed_prompt.clone()).is_some();
 
     // 取得 prompt 設定
     let (fixed_prompt, custom_prompt) = {
@@ -86,13 +88,18 @@ pub async fn generate_parser_for_title(
 
     let ai_result: Result<(String, Vec<AttemptRecord>), AiError> = match chain_result {
         Ok(Some(chain)) => {
-            let system = build_system_prompt(Some(&fixed_prompt));
+            let fixed = FixedPrompt {
+                kind: PromptKind::Parser,
+                text: build_system_prompt(Some(&fixed_prompt)),
+                pinned,
+            };
             let user = build_parser_user_prompt(&source_title, custom_prompt.as_deref());
             match chain
-                .chat_completion_structured(&system, &user, &parser_schema())
+                .chat_completion_layered(&fixed, &user, &parser_schema())
                 .await
             {
-                Ok((resp, attempts)) => {
+                Ok((resp, attempts, used)) => {
+                    super::record_used_fixed_prompt(&pool, pending_id, &used);
                     if !attempts.is_empty() {
                         tracing::info!(
                             pending_id,
@@ -372,13 +379,18 @@ pub async fn generate_parsers_for_subscription_batch(
         };
 
         // 呼叫 AI
-        let system = build_system_prompt(Some(&fixed_prompt));
+        let fixed = FixedPrompt {
+            kind: PromptKind::Parser,
+            text: build_system_prompt(Some(&fixed_prompt)),
+            pinned: false,
+        };
         let user = build_parser_batch_user_prompt(&unique_titles, custom_prompt.as_deref());
         let json_str = match chain
-            .chat_completion_structured(&system, &user, &parser_schema())
+            .chat_completion_layered(&fixed, &user, &parser_schema())
             .await
         {
-            Ok((s, attempts)) => {
+            Ok((s, attempts, used)) => {
+                super::record_used_fixed_prompt(&pool, pending_id, &used);
                 if !attempts.is_empty() {
                     tracing::info!(
                         pending_id,
