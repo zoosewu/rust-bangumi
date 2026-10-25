@@ -355,7 +355,11 @@
     預設 prompt 範例檢查測試（$N 不超過擷取群組數、過濾範例只留偏好版本）、handler 逾時範圍 / 空白 prompt 測試、
     複製帶新欄位的 DB 測試、前端對話框測試；本機起 core 實際打 API（逾時 3 → 400、建立 / 清除 / 複製 / 部分更新）
   - [x] 2026-10-25 部署（44a2103）：migration 已套用（4 個 provider timeout 60、模型 prompt 空）；groq 真實測試用到新的過濾預設，青之箱 3 組都只留繁日內嵌
-  - [ ] 使用者在 UI 把 groq 的解析器 prompt 設成 `docs/prompts/parser-short.txt`；openRouter 兩組停用或調逾時
+  - [x] 使用者在 UI 把 groq 的解析器 prompt 設成 `docs/prompts/parser-short.txt`；openRouter 兩組停用或調逾時
+    - 2026-10-25 使用者設定：openRouter 停用、groq 解析器用短版（2426 字元）、openRouter（複本）逾時 120 秒
+    - 驗證（不指定 prompt，各模型用自己的設定，21 次）：groq 解析 23/23、過濾 9/9（全對，目前實際上的第一順位）；
+      mistral 解析 22/23、過濾 6/9；openRouter（複本）解析 23/23、過濾 6/9（回應 15–117 秒，1 次超過 120 秒逾時）
+    - mistral 的失誤都是 regex 寫不精準（冰之城牆把 `[繁体内嵌]` 放在集數前面、尼古喵喵寫成 `-\d+` 漏了空格），不是理解錯誤
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
