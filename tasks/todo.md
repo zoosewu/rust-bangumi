@@ -354,7 +354,7 @@
   - 驗證：chain 三個新測試（fallback 後用自己的模型 prompt、空白視為沒設定、重新生成指定的覆蓋模型 prompt）、
     預設 prompt 範例檢查測試（$N 不超過擷取群組數、過濾範例只留偏好版本）、handler 逾時範圍 / 空白 prompt 測試、
     複製帶新欄位的 DB 測試、前端對話框測試；本機起 core 實際打 API（逾時 3 → 400、建立 / 清除 / 複製 / 部分更新）
-  - [ ] 部署（含 migration）
+  - [x] 2026-10-25 部署（44a2103）：migration 已套用（4 個 provider timeout 60、模型 prompt 空）；groq 真實測試用到新的過濾預設，青之箱 3 組都只留繁日內嵌
   - [ ] 使用者在 UI 把 groq 的解析器 prompt 設成 `docs/prompts/parser-short.txt`；openRouter 兩組停用或調逾時
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
