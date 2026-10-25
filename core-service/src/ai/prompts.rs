@@ -228,6 +228,15 @@ Title: `[LoliHouse] Jigokuraku [01-13 合集][WebRip 1080p HEVC-10bit AAC][Fin]`
 }
 ```
 
+## Final Check (do this before answering)
+
+Test condition_regex and parse_regex against every title you put in matched_titles, character by character:
+- **Spaces**: wherever a title has a space, the regex needs `\\s*` (or a literal space). `- 6` is matched by `-\\s*(\\d+)`, NOT by `-\\d+`.
+- **Order**: every part appears in the same order as in the titles.
+- **Captures**: only field values are captured. Any other parentheses must be non-capturing `(?:...)`, so `$1`, `$2`, … point at the right fields. An episode capture is digits only: `(\\d+)`, never `(-?\\d+)`.
+- **Escaping**: only `[` and `]` are escaped. Characters such as `【】★／・` are written as-is, never with a backslash.
+- **condition_regex** uses the same structure as parse_regex. If a title does not match both, move it to unmatched_titles.
+
 Return ONLY the JSON object, no extra text."#;
 
 /// Filter 固定 Prompt 預設值
@@ -238,7 +247,9 @@ How rules combine — read carefully:
 - So write exactly ONE positive rule that matches only the preferred version, e.g. its language tag. Never write one positive rule per version: several positive rules must all match at once, so nothing would be kept.
 - Add negative rules only when one positive rule cannot exclude the rest.
 
-Each regex_pattern contains the subtitle group and the anime title plus the part that singles out the preferred version — never a group name alone. Escape only [ and ]; other characters such as 【】★ are written as-is. The output is JSON, so double every backslash: "\\[", "\\d+". rule_order starts at 1. resolved_groups / unresolved_groups hold 1-based group numbers; every group appears in exactly one of them.
+Each regex_pattern contains the subtitle group and the anime title plus the part that singles out the preferred version — never a group name alone. Write the parts in the same order as in the titles; the safest form is `^\\[Group\\]\\s*Title.*\\[PreferredTag\\]`, using `.*` to skip everything in between instead of spelling it out. Episode numbers are always `\\d+`: a rule must also work for future episodes, so never put a specific episode number in it. Escape only [ and ]; other characters such as 【】★ are written as-is. The output is JSON, so double every backslash: "\\[", "\\d+". rule_order starts at 1. resolved_groups / unresolved_groups hold 1-based group numbers; every group appears in exactly one of them.
+
+Before answering, test every rule against every title in every group: exactly one title per group must be kept, and it must be the preferred one.
 
 Example — groups of "[Group] Frieren [05][1080p][繁日内嵌]" and "[Group] Frieren [05][1080p][简日内嵌]", user prefers traditional Chinese:
 {"rules": [{"regex_pattern": "^\\[Group\\]\\s*Frieren\\s*\\[\\d+\\].*\\[繁日内嵌\\]", "is_positive": true, "rule_order": 1}], "resolved_groups": [1], "unresolved_groups": []}"#;

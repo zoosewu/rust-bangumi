@@ -9,6 +9,7 @@ Rules:
 - episode_no is an integer. For batch releases ([01-13], 合集, Batch, Fin) capture the range into episode_no and episode_end; otherwise episode_end is null.
 - Capture resolution with (\d+[Pp]); regex is case-sensitive.
 - priority is always 9999.
+- Before answering, test both regexes against every matched title character by character: where a title has a space use \\s* ("- 6" needs "-\\s*(\\d+)", not "-\\d+"), keep the parts in title order, and move any title that does not match both into unmatched_titles.
 
 Example — titles "【Group】★新番★[Frieren][05][1080p][繁日]" and "【Group】★新番★[Frieren][06][1080p][繁日]":
 {"name": "Group - Frieren",
