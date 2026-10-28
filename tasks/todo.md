@@ -320,7 +320,14 @@
 - [ ] 2026-10-28 盤點（使用者問還有哪些沒處理）
   - Jellyfin trickplay 72 小時 1046 筆錯誤：媒體庫掛載唯讀（rw=false），trickplay 寫不進媒體旁 → 使用者決定：trickplay 改存 cache，或媒體庫改可寫
   - 孤兒設定：3 條過濾規則、6 個解析器綁在已刪除的訂閱
-  - Docker Desktop 留下的 `data/jellyfin-config`（139M）、`data/jellyfin-cache`（19M）、`BT_backup.stale-20261024`（116K）可刪
+  - ~~Docker Desktop 留下的 `data/jellyfin-config`、`data/jellyfin-cache` 可刪~~ **更正（2026-10-28）**：這兩個是 OrbStack Jellyfin 的
+    bind 型 named volume（`jellyfin_ext_config/cache` 的 device），正在使用，不能刪；只有 `BT_backup.stale-20261024`（116K）可刪。
+    Docker Desktop 的 Jellyfin 7 週來也同時用同一份設定 → `jellyfin.db` 唯讀 `quick_check` 結果 ok
+- [ ] 2026-10-28 使用者要求：刪 BT_backup.stale、加 AI 備援、內嵌優先、清孤兒設定
+  - [ ] 使用者：刪 `data/qbittorrent/qBittorrent/BT_backup.stale-20261024`
+  - [ ] 使用者：清孤兒設定（過濾規則 5、11、13；解析器 46、47、51、52、54、59，皆無項目使用）
+  - [ ] 使用者：自訂過濾 prompt 換成含「內嵌優先」的版本（groq / mistral 測試 18/18，冰之城牆選繁體內嵌而非簡繁內封）
+  - [ ] 使用者：新增 AI 備援（建議 Gemini Flash、NVIDIA build），用設定頁燒瓶按鈕測試後啟用
   - 自訂過濾 prompt 尚未加上「內嵌優先」
   - 使用者決定（2026-10-28）：Jellyfin trickplay 用方案 A（改存 cache，使用者在 Jellyfin 後台操作）；做「下載停滯」通知
 - [ ] 下載停滯通知
