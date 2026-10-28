@@ -325,7 +325,7 @@
     Docker Desktop 的 Jellyfin 7 週來也同時用同一份設定 → `jellyfin.db` 唯讀 `quick_check` 結果 ok
 - [ ] 2026-10-28 使用者要求：刪 BT_backup.stale、加 AI 備援、內嵌優先、清孤兒設定
   - [x] 2026-10-28 使用者已刪 `data/qbittorrent/qBittorrent/BT_backup.stale-20261024`
-  - [ ] 使用者：清孤兒設定（過濾規則 5、11、13；解析器 46、47、51、52、54、59，皆無項目使用）
+  - [x] 2026-10-28 使用者清孤兒設定：DELETE 3（過濾規則 5、11、13）、DELETE 6（解析器 46、47、51、52、54、59）
   - [ ] 使用者：自訂過濾 prompt 換成含「內嵌優先」的版本（groq / mistral 測試 18/18，冰之城牆選繁體內嵌而非簡繁內封）
   - [ ] 使用者：新增 AI 備援（建議 Gemini Flash、NVIDIA build），用設定頁燒瓶按鈕測試後啟用
   - 自訂過濾 prompt 尚未加上「內嵌優先」
