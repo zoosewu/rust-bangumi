@@ -327,7 +327,10 @@
   - [x] `flag_stalled` 回傳這次標記的下載（每個 torrent 只標一次）→ 發「⚠️ 下載停滯」（標題、進度、提示改用此版本）；
     先前停滯、這次進度有變 → 發「▶️ 下載恢復」（只在發過停滯時）；單元測試訊息內容、DB 測試只標一次
   - [x] 2026-10-28 11:33 部署 core + frontend（e11482e）
-- [ ] 使用者：Jellyfin 後台每個媒體庫取消「將 trickplay 圖片存放在媒體旁」→ 之後 trickplay 錯誤應消失
+- [x] 使用者：Jellyfin 後台每個媒體庫取消「將 trickplay 圖片存放在媒體旁」
+  - 2026-10-28 確認：唯一的媒體庫「節目」options.xml 11:25 已存檔、`SaveTrickplayWithMedia` 已不在（預設 false 不寫入），
+    其他 trickplay 設定仍開著；11:35–11:50 無 trickplay 錯誤
+  - [ ] 觀察：下次媒體庫掃描（或排程的 trickplay 任務）後 `Error creating trickplay images` 不再出現
 - [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
 
 - [x] 2026-10-24 Prompt 簡化測試（使用者要求：用設定好的每個模型、搭配不同動畫標題測試 prompt 能否簡化）
