@@ -327,7 +327,10 @@
   - [x] 2026-10-28 使用者已刪 `data/qbittorrent/qBittorrent/BT_backup.stale-20261024`
   - [x] 2026-10-28 使用者清孤兒設定：DELETE 3（過濾規則 5、11、13）、DELETE 6（解析器 46、47、51、52、54、59）
   - [ ] 使用者：自訂過濾 prompt 換成含「內嵌優先」的版本（groq / mistral 測試 18/18，冰之城牆選繁體內嵌而非簡繁內封）
-  - [ ] 使用者：新增 AI 備援（建議 Gemini Flash、NVIDIA build），用設定頁燒瓶按鈕測試後啟用
+  - [x] 新增 AI 備援：NVIDIA build（使用者建立 provider 5 與 key；應使用者要求由我設定並啟用）
+    - 測試 9 個模型：minimax-m3.1-flash（inject_schema）解析 23/23、過濾 9/9 → 採用，逾時 180 秒；
+      glm-5.3-flash、gpt-oss-20b 過濾 6/9；kimi、nemotron、mistral-large-2 免費帳號 404；deepseek-v4.1-flash、gemma-4 逾時（細節見 docs/prompts/README.md）
+    - 啟用順序：groq → mistral → nvidia build
   - 自訂過濾 prompt 尚未加上「內嵌優先」
   - 使用者決定（2026-10-28）：Jellyfin trickplay 用方案 A（改存 cache，使用者在 Jellyfin 後台操作）；做「下載停滯」通知
 - [ ] 下載停滯通知

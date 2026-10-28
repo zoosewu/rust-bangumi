@@ -27,3 +27,17 @@ AI 的固定 prompt 分三層：**全域**（設定頁的固定 prompt，空白�
 | openRouter（複本）（內建長版） | 9/9（成功的 2 次）| —（其餘 5 次上游 502，未評分） |
 
 補強前 mistral 在同一組測試是解析 22/23、過濾 6/9。
+
+## 2026-10-28 NVIDIA build（`https://integrate.api.nvidia.com/v1`，免費 key）
+
+目錄（`/v1/models`）上有的模型，免費帳號不一定能用：
+
+| 模型 | 結果 |
+|---|---|
+| `minimaxai/minimax-m3.1-flash`（inject_schema） | **解析 23/23、過濾 9/9**，每次 20–122 秒 → 採用，逾時 180 秒、排在最後 |
+| `z-ai/glm-5.3-flash`（strict） | 解析 23/23、過濾 6/9（1 次回應不完整）；inject_schema 時回的不是 JSON |
+| `openai/gpt-oss-20b`（strict） | 解析 23/23、過濾 6/9 |
+| `moonshotai/kimi-k2.6`、`nvidia/nemotron-3-super-120b-a12b`、`mistralai/mistral-large-2-instruct` | 404 `Function … Not found for account`（免費帳號不能用） |
+| `deepseek-ai/deepseek-v4.1-flash`、`google/gemma-4-31b-it` | 180 秒逾時 |
+
+`openai/gpt-oss-120b` 已不在目錄上。
