@@ -365,7 +365,8 @@
   - 測試（各模型用自己的那份）：groq 解析 23/23、過濾 9/9；mistral 兩輪解析 46/46、過濾 18/18（補強前 22/23、6/9）；
     openRouter（複本）成功的 2 次全對，其餘 5 次上游 502（OpenRouter 免費模型故障，與 prompt 無關）
   - [x] 內建預設換成補強版、`docs/prompts/parser-short.txt` 更新（aec337c）
-  - [ ] 部署 core；使用者把 groq 的解析器 prompt 換成新版 `parser-short.txt`
+  - [x] 2026-10-28 部署 core（補強版內建 prompt 生效）
+  - [ ] 使用者把 groq 的解析器 prompt 換成新版 `parser-short.txt`
 
 - [ ] 2026-10-28 狀態檢查發現：downloader 登入不了 qBittorrent（最高）
   - 現象：主機 10/27 重開後，每小時的「移除已結束 torrent」掃描都回 500；downloader log `Status query failed: 403 Forbidden`、
@@ -376,7 +377,7 @@
   - 影響：新集數派送時第一次加入 torrent 會失敗（之後要靠重試）；目前沒有待下載的集數
   - 參考：qbittorrent/qBittorrent#23270、Radarr/Radarr#11339
   - [x] 修正：`login_outcome()`（204 / `Ok.` / 空白 = 成功，`Fails.` = 帳密錯誤），登入與重新登入共用；單元 + 模擬 qB 5.2 的整合測試
-  - [ ] 部署 downloader-qbittorrent
+  - [x] 2026-10-28 10:56 部署 downloader-qbittorrent + core（1ec1465）：啟動 log `Successfully logged in to qBittorrent`、狀態查詢回 200、core 掃描不再警告
 - 2026-10-28 其他狀態：630（CR 第 11 集）10/26 已同步；新訂閱 31（羅梅莉亞戰記）AI 解析器確認後 4 集同步；過濾 #115 確認 → 青之箱衝突解決；
   仍未解決：藥屋 49/50/51（綠茶 10/21 後沒有新集數）；補強 prompt（aec337c）尚未部署、groq 的解析器 prompt 仍是舊版短版
 
