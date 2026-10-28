@@ -310,7 +310,7 @@
   - [x] 自動產生過濾規則：抓取 / 解析器確認後若訂閱有未解決衝突就請 AI 產生（結果進待確認清單）
   - [x] 防重複（過濾規則與解析器共用判斷）：同訂閱最新一筆是 generating / pending → 不產生；最新一筆 failed 且未滿 6 小時 → 不產生；
     最新一筆 confirmed / rejected 且之後沒有新的衝突 / 未匹配項目 → 不產生
-  - [ ] 內嵌偏好：在設定頁的過濾 prompt 補上「內嵌優先於內封」（使用者自行貼上，給文字）
+  - [x] 內嵌偏好：在設定頁的過濾 prompt 補上「內嵌優先於內封」（2026-10-28 17:10 已存）
   - 實作：`services/version_choice.rs`、`POST /links/:link_id/choose`、`ai/auto_trigger.rs`（`should_generate`、`parser_due`、
     `spawn_filter_generation_if_due`；抓取派送後與解析器確認後觸發）、`anime_link_conflict` upsert 重新打開時清欄位、作品季對話框按鈕
   - 驗證：DB 測試（指定版本、之後新版本不採用、過濾重算不影響指定版本、重新打開清欄位、解析器等待中不再產生、衝突分組）、
@@ -323,10 +323,10 @@
   - ~~Docker Desktop 留下的 `data/jellyfin-config`、`data/jellyfin-cache` 可刪~~ **更正（2026-10-28）**：這兩個是 OrbStack Jellyfin 的
     bind 型 named volume（`jellyfin_ext_config/cache` 的 device），正在使用，不能刪；只有 `BT_backup.stale-20261024`（116K）可刪。
     Docker Desktop 的 Jellyfin 7 週來也同時用同一份設定 → `jellyfin.db` 唯讀 `quick_check` 結果 ok
-- [ ] 2026-10-28 使用者要求：刪 BT_backup.stale、加 AI 備援、內嵌優先、清孤兒設定
+- [x] 2026-10-28 使用者要求：刪 BT_backup.stale、加 AI 備援、內嵌優先、清孤兒設定
   - [x] 2026-10-28 使用者已刪 `data/qbittorrent/qBittorrent/BT_backup.stale-20261024`
   - [x] 2026-10-28 使用者清孤兒設定：DELETE 3（過濾規則 5、11、13）、DELETE 6（解析器 46、47、51、52、54、59）
-  - [ ] 使用者：自訂過濾 prompt 換成含「內嵌優先」的版本（groq / mistral 測試 18/18，冰之城牆選繁體內嵌而非簡繁內封）
+  - [x] 使用者：自訂過濾 prompt 換成含「內嵌優先」的版本（2026-10-28 17:10 已存）（groq / mistral 測試 18/18，冰之城牆選繁體內嵌而非簡繁內封）
   - [x] 新增 AI 備援：NVIDIA build（使用者建立 provider 5 與 key；應使用者要求由我設定並啟用）
     - 測試 9 個模型：minimax-m3.1-flash（inject_schema）解析 23/23、過濾 9/9 → 採用，逾時 180 秒；
       glm-5.3-flash、gpt-oss-20b 過濾 6/9；kimi、nemotron、mistral-large-2 免費帳號 404；deepseek-v4.1-flash、gemma-4 逾時（細節見 docs/prompts/README.md）
