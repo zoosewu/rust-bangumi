@@ -322,6 +322,12 @@
   - 孤兒設定：3 條過濾規則、6 個解析器綁在已刪除的訂閱
   - Docker Desktop 留下的 `data/jellyfin-config`（139M）、`data/jellyfin-cache`（19M）、`BT_backup.stale-20261024`（116K）可刪
   - 自訂過濾 prompt 尚未加上「內嵌優先」
+  - 使用者決定（2026-10-28）：Jellyfin trickplay 用方案 A（改存 cache，使用者在 Jellyfin 後台操作）；做「下載停滯」通知
+- [ ] 下載停滯通知
+  - [x] `flag_stalled` 回傳這次標記的下載（每個 torrent 只標一次）→ 發「⚠️ 下載停滯」（標題、進度、提示改用此版本）；
+    先前停滯、這次進度有變 → 發「▶️ 下載恢復」（只在發過停滯時）；單元測試訊息內容、DB 測試只標一次
+  - [ ] 部署 core + frontend
+- [ ] 使用者：Jellyfin 後台每個媒體庫取消「將 trickplay 圖片存放在媒體旁」→ 之後 trickplay 錯誤應消失
 - [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
 
 - [x] 2026-10-24 Prompt 簡化測試（使用者要求：用設定好的每個模型、搭配不同動畫標題測試 prompt 能否簡化）

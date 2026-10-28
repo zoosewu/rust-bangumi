@@ -396,7 +396,7 @@
       "testFailure": "測試失敗",
       "renderedPayload": "渲染後的 Payload（範例資料）：",
       "alertTemplate": "異常通知模板",
-      "alertTemplateHelp": "有填才會收到異常通知：下載器無法查詢 / 已恢復、派送下載失敗、AI 產生解析器或過濾規則失敗、同步到媒體庫失敗。同一件事 6 小時內只通知一次。可用變數：{{alert_title}}、{{alert_message}}、{{alert_time}}（會自動做 JSON 跳脫，放在雙引號裡即可）",
+      "alertTemplateHelp": "有填才會收到異常通知：下載器無法查詢 / 已恢復、下載停滯超過 24 小時 / 恢復、派送下載失敗、AI 產生解析器或過濾規則失敗、同步到媒體庫失敗。同一件事 6 小時內只通知一次。可用變數：{{alert_title}}、{{alert_message}}、{{alert_time}}（會自動做 JSON 跳脫，放在雙引號裡即可）",
       "alertTemplatePlaceholder": "留空：這個 webhook 不收異常通知",
       "useDiscordAlertTemplate": "使用 Discord 預設格式",
       "testAlert": "測試異常通知"

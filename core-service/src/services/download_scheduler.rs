@@ -31,6 +31,25 @@ const MISSING_GRACE: Duration = Duration::from_secs(10 * 60);
 const STALL_AFTER_HOURS: i64 = 24;
 const STALL_NOTE: &str = "No download progress for 24 hours (no reachable peers?)";
 
+fn stall_alert_key(torrent_hash: &str) -> String {
+    format!("stall:{}", torrent_hash)
+}
+
+/// 停滯通知的內容：最多列 3 個標題
+fn stall_message(titles: &[String], download_ids: &[i32], progress: f64) -> String {
+    let mut lines: Vec<String> = titles.iter().take(3).cloned().collect();
+    if titles.len() > 3 {
+        lines.push(format!("…等 {} 集", titles.len()));
+    }
+    format!(
+        "{}\n下載 {:?} 已 {} 小時沒有進度（目前 {:.1}%），可能沒有人做種。\n可到作品頁對這一集「改用此版本」換成其他版本。",
+        lines.join("\n"),
+        download_ids,
+        STALL_AFTER_HOURS,
+        progress * 100.0
+    )
+}
+
 /// What a polled download should become, given the downloader's normalized status.
 #[derive(Debug, PartialEq, Eq)]
 enum PollOutcome {
@@ -148,7 +167,7 @@ impl DownloadScheduler {
     /// True once per `SETTLED_TORRENT_SWEEP_INTERVAL` (and on the first poll after start).
     fn settled_sweep_due(&self) -> bool {
         let mut last = self.last_settled_sweep.lock().unwrap();
-        let due = last.map_or(true, |at| at.elapsed() >= SETTLED_TORRENT_SWEEP_INTERVAL);
+        let due = last.is_none_or(|at| at.elapsed() >= SETTLED_TORRENT_SWEEP_INTERVAL);
         if due {
             *last = Some(Instant::now());
         }
@@ -220,6 +239,19 @@ impl DownloadScheduler {
                             // Only rows that made progress (or are recovering) are touched, so
                             // updated_at of a `downloading` row means "last progress".
                             let progress = status_item.progress as f32;
+                            // 先前被標成停滯、這次進度有變 → 恢復下載
+                            let resumed = downloads::table
+                                .filter(downloads::torrent_hash.eq(&status_item.hash))
+                                .filter(downloads::module_id.eq(downloader.module_id))
+                                .filter(downloads::status.eq("downloading"))
+                                .filter(downloads::error_message.eq(STALL_NOTE))
+                                .filter(downloads::progress.is_distinct_from(progress))
+                                .select(downloads::download_id)
+                                .first::<i32>(conn)
+                                .optional()
+                                .ok()
+                                .flatten()
+                                .is_some();
                             diesel::update(
                                 polled_rows.filter(
                                     downloads::progress
@@ -236,7 +268,32 @@ impl DownloadScheduler {
                             ))
                             .execute(conn)
                             .ok();
-                            Self::flag_stalled(conn, &status_item.hash, downloader.module_id, now);
+                            if resumed {
+                                crate::services::alerts::resolve(
+                                    &self.db_pool,
+                                    &stall_alert_key(&status_item.hash),
+                                    "▶️ 下載恢復",
+                                    &format!(
+                                        "{} 又開始有進度了（{:.1}%）",
+                                        status_item.hash,
+                                        status_item.progress * 100.0
+                                    ),
+                                );
+                            }
+                            let stalled = Self::flag_stalled(
+                                conn,
+                                &status_item.hash,
+                                downloader.module_id,
+                                now,
+                            );
+                            if !stalled.is_empty() {
+                                self.alert_stalled(
+                                    conn,
+                                    &status_item.hash,
+                                    &stalled,
+                                    status_item.progress,
+                                );
+                            }
                         }
                         PollOutcome::Missing => {
                             let missing_for =
@@ -369,13 +426,40 @@ impl DownloadScheduler {
             .retain(|(m, h), _| *m != module_id || polled_hashes.contains(h));
     }
 
+    /// 停滯通知：每個 torrent 只在剛被標成停滯時通知一次（之後不會再標）
+    fn alert_stalled(
+        &self,
+        conn: &mut PgConnection,
+        torrent_hash: &str,
+        download_ids: &[i32],
+        progress: f64,
+    ) {
+        use crate::schema::anime_links;
+        let titles: Vec<String> = downloads::table
+            .inner_join(anime_links::table.on(anime_links::link_id.eq(downloads::link_id)))
+            .filter(downloads::download_id.eq_any(download_ids))
+            .select(anime_links::title)
+            .load::<Option<String>>(conn)
+            .unwrap_or_default()
+            .into_iter()
+            .flatten()
+            .collect();
+        crate::services::alerts::raise(
+            &self.db_pool,
+            &stall_alert_key(torrent_hash),
+            "⚠️ 下載停滯",
+            &stall_message(&titles, download_ids, progress),
+        );
+    }
+
     /// Flags `downloading` rows of a torrent whose progress has not moved for STALL_AFTER_HOURS.
+    /// Returns the downloads flagged by this call (each row is flagged once).
     fn flag_stalled(
         conn: &mut PgConnection,
         torrent_hash: &str,
         module_id: i32,
         now: chrono::NaiveDateTime,
-    ) {
+    ) -> Vec<i32> {
         let cutoff = now - chrono::Duration::hours(STALL_AFTER_HOURS);
         match diesel::update(
             downloads::table
@@ -386,16 +470,24 @@ impl DownloadScheduler {
                 .filter(downloads::error_message.is_null()),
         )
         .set(downloads::error_message.eq(STALL_NOTE))
-        .execute(conn)
+        .returning(downloads::download_id)
+        .get_results::<i32>(conn)
         {
-            Ok(count) if count > 0 => tracing::warn!(
-                "Torrent {} has made no progress for {} hours ({} downloads flagged)",
-                torrent_hash,
-                STALL_AFTER_HOURS,
-                count
-            ),
-            Err(e) => tracing::error!("Failed to flag stalled torrent {}: {}", torrent_hash, e),
-            _ => {}
+            Ok(ids) => {
+                if !ids.is_empty() {
+                    tracing::warn!(
+                        "Torrent {} has made no progress for {} hours ({} downloads flagged)",
+                        torrent_hash,
+                        STALL_AFTER_HOURS,
+                        ids.len()
+                    );
+                }
+                ids
+            }
+            Err(e) => {
+                tracing::error!("Failed to flag stalled torrent {}: {}", torrent_hash, e);
+                vec![]
+            }
         }
     }
 
@@ -817,5 +909,46 @@ mod tests {
     fn downloader_error_is_polled_so_it_can_recover() {
         assert!(POLLED_STATUSES.contains(&"downloading"));
         assert!(POLLED_STATUSES.contains(&"downloader_error"));
+    }
+
+    #[test]
+    fn a_stall_message_lists_a_few_titles_and_how_to_switch() {
+        let titles: Vec<String> = (1..=5).map(|i| format!("[G] Show - {i:02}")).collect();
+        let message = stall_message(&titles, &[622], 0.9971);
+        assert!(message.starts_with("[G] Show - 01\n[G] Show - 02\n[G] Show - 03\n…等 5 集"));
+        assert!(message.contains("99.7%"));
+        assert!(message.contains("改用此版本"));
+    }
+
+    #[test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    fn a_stalled_torrent_is_flagged_only_once() {
+        use crate::services::identity::test_db;
+        #[derive(QueryableByName)]
+        struct Id {
+            #[diesel(sql_type = diesel::sql_types::Integer)]
+            id: i32,
+        }
+        let mut conn = test_db::conn();
+        let insert = |conn: &mut PgConnection, sql: &str| {
+            diesel::sql_query(sql).get_result::<Id>(conn).unwrap().id
+        };
+        let module = insert(&mut conn, "INSERT INTO service_modules (module_type, name, version, is_enabled, priority, base_url, created_at, updated_at) VALUES ('downloader', 'stall-test-qb', '1', true, 50, 'http://x', now(), now()) RETURNING module_id AS id");
+        let work = insert(&mut conn, "INSERT INTO anime_works (title, created_at, updated_at) VALUES ('停滯測試', now(), now()) RETURNING work_id AS id");
+        let season = insert(&mut conn, "INSERT INTO seasons (year, season, created_at) VALUES (2094, 'winter', now()) ON CONFLICT (year, season) DO UPDATE SET year = EXCLUDED.year RETURNING season_id AS id");
+        let anime = insert(&mut conn, &format!("INSERT INTO animes (work_id, series_no, season_id, created_at, updated_at) VALUES ({work}, 1, {season}, now(), now()) RETURNING anime_id AS id"));
+        let group = insert(&mut conn, "INSERT INTO subtitle_groups (group_name) VALUES ('停滯測試組') RETURNING group_id AS id");
+        let link = insert(&mut conn, &format!("INSERT INTO anime_links (anime_id, group_id, episode_no, title, url, source_hash) VALUES ({anime}, {group}, 11, '[G] Show - 11', 'u', 'stall-test') RETURNING link_id AS id"));
+        let download = insert(&mut conn, &format!("INSERT INTO downloads (link_id, downloader_type, status, module_id, torrent_hash, progress, updated_at) VALUES ({link}, 'qbittorrent', 'downloading', {module}, 'stallhash', 0.997, now() - interval '25 hours') RETURNING download_id AS id"));
+
+        let now = chrono::Utc::now().naive_utc();
+        assert_eq!(
+            DownloadScheduler::flag_stalled(&mut conn, "stallhash", module, now),
+            vec![download]
+        );
+        assert!(
+            DownloadScheduler::flag_stalled(&mut conn, "stallhash", module, now).is_empty(),
+            "already flagged, so no second alert"
+        );
     }
 }

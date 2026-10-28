@@ -396,7 +396,7 @@
       "testFailure": "Test failed",
       "renderedPayload": "Rendered payload (sample data):",
       "alertTemplate": "Alert template",
-      "alertTemplateHelp": "Only webhooks with a template get alerts: downloader unreachable / recovered, dispatch failed, AI parser or filter generation failed, sync to the library failed. The same alert is sent at most once every 6 hours. Variables: {{alert_title}}, {{alert_message}}, {{alert_time}} (JSON-escaped, put them inside double quotes)",
+      "alertTemplateHelp": "Only webhooks with a template get alerts: downloader unreachable / recovered, download stalled for 24 hours / resumed, dispatch failed, AI parser or filter generation failed, sync to the library failed. The same alert is sent at most once every 6 hours. Variables: {{alert_title}}, {{alert_message}}, {{alert_time}} (JSON-escaped, put them inside double quotes)",
       "alertTemplatePlaceholder": "Leave blank: this webhook gets no alerts",
       "useDiscordAlertTemplate": "Use Discord default",
       "testAlert": "Test alert"

@@ -3572,7 +3572,7 @@ components:
           type: string
           nullable: true
           description: |
-            異常通知模板；有值才會收到異常通知（下載器無法查詢 / 已恢復、派送下載失敗、AI 生成失敗、同步失敗，
+            異常通知模板；有值才會收到異常通知（下載器無法查詢 / 已恢復、下載停滯 24 小時 / 恢復、派送下載失敗、AI 生成失敗、同步失敗，
             同一件事 6 小時內只通知一次）。變數 {{alert_title}}、{{alert_message}}、{{alert_time}} 會先做 JSON 字串跳脫。
         created_at:
           type: string
