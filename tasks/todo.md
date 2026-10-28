@@ -389,7 +389,9 @@
   - [x] 測試：節流、跳脫成合法 JSON、DB 端對端（只送有模板的 webhook、同一件事只送一次、恢復只送一次）；
     本機起 core 打 `/webhooks/test`（帶 alert_template）→ 假接收器收到正確的 Discord 嵌入
   - core 容器原本是 UTC，compose 加 `TZ: ${TZ:-Asia/Taipei}`（映像檔內有 zoneinfo），通知時間顯示台灣時間
-  - [ ] 部署 core + frontend；使用者在 webhook 編輯按「使用 Discord 預設格式」→「測試異常通知」→ 儲存
+  - [x] 2026-10-28 部署（2f2cdfc）：migration 已套用、core 時區 CST；使用者已在「DC zoo 通知」設好異常通知模板（代入範例值為合法 JSON）、
+    openRouter（複本）已停用、groq 解析器 prompt 已換新版短版（2691 字元）
+  - [ ] 觀察：下一次真的發生異常時 Discord 收到通知（或下載器恢復時收到「已恢復」）
 
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
