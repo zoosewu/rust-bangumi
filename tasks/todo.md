@@ -326,7 +326,7 @@
 - [ ] 下載停滯通知
   - [x] `flag_stalled` 回傳這次標記的下載（每個 torrent 只標一次）→ 發「⚠️ 下載停滯」（標題、進度、提示改用此版本）；
     先前停滯、這次進度有變 → 發「▶️ 下載恢復」（只在發過停滯時）；單元測試訊息內容、DB 測試只標一次
-  - [ ] 部署 core + frontend
+  - [x] 2026-10-28 11:33 部署 core + frontend（e11482e）
 - [ ] 使用者：Jellyfin 後台每個媒體庫取消「將 trickplay 圖片存放在媒體旁」→ 之後 trickplay 錯誤應消失
 - [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
 
