@@ -285,6 +285,15 @@ impl DownloadScheduler {
                     return Ok(());
                 }
 
+                crate::services::alerts::raise(
+                    &self.db_pool,
+                    &format!("downloader:{}", downloader.module_id),
+                    "⚠️ 下載器無法查詢",
+                    &format!(
+                        "{}（{}）連續 {} 次查詢失敗：{}",
+                        downloader.name, downloader.base_url, failed_polls, e
+                    ),
+                );
                 let now = chrono::Utc::now().naive_utc();
                 let marked = diesel::update(
                     downloads::table
@@ -327,6 +336,12 @@ impl DownloadScheduler {
                 count
             );
         }
+        crate::services::alerts::resolve(
+            &self.db_pool,
+            &format!("downloader:{}", downloader.module_id),
+            "✅ 下載器已恢復",
+            &format!("{} 又可以正常查詢了", downloader.name),
+        );
     }
 
     /// How long the torrent has been reported missing in consecutive polls (zero on first report).

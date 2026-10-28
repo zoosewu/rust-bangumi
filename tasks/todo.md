@@ -381,6 +381,16 @@
 - 2026-10-28 其他狀態：630（CR 第 11 集）10/26 已同步；新訂閱 31（羅梅莉亞戰記）AI 解析器確認後 4 集同步；過濾 #115 確認 → 青之箱衝突解決；
   仍未解決：藥屋 49/50/51（綠茶 10/21 後沒有新集數）；補強 prompt（aec337c）尚未部署、groq 的解析器 prompt 仍是舊版短版
 
+- [ ] 2026-10-28 異常時發 Discord 通知（使用者決定；同時決定 openRouter（複本）停用〔使用者在 UI 操作〕、藥屋衝突等自動處理）
+  - [x] migration：`webhooks.alert_template`（NULL = 不收異常通知）；CRUD / DTO / 前端表單（附 Discord 預設格式按鈕）
+  - [x] `services/alerts.rs`：`raise(key, 標題, 內容)` 同一 key 6 小時內只送一次；`resolve(key)` 只在發過時送「已恢復」；
+    變數 `{{alert_title}}` `{{alert_message}}` `{{alert_time}}` 以 JSON 字串跳脫後代入
+  - [x] 接上：下載器查詢失敗（每小時掃描、輪詢連續 3 次失敗）＋恢復；派送失敗；AI 生成失敗；同步失敗（重試用完）
+  - [x] 測試：節流、跳脫成合法 JSON、DB 端對端（只送有模板的 webhook、同一件事只送一次、恢復只送一次）；
+    本機起 core 打 `/webhooks/test`（帶 alert_template）→ 假接收器收到正確的 Discord 嵌入
+  - core 容器原本是 UTC，compose 加 `TZ: ${TZ:-Asia/Taipei}`（映像檔內有 zoneinfo），通知時間顯示台灣時間
+  - [ ] 部署 core + frontend；使用者在 webhook 編輯按「使用 Discord 預設格式」→「測試異常通知」→ 儲存
+
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
 | 對象 | 前提 | 動作 |

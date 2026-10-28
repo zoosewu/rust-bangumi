@@ -240,6 +240,8 @@ impl DownloadDispatchService {
         let mut total_dispatched = 0;
         let mut total_no_downloader = 0;
         let mut total_failed = 0;
+        // 派送失敗時通知用（第一個失敗原因）
+        let mut first_fail_reason: Option<String> = None;
         // 每個 link 最後一次被拒/出錯的原因，最終寫入 failed 記錄的 error_message
         let mut fail_reasons: HashMap<i32, String> = HashMap::new();
 
@@ -430,6 +432,11 @@ impl DownloadDispatchService {
             }
 
             // Remaining links after all downloaders tried
+            if first_fail_reason.is_none() {
+                first_fail_reason = pending_links
+                    .iter()
+                    .find_map(|l| fail_reasons.get(&l.link_id).cloned());
+            }
             for link in &pending_links {
                 self.create_download_record(
                     &mut conn,
@@ -444,6 +451,19 @@ impl DownloadDispatchService {
                 )?;
                 total_failed += 1;
             }
+        }
+
+        if total_failed > 0 {
+            crate::services::alerts::raise(
+                &self.db_pool,
+                "dispatch",
+                "⚠️ 派送下載失敗",
+                &format!(
+                    "{} 個連結沒有任何下載器接受：{}",
+                    total_failed,
+                    first_fail_reason.as_deref().unwrap_or("unknown")
+                ),
+            );
         }
 
         Ok(DispatchResult {

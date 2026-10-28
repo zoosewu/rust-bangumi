@@ -1,3 +1,4 @@
+pub mod alerts;
 pub mod conflict_detection;
 pub mod download_cancel;
 pub mod download_dir_cleanup;

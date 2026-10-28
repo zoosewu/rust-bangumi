@@ -38,7 +38,7 @@ fn retry_wait(retry_after_header: Option<&str>, body: &str) -> Duration {
 
 /// Send one notification, retrying while the webhook is rate limited.
 /// Only the webhook id is logged: the URL carries the webhook's secret token.
-async fn deliver(client: &reqwest::Client, webhook_id: i32, url: &str, payload: String) {
+pub(crate) async fn deliver(client: &reqwest::Client, webhook_id: i32, url: &str, payload: String) {
     for attempt in 1..=MAX_ATTEMPTS {
         let resp = match client
             .post(url)

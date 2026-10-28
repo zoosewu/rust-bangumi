@@ -551,4 +551,5 @@ async fn update_pending_failed(
         ))
         .get_result::<PendingAiResult>(&mut conn)
         .map_err(|e| e.to_string())
+        .inspect(|pending| super::alert_generation_failed(pool, pending, error))
 }

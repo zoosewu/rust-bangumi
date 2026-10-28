@@ -373,6 +373,17 @@ function FilterPromptSection() {
   )
 }
 
+/** 與後端 `alerts::DISCORD_ALERT_TEMPLATE` 相同：Discord 紅色嵌入 */
+const DISCORD_ALERT_TEMPLATE = `{
+  "content": null,
+  "embeds": [{
+    "title": "{{alert_title}}",
+    "description": "{{alert_message}}",
+    "color": 15548997,
+    "footer": {"text": "rust-bangumi · {{alert_time}}"}
+  }]
+}`
+
 const DEFAULT_PAYLOAD_TEMPLATE = `{"download_id": {{download_id}}, "anime_title": "{{anime_title}}", "episode_no": {{episode_no}}, "subtitle_group": "{{subtitle_group}}", "video_path": "{{video_path}}"}`
 
 interface WebhookFormState {
@@ -380,10 +391,18 @@ interface WebhookFormState {
   url: string
   payload_template: string
   is_active: boolean
+  /** 空字串 = 不收異常通知 */
+  alert_template: string
 }
 
 function emptyForm(): WebhookFormState {
-  return { name: "", url: "", payload_template: DEFAULT_PAYLOAD_TEMPLATE, is_active: true }
+  return {
+    name: "",
+    url: "",
+    payload_template: DEFAULT_PAYLOAD_TEMPLATE,
+    is_active: true,
+    alert_template: "",
+  }
 }
 
 function WebhookSection() {
@@ -419,7 +438,13 @@ function WebhookSection() {
   }
 
   const startEdit = (w: Webhook) => {
-    setForm({ name: w.name, url: w.url, payload_template: w.payload_template, is_active: w.is_active })
+    setForm({
+      name: w.name,
+      url: w.url,
+      payload_template: w.payload_template,
+      is_active: w.is_active,
+      alert_template: w.alert_template ?? "",
+    })
     setEditingId(w.webhook_id)
   }
 
@@ -559,16 +584,21 @@ function WebhookForm({
   const [testResult, setTestResult] = useState<TestResult | null>(null)
 
   const { mutate: doTest, isLoading: testing } = useEffectMutation(
-    (req: { url: string; payload_template: string }) =>
+    (req: { url: string; payload_template: string; alert_template?: string }) =>
       Effect.flatMap(CoreApi, (api) => api.testWebhook(req)),
   )
 
-  const handleTest = async () => {
+  /** alert：改送一則範例異常通知（測試異常通知模板） */
+  const handleTest = async (alert = false) => {
     if (!form.url.trim()) {
       toast.error(t("settings.webhook.nameUrlRequired"))
       return
     }
-    const result = await doTest({ url: form.url, payload_template: form.payload_template })
+    const result = await doTest({
+      url: form.url,
+      payload_template: form.payload_template,
+      ...(alert ? { alert_template: form.alert_template } : {}),
+    })
     if (result) {
       setTestResult(result)
     }
@@ -616,6 +646,28 @@ function WebhookForm({
         />
       </div>
 
+      {/* Alert Template */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-sm">{t("settings.webhook.alertTemplate")}</Label>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => handleChange({ ...form, alert_template: DISCORD_ALERT_TEMPLATE })}
+          >
+            {t("settings.webhook.useDiscordAlertTemplate")}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{t("settings.webhook.alertTemplateHelp")}</p>
+        <AutoResizeTextarea
+          value={form.alert_template}
+          onChange={(e) => handleChange({ ...form, alert_template: e.target.value })}
+          className="font-mono text-xs"
+          placeholder={t("settings.webhook.alertTemplatePlaceholder")}
+        />
+      </div>
+
       {/* Test Result */}
       {testResult && (
         <div className={`rounded-md border p-3 space-y-2 text-xs ${testResult.ok ? "border-green-500/40 bg-green-500/5" : "border-destructive/40 bg-destructive/5"}`}>
@@ -656,9 +708,17 @@ function WebhookForm({
             <X className="mr-1 size-3" />
             {t("common.cancel")}
           </Button>
-          <Button variant="outline" size="sm" onClick={handleTest} disabled={isBusy || testing}>
+          <Button variant="outline" size="sm" onClick={() => handleTest()} disabled={isBusy || testing}>
             {testing ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
             {t("settings.webhook.test")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleTest(true)}
+            disabled={isBusy || testing || !form.alert_template.trim()}
+          >
+            {t("settings.webhook.testAlert")}
           </Button>
           <Button size="sm" onClick={onSave} disabled={isBusy || testing}>
             {isBusy ? (

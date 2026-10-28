@@ -20,6 +20,9 @@ pub struct CreateWebhookRequest {
     pub url: String,
     pub payload_template: String,
     pub is_active: Option<bool>,
+    /// 異常通知模板；空白 = 不收異常通知
+    #[serde(default)]
+    pub alert_template: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +31,13 @@ pub struct UpdateWebhookRequest {
     pub url: Option<String>,
     pub payload_template: Option<String>,
     pub is_active: Option<bool>,
+    /// 有給就更新；空字串代表不再收異常通知
+    pub alert_template: Option<String>,
+}
+
+/// 空白的異常通知模板視為沒設定
+fn alert_template(template: Option<String>) -> Option<String> {
+    template.filter(|t| !t.trim().is_empty())
 }
 
 #[derive(Debug, Serialize)]
@@ -37,6 +47,7 @@ pub struct WebhookResponse {
     pub url: String,
     pub payload_template: String,
     pub is_active: bool,
+    pub alert_template: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -49,6 +60,7 @@ impl From<Webhook> for WebhookResponse {
             url: w.url,
             payload_template: w.payload_template,
             is_active: w.is_active,
+            alert_template: w.alert_template,
             created_at: w.created_at.to_string(),
             updated_at: w.updated_at.to_string(),
         }
@@ -98,6 +110,7 @@ pub async fn create_webhook(
         is_active: payload.is_active.unwrap_or(true),
         created_at: now,
         updated_at: now,
+        alert_template: alert_template(payload.alert_template),
     };
 
     let repo = &state.repos.webhook;
@@ -166,6 +179,10 @@ pub async fn update_webhook(
             .payload_template
             .unwrap_or(existing.payload_template),
         is_active: payload.is_active.unwrap_or(existing.is_active),
+        alert_template: match payload.alert_template {
+            Some(t) => alert_template(Some(t)),
+            None => existing.alert_template.clone(),
+        },
         ..existing
     };
 
@@ -199,7 +216,15 @@ pub async fn test_webhook(
         video_path: "/downloads/test_ep01.mkv".to_string(),
     };
 
-    let rendered = render_template(&payload.payload_template, &sample_ctx);
+    let rendered = match alert_template(payload.alert_template) {
+        Some(template) => crate::services::alerts::render_alert(
+            &template,
+            "測試異常通知",
+            "這是一則測試訊息：下載器 \"qbittorrent\" 無法連線",
+            &chrono::Local::now().format("%Y-%m-%d %H:%M").to_string(),
+        ),
+        None => render_template(&payload.payload_template, &sample_ctx),
+    };
 
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -248,6 +273,9 @@ pub async fn test_webhook(
 pub struct TestWebhookRequest {
     pub url: String,
     pub payload_template: String,
+    /// 有給時改送一則範例異常通知（測試異常通知模板）
+    #[serde(default)]
+    pub alert_template: Option<String>,
 }
 
 /// DELETE /webhooks/:id — 刪除 webhook

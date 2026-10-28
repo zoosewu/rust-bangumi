@@ -886,6 +886,8 @@ pub struct Webhook {
     pub is_active: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// 異常通知模板；有值才會收到異常通知
+    pub alert_template: Option<String>,
 }
 
 #[derive(Debug, Insertable, serde::Deserialize)]
@@ -897,6 +899,8 @@ pub struct NewWebhook {
     pub is_active: bool,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// 異常通知模板；有值才會收到異常通知
+    pub alert_template: Option<String>,
 }
 
 #[cfg(test)]

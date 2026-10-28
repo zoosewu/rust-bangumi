@@ -390,6 +390,7 @@ diesel::table! {
         is_active -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        alert_template -> Nullable<Text>,
     }
 }
 

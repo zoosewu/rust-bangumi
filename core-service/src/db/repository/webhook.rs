@@ -90,6 +90,7 @@ impl WebhookRepository for DieselWebhookRepository {
                     webhooks::url.eq(&webhook.url),
                     webhooks::payload_template.eq(&webhook.payload_template),
                     webhooks::is_active.eq(webhook.is_active),
+                    webhooks::alert_template.eq(&webhook.alert_template),
                     webhooks::updated_at.eq(now),
                 ))
                 .get_result::<Webhook>(&mut conn)

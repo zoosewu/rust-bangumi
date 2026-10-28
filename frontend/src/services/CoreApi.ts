@@ -152,6 +152,6 @@ export class CoreApi extends Context.Tag("CoreApi")<
     readonly createWebhook: (req: CreateWebhookRequest) => Effect.Effect<Webhook>
     readonly updateWebhook: (id: number, req: UpdateWebhookRequest) => Effect.Effect<Webhook>
     readonly deleteWebhook: (id: number) => Effect.Effect<void>
-    readonly testWebhook: (req: { url: string; payload_template: string }) => Effect.Effect<{ ok: boolean; status_code?: number; error?: string; rendered_payload: string }>
+    readonly testWebhook: (req: { url: string; payload_template: string; alert_template?: string }) => Effect.Effect<{ ok: boolean; status_code?: number; error?: string; rendered_payload: string }>
   }
 >() {}

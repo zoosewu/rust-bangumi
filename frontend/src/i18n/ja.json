@@ -394,7 +394,12 @@
       "test": "テスト",
       "testSuccess": "テスト成功",
       "testFailure": "テスト失敗",
-      "renderedPayload": "レンダリング済みペイロード（サンプルデータ）："
+      "renderedPayload": "レンダリング済みペイロード（サンプルデータ）：",
+      "alertTemplate": "異常通知テンプレート",
+      "alertTemplateHelp": "入力した場合のみ異常通知を受け取ります：ダウンローダーに接続できない / 復旧、ダウンロード送信失敗、AIによるパーサー・フィルター生成失敗、ライブラリ同期失敗。同じ内容は6時間に1回のみ通知します。変数：{{alert_title}}、{{alert_message}}、{{alert_time}}（JSONエスケープ済み、ダブルクォート内に配置）",
+      "alertTemplatePlaceholder": "空欄：このWebhookは異常通知を受け取りません",
+      "useDiscordAlertTemplate": "Discordの既定形式を使う",
+      "testAlert": "異常通知をテスト"
     },
     "downloadCleanup": {
       "title": "ダウンロードフォルダの整理",

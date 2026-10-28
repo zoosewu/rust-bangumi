@@ -3568,6 +3568,12 @@ components:
             {{episode_no}}, {{series_no}}, {{subtitle_group}}, {{video_path}}
         is_active:
           type: boolean
+        alert_template:
+          type: string
+          nullable: true
+          description: |
+            異常通知模板；有值才會收到異常通知（下載器無法查詢 / 已恢復、派送下載失敗、AI 生成失敗、同步失敗，
+            同一件事 6 小時內只通知一次）。變數 {{alert_title}}、{{alert_message}}、{{alert_time}} 會先做 JSON 字串跳脫。
         created_at:
           type: string
           format: date-time
@@ -3593,6 +3599,9 @@ components:
         is_active:
           type: boolean
           default: true
+        alert_template:
+          type: string
+          description: 異常通知模板；空白 = 不收異常通知
 
     UpdateWebhookRequest:
       type: object
@@ -3606,6 +3615,9 @@ components:
           type: string
         is_active:
           type: boolean
+        alert_template:
+          type: string
+          description: 有給就更新；空字串代表不再收異常通知
 
     # ============ Links (additional) ============
     ConflictingLinkInfo:

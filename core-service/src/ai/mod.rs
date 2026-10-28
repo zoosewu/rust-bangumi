@@ -13,6 +13,33 @@ pub use chain::{build_ai_chain, AiProviderChain, AttemptRecord};
 pub use client::{AiClient, AiError};
 pub use openai::OpenAiClient;
 
+/// AI 生成失敗的通知：同一個訂閱、同一種結果 6 小時內只通知一次
+pub(crate) fn alert_generation_failed(
+    pool: &crate::db::DbPool,
+    pending: &crate::models::PendingAiResult,
+    error: &str,
+) {
+    let kind = if pending.result_type == "filter" {
+        "過濾規則"
+    } else {
+        "解析器"
+    };
+    let subscription = pending
+        .subscription_id
+        .map(|id| format!("訂閱 {}", id))
+        .unwrap_or_else(|| "手動".to_string());
+    crate::services::alerts::raise(
+        pool,
+        &format!(
+            "ai:{}:{}",
+            pending.result_type,
+            pending.subscription_id.unwrap_or(0)
+        ),
+        &format!("⚠️ AI 產生{}失敗", kind),
+        &format!("{}（{}）：{}", subscription, pending.source_title, error),
+    );
+}
+
 /// 記下實際成功的 provider 用的固定 prompt（三層 prompt 下可能是那家的模型 prompt），
 /// 重新生成時編輯的就是這份。
 pub(crate) fn record_used_fixed_prompt(pool: &crate::db::DbPool, pending_id: i32, used: &str) {

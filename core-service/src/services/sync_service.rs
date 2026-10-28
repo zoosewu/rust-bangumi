@@ -789,10 +789,26 @@ impl SyncService {
         let mut removed = 0;
         for (module_id, base_url) in downloaders {
             let settled = self.settled_hashes(module_id)?;
+            // 每小時都會跑，沒有下載時也是：順便當作下載器的健康檢查
+            let alert_key = format!("downloader:{}", module_id);
             let tracked = match tracked_torrents(&self.http_client, &base_url, &settled).await {
-                Ok(tracked) => tracked,
+                Ok(tracked) => {
+                    crate::services::alerts::resolve(
+                        &self.db_pool,
+                        &alert_key,
+                        "✅ 下載器已恢復",
+                        &format!("{} 又可以正常查詢了", base_url),
+                    );
+                    tracked
+                }
                 Err(e) => {
                     tracing::warn!("Skipping settled torrents of {}: {}", base_url, e);
+                    crate::services::alerts::raise(
+                        &self.db_pool,
+                        &alert_key,
+                        "⚠️ 下載器無法查詢",
+                        &format!("{}：{}\n新集數可能無法派送下載。", base_url, e),
+                    );
                     continue;
                 }
             };
@@ -916,6 +932,19 @@ impl SyncService {
                     new_retry_count,
                     error_message.unwrap_or("unknown")
                 );
+                if new_status == "sync_failed" {
+                    crate::services::alerts::raise(
+                        &self.db_pool,
+                        &format!("sync:{}", download_id),
+                        "⚠️ 同步到媒體庫失敗",
+                        &format!(
+                            "下載 {} 重試 {} 次後仍無法同步：{}",
+                            download_id,
+                            new_retry_count,
+                            error_message.unwrap_or("unknown")
+                        ),
+                    );
+                }
             }
             _ => {
                 return Err(format!("Unknown callback status: {}", status));
