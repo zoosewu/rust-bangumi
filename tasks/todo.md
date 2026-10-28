@@ -367,6 +367,19 @@
   - [x] 內建預設換成補強版、`docs/prompts/parser-short.txt` 更新（aec337c）
   - [ ] 部署 core；使用者把 groq 的解析器 prompt 換成新版 `parser-short.txt`
 
+- [ ] 2026-10-28 狀態檢查發現：downloader 登入不了 qBittorrent（最高）
+  - 現象：主機 10/27 重開後，每小時的「移除已結束 torrent」掃描都回 500；downloader log `Status query failed: 403 Forbidden`、
+    `re-login failed: Re-login failed: `（內容空白），共 27 次
+  - 根因：qBittorrent 5.2.0 起登入成功改回 `204 No Content`（無內容），程式只認 `200` + `Ok.` → 把成功當失敗、不重試原請求。
+    10/17 啟動登入就已經「失敗」，但 qB 其實發了 session cookie，加上 622 / 630 每 60 秒輪詢讓 session 一直有效，所以看不出來；
+    630 同步完、主機重開後只剩每小時一次的請求，qB session 閒置 1 小時過期 → 每次都 403 → 重新登入「失敗」
+  - 影響：新集數派送時第一次加入 torrent 會失敗（之後要靠重試）；目前沒有待下載的集數
+  - 參考：qbittorrent/qBittorrent#23270、Radarr/Radarr#11339
+  - [x] 修正：`login_outcome()`（204 / `Ok.` / 空白 = 成功，`Fails.` = 帳密錯誤），登入與重新登入共用；單元 + 模擬 qB 5.2 的整合測試
+  - [ ] 部署 downloader-qbittorrent
+- 2026-10-28 其他狀態：630（CR 第 11 集）10/26 已同步；新訂閱 31（羅梅莉亞戰記）AI 解析器確認後 4 集同步；過濾 #115 確認 → 青之箱衝突解決；
+  仍未解決：藥屋 49/50/51（綠茶 10/21 後沒有新集數）；補強 prompt（aec337c）尚未部署、groq 的解析器 prompt 仍是舊版短版
+
 ## 階段 2：資料修復（對應的程式修正部署後才做；全部在 DB 修復完成後）
 
 | 對象 | 前提 | 動作 |

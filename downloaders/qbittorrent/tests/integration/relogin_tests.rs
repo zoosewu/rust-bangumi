@@ -28,12 +28,34 @@ struct MockQbState {
     added: AtomicBool,
     /// 收到的 /torrents/delete 表單
     delete_forms: Mutex<Vec<HashMap<String, String>>>,
+    /// 登入回應的版本：qBittorrent 5.2.0 起成功時回 204 沒有內容
+    login_style: Mutex<LoginStyle>,
+}
+
+#[derive(Clone, Copy)]
+enum LoginStyle {
+    /// 5.2.0 之前：200 + "Ok."
+    Ok200,
+    /// 5.2.0 起：204 沒有內容
+    NoContent204,
+    /// 帳密錯誤：200 + "Fails."
+    WrongPassword,
 }
 
 async fn mock_login(State(state): State<Arc<MockQbState>>) -> (StatusCode, &'static str) {
     state.login_calls.fetch_add(1, Ordering::SeqCst);
-    state.logged_in.store(true, Ordering::SeqCst);
-    (StatusCode::OK, "Ok.")
+    let style = *state.login_style.lock().unwrap();
+    match style {
+        LoginStyle::WrongPassword => (StatusCode::OK, "Fails."),
+        LoginStyle::Ok200 => {
+            state.logged_in.store(true, Ordering::SeqCst);
+            (StatusCode::OK, "Ok.")
+        }
+        LoginStyle::NoContent204 => {
+            state.logged_in.store(true, Ordering::SeqCst);
+            (StatusCode::NO_CONTENT, "")
+        }
+    }
 }
 
 async fn mock_add(State(state): State<Arc<MockQbState>>) -> (StatusCode, &'static str) {
@@ -82,6 +104,7 @@ async fn spawn_mock_qbittorrent_with(registers_added: bool) -> (String, Arc<Mock
         registers_added: AtomicBool::new(registers_added),
         added: AtomicBool::new(false),
         delete_forms: Mutex::new(Vec::new()),
+        login_style: Mutex::new(LoginStyle::Ok200),
     });
 
     let app = Router::new()
@@ -222,4 +245,40 @@ async fn cancel_torrents_removes_partial_files() {
     assert_eq!(forms[0]["hashes"], MAGNET_HASH);
     // 稽核 E7：取消後不能在 /downloads 留下沒下載完的檔案
     assert_eq!(forms[0]["deleteFiles"], "true");
+}
+
+#[tokio::test]
+async fn relogin_works_with_the_empty_204_of_qbittorrent_5_2() {
+    // 生產 2026-10-27：qB 5.2.3 重啟後 session 過期，重新登入回 204，舊程式當成失敗
+    let (base_url, state) = spawn_mock_qbittorrent().await;
+    *state.login_style.lock().unwrap() = LoginStyle::NoContent204;
+    let client = QBittorrentClient::new(base_url);
+    client.set_credentials("admin", "password").await;
+
+    let results = client
+        .add_torrents(vec![DownloadRequestItem {
+            url: MAGNET.to_string(),
+            save_path: "/downloads".to_string(),
+        }])
+        .await
+        .expect("add_torrents should succeed after a 204 re-login");
+
+    assert_eq!(results[0].status, "accepted");
+    assert_eq!(state.login_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(state.add_calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn a_login_with_the_204_of_qbittorrent_5_2_succeeds() {
+    let (base_url, state) = spawn_mock_qbittorrent().await;
+    *state.login_style.lock().unwrap() = LoginStyle::NoContent204;
+    let client = QBittorrentClient::new(base_url.clone());
+    assert!(client.login("admin", "password").await.is_ok());
+
+    *state.login_style.lock().unwrap() = LoginStyle::WrongPassword;
+    let err = QBittorrentClient::new(base_url)
+        .login("admin", "wrong")
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("wrong username or password"));
 }

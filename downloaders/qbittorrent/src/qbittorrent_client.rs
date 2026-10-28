@@ -56,6 +56,19 @@ pub struct TorrentInfo {
     pub content_path: Option<String>,
 }
 
+/// `/api/v2/auth/login` 的回應是否代表登入成功。
+///
+/// qBittorrent 5.2.0 起登入成功改回 `204 No Content`（沒有內容）；更早的版本回 `200` + `Ok.`。
+/// 帳密錯誤時兩者都是 `200` + `Fails.`。
+fn login_outcome(status: reqwest::StatusCode, body: &str) -> Result<()> {
+    match (status.is_success(), body.trim()) {
+        (true, "Ok." | "") => Ok(()),
+        (true, "Fails.") => Err(anyhow!("Login failed: wrong username or password")),
+        (true, other) => Err(anyhow!("Login failed: unexpected response {:?}", other)),
+        (false, _) => Err(anyhow!("Login request failed: {}", status)),
+    }
+}
+
 impl QBittorrentClient {
     pub fn new(base_url: String) -> Self {
         let jar = Arc::new(Jar::default());
@@ -148,15 +161,11 @@ impl QBittorrentClient {
                 .send()
                 .await?;
 
-            if resp.status().is_success() {
-                let body = resp.text().await?;
-                if body == "Ok." {
-                    tracing::info!("Re-login successful");
-                    return Ok(());
-                }
-                return Err(anyhow!("Re-login failed: {}", body));
-            }
-            Err(anyhow!("Re-login request failed: {}", resp.status()))
+            let status = resp.status();
+            let body = resp.text().await?;
+            login_outcome(status, &body)?;
+            tracing::info!("Re-login successful");
+            Ok(())
         } else {
             Err(anyhow!("No stored credentials for re-login"))
         }
@@ -231,19 +240,13 @@ impl DownloaderClient for QBittorrentClient {
             .send()
             .await?;
 
-        if resp.status().is_success() {
-            let body = resp.text().await?;
-            if body == "Ok." {
-                // 儲存帳密供 session 過期時重新登入
-                *self.credentials.lock().await = Some((username.to_string(), password.to_string()));
-                tracing::info!("Successfully logged in to qBittorrent");
-                Ok(())
-            } else {
-                Err(anyhow!("Login failed: {}", body))
-            }
-        } else {
-            Err(anyhow!("Login request failed: {}", resp.status()))
-        }
+        let status = resp.status();
+        let body = resp.text().await?;
+        login_outcome(status, &body)?;
+        // 儲存帳密供 session 過期時重新登入
+        *self.credentials.lock().await = Some((username.to_string(), password.to_string()));
+        tracing::info!("Successfully logged in to qBittorrent");
+        Ok(())
     }
 
     async fn add_torrents(
@@ -491,5 +494,26 @@ impl DownloaderClient for QBittorrentClient {
         } else {
             Err(anyhow!("Failed to delete torrent: {}", resp.status()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use reqwest::StatusCode;
+
+    #[test]
+    fn a_login_succeeds_with_204_from_qbittorrent_5_2_or_ok_from_older_versions() {
+        assert!(login_outcome(StatusCode::NO_CONTENT, "").is_ok());
+        assert!(login_outcome(StatusCode::OK, "Ok.").is_ok());
+        assert!(login_outcome(StatusCode::OK, "").is_ok());
+    }
+
+    #[test]
+    fn wrong_credentials_and_errors_are_failures() {
+        let wrong = login_outcome(StatusCode::OK, "Fails.").unwrap_err();
+        assert!(wrong.to_string().contains("wrong username or password"));
+        assert!(login_outcome(StatusCode::OK, "<html>").is_err());
+        assert!(login_outcome(StatusCode::FORBIDDEN, "").is_err());
     }
 }
