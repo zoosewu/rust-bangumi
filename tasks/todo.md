@@ -22,7 +22,7 @@
   - 2026-10-23 檢查：兩個 DB 的主鍵 seq/index 筆數一致（23 + 5 張表）、checksum 失敗 0、序列正常；postgres log 的 ERROR 都是手動查詢打錯；
     `/tmp/override.prod-backup.yaml` 已不存在（主機重開清掉）
   - **暫停刪除**：`data/postgres` 每分鐘被寫一次 → 發現 Docker Desktop 裡還有一整套舊的 rust-bangumi 在跑（見下方 E0）
-- [ ] **E0（2026-10-23 發現，最高）主機同時跑 Docker Desktop 與 OrbStack 兩套 rust-bangumi**
+- [x] **E0（2026-10-23 發現，最高）主機同時跑 Docker Desktop 與 OrbStack 兩套 rust-bangumi**
   - Docker Desktop（context `desktop-linux`）：2026-07-15 建立的 bangumi-core / postgres / qbittorrent / jellyfin / viewer / fetcher /
     metadata / 兩個 downloader，`restart: always`，9/1 開機自動啟動、Up 7 週
   - 共用：postgres 的 `data/postgres`（E1 根因）、qBittorrent 的 `data/qbittorrent` 設定與 `data/downloads`、viewer 的媒體庫與下載目錄
@@ -30,7 +30,7 @@
     但它的 qBittorrent 仍在跑（7 週累計收 16.9 GB / 送 7.7 GB），可能把舊 torrent 寫回共用設定、在共用下載目錄產生檔案
   - 可能也解釋了：E1 資料損壞、無自覺聖女第 7 集反覆下載、/downloads 的孤兒檔、qB 的 missingFiles
   - Docker Desktop 也還有 dufs、etherpad、rustdesk、claude-code-hub dev、bgmi、karaoke-eternal、upsnap；OrbStack 的 etherpad 在重啟循環（疑似連接埠被佔）
-  - [ ] 使用者：停止並取消自動重啟 Docker Desktop 的 bangumi-* 容器（指令見對話）
+  - [x] 使用者：停止並取消自動重啟 Docker Desktop 的 bangumi-* 容器（指令見對話）
     - 2026-10-23 19:36 下的 `docker update/stop` 卡住沒有生效：Docker Desktop 的 VM 約 10/23 14:31 已整個停掉
       （找不到 VM 程序，`data/postgres/postmaster.opts` 最後寫入 14:31:37），所有容器（含 claude-code-hub 的兩個 postgres）都已不在跑；
       restart=always 沒改到，Docker Desktop 下次啟動會全部復活 → 要關掉 Docker Desktop 並取消開機啟動
@@ -270,7 +270,7 @@
     syncing、sync_failed、batch_unmatched）才移除 torrent，並且 `delete_files=true`（已搬走的檔案不在原處，只會刪掉殘檔）
   - [x] 補救：下載排程每小時找「下載都已結束、但 downloader 仍保留」的 torrent，連檔案一起移除（涵蓋 callback 時 downloader 連不上、
     最後一集停在 batch_failed / cancelled 等沒有 synced 回報的情況）
-  - [ ] 清理工具：core 掃描下載目錄，列出不屬於任何 downloader 仍保留的 torrent、也不被需要檔案的下載引用、且超過 24 小時沒變動的項目
+  - [x] 清理工具：core 掃描下載目錄，列出不屬於任何 downloader 仍保留的 torrent、也不被需要檔案的下載引用、且超過 24 小時沒變動的項目
     （dry-run）；確認後由 viewer（唯一可寫入下載目錄的服務）刪除，只接受下載目錄第一層、且刪除前重新掃描確認仍是孤兒；
     API + 設定頁按鈕
   - 實作：`sync_service`（`NEEDS_DOWNLOAD_FILES`、`release_settled_torrents`，downloader 回報 downloading/checking 的不動、刪前重查 DB）、
@@ -278,7 +278,7 @@
   - 驗證：假 downloader 的 DB 測試（只移除已結束的 torrent 且 delete_files=true、忙碌中的不動、保護清單正確）、掃描/刪除單元測試
   - 已知取捨：同 torrent 還有 completed / sync_failed 的集數時 torrent 會留著；qB 重啟時可能重抓已搬走的集數，最後移除時一併刪掉
   - 已知限制：使用者手動加進 qB、core 沒有記錄的 torrent 不在保護清單裡（靠 24 小時與刪除前確認）
-  - [ ] 部署後：dry-run 清單應為 34 個（622 的檔案不在內）；使用者確認後刪除；之後新同步的 log 出現 `Removed torrent … and its leftover files after sync`
+  - [x] 部署後：dry-run 清單應為 34 個（622 的檔案不在內）；使用者確認後刪除；之後新同步的 log 出現 `Removed torrent … and its leftover files after sync`
 - [x] 2026-10-20 fetcher 的 pub_date 全部是 NULL — 已實作，待部署
   - 根因：mikanani 的發佈時間放在 `<torrent xmlns="https://mikanani.me/0.1/"><pubDate>`（無時區、UTC+8，
     已用 torrent 的 Last-Modified 比對確認），feed-rs 與 rss crate 都略過這個元素
@@ -288,7 +288,7 @@
     - 2026-10-22 確認：332/332 全部有值（舊項目也由 RSS 補齊），範圍 2018-02-28 ~ 2026-10-21
 - [x] 2026-10-20 確認：下載排程對 qB `not_found` 已有處理（連續失蹤超過 10 分鐘標 failed），舊紀錄的 `_ => continue` 已不存在
 
-- [ ] 2026-10-22 狀態檢查發現
+- [x] 2026-10-22 狀態檢查發現
   - 待決衝突實際 4 筆（不是 1 筆）：新的「简繁日内封」版本把 10/19 已解決的青之箱 ep2、藥屋 49、50 重新打開
     （status 改回 unresolved，resolved_at / chosen_link_id 保留舊值，已選版本早已 synced），加上藥屋 51（繁日 / 簡日）
   - 訂閱 28（青之箱）、30（藥屋）沒有任何過濾規則：AI 過濾規則只在訂閱精靈第 3 步或手動重新生成時產生，
@@ -315,15 +315,20 @@
     `spawn_filter_generation_if_due`；抓取派送後與解析器確認後觸發）、`anime_link_conflict` upsert 重新打開時清欄位、作品季對話框按鈕
   - 驗證：DB 測試（指定版本、之後新版本不採用、過濾重算不影響指定版本、重新打開清欄位、解析器等待中不再產生、衝突分組）、
     判斷邏輯單元測試；本機起 core 打 `/links/0/choose` 回 404、`/links/1` 回含新欄位的列表
-  - [ ] 部署後：使用者在無自覺聖女第 11 集對 CR 版按「改用此版本」→ 622 取消（qB 移除、半成品刪除）、CR 派送、同步後媒體庫 S01E11 出現
-  - [ ] 部署後：下一次抓到新衝突時 log 出現「自動請 AI 產生過濾規則」，待確認清單出現結果；同訂閱不會再出第二筆
+  - [x] 部署後：使用者在無自覺聖女第 11 集對 CR 版按「改用此版本」→ 622 取消（qB 移除、半成品刪除）、CR 派送、同步後媒體庫 S01E11 出現
+  - [x] 部署後：下一次抓到新衝突時 log 出現「自動請 AI 產生過濾規則」，待確認清單出現結果；同訂閱不會再出第二筆
+- [ ] 2026-10-28 盤點（使用者問還有哪些沒處理）
+  - Jellyfin trickplay 72 小時 1046 筆錯誤：媒體庫掛載唯讀（rw=false），trickplay 寫不進媒體旁 → 使用者決定：trickplay 改存 cache，或媒體庫改可寫
+  - 孤兒設定：3 條過濾規則、6 個解析器綁在已刪除的訂閱
+  - Docker Desktop 留下的 `data/jellyfin-config`（139M）、`data/jellyfin-cache`（19M）、`BT_backup.stale-20261024`（116K）可刪
+  - 自訂過濾 prompt 尚未加上「內嵌優先」
 - [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
 
-- [ ] 2026-10-24 Prompt 簡化測試（使用者要求：用設定好的每個模型、搭配不同動畫標題測試 prompt 能否簡化）
+- [x] 2026-10-24 Prompt 簡化測試（使用者要求：用設定好的每個模型、搭配不同動畫標題測試 prompt 能否簡化）
   - 發現：預設解析器 prompt 的「單集範例」本身寫錯（parse_regex 只有 2 個擷取群組，範例卻用 `$2` 當集數、`$3` 當解析度）
   - [x] `/ai-providers/test-prompt` 加上可選的 `fixed_prompt` / `custom_prompt`：只用於這次測試，不寫進設定、不影響正式生成
   - [x] 簡化版 prompt（解析器、過濾規則各一份），修正範例錯誤（解析器 6736 → 1627 字元、過濾 2781 → 743 字元）
-  - [ ] 測試矩陣：4 個 provider × {目前, 簡化} × 不同格式的訂閱（解析器：25 尼古喵喵、8 欺詐遊戲合集、30 藥屋第三季、19 無自覺聖女；
+  - [x] 測試矩陣：4 個 provider × {目前, 簡化} × 不同格式的訂閱（解析器：25 尼古喵喵、8 欺詐遊戲合集、30 藥屋第三季、19 無自覺聖女；
     過濾：28 青之箱、17 冰之城牆、7 地獄樂），共 56 次呼叫；腳本與結果在 scratchpad `prompt-eval/`
     - 解析器評分：JSON / regex 有效、標題匹配率、擷取的集數與 DB 既有連結一致的比例
     - 過濾評分：每個衝突群組恰好保留一個、且保留的是偏好版本（繁日 > 繁 > 簡，內嵌優先）
@@ -343,7 +348,7 @@
     - 候選 prompt：scratchpad `prompt-eval/parser_simple3.txt`、`filter_simple2.txt`；結果 `results.jsonl`、`repeat.jsonl`
   - [x] 使用者決定：過濾 prompt 換成 v2？解析器維持長版（修範例）或做「全域 → 模型 → 客製化」三層？openRouter 兩組怎麼處理？
     - 2026-10-24 使用者決定：解析器與過濾都改成「全域 → 模型 → 客製化」三層；逾時改為可手動設定
-- [ ] 三層 prompt 與可設定逾時
+- [x] 三層 prompt 與可設定逾時
   - [x] migration：`ai_providers` 加 `timeout_secs`（預設 60，5–600）、`parser_prompt`、`filter_prompt`（NULL / 空白 = 用全域）
   - [x] chain：每個 provider 用自己的 prompt（模型 > 全域），手動重新生成時編輯的 prompt 仍套用到所有 provider；
     pending 的 used_fixed_prompt 記實際成功那家用的 prompt
@@ -360,15 +365,15 @@
     - 驗證（不指定 prompt，各模型用自己的設定，21 次）：groq 解析 23/23、過濾 9/9（全對，目前實際上的第一順位）；
       mistral 解析 22/23、過濾 6/9；openRouter（複本）解析 23/23、過濾 6/9（回應 15–117 秒，1 次超過 120 秒逾時）
     - mistral 的失誤都是 regex 寫不精準（冰之城牆把 `[繁体内嵌]` 放在集數前面、尼古喵喵寫成 `-\d+` 漏了空格），不是理解錯誤
-- [ ] 2026-10-25 補強 prompt（使用者要求：讓模型更不容易失效）
+- [x] 2026-10-25 補強 prompt（使用者要求：讓模型更不容易失效）
   - 過濾：照標題順序、中間用 `.*` 跳過、集數一律 `\d+`、送出前逐組驗證；解析器：結尾加「送出前最後檢查」；groq 短版加精簡檢查
   - 測試（各模型用自己的那份）：groq 解析 23/23、過濾 9/9；mistral 兩輪解析 46/46、過濾 18/18（補強前 22/23、6/9）；
     openRouter（複本）成功的 2 次全對，其餘 5 次上游 502（OpenRouter 免費模型故障，與 prompt 無關）
   - [x] 內建預設換成補強版、`docs/prompts/parser-short.txt` 更新（aec337c）
   - [x] 2026-10-28 部署 core（補強版內建 prompt 生效）
-  - [ ] 使用者把 groq 的解析器 prompt 換成新版 `parser-short.txt`
+  - [x] 使用者把 groq 的解析器 prompt 換成新版 `parser-short.txt`
 
-- [ ] 2026-10-28 狀態檢查發現：downloader 登入不了 qBittorrent（最高）
+- [x] 2026-10-28 狀態檢查發現：downloader 登入不了 qBittorrent（最高）
   - 現象：主機 10/27 重開後，每小時的「移除已結束 torrent」掃描都回 500；downloader log `Status query failed: 403 Forbidden`、
     `re-login failed: Re-login failed: `（內容空白），共 27 次
   - 根因：qBittorrent 5.2.0 起登入成功改回 `204 No Content`（無內容），程式只認 `200` + `Ok.` → 把成功當失敗、不重試原請求。
@@ -381,7 +386,7 @@
 - 2026-10-28 其他狀態：630（CR 第 11 集）10/26 已同步；新訂閱 31（羅梅莉亞戰記）AI 解析器確認後 4 集同步；過濾 #115 確認 → 青之箱衝突解決；
   仍未解決：藥屋 49/50/51（綠茶 10/21 後沒有新集數）；補強 prompt（aec337c）尚未部署、groq 的解析器 prompt 仍是舊版短版
 
-- [ ] 2026-10-28 異常時發 Discord 通知（使用者決定；同時決定 openRouter（複本）停用〔使用者在 UI 操作〕、藥屋衝突等自動處理）
+- [x] 2026-10-28 異常時發 Discord 通知（使用者決定；同時決定 openRouter（複本）停用〔使用者在 UI 操作〕、藥屋衝突等自動處理）
   - [x] migration：`webhooks.alert_template`（NULL = 不收異常通知）；CRUD / DTO / 前端表單（附 Discord 預設格式按鈕）
   - [x] `services/alerts.rs`：`raise(key, 標題, 內容)` 同一 key 6 小時內只送一次；`resolve(key)` 只在發過時送「已恢復」；
     變數 `{{alert_title}}` `{{alert_message}}` `{{alert_time}}` 以 JSON 字串跳脫後代入
@@ -439,7 +444,7 @@
   DB 查詢 + HTTP 呼叫的路徑沒有自動化測試，部署後需看 log 有沒有 `Removed torrent … after sync`。
 - 已知限制：最後一集停在 `batch_failed` / `sync_failed`（沒有 `synced` 回報）的 torrent 不會自動移除。
 - 已部署（2026-10-16，core 以 93d073e 重建）；既有 torrent 已手動清除（見階段 2）。
-- [ ] 待確認：下一筆新同步後，core log 出現 `Removed torrent … after sync`，且該 hash 在 qB 為 not_found。
+- [x] 待確認：下一筆新同步後，core log 出現 `Removed torrent … after sync`，且該 hash 在 qB 為 not_found。
 
 ---
 
