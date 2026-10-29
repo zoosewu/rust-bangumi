@@ -340,7 +340,11 @@
 - [x] 使用者：Jellyfin 後台每個媒體庫取消「將 trickplay 圖片存放在媒體旁」
   - 2026-10-28 確認：唯一的媒體庫「節目」options.xml 11:25 已存檔、`SaveTrickplayWithMedia` 已不在（預設 false 不寫入），
     其他 trickplay 設定仍開著；11:35–11:50 無 trickplay 錯誤
-  - [ ] 觀察：下次媒體庫掃描（或排程的 trickplay 任務）後 `Error creating trickplay images` 不再出現
+  - [x] 觀察：下次媒體庫掃描（或排程的 trickplay 任務）後 `Error creating trickplay images` 不再出現
+    - 2026-10-29 確認：改設定前累積 8093 筆錯誤（最後一筆 10/28 10:54），改設定後 0 筆；10/28 起持續正常產生 trickplay（10/29 已 47 部）
+- 2026-10-29 狀態檢查：全部服務 healthy；10/28 起無新下載、無新 RSS 項目（最新 10/24）——抽查 mikan 上綠茶藥屋停在 51、青之箱停在 03、
+  尼古喵喵停在 11，是字幕組尚未更新，抓取正常；downloader 24 小時內無 403 / 失敗；core 無 WARN / ERROR、未觸發任何異常通知；
+  每日備份 10:13（台灣時間）正常
 - [ ] 技術債：`tests/anime_api_tests.rs` 把資料 commit 進測試 DB（沒有 rollback），第二次跑就撞 unique constraint
 
 - [x] 2026-10-24 Prompt 簡化測試（使用者要求：用設定好的每個模型、搭配不同動畫標題測試 prompt 能否簡化）
