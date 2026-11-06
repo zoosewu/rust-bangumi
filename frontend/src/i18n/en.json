@@ -61,7 +61,8 @@
       "failed": "Failed",
       "skipped": "Skipped",
       "eliminated": "Eliminated",
-      "conflict": "Conflict"
+      "conflict": "Conflict",
+      "filtered": "Filtered"
     },
     "download": {
       "completed": "Completed",

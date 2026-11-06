@@ -1241,7 +1241,7 @@ paths:
         - name: status
           in: query
           required: false
-          description: 過濾狀態（pending/parsed/no_match/failed/skipped）
+          description: 過濾狀態（pending/parsed/no_match/filtered/failed/skipped；filtered = 解析前就被全域或訂閱層級的過濾規則排除，不解析、不請 AI 產生解析器）
           schema:
             type: string
         - name: subscription_id
@@ -3315,7 +3315,7 @@ components:
           type: integer
         status:
           type: string
-          description: 解析狀態（pending/parsed/no_match/failed/skipped）
+          description: 解析狀態（pending/parsed/no_match/filtered/failed/skipped；filtered = 解析前就被全域或訂閱層級的過濾規則排除，不解析、不請 AI 產生解析器）
         parser_id:
           type: integer
           nullable: true

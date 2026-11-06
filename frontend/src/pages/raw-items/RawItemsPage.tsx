@@ -26,7 +26,7 @@ import { TitleCell } from "@/components/shared/TitleCell"
 import { formatDateTime } from "@/lib/datetime"
 import { getRawItemStatusKind } from "./rawItemStatus"
 
-const STATUSES = ["all", "pending", "parsed", "no_match", "failed", "skipped"]
+const STATUSES = ["all", "pending", "parsed", "no_match", "filtered", "failed", "skipped"]
 const PAGE_SIZE = 50
 const RETRYABLE_DOWNLOAD = new Set(["failed", "downloader_error", "no_downloader"])
 

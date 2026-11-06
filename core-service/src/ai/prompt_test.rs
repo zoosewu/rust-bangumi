@@ -90,8 +90,13 @@ pub fn build_sample(
     let system_prompt = build_system_prompt(Some(&fixed));
     match kind {
         PromptKind::Parser => {
+            // 與正式流程相同：解析前就被過濾掉的標題不送
             let all: Vec<String> = raw_anime_items::table
                 .filter(raw_anime_items::subscription_id.eq(subscription_id))
+                .filter(
+                    raw_anime_items::status
+                        .ne(crate::services::title_parser::ParseStatus::Filtered.as_str()),
+                )
                 .order((
                     raw_anime_items::pub_date.asc(),
                     raw_anime_items::item_id.asc(),

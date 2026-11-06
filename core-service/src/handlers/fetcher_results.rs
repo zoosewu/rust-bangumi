@@ -578,9 +578,23 @@ pub async fn receive_raw_fetcher_results(
                 .collect();
 
             let identity = prepare_identity(&mut conn, &state.db, &saved_items).await;
+            // 全域 / 訂閱層級的過濾規則在解析前套用：被排除的不解析、不請 AI
+            let prefilter_rules = crate::services::prefilter::rules_before_parsing(
+                &mut conn,
+                payload.subscription_id,
+            )
+            .unwrap_or_else(|e| {
+                tracing::warn!("無法載入解析前過濾規則: {}", e);
+                vec![]
+            });
 
             for saved_item in saved_items {
                 let raw_item = &saved_item;
+                if crate::services::prefilter::excluded(&prefilter_rules, &raw_item.title) {
+                    crate::services::prefilter::mark_filtered(&mut conn, raw_item.item_id).ok();
+                    tracing::debug!("Filtered before parsing: {}", raw_item.title);
+                    continue;
+                }
                 // 嘗試解析標題
                 match TitleParserService::parse_title(
                     &mut conn,

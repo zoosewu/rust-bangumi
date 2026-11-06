@@ -143,6 +143,12 @@ pub async fn create_filter_rule(
                     ),
                     Err(e) => tracing::warn!("Failed to re-dispatch after filter create: {}", e),
                 }
+                // 全域 / 訂閱層級的規則也影響解析前過濾
+                crate::services::prefilter::refresh_after_rule_change(
+                    std::sync::Arc::new(db.clone()),
+                    tt,
+                    tid,
+                );
             });
 
             let response = FilterRuleResponse {
@@ -456,6 +462,12 @@ pub async fn delete_filter_rule(
                             ),
                             Err(e) => tracing::warn!("Failed to re-dispatch after filter delete: {}", e),
                         }
+                        // 全域 / 訂閱層級的規則也影響解析前過濾
+                        crate::services::prefilter::refresh_after_rule_change(
+                            std::sync::Arc::new(db.clone()),
+                            tt,
+                            tid,
+                        );
                     });
                 }
 

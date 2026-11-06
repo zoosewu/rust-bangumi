@@ -143,6 +143,14 @@ pub async fn reparse_affected_items(
     let identity = crate::handlers::fetcher_results::prepare_identity(&mut conn, &db, &items).await;
 
     for item in &items {
+        // 解析前過濾：還沒有連結的項目若被全域 / 訂閱層級規則排除，就不解析
+        // （已有連結的照常重新解析，連結的 filtered_flag 會由過濾重算處理）
+        if crate::services::prefilter::excluded_for(&mut conn, item.subscription_id, &item.title)
+            && !crate::services::prefilter::has_links(&mut conn, item.item_id).unwrap_or(true)
+        {
+            crate::services::prefilter::mark_filtered(&mut conn, item.item_id).ok();
+            continue;
+        }
         match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
                 match upsert_anime_link(&mut conn, &identity, item, &parsed) {

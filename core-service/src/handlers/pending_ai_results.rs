@@ -290,6 +290,12 @@ pub async fn confirm_pending(
                     ),
                     Err(e) => tracing::warn!("Failed to dispatch after filter confirm: {}", e),
                 }
+                // 全域 / 訂閱層級的規則也影響解析前過濾
+                crate::services::prefilter::refresh_after_rule_change(
+                    std::sync::Arc::new(db.clone()),
+                    target_type,
+                    target_id,
+                );
             });
         }
         _ => {}
@@ -441,6 +447,11 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
     let mut still_unmatched_subs: HashSet<i32> = HashSet::new();
     for item in &items {
         let mut conn = pool.get().map_err(|e| e.to_string())?;
+        // 全域 / 訂閱層級的過濾規則在解析前套用：被排除的標成 filtered，不算未匹配
+        if crate::services::prefilter::excluded_for(&mut conn, item.subscription_id, &item.title) {
+            crate::services::prefilter::mark_filtered(&mut conn, item.item_id).ok();
+            continue;
+        }
         match TitleParserService::parse_title(&mut conn, &item.title, item.subscription_id) {
             Ok(Some(parsed)) => {
                 match crate::handlers::fetcher_results::process_parsed_result(

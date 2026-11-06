@@ -32,6 +32,8 @@ pub enum ParseStatus {
     Failed,
     NoMatch,
     Skipped,
+    /// 解析前就被全域 / 訂閱層級的過濾規則排除（不解析、不請 AI 產生解析器）
+    Filtered,
 }
 
 impl ParseStatus {
@@ -43,6 +45,7 @@ impl ParseStatus {
             ParseStatus::Failed => "failed",
             ParseStatus::NoMatch => "no_match",
             ParseStatus::Skipped => "skipped",
+            ParseStatus::Filtered => "filtered",
         }
     }
 }

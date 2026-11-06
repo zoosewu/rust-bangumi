@@ -61,7 +61,8 @@
       "failed": "失敗",
       "skipped": "已略過",
       "eliminated": "已淘汰",
-      "conflict": "衝突"
+      "conflict": "衝突",
+      "filtered": "已過濾"
     },
     "download": {
       "completed": "已完成",

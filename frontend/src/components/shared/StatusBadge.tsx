@@ -7,6 +7,7 @@ const statusTone: Record<string, TagBadgeTone> = {
   no_match: "muted",
   failed: "danger",
   skipped: "info",
+  filtered: "muted",
   eliminated: "muted",
   conflict: "warning",
 }
@@ -17,6 +18,7 @@ const statusLabelKey: Record<string, string> = {
   no_match: "tags.status.noMatch",
   failed: "tags.status.failed",
   skipped: "tags.status.skipped",
+  filtered: "tags.status.filtered",
   eliminated: "tags.status.eliminated",
   conflict: "tags.status.conflict",
 }

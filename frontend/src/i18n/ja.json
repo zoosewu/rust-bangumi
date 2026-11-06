@@ -61,7 +61,8 @@
       "failed": "失敗",
       "skipped": "スキップ済み",
       "eliminated": "除外済み",
-      "conflict": "コンフリクト"
+      "conflict": "コンフリクト",
+      "filtered": "フィルター済み"
     },
     "download": {
       "completed": "完了",
