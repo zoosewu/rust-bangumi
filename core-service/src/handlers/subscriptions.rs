@@ -1193,10 +1193,21 @@ pub async fn detect_conflicts_and_generate_filters(
 
     let groups_count = conflict_groups.len();
 
-    // 3. 觸發 AI 過濾器生成（背景非同步）
-    if !conflict_groups.is_empty() {
+    // 3. 觸發 AI 過濾器生成（背景非同步）；使用者主動要求，不看「是否該產生」，
+    //    但同一訂閱已經在產生時不重複
+    let claim = (!conflict_groups.is_empty())
+        .then(|| crate::ai::auto_trigger::claim("filter", subscription_id))
+        .flatten();
+    if !conflict_groups.is_empty() && claim.is_none() {
+        tracing::info!(
+            "subscription={} 已經在產生過濾規則，略過這次觸發",
+            subscription_id
+        );
+    }
+    if let Some(claim) = claim {
         let pool_clone = pool.clone();
         tokio::spawn(async move {
+            let _claim = claim;
             if let Err(e) = crate::ai::filter_generator::generate_filters_for_subscription_batch(
                 pool_clone,
                 Some(subscription_id),

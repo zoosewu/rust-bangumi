@@ -650,30 +650,12 @@ pub async fn receive_raw_fetcher_results(
                 }
             }
 
-            // 若有未匹配項目、且沒有等待確認的解析器，背景觸發批次 AI 解析器生成
-            let parser_due = items_failed > 0
-                && crate::ai::auto_trigger::parser_due(&mut conn, payload.subscription_id)
-                    .unwrap_or_else(|e| {
-                        tracing::warn!("無法判斷是否產生解析器: {}", e);
-                        false
-                    });
-            if parser_due {
-                let pool_clone = pool.clone();
-                let sub_id = payload.subscription_id;
-                tokio::spawn(async move {
-                    if let Err(e) =
-                        crate::ai::parser_generator::generate_parsers_for_subscription_batch(
-                            pool_clone, sub_id,
-                        )
-                        .await
-                    {
-                        tracing::warn!(
-                            "Batch parser generation failed for subscription={}: {}",
-                            sub_id,
-                            e
-                        );
-                    }
-                });
+            // 若有未匹配項目、且沒有等待確認 / 產生中的解析器，背景觸發批次 AI 解析器生成
+            if items_failed > 0 {
+                crate::ai::auto_trigger::spawn_parser_generation_if_due(
+                    pool.clone(),
+                    payload.subscription_id,
+                );
             }
 
             // 批次派發新建的下載連結

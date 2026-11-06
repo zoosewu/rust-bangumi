@@ -476,33 +476,9 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
         }
     }
 
-    // 對每個仍有未匹配項目的訂閱，檢查是否已有進行中的批次 pending，若無則觸發
+    // 對每個仍有未匹配項目的訂閱，沒有等待確認 / 產生中的解析器時觸發（同一訂閱同時只跑一個）
     for sub_id in still_unmatched_subs {
-        let already_generating = {
-            let mut conn = pool.get().map_err(|e| e.to_string())?;
-            pending_ai_results::table
-                .filter(pending_ai_results::result_type.eq("parser"))
-                .filter(pending_ai_results::subscription_id.eq(sub_id))
-                .filter(pending_ai_results::status.eq("generating"))
-                .count()
-                .get_result::<i64>(&mut conn)
-                .unwrap_or(0)
-                > 0
-        };
-
-        if !already_generating {
-            let pool_clone = pool.clone();
-            tokio::spawn(async move {
-                if let Err(e) =
-                    crate::ai::parser_generator::generate_parsers_for_subscription_batch(
-                        pool_clone, sub_id,
-                    )
-                    .await
-                {
-                    tracing::warn!("Batch parser 生成失敗 subscription={}: {}", sub_id, e);
-                }
-            });
-        }
+        crate::ai::auto_trigger::spawn_parser_generation_if_due(pool.clone(), sub_id);
     }
 
     Ok(new_link_ids)

@@ -2,8 +2,10 @@
 //!
 //! 同一個訂閱的同一種結果一次只有一組等待確認；失敗後隔一段時間才重試（避免每次抓取都撞上限流）；
 //! 使用者看過（確認或拒絕）之後，只有出現新的輸入（未匹配標題 / 衝突）才再產生。
+//! 同一個訂閱的同一種結果同時只會有一個在產生（`claim`），多個觸發點同時呼叫也不會重複。
 
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex, OnceLock};
 
 use chrono::{Duration, NaiveDateTime};
 use diesel::prelude::*;
@@ -16,6 +18,41 @@ use crate::services::title_parser::ParseStatus;
 pub const RETRY_AFTER_FAILURE: Duration = Duration::hours(6);
 /// 停在 generating 超過這段時間視為中斷（例如服務重啟），可以重新產生
 pub const STALE_GENERATING: Duration = Duration::hours(1);
+
+/// 正在產生的（種類, 訂閱）
+fn in_flight() -> &'static Mutex<HashSet<(&'static str, i32)>> {
+    static IN_FLIGHT: OnceLock<Mutex<HashSet<(&'static str, i32)>>> = OnceLock::new();
+    IN_FLIGHT.get_or_init(Default::default)
+}
+
+/// 產生期間的佔位，drop 時放開
+pub struct GenerationClaim {
+    kind: &'static str,
+    subscription_id: i32,
+}
+
+impl Drop for GenerationClaim {
+    fn drop(&mut self) {
+        in_flight()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&(self.kind, self.subscription_id));
+    }
+}
+
+/// 佔住「這個訂閱正在產生這種結果」；已經有人在產生時回傳 None。
+/// 佔位要一直持有到產生結束（待確認結果寫入之後），之後的判斷才看得到它。
+pub fn claim(kind: &'static str, subscription_id: i32) -> Option<GenerationClaim> {
+    let inserted = in_flight()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert((kind, subscription_id));
+    // 只在佔到時才建立：GenerationClaim 被丟掉時會放開佔位（而且要拿同一把鎖）
+    inserted.then(|| GenerationClaim {
+        kind,
+        subscription_id,
+    })
+}
 
 /// 依同訂閱最新一筆結果（狀態、建立時間）與最新的輸入時間，決定要不要再產生
 pub fn should_generate(
@@ -135,9 +172,54 @@ fn newest_conflict(
         .first(conn)
 }
 
-/// 訂閱有未解決的衝突、且沒有等待中的過濾規則時，背景請 AI 產生（結果進待確認清單）。
+/// 訂閱有未匹配標題、且沒有等待中 / 產生中的解析器時，背景請 AI 產生（結果進待確認清單）。
+/// 回傳是否觸發。
+pub fn spawn_parser_generation_if_due(pool: Arc<DbPool>, subscription_id: i32) -> bool {
+    let Some(claim) = claim("parser", subscription_id) else {
+        return false;
+    };
+    let due = pool
+        .get()
+        .map_err(|e| e.to_string())
+        .and_then(|mut conn| parser_due(&mut conn, subscription_id).map_err(|e| e.to_string()));
+    match due {
+        Ok(true) => {
+            tracing::info!(
+                "subscription={} 有未匹配標題，自動請 AI 產生解析器",
+                subscription_id
+            );
+            tokio::spawn(async move {
+                let _claim = claim;
+                if let Err(e) =
+                    crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+                        pool,
+                        subscription_id,
+                    )
+                    .await
+                {
+                    tracing::warn!("自動產生解析器失敗 subscription={}: {}", subscription_id, e);
+                }
+            });
+            true
+        }
+        Ok(false) => false,
+        Err(e) => {
+            tracing::warn!(
+                "無法判斷是否產生解析器 subscription={}: {}",
+                subscription_id,
+                e
+            );
+            false
+        }
+    }
+}
+
+/// 訂閱有未解決的衝突、且沒有等待中 / 產生中的過濾規則時，背景請 AI 產生（結果進待確認清單）。
 /// 回傳是否觸發。
 pub fn spawn_filter_generation_if_due(pool: Arc<DbPool>, subscription_id: i32) -> bool {
+    let Some(claim) = claim("filter", subscription_id) else {
+        return false;
+    };
     let groups = pool.get().map_err(|e| e.to_string()).and_then(|mut conn| {
         let latest =
             latest_result(&mut conn, "filter", subscription_id).map_err(|e| e.to_string())?;
@@ -160,6 +242,7 @@ pub fn spawn_filter_generation_if_due(pool: Arc<DbPool>, subscription_id: i32) -
                 groups.len()
             );
             tokio::spawn(async move {
+                let _claim = claim;
                 if let Err(e) =
                     crate::ai::filter_generator::generate_filters_for_subscription_batch(
                         pool,
@@ -199,6 +282,25 @@ mod tests {
             .and_hms_opt(0, 0, 0)
             .unwrap()
             + Duration::hours(h)
+    }
+
+    #[test]
+    fn only_one_generation_per_subscription_and_kind_at_a_time() {
+        let first = claim("parser", 900_001).expect("free");
+        assert!(claim("parser", 900_001).is_none(), "already generating");
+        assert!(
+            claim("filter", 900_001).is_some(),
+            "another kind is independent"
+        );
+        assert!(
+            claim("parser", 900_002).is_some(),
+            "another subscription is independent"
+        );
+        drop(first);
+        assert!(
+            claim("parser", 900_001).is_some(),
+            "released when the generation ends"
+        );
     }
 
     #[test]
@@ -273,6 +375,23 @@ mod tests {
 
         fn result(conn: &mut PgConnection, kind: &str, sub: i32, status: &str) {
             insert(conn, &format!("INSERT INTO pending_ai_results (result_type, source_title, status, subscription_id) VALUES ('{kind}', 'batch', '{status}', {sub}) RETURNING id"));
+        }
+
+        #[tokio::test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        async fn two_triggers_at_once_start_one_generation() {
+            // 2026-11-05 訂閱 33：解析器確認與精靈第 3 步同時觸發，產生了兩個待確認解析器
+            let pool = Arc::new(test_db::pool());
+            let sub = {
+                let mut conn = pool.get().unwrap();
+                let sub = subscription(&mut conn, "two-triggers");
+                item(&mut conn, sub, "[X] new - 01", "no_match");
+                sub
+            };
+            let first = spawn_parser_generation_if_due(pool.clone(), sub);
+            let second = spawn_parser_generation_if_due(pool.clone(), sub);
+            assert!(first, "the first trigger generates");
+            assert!(!second, "the second sees the first one in flight");
         }
 
         #[test]
