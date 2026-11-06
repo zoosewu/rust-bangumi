@@ -229,10 +229,11 @@ pub async fn generate_filters_for_subscription_batch(
 
     // 只送前幾集的衝突；確認後的規則會套用到其餘集數，還有衝突時再重新產生
     let total_groups = conflict_groups.len();
-    let mut remaining: Vec<(Vec<String>, String)> = first_episodes(conflict_groups);
+    let mut remaining: Vec<(Vec<String>, String)> =
+        sample_groups(conflict_groups, |(titles, _)| titles.as_slice());
     if remaining.len() < total_groups {
         tracing::info!(
-            "AI 過濾規則只送前 {} 集的衝突（共 {} 集）",
+            "AI 過濾規則送 {} 組衝突（前幾集與格式不同的組，共 {} 組）",
             remaining.len(),
             total_groups
         );

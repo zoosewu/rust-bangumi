@@ -315,7 +315,7 @@ pub async fn generate_parsers_for_subscription_batch(
         // 去重後只送最早幾集的所有版本（避免佔用過多 token；確認後的解析器會套用到其餘集數）
         let unique_titles: Vec<String> = {
             let mut seen = std::collections::HashSet::new();
-            titles_of_first_episodes(
+            sample_titles(
                 unmatched
                     .iter()
                     .filter(|item| seen.insert(item.title.clone()))

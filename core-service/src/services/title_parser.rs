@@ -429,6 +429,36 @@ mod tests {
     }
 
     #[test]
+    fn an_optional_range_end_parses_singles_and_batches() {
+        let parser = TitleParser {
+            condition_regex: r"城下町的蒲公英\s*第\d+".to_string(),
+            parse_regex: r"^\[澄空学园&华盟字幕社\].*?城下町的蒲公英\s*第(\d+)(?:-(\d+))?话"
+                .to_string(),
+            anime_title_source: ParserSourceType::Static,
+            anime_title_value: "城下町的蒲公英".to_string(),
+            episode_no_value: "$1".to_string(),
+            episode_end_value: Some("$2".to_string()),
+            ..make_batch_parser()
+        };
+        let parse = |t: &str| {
+            let r = TitleParserService::try_parser(&parser, t).unwrap().unwrap();
+            (r.episode_no, r.episode_end)
+        };
+        assert_eq!(
+            parse("[澄空学园&华盟字幕社][7月新番] 城下町的蒲公英 第03话 MP4 720p"),
+            (3, None)
+        );
+        assert_eq!(
+            parse("[澄空学园&华盟字幕社] 城下町的蒲公英 第12话 MP4 720p 完"),
+            (12, None)
+        );
+        assert_eq!(
+            parse("[澄空学园&华盟字幕社] 城下町的蒲公英 第01-12话 MP4 720p 合集"),
+            (1, Some(12))
+        );
+    }
+
+    #[test]
     fn test_try_parser_extracts_episode_end() {
         let parser = make_batch_parser();
         let title = "動畫名 01-12 [1080p]";

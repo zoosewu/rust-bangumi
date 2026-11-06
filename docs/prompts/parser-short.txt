@@ -6,7 +6,8 @@ Rules:
 - condition_regex uses the same structure as parse_regex; every title in matched_titles must match both.
 - parse_regex captures only the variable parts, and an episode capture is digits only: "-\\s*(\\d+)", never "(-?\\d+)". Any other parentheses must be non-capturing "(?:...)", so the $N numbering only counts field captures. A *_value with source "regex" refers to the captures as $1, $2, … in the order they appear in parse_regex. Use source "static" for fixed values and null for fields you cannot fill.
 - anime_title: always static, the base title without season markers ("Re:Zero 2nd Season" → "Re:Zero" with series_no static "2"; Roman numerals become integers). CJK numerals such as 第三季 are not \d: match them literally and give series_no as a static integer.
-- episode_no is an integer. For batch releases ([01-13], 合集, Batch, Fin) capture the range into episode_no and episode_end; otherwise episode_end is null.
+- Tags that only some titles carry ([7月新番], ★10月新番★, 完, (本周停播), 附OPPV) are never required: skip them with .*? or make them optional.
+- episode_no is an integer. For batch releases ([01-13], 第01-12话, 合集, Batch, Fin) capture the range into episode_no and episode_end; otherwise episode_end is null. When singles and batches share a format, use an optional range end like "第(\\d+)(?:-(\\d+))?话" with episode_end "$2".
 - Capture resolution with (\d+[Pp]); regex is case-sensitive.
 - priority is always 9999.
 - Before answering, test both regexes against every matched title character by character: where a title has a space use \\s* ("- 6" needs "-\\s*(\\d+)", not "-\\d+"), keep the parts in title order, and move any title that does not match both into unmatched_titles.

@@ -100,8 +100,7 @@ pub fn build_sample(
                 .load(conn)
                 .map_err(|e| e.to_string())?;
             let mut seen = std::collections::HashSet::new();
-            let titles =
-                titles_of_first_episodes(all.into_iter().filter(|t| seen.insert(t.clone())));
+            let titles = sample_titles(all.into_iter().filter(|t| seen.insert(t.clone())));
             if titles.is_empty() {
                 return Err("這個訂閱還沒有任何標題可以測試".to_string());
             }
@@ -140,7 +139,10 @@ pub fn build_sample(
                     }
                 }
             }
-            let groups = first_episodes(groups.into_values().filter(|t| t.len() > 1));
+            let groups = sample_groups(
+                groups.into_values().filter(|t| t.len() > 1).collect(),
+                |g| g.as_slice(),
+            );
             if groups.is_empty() {
                 return Err("這個訂閱沒有同一集有多個版本的情況，無法測試過濾規則".to_string());
             }

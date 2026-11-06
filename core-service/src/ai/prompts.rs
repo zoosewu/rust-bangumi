@@ -171,10 +171,15 @@ Strip season numbers and identifiers — `anime_title` must be the base work tit
 - "Overlord IV" → `"Overlord"`, series_no `"static"`/`"4"` (Roman → integer)
 - "進擊の巨人 The Final Season" → `"進擊の巨人"`, series_no `null`
 
+## Tags That Only Some Releases Carry
+
+Release groups add tags to some episodes only: season announcements (`[7月新番]`, `★10月新番★`), `完` / `END` on the last episode, `(本周停播)`, `附OPPV`, `v2`. Compare all the titles: when a tag appears in some titles but not in others, never make it required. Skip it with `.*?` or make it optional (e.g. `(?:\\[7月新番\\])?`), so one parser covers the titles with and without it.
+
 ## Batch Torrents (合輯)
 
 Some titles are batch/collection releases containing multiple episodes in a single torrent. Recognize these patterns:
 - `[01-13 合集]`, `[01-13]`, `[01~13]` — episode range in brackets
+- `第01-12话`, `第10-11話` — episode range in 第…话 form
 - `Batch`, `Complete`, `Fin` — batch/final markers
 - `合集`, `全集` — Chinese batch markers
 
@@ -183,6 +188,8 @@ For batch titles, set **both** `episode_no` (start) and `episode_end` (end):
 - `episode_end_source`/`episode_end_value`: the **last** episode number
 
 For single-episode titles, set `episode_end_source` and `episode_end_value` to `null`.
+
+When single episodes and batches share the same format, one parser can cover both with an optional range end: `第(\\d+)(?:-(\\d+))?话` with `episode_no_value` `"$1"` and `episode_end_value` `"$2"` (left empty for a single episode).
 
 ### Batch Example
 
@@ -236,6 +243,7 @@ Test condition_regex and parse_regex against every title you put in matched_titl
 - **Captures**: only field values are captured. Any other parentheses must be non-capturing `(?:...)`, so `$1`, `$2`, … point at the right fields. An episode capture is digits only: `(\\d+)`, never `(-?\\d+)`.
 - **Escaping**: only `[` and `]` are escaped. Characters such as `【】★／・` are written as-is, never with a backslash.
 - **condition_regex** uses the same structure as parse_regex. If a title does not match both, move it to unmatched_titles.
+- **Optional tags**: a tag missing from some titles (`[7月新番]`, `完`, `(本周停播)`) is not required by either regex.
 
 Return ONLY the JSON object, no extra text."#;
 
@@ -247,7 +255,7 @@ How rules combine — read carefully:
 - So write exactly ONE positive rule that matches only the preferred version, e.g. its language tag. Never write one positive rule per version: several positive rules must all match at once, so nothing would be kept.
 - Add negative rules only when one positive rule cannot exclude the rest.
 
-Each regex_pattern contains the subtitle group and the anime title plus the part that singles out the preferred version — never a group name alone. Write the parts in the same order as in the titles; the safest form is `^\\[Group\\]\\s*Title.*\\[PreferredTag\\]`, using `.*` to skip everything in between instead of spelling it out. Episode numbers are always `\\d+`: a rule must also work for future episodes, so never put a specific episode number in it. Escape only [ and ]; other characters such as 【】★ are written as-is. The output is JSON, so double every backslash: "\\[", "\\d+". rule_order starts at 1. resolved_groups / unresolved_groups hold 1-based group numbers; every group appears in exactly one of them.
+Each regex_pattern contains the subtitle group and the anime title plus the part that singles out the preferred version — never a group name alone. Write the parts in the same order as in the titles; the safest form is `^\\[Group\\]\\s*Title.*\\[PreferredTag\\]`, using `.*` to skip everything in between instead of spelling it out. Episode numbers are always `\\d+`: a rule must also work for future episodes, so never put a specific episode number in it. Leave out tags that only some releases carry (`[7月新番]`, `★10月新番★`, `完`, `(本周停播)`, `附OPPV`) — later episodes will not have them; skip them with `.*`. Escape only [ and ]; other characters such as 【】★ are written as-is. The output is JSON, so double every backslash: "\\[", "\\d+". rule_order starts at 1. resolved_groups / unresolved_groups hold 1-based group numbers; every group appears in exactly one of them.
 
 Before answering, test every rule against every title in every group: exactly one title per group must be kept, and it must be the preferred one.
 
@@ -276,14 +284,67 @@ pub fn build_parser_user_prompt(title: &str, custom: Option<&str>) -> String {
     s
 }
 
-/// 組裝 parser 的 batch user prompt（多個標題，用於批次生成）
-/// 一次送給 AI 的集數。同一部作品各集標題的格式相同，前幾集就足以歸納出規則；
+/// 一次送給 AI 的集數。同一部作品各集標題的格式大多相同，前幾集就足以歸納出規則；
 /// 送更多只會多耗 token（Groq 免費方案每分鐘 8K token），規則確認後會套用到其餘集數。
 pub const AI_SAMPLE_EPISODES: usize = 3;
 
-/// 依集數排好的項目中，取送給 AI 的前幾集
-pub fn first_episodes<T>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    items.into_iter().take(AI_SAMPLE_EPISODES).collect()
+/// 除了前幾集，再補幾個「格式不同」的標題 / 衝突組。前幾集常有後面沒有的標籤（`[7月新番]`），
+/// 只看前幾集會讓 AI 把它寫死；合集、`完`、`(本周停播)` 這類格式也要讓 AI 看到。
+pub const AI_SAMPLE_EXTRA_SHAPES: usize = 8;
+
+/// 標題的格式：連續數字換成 `#`。只差在集數、解析度數字的標題格式相同。
+pub fn title_shape(title: &str) -> String {
+    let mut shape = String::with_capacity(title.len());
+    let mut in_digits = false;
+    for c in title.chars() {
+        if c.is_ascii_digit() {
+            if !in_digits {
+                shape.push('#');
+            }
+            in_digits = true;
+        } else {
+            shape.push(c);
+            in_digits = false;
+        }
+    }
+    shape
+}
+
+/// 依發布順序排好的標題中，送給 AI 的樣本：前幾集的所有版本，再加上每種還沒出現過的格式各一個
+pub fn sample_titles(titles: impl IntoIterator<Item = String>) -> Vec<String> {
+    let titles: Vec<String> = titles.into_iter().collect();
+    let mut sample = titles_of_first_episodes(titles.iter().cloned());
+    let mut shapes: std::collections::HashSet<String> =
+        sample.iter().map(|t| title_shape(t)).collect();
+    let extras: Vec<String> = titles
+        .into_iter()
+        .filter(|t| !sample.contains(t) && shapes.insert(title_shape(t)))
+        .take(AI_SAMPLE_EXTRA_SHAPES)
+        .collect();
+    sample.extend(extras);
+    sample
+}
+
+/// 依集數排好的衝突組中，送給 AI 的樣本：前幾組，再加上版本組合（各標題格式）不同的組
+pub fn sample_groups<T>(groups: Vec<T>, titles_of: impl Fn(&T) -> &[String]) -> Vec<T> {
+    let signature = |g: &T| {
+        let mut shapes: Vec<String> = titles_of(g).iter().map(|t| title_shape(t)).collect();
+        shapes.sort();
+        shapes
+    };
+    let mut seen = std::collections::HashSet::new();
+    let mut sample = Vec::new();
+    let mut extras = 0;
+    for (i, group) in groups.into_iter().enumerate() {
+        let new_signature = seen.insert(signature(&group));
+        if i < AI_SAMPLE_EPISODES {
+            sample.push(group);
+        } else if new_signature && extras < AI_SAMPLE_EXTRA_SHAPES {
+            extras += 1;
+            sample.push(group);
+        }
+    }
+    sample
 }
 
 /// 從還沒解析的標題粗略猜出集數（`[05]`、` - 05 `、`第05話`、`[01-12]`），
@@ -305,7 +366,7 @@ pub fn guess_episode_key(title: &str) -> Option<String> {
 
 /// 依發布順序排好的標題中，取前幾集的**所有版本**（一集有三個版本就會有三個標題）。
 /// 猜不出集數的標題各自算一集。
-pub fn titles_of_first_episodes(titles: impl IntoIterator<Item = String>) -> Vec<String> {
+fn titles_of_first_episodes(titles: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut episodes: Vec<String> = Vec::new();
     titles
         .into_iter()
@@ -446,10 +507,83 @@ mod sample_tests {
         assert!(!rule.is_match("[Group] Frieren [05][1080p][简日内嵌]"));
     }
 
+    /// 城下町的蒲公英（2026-11-05）：前 3 集有 `[7月新番]`，之後沒有；還有合集與「完」「本周停播」
+    fn dandelion() -> Vec<String> {
+        let g = "[澄空学园&华盟字幕社]";
+        let mut titles = Vec::new();
+        for ep in 1..=3 {
+            titles.push(format!(
+                "{g}[7月新番] 城下町的蒲公英 第{ep:02}话 MKV 1080p HEVC 简体外挂"
+            ));
+            titles.push(format!("{g}[7月新番] 城下町的蒲公英 第{ep:02}话 MP4 720p"));
+        }
+        for ep in 4..=11 {
+            titles.push(format!(
+                "{g} 城下町的蒲公英 第{ep:02}话 MKV 1080p HEVC 简体外挂"
+            ));
+            titles.push(format!("{g} 城下町的蒲公英 第{ep:02}话 MP4 720p"));
+        }
+        titles.push(format!("{g} 城下町的蒲公英 第09话 MP4 720p (本周停播)"));
+        titles.push(format!("{g} 城下町的蒲公英 第12话 MP4 720p 完"));
+        titles.push(format!(
+            "{g} 城下町的蒲公英 第01-12话 MKV 1080p HEVC 简体外挂 合集"
+        ));
+        titles.push(format!("{g} 城下町的蒲公英 第01-12话 MP4 720p 合集"));
+        titles
+    }
+
     #[test]
-    fn only_the_first_episodes_are_sent() {
-        assert_eq!(first_episodes(1..=26), vec![1, 2, 3]);
-        assert_eq!(first_episodes(vec!["only"]), vec!["only"]);
+    fn the_sample_covers_formats_that_appear_after_the_first_episodes() {
+        let sample = sample_titles(dandelion());
+        assert_eq!(sample.iter().filter(|t| t.contains("[7月新番]")).count(), 6);
+        for later in [
+            "城下町的蒲公英 第04话 MKV",
+            "城下町的蒲公英 第04话 MP4",
+            "(本周停播)",
+            "完",
+            "第01-12话 MKV",
+            "第01-12话 MP4",
+        ] {
+            assert!(
+                sample.iter().any(|t| t.contains(later)),
+                "{later} is missing"
+            );
+        }
+        assert!(sample.len() <= 6 + AI_SAMPLE_EXTRA_SHAPES);
+        assert!(
+            !sample.iter().any(|t| t.contains("第05话")),
+            "same format as episode 4"
+        );
+    }
+
+    #[test]
+    fn titles_of_one_format_send_only_the_first_episodes() {
+        let titles: Vec<String> = (1..=12)
+            .map(|ep| format!("[G] T [{ep:02}][1080p]"))
+            .collect();
+        assert_eq!(sample_titles(titles).len(), 3);
+    }
+
+    #[test]
+    fn conflict_groups_with_other_versions_are_added_to_the_first_ones() {
+        let group = |ep: u32, tag: &str| {
+            vec![
+                format!("[G]{tag} T 第{ep:02}话 MKV"),
+                format!("[G]{tag} T 第{ep:02}话 MP4"),
+            ]
+        };
+        let groups: Vec<Vec<String>> = (1..=3)
+            .map(|ep| group(ep, "[7月新番]"))
+            .chain((4..=8).map(|ep| group(ep, "")))
+            .collect();
+        let sample = sample_groups(groups, |g| g.as_slice());
+        let eps: Vec<&str> = sample.iter().map(|g| g[0].as_str()).collect();
+        assert_eq!(
+            eps.len(),
+            4,
+            "first three plus the first untagged group: {eps:?}"
+        );
+        assert!(eps[3].contains("第04话"));
     }
 
     #[test]
