@@ -360,38 +360,7 @@ pub async fn regenerate_pending(
         let mut conn = pool
             .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let p = pending_ai_results::table
-            .find(id)
-            .first::<PendingAiResult>(&mut conn)
-            .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
-        // 訂閱的批次結果沒有真正的來源標題（source_title 是「批次解析（iteration 1）」），
-        // 重新生成就是對那個訂閱重跑一次批次產生
-        let batch_subscription = p
-            .subscription_id
-            .filter(|_| p.source_title.starts_with("批次"));
-
-        // 先刪除舊的 parser（待確認的 filter 只存在 generated_data）
-        if p.result_type == "parser" {
-            diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
-                .execute(&mut conn)
-                .ok();
-        }
-
-        // 單筆：重設為 generating 再產生；批次：舊結果標成已取代，由新的批次結果接手
-        diesel::update(pending_ai_results::table.find(id))
-            .set((
-                pending_ai_results::status.eq(if batch_subscription.is_some() {
-                    "rejected"
-                } else {
-                    "generating"
-                }),
-                pending_ai_results::error_message.eq(None::<String>),
-                pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-        (p.result_type, p.source_title, batch_subscription)
+        prepare_regenerate(&mut conn, id)?
     };
 
     if let Some(subscription_id) = batch_subscription {
@@ -425,6 +394,47 @@ pub async fn regenerate_pending(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(Json(result))
+}
+
+/// 重新生成前的準備，回傳（種類, 來源標題, 批次結果所屬的訂閱）。
+///
+/// 待確認的解析器先刪掉（過濾規則只存在 generated_data）。單筆結果重設為 generating 後原地重產；
+/// 訂閱的批次結果（source_title 是「批次解析（iteration 1）」，不是真正的標題）整筆刪掉，
+/// 由重跑的批次產生新的一筆——和「拒絕」一樣刪除，狀態只允許 generating / pending / confirmed / failed。
+fn prepare_regenerate(
+    conn: &mut PgConnection,
+    id: i32,
+) -> Result<(String, String, Option<i32>), (StatusCode, String)> {
+    let p = pending_ai_results::table
+        .find(id)
+        .first::<PendingAiResult>(conn)
+        .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
+    let batch_subscription = p
+        .subscription_id
+        .filter(|_| p.source_title.starts_with("批次"));
+    let db_error = |e: diesel::result::Error| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+
+    conn.transaction(|conn| {
+        if p.result_type == "parser" {
+            diesel::delete(title_parsers::table.filter(title_parsers::pending_result_id.eq(id)))
+                .execute(conn)?;
+        }
+        if batch_subscription.is_some() {
+            diesel::delete(pending_ai_results::table.find(id)).execute(conn)?;
+        } else {
+            diesel::update(pending_ai_results::table.find(id))
+                .set((
+                    pending_ai_results::status.eq("generating"),
+                    pending_ai_results::error_message.eq(None::<String>),
+                    pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
+                ))
+                .execute(conn)?;
+        }
+        Ok::<_, diesel::result::Error>(())
+    })
+    .map_err(db_error)?;
+
+    Ok((p.result_type, p.source_title, batch_subscription))
 }
 
 /// 對訂閱重跑一次批次產生（使用者按「重新生成」），回傳新的結果。
@@ -626,6 +636,19 @@ mod tests {
                 .get_result::<Id>(&mut conn).unwrap().id;
             (sub, old)
         };
+
+        // 準備重新生成：批次結果整筆刪掉（狀態限制沒有 rejected；2026-11-06 生產因此回 500）
+        {
+            let mut conn = pool.get().unwrap();
+            let (kind, _, batch) = prepare_regenerate(&mut conn, old).unwrap();
+            assert_eq!((kind.as_str(), batch), ("parser", Some(sub)));
+            let left: i64 = pending_ai_results::table
+                .find(old)
+                .count()
+                .get_result(&mut conn)
+                .unwrap();
+            assert_eq!(left, 0, "the old batch result is gone");
+        }
 
         let held = crate::ai::auto_trigger::claim("parser", sub).unwrap();
         let busy = regenerate_batch(pool.clone(), "parser", sub)
