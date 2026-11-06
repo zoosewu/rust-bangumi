@@ -219,15 +219,26 @@ pub async fn reparse_affected_items(
                     unmatched_link_ids.push(lid);
                     unmatched_series_ids.push((item.item_id, sid));
                 }
-                TitleParserService::update_raw_item_status(
+                // 連結已移除；被解析前過濾排除的標成 filtered，不算未匹配
+                if crate::services::prefilter::excluded_for(
                     &mut conn,
-                    item.item_id,
-                    ParseStatus::NoMatch,
-                    None,
-                    None,
-                )
-                .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
-                no_match_count += 1;
+                    item.subscription_id,
+                    &item.title,
+                ) {
+                    crate::services::prefilter::mark_filtered(&mut conn, item.item_id)
+                        .map(|_| ())
+                        .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
+                } else {
+                    TitleParserService::update_raw_item_status(
+                        &mut conn,
+                        item.item_id,
+                        ParseStatus::NoMatch,
+                        None,
+                        None,
+                    )
+                    .unwrap_or_else(|e| tracing::warn!("reparse: 更新 item 狀態失敗: {}", e));
+                    no_match_count += 1;
+                }
             }
             Err(e) => {
                 TitleParserService::update_raw_item_status(

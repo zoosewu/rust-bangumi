@@ -356,7 +356,7 @@ pub async fn regenerate_pending(
 ) -> Result<Json<PendingAiResult>, (StatusCode, String)> {
     let pool = Arc::new(state.db.clone());
 
-    let (result_type, source_title) = {
+    let (result_type, source_title, batch_subscription) = {
         let mut conn = pool
             .get()
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -364,6 +364,11 @@ pub async fn regenerate_pending(
             .find(id)
             .first::<PendingAiResult>(&mut conn)
             .map_err(|_| (StatusCode::NOT_FOUND, "Not found".to_string()))?;
+        // 訂閱的批次結果沒有真正的來源標題（source_title 是「批次解析（iteration 1）」），
+        // 重新生成就是對那個訂閱重跑一次批次產生
+        let batch_subscription = p
+            .subscription_id
+            .filter(|_| p.source_title.starts_with("批次"));
 
         // 先刪除舊的 parser（待確認的 filter 只存在 generated_data）
         if p.result_type == "parser" {
@@ -372,18 +377,26 @@ pub async fn regenerate_pending(
                 .ok();
         }
 
-        // 重設為 generating
+        // 單筆：重設為 generating 再產生；批次：舊結果標成已取代，由新的批次結果接手
         diesel::update(pending_ai_results::table.find(id))
             .set((
-                pending_ai_results::status.eq("generating"),
+                pending_ai_results::status.eq(if batch_subscription.is_some() {
+                    "rejected"
+                } else {
+                    "generating"
+                }),
                 pending_ai_results::error_message.eq(None::<String>),
                 pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
             ))
             .execute(&mut conn)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        (p.result_type, p.source_title)
+        (p.result_type, p.source_title, batch_subscription)
     };
+
+    if let Some(subscription_id) = batch_subscription {
+        return regenerate_batch(pool, &result_type, subscription_id).await;
+    }
 
     let result = match result_type.as_str() {
         "parser" => {
@@ -412,6 +425,65 @@ pub async fn regenerate_pending(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(Json(result))
+}
+
+/// 對訂閱重跑一次批次產生（使用者按「重新生成」），回傳新的結果。
+/// 同一訂閱同一種結果已經在產生時回 409。
+async fn regenerate_batch(
+    pool: Arc<DbPool>,
+    result_type: &str,
+    subscription_id: i32,
+) -> Result<Json<PendingAiResult>, (StatusCode, String)> {
+    let kind: &'static str = if result_type == "filter" {
+        "filter"
+    } else {
+        "parser"
+    };
+    let _claim = crate::ai::auto_trigger::claim(kind, subscription_id).ok_or((
+        StatusCode::CONFLICT,
+        "這個訂閱正在產生中，請稍後再試".to_string(),
+    ))?;
+    let generated = if kind == "filter" {
+        let groups = {
+            let mut conn = pool
+                .get()
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            crate::ai::auto_trigger::conflict_groups_for_subscription(&mut conn, subscription_id)
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        };
+        if groups.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "這個訂閱目前沒有衝突".to_string()));
+        }
+        crate::ai::filter_generator::generate_filters_for_subscription_batch(
+            pool.clone(),
+            Some(subscription_id),
+            groups,
+        )
+        .await
+    } else {
+        crate::ai::parser_generator::generate_parsers_for_subscription_batch(
+            pool.clone(),
+            subscription_id,
+        )
+        .await
+    };
+    generated.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let mut conn = pool
+        .get()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    pending_ai_results::table
+        .filter(pending_ai_results::result_type.eq(kind))
+        .filter(pending_ai_results::subscription_id.eq(subscription_id))
+        .order(pending_ai_results::id.desc())
+        .first::<PendingAiResult>(&mut conn)
+        .map(Json)
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "沒有產生新的結果（這個訂閱可能已經沒有未匹配的標題）".to_string(),
+            )
+        })
 }
 
 /// 重新解析所有未匹配的 raw_items：先用現有解析器 re-parse，仍失敗的按 subscription 觸發批次 AI 生成。
@@ -529,5 +601,43 @@ mod tests {
             confirm_target(&req("global", Some(3)), Some(27)).unwrap(),
             (FilterTargetType::Global, None)
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn regenerating_a_batch_result_reruns_the_subscription_batch() {
+        use crate::services::identity::test_db;
+        #[derive(diesel::QueryableByName)]
+        struct Id {
+            #[diesel(sql_type = diesel::sql_types::Integer)]
+            id: i32,
+        }
+        let pool = Arc::new(test_db::pool());
+        let (sub, old) = {
+            let mut conn = pool.get().unwrap();
+            diesel::sql_query("UPDATE ai_providers SET is_enabled = false")
+                .execute(&mut conn)
+                .unwrap();
+            let sub = diesel::sql_query("INSERT INTO subscriptions (fetcher_id, source_url, name, created_at, updated_at) SELECT module_id, 'https://regen-test', 's', now(), now() FROM service_modules LIMIT 1 RETURNING subscription_id AS id")
+                .get_result::<Id>(&mut conn).unwrap().id;
+            diesel::sql_query(format!("INSERT INTO raw_anime_items (title, download_url, subscription_id, status, created_at) VALUES ('[G] T 第01-12话 合集', 'u-regen', {sub}, 'no_match', now())"))
+                .execute(&mut conn).unwrap();
+            let old = diesel::sql_query(format!("INSERT INTO pending_ai_results (result_type, source_title, status, subscription_id) VALUES ('parser', '批次解析（iteration 1）', 'pending', {sub}) RETURNING id"))
+                .get_result::<Id>(&mut conn).unwrap().id;
+            (sub, old)
+        };
+
+        let held = crate::ai::auto_trigger::claim("parser", sub).unwrap();
+        let busy = regenerate_batch(pool.clone(), "parser", sub)
+            .await
+            .unwrap_err();
+        assert_eq!(busy.0, StatusCode::CONFLICT);
+        drop(held);
+
+        // 沒有啟用的 provider：批次產生會建立一筆失敗的新結果
+        let Json(result) = regenerate_batch(pool.clone(), "parser", sub).await.unwrap();
+        assert_ne!(result.id, old, "a new batch result, not the old one");
+        assert_eq!(result.subscription_id, Some(sub));
+        assert!(result.source_title.starts_with("批次解析"));
     }
 }

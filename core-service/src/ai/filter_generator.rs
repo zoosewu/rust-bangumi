@@ -426,14 +426,17 @@ async fn update_filter_pending_failed(
     error: &str,
 ) -> Result<PendingAiResult, String> {
     tracing::warn!("AI filter 生成失敗 pending_id={}: {}", id, error);
-    let mut conn = pool.get().map_err(|e| e.to_string())?;
-    diesel::update(pending_ai_results::table.find(id))
-        .set((
-            pending_ai_results::status.eq("failed"),
-            pending_ai_results::error_message.eq(error),
-            pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
-        ))
-        .get_result::<PendingAiResult>(&mut conn)
-        .map_err(|e| e.to_string())
-        .inspect(|pending| super::alert_generation_failed(pool, pending, error))
+    // 先放開連線再發通知（通知要讀 webhook 設定，會再拿一條連線）
+    let updated = {
+        let mut conn = pool.get().map_err(|e| e.to_string())?;
+        diesel::update(pending_ai_results::table.find(id))
+            .set((
+                pending_ai_results::status.eq("failed"),
+                pending_ai_results::error_message.eq(error),
+                pending_ai_results::updated_at.eq(Utc::now().naive_utc()),
+            ))
+            .get_result::<PendingAiResult>(&mut conn)
+            .map_err(|e| e.to_string())
+    };
+    updated.inspect(|pending| super::alert_generation_failed(pool, pending, error))
 }
