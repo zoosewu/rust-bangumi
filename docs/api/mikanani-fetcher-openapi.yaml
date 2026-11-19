@@ -6,7 +6,8 @@ info:
   contact:
     name: rustBangumi Project
   license:
-    name: MIT
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.html
 
 servers:
   - url: 'http://{host}:{port}'

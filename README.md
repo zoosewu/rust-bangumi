@@ -176,3 +176,8 @@ PIKPAK_DATA_DIR=/path/to/pikpak-data
 ## 開發者文件
 
 詳細的架構設計、API 規格與開發指南請參考 [docs/](docs/) 目錄。
+
+## 授權
+
+程式碼以 [GNU AGPL-3.0](LICENSE) 授權。映像內的 PostgreSQL、qBittorrent、Jellyfin 與各 Rust / npm 套件依其各自的授權。
+動畫影片、字幕與 metadata 的著作權屬於原作者，本專案不包含也不散布這些內容。

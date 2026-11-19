@@ -304,4 +304,4 @@ When making changes to the fetcher:
 
 ## License
 
-Part of the rust-bangumi project.
+Part of the rust-bangumi project, licensed under [GNU AGPL-3.0](../../LICENSE).
