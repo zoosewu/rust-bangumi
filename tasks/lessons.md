@@ -18,3 +18,5 @@
 - `bool::then_some(x)` 一定會先建立 `x`（不管條件真假），`then(|| x)` 才是延遲建立。`x` 有 Drop 副作用時（放開佔位、拿鎖）會出事：2026-11-06 `claim()` 在佔位失敗時也建立了 GenerationClaim，丟掉時去拿同一把還沒放開的鎖 → 死結（測試卡住才發現）。規則：會被 drop 的守衛型別一律用 `then(||…)`，並且先放開鎖再建立。
 - `pkill -f <字串>` 會比對到正在執行這條指令的 shell 本身（字串就在它的命令列裡），把自己殺掉（exit 144），到 2026-11-06 已經第三次。規則：要結束程序時先 `pgrep -fa` 找出 PID，再在**另一個**指令裡 `kill <PID>`；不要在同一條指令裡用 `pkill -f`。
 - 寫入新的狀態值之前，先查資料表的 CHECK 限制（`select pg_get_constraintdef(oid) from pg_constraint where conrelid='<table>'::regclass`）。2026-11-06 我把批次結果標成 `rejected`，但 `pending_ai_results.status` 只允許 generating / pending / confirmed / failed（「拒絕」其實是刪除），生產回 500；DB 測試直接呼叫內部函式、跳過了寫入狀態的那段，所以沒抓到。規則：DB 測試要涵蓋實際寫入的路徑；多步驟寫入包在 transaction 裡，避免前半段成功、後半段失敗留下半套狀態（這次解析器先被刪、狀態更新才失敗）。
+- 對生產主機的 SSH 查詢一律加 `-o ConnectTimeout=10`，並給 Bash 工具短的 timeout；長時間沒有輸出就停掉重試，不要放著等。2026-11-20 一個唯讀 psql 查詢卡在 SSH 上將近一小時，使用者等到主動來問進度。規則：**查詢超過一兩分鐘沒結果就 TaskStop、先回報已查到的內容**；調查跨很多步驟時，每隔幾步就用一兩句話告訴使用者目前在做什麼。
+- 2026-11-20 又用了 `git stash` 比較 clippy 警告（違反上面「不要用 stash」那條，這次碰巧沒出事）。規則：動手改程式**之前**先把 clippy 基準存到 scratchpad（`cargo clippy --workspace --tests 2>&1 | rg '^(warning|error)' | sort | uniq -c`），改完再比對。
