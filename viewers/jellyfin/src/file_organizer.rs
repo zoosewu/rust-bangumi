@@ -89,12 +89,15 @@ impl FileOrganizer {
         path.to_path_buf()
     }
 
+    /// 把下載好的集數搬進媒體庫。目標位置已有檔案時（同一集的其他版本、副檔名相同），
+    /// 只有 core 列在 `replaceable` 的路徑才覆蓋，否則回報失敗、兩邊的檔案都不動。
     pub async fn organize_episode(
         &self,
         anime_title: &str,
         season: u32,
         episode: u32,
         source_file: &Path,
+        replaceable: &[String],
     ) -> anyhow::Result<PathBuf> {
         let season_dir = self
             .library_dir
@@ -130,6 +133,13 @@ impl FileOrganizer {
             return Err(anyhow::anyhow!(
                 "Source file does not exist: {}",
                 source_file.display()
+            ));
+        }
+
+        if exists(&target_path).await && !replaceable.iter().any(|p| Path::new(p) == target_path) {
+            return Err(anyhow::anyhow!(
+                "{} 已有其他版本的檔案，未覆蓋",
+                target_path.display()
             ));
         }
 
@@ -529,18 +539,53 @@ mod tests {
         std::fs::write(&source, b"video").unwrap();
 
         let first = organizer
-            .organize_episode("Show", 1, 3, &source)
+            .organize_episode("Show", 1, 3, &source, &[])
             .await
             .unwrap();
         assert!(!source.exists());
 
         // E6: a duplicate request arrives after the first one moved the file
         let second = organizer
-            .organize_episode("Show", 1, 3, &source)
+            .organize_episode("Show", 1, 3, &source, &[])
             .await
             .unwrap();
         assert_eq!(first, second);
         assert_eq!(std::fs::read(&second).unwrap(), b"video");
+    }
+
+    #[tokio::test]
+    async fn another_version_already_in_place_is_not_overwritten() {
+        let root = tempfile::tempdir().unwrap();
+        let organizer = organizer_in(root.path());
+        let target = root.path().join("library/Show/Season 01/Show - S01E05.mkv");
+        touch(&target, "old version");
+        let source = root.path().join("downloads/[Other] Show - 05.mkv");
+        touch(&source, "new version");
+
+        let err = organizer
+            .organize_episode("Show", 1, 5, &source, &[])
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("已有其他版本"), "{err}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "old version");
+        assert!(source.exists(), "the new download stays where it is");
+    }
+
+    #[tokio::test]
+    async fn a_version_core_replaces_is_overwritten() {
+        let root = tempfile::tempdir().unwrap();
+        let organizer = organizer_in(root.path());
+        let target = root.path().join("library/Show/Season 01/Show - S01E05.mkv");
+        touch(&target, "old version");
+        let source = root.path().join("downloads/[Other] Show - 05.mkv");
+        touch(&source, "new version");
+
+        let placed = organizer
+            .organize_episode("Show", 1, 5, &source, &[target.display().to_string()])
+            .await
+            .unwrap();
+        assert_eq!(placed, target);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new version");
     }
 
     #[tokio::test]
@@ -550,7 +595,7 @@ mod tests {
         let source = root.path().join("downloads/[Group] Show - 04.mkv");
 
         let err = organizer
-            .organize_episode("Show", 1, 4, &source)
+            .organize_episode("Show", 1, 4, &source, &[])
             .await
             .unwrap_err();
         assert!(err.to_string().contains("Source file does not exist"));

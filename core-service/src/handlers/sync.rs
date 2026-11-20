@@ -28,6 +28,14 @@ pub async fn sync_callback(
                         let sync_service = state.sync_service.clone();
                         let download_id = payload.download_id;
                         tokio::spawn(async move {
+                            if let Err(e) = sync_service.retire_replaced_versions(download_id).await
+                            {
+                                tracing::warn!(
+                                    "Failed to remove versions replaced by download {}: {}",
+                                    download_id,
+                                    e
+                                );
+                            }
                             if let Err(e) =
                                 sync_service.release_torrent_if_settled(download_id).await
                             {

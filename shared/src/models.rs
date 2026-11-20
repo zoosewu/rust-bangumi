@@ -238,6 +238,9 @@ pub struct ViewerSyncRequest {
     /// 季內容（season.nfo、季海報）
     #[serde(default)]
     pub season: Option<ViewerSeason>,
+    /// 同一集被這個版本取代的檔案：目標位置已有檔案時，只有列在這裡的才可以覆蓋
+    #[serde(default)]
+    pub replaceable_paths: Vec<String>,
 }
 
 /// 系列（作品）層級、寫進 `tvshow.nfo` 的內容；`title` 也是媒體庫資料夾名

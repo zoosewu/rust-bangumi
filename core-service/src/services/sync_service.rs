@@ -403,7 +403,16 @@ impl SyncService {
 
         let callback_url = format!("{}/sync-callback", self.core_service_url);
 
+        // 同一集已不採用、還在媒體庫的版本：同路徑時（副檔名相同）viewer 可以覆蓋
+        let replaceable_paths =
+            crate::services::version_replace::replaced_by(conn, download.download_id)
+                .map_err(|e| format!("Failed to find replaced versions: {}", e))?
+                .into_iter()
+                .map(|r| r.file_path)
+                .collect();
+
         Ok(ViewerSyncRequest {
+            replaceable_paths,
             download_id: download.download_id,
             series_id: link.anime_id,
             anime_title: work.title,
@@ -623,6 +632,60 @@ impl SyncService {
             series: Some(content.series),
             season: Some(content.season),
         })
+    }
+
+    /// 下載同步進媒體庫後，移除同一集已不採用的版本（一集只留一個版本）。
+    /// 和新版本同路徑的舊檔已被覆蓋，只更新記錄；其他路徑請 viewer 刪除，刪成功才更新記錄。
+    /// 回傳移除的下載數。
+    pub async fn retire_replaced_versions(&self, download_id: i32) -> Result<usize, String> {
+        use crate::services::version_replace::{replaced_by, retire};
+
+        let (new_path, replaced) = {
+            let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+            let new_path: Option<String> = downloads::table
+                .find(download_id)
+                .select(downloads::file_path)
+                .first(&mut conn)
+                .map_err(|e| format!("Download {} not found: {}", download_id, e))?;
+            let replaced = replaced_by(&mut conn, download_id)
+                .map_err(|e| format!("Failed to find replaced versions: {}", e))?;
+            (new_path, replaced)
+        };
+        if replaced.is_empty() {
+            return Ok(0);
+        }
+
+        let (overwritten, elsewhere): (Vec<_>, Vec<_>) = replaced
+            .into_iter()
+            .partition(|r| Some(&r.file_path) == new_path.as_ref());
+        let mut gone: Vec<i32> = overwritten.iter().map(|r| r.download_id).collect();
+        if !elsewhere.is_empty() {
+            let response = self
+                .notify_viewer_delete(elsewhere.iter().map(|r| r.download_id).collect())
+                .await?;
+            for result in response.deleted {
+                if result.success {
+                    gone.push(result.download_id);
+                } else {
+                    tracing::warn!(
+                        "Replaced version (download {}) was not deleted: {}",
+                        result.download_id,
+                        result.error_message.unwrap_or_default()
+                    );
+                }
+            }
+        }
+
+        let mut conn = self.db_pool.get().map_err(|e| e.to_string())?;
+        let retired = retire(&mut conn, &gone, download_id)
+            .map_err(|e| format!("Failed to retire replaced versions: {}", e))?;
+        tracing::info!(
+            "Download {} replaced {} other versions of its episode in the library: {:?}",
+            download_id,
+            retired,
+            gone
+        );
+        Ok(retired)
     }
 
     /// Notify viewer to delete synced files (best-effort).

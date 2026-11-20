@@ -207,6 +207,7 @@ async fn do_sync(
             req.series_no as u32,
             req.episode_no as u32,
             &source,
+            &req.replaceable_paths,
         )
         .await?;
 
@@ -634,6 +635,29 @@ fn resolve_delete_target(
     }
 }
 
+/// 同一個資料夾裡還有同名、不同副檔名的檔案（同一集的另一個版本，例如 `.mp4` 與 `.mkv`）。
+/// 它們共用 `{名稱}.nfo`，這時刪掉一個版本不能連 nfo 一起刪。
+async fn another_file_shares_the_name(file: &std::path::Path) -> bool {
+    let (Some(dir), Some(stem)) = (file.parent(), file.file_stem()) else {
+        return false;
+    };
+    let Ok(mut entries) = tokio::fs::read_dir(dir).await else {
+        return false;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        let is_file = entry.file_type().await.is_ok_and(|t| t.is_file());
+        if is_file
+            && path != file
+            && path.file_stem() == Some(stem)
+            && path.extension().is_some_and(|e| e != "nfo")
+        {
+            return true;
+        }
+    }
+    false
+}
+
 async fn delete_single_download(
     state: &AppState,
     download_id: i32,
@@ -682,9 +706,9 @@ async fn delete_single_download(
         }
     }
 
-    // Delete associated .nfo file
+    // Delete associated .nfo file, unless another version of the episode still uses it
     let nfo_path = file_path.with_extension("nfo");
-    if nfo_path.exists() {
+    if nfo_path.exists() && !another_file_shares_the_name(&file_path).await {
         let _ = tokio::fs::remove_file(&nfo_path).await;
     }
 
@@ -703,6 +727,24 @@ async fn delete_single_download(
 mod tests {
     use super::*;
     use axum::{routing::get, routing::post, Router};
+
+    #[tokio::test]
+    async fn the_nfo_stays_while_another_version_of_the_episode_remains() {
+        let dir = tempfile::tempdir().unwrap();
+        let season = dir.path();
+        let touch = |name: &str| std::fs::write(season.join(name), b"x").unwrap();
+        touch("X - S01E01.mp4");
+        touch("X - S01E01.nfo");
+        touch("X - S01E01.zh-TW.ass");
+        touch("X - S01E02.mkv");
+        let mp4 = season.join("X - S01E01.mp4");
+
+        // 只有字幕、nfo 和別集：沒有其他版本
+        assert!(!another_file_shares_the_name(&mp4).await);
+        touch("X - S01E01.mkv");
+        assert!(another_file_shares_the_name(&mp4).await);
+        assert!(another_file_shares_the_name(&season.join("X - S01E01.mkv")).await);
+    }
 
     #[test]
     fn delete_targets_must_agree_and_stay_inside_the_library() {

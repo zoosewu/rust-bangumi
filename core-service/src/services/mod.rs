@@ -17,6 +17,7 @@ pub mod scheduler;
 pub mod sync_service;
 pub mod title_parser;
 pub mod version_choice;
+pub mod version_replace;
 pub mod webhook_service;
 
 pub use conflict_detection::{ConflictDetectionResult, ConflictDetectionService};
