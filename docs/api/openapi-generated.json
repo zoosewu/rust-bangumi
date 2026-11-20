@@ -7,7 +7,7 @@
       "name": "Claude Code"
     },
     "license": {
-      "name": "MIT"
+      "name": "AGPL-3.0-only"
     },
     "version": "0.1.0"
   },
@@ -918,10 +918,8 @@
         "required": [
           "conflict_id",
           "series_id",
-          "group_id",
           "episode_no",
           "anime_title",
-          "group_name",
           "resolution_status",
           "links",
           "created_at"
@@ -947,13 +945,6 @@
             "type": "integer",
             "format": "int32"
           },
-          "group_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "group_name": {
-            "type": "string"
-          },
           "links": {
             "type": "array",
             "items": {
@@ -973,6 +964,7 @@
         "type": "object",
         "required": [
           "link_id",
+          "group_name",
           "url",
           "source_hash",
           "conflict_flag",
@@ -995,6 +987,10 @@
               }
             ],
             "nullable": true
+          },
+          "group_name": {
+            "type": "string",
+            "description": "這個版本的字幕組（同一集的衝突版本可以來自不同字幕組）"
           },
           "link_id": {
             "type": "integer",
@@ -1646,7 +1642,6 @@
         "type": "object",
         "required": [
           "anime_id",
-          "group_id",
           "chosen_raw_item_id"
         ],
         "properties": {
@@ -1655,10 +1650,6 @@
             "format": "int32"
           },
           "chosen_raw_item_id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "group_id": {
             "type": "integer",
             "format": "int32"
           }

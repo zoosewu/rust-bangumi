@@ -12,8 +12,6 @@ struct ConflictGroup {
     #[diesel(sql_type = Int4)]
     anime_id: i32,
     #[diesel(sql_type = Int4)]
-    group_id: i32,
-    #[diesel(sql_type = Int4)]
     episode_no: i32,
 }
 
@@ -27,13 +25,12 @@ pub trait AnimeLinkRepository: Send + Sync {
     ) -> Result<Vec<AnimeLink>, RepositoryError>;
     async fn create(&self, link: NewAnimeLink) -> Result<AnimeLink, RepositoryError>;
     async fn delete(&self, id: i32) -> Result<bool, RepositoryError>;
-    /// Find all active (anime_id, group_id, episode_no) groups that have COUNT > 1
-    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError>;
-    /// Find all active link_ids for a given (anime_id, group_id, episode_no)
+    /// Find all active, unfiltered (anime_id, episode_no) episodes with more than one version
+    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32)>, RepositoryError>;
+    /// Find all active, unfiltered links (versions) of a given (anime_id, episode_no)
     async fn find_active_links_for_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<Vec<AnimeLink>, RepositoryError>;
     /// Batch set conflict_flag for given link_ids
@@ -47,7 +44,6 @@ pub trait AnimeLinkRepository: Send + Sync {
     async fn find_resolved_links_for_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<Vec<AnimeLink>, RepositoryError>;
 }
@@ -124,21 +120,21 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
         .await?
     }
 
-    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError> {
+    async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32)>, RepositoryError> {
         let pool = self.pool.clone();
         tokio::task::spawn_blocking(move || {
             let mut conn = pool.get()?;
             // Use raw SQL for GROUP BY + HAVING
-            let results: Vec<(i32, i32, i32)> = diesel::sql_query(
-                "SELECT anime_id, group_id, episode_no \
+            let results: Vec<(i32, i32)> = diesel::sql_query(
+                "SELECT anime_id, episode_no \
                  FROM anime_links \
                  WHERE link_status = 'active' AND filtered_flag = false \
-                 GROUP BY anime_id, group_id, episode_no \
+                 GROUP BY anime_id, episode_no \
                  HAVING COUNT(*) > 1",
             )
             .load::<ConflictGroup>(&mut conn)?
             .into_iter()
-            .map(|cg| (cg.anime_id, cg.group_id, cg.episode_no))
+            .map(|cg| (cg.anime_id, cg.episode_no))
             .collect();
             Ok(results)
         })
@@ -148,7 +144,6 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
     async fn find_active_links_for_episode(
         &self,
         anime_id: i32,
-        gid: i32,
         ep: i32,
     ) -> Result<Vec<AnimeLink>, RepositoryError> {
         let pool = self.pool.clone();
@@ -156,7 +151,6 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
             let mut conn = pool.get()?;
             anime_links::table
                 .filter(anime_links::anime_id.eq(anime_id))
-                .filter(anime_links::group_id.eq(gid))
                 .filter(anime_links::episode_no.eq(ep))
                 .filter(anime_links::link_status.eq("active"))
                 .filter(anime_links::filtered_flag.eq(false))
@@ -213,7 +207,6 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
     async fn find_resolved_links_for_episode(
         &self,
         anime_id: i32,
-        gid: i32,
         ep: i32,
     ) -> Result<Vec<AnimeLink>, RepositoryError> {
         let pool = self.pool.clone();
@@ -221,7 +214,6 @@ impl AnimeLinkRepository for DieselAnimeLinkRepository {
             let mut conn = pool.get()?;
             anime_links::table
                 .filter(anime_links::anime_id.eq(anime_id))
-                .filter(anime_links::group_id.eq(gid))
                 .filter(anime_links::episode_no.eq(ep))
                 .filter(anime_links::link_status.eq("resolved"))
                 .filter(anime_links::filtered_flag.eq(false))
@@ -345,14 +337,13 @@ pub mod mock {
             Ok(links.len() < original_len)
         }
 
-        async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32, i32)>, RepositoryError> {
+        async fn detect_all_conflicts(&self) -> Result<Vec<(i32, i32)>, RepositoryError> {
             Ok(vec![])
         }
 
         async fn find_active_links_for_episode(
             &self,
             anime_id: i32,
-            group_id: i32,
             episode_no: i32,
         ) -> Result<Vec<AnimeLink>, RepositoryError> {
             let links = self.links.lock().unwrap();
@@ -360,7 +351,6 @@ pub mod mock {
                 .iter()
                 .filter(|l| {
                     l.anime_id == anime_id
-                        && l.group_id == group_id
                         && l.episode_no == episode_no
                         && l.link_status == "active"
                         && !l.filtered_flag
@@ -400,7 +390,6 @@ pub mod mock {
         async fn find_resolved_links_for_episode(
             &self,
             anime_id: i32,
-            group_id: i32,
             episode_no: i32,
         ) -> Result<Vec<AnimeLink>, RepositoryError> {
             let links = self.links.lock().unwrap();
@@ -408,7 +397,6 @@ pub mod mock {
                 .iter()
                 .filter(|l| {
                     l.anime_id == anime_id
-                        && l.group_id == group_id
                         && l.episode_no == episode_no
                         && l.link_status == "resolved"
                 })

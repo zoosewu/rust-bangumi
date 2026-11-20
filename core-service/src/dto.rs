@@ -264,6 +264,8 @@ pub struct AnimeLinkResponse {
 #[derive(Debug, Serialize, Clone, ToSchema)]
 pub struct AnimeLinkConflictLink {
     pub link_id: i32,
+    /// 這個版本的字幕組（同一集的衝突版本可以來自不同字幕組）
+    pub group_name: String,
     pub title: Option<String>,
     pub url: String,
     pub source_hash: String,
@@ -286,10 +288,8 @@ pub struct AnimeLinkConflictLink {
 pub struct AnimeLinkConflictInfo {
     pub conflict_id: i32,
     pub series_id: i32,
-    pub group_id: i32,
     pub episode_no: i32,
     pub anime_title: String,
-    pub group_name: String,
     pub resolution_status: String,
     pub chosen_link_id: Option<i32>,
     pub links: Vec<AnimeLinkConflictLink>,
@@ -306,7 +306,6 @@ pub struct ResolveAnimeLinkConflictRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ResolveByRawItemRequest {
     pub anime_id: i32,
-    pub group_id: i32,
     pub chosen_raw_item_id: i32,
 }
 

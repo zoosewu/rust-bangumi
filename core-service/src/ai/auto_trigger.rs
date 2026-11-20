@@ -102,33 +102,28 @@ pub fn parser_due(conn: &mut PgConnection, subscription_id: i32) -> QueryResult<
     ))
 }
 
-/// 訂閱的衝突群組：每個未解決衝突的集數一組（該集所有衝突版本的標題，第一個標題當來源），
-/// 依（季, 字幕組, 集數）排序，送給 AI 時才能取「前幾集」
+/// 訂閱的衝突群組：每個未解決衝突的集數一組（該集所有衝突版本的標題，不分字幕組，第一個標題當來源），
+/// 依（季, 集數）排序，送給 AI 時才能取「前幾集」
 pub fn conflict_groups_for_subscription(
     conn: &mut PgConnection,
     subscription_id: i32,
 ) -> QueryResult<Vec<(Vec<String>, String)>> {
-    let episodes: Vec<(i32, i32, i32)> = anime_links::table
+    let episodes: Vec<(i32, i32)> = anime_links::table
         .inner_join(
             raw_anime_items::table
                 .on(anime_links::raw_item_id.eq(raw_anime_items::item_id.nullable())),
         )
         .filter(raw_anime_items::subscription_id.eq(subscription_id))
         .filter(anime_links::conflict_flag.eq(true))
-        .select((
-            anime_links::anime_id,
-            anime_links::group_id,
-            anime_links::episode_no,
-        ))
+        .select((anime_links::anime_id, anime_links::episode_no))
         .distinct()
         .load(conn)?;
 
     let mut groups = std::collections::BTreeMap::new();
-    for (anime_id, group_id, episode_no) in episodes {
+    for (anime_id, episode_no) in episodes {
         // 該集所有衝突版本（不限本訂閱）
         let titles: Vec<String> = anime_links::table
             .filter(anime_links::anime_id.eq(anime_id))
-            .filter(anime_links::group_id.eq(group_id))
             .filter(anime_links::episode_no.eq(episode_no))
             .filter(anime_links::conflict_flag.eq(true))
             .select(anime_links::title)
@@ -137,7 +132,7 @@ pub fn conflict_groups_for_subscription(
             .flatten()
             .collect();
         if titles.len() > 1 {
-            groups.insert((anime_id, group_id, episode_no), titles);
+            groups.insert((anime_id, episode_no), titles);
         }
     }
     Ok(groups
@@ -164,7 +159,6 @@ fn newest_conflict(
                 )
                 .filter(raw_anime_items::subscription_id.eq(subscription_id))
                 .filter(anime_links::anime_id.eq(anime_link_conflicts::anime_id))
-                .filter(anime_links::group_id.eq(anime_link_conflicts::group_id))
                 .filter(anime_links::episode_no.eq(anime_link_conflicts::episode_no))
                 .filter(anime_links::conflict_flag.eq(true)),
         ))
@@ -418,12 +412,16 @@ mod tests {
             let work = insert(&mut conn, "INSERT INTO anime_works (title, created_at, updated_at) VALUES ('自動觸發測試', now(), now()) RETURNING work_id AS id");
             let season = insert(&mut conn, "INSERT INTO seasons (year, season, created_at) VALUES (2095, 'winter', now()) ON CONFLICT (year, season) DO UPDATE SET year = EXCLUDED.year RETURNING season_id AS id");
             let anime = insert(&mut conn, &format!("INSERT INTO animes (work_id, series_no, season_id, created_at, updated_at) VALUES ({work}, 1, {season}, now(), now()) RETURNING anime_id AS id"));
-            let group = insert(&mut conn, "INSERT INTO subtitle_groups (group_name) VALUES ('自動觸發測試組') RETURNING group_id AS id");
+            let group = |conn: &mut PgConnection, name: &str| {
+                insert(conn, &format!("INSERT INTO subtitle_groups (group_name) VALUES ('{name}') ON CONFLICT (group_name) DO UPDATE SET group_name = EXCLUDED.group_name RETURNING group_id AS id"))
+            };
+            // 同一集的不同字幕組版本也是同一組衝突
             for (ep, title, conflict) in [
                 (51, "[G] S - 51 [繁日内嵌]", true),
-                (51, "[G] S - 51 [简日内嵌]", true),
+                (51, "[H] S - 51 [简日内嵌]", true),
                 (52, "[G] S - 52 [繁日内嵌]", false),
             ] {
+                let group = group(&mut conn, &title[1..2]);
                 let raw = item(&mut conn, sub, title, "parsed");
                 insert(&mut conn, &format!("INSERT INTO anime_links (anime_id, group_id, episode_no, title, url, source_hash, raw_item_id, conflict_flag) VALUES ({anime}, {group}, {ep}, '{title}', 'u-{title}', 'auto-trigger-{title}', {raw}, {conflict}) RETURNING link_id AS id"));
             }
@@ -432,7 +430,7 @@ mod tests {
                 None,
                 "no conflict record yet"
             );
-            insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, group_id, episode_no, resolution_status, created_at) VALUES ({anime}, {group}, 51, 'unresolved', now()) RETURNING conflict_id AS id"));
+            insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, episode_no, resolution_status, created_at) VALUES ({anime}, 51, 'unresolved', now()) RETURNING conflict_id AS id"));
 
             assert!(newest_conflict(&mut conn, sub).unwrap().is_some());
             let groups = conflict_groups_for_subscription(&mut conn, sub).unwrap();

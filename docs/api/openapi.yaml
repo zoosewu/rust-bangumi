@@ -3659,13 +3659,10 @@ components:
           type: integer
         series_id:
           type: integer
-        group_id:
-          type: integer
         episode_no:
           type: integer
+          description: 衝突以（季, 集數）判斷，不分字幕組：一集只留一個版本
         anime_title:
-          type: string
-        group_name:
           type: string
         resolution_status:
           type: string
@@ -3686,6 +3683,9 @@ components:
       properties:
         link_id:
           type: integer
+        group_name:
+          type: string
+          description: 這個版本的字幕組（同一集的衝突版本可以來自不同字幕組）
         title:
           type: string
           nullable: true
@@ -3731,13 +3731,11 @@ components:
       type: object
       required:
         - anime_id
-        - group_id
         - chosen_raw_item_id
       properties:
         anime_id:
           type: integer
-        group_id:
-          type: integer
+          description: 解決這一季所有未解決的衝突
         chosen_raw_item_id:
           type: integer
           description: 偏好採用的 raw_item ID

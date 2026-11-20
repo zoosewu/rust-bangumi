@@ -1,4 +1,4 @@
-//! 使用者手動指定某一集要用的版本（同季、同字幕組、同集數的其中一個 link）。
+//! 使用者手動指定某一集要用的版本（同季同一集的其中一個 link，不分字幕組：一集只留一個版本）。
 //!
 //! 手動指定的版本不受過濾規則影響；同集的其他版本（包含之後才出現的）一律不採用，
 //! 所以這一集不會再產生衝突。
@@ -32,7 +32,6 @@ pub fn choose_version(conn: &mut PgConnection, link_id: i32) -> Result<VersionCh
 
         let episode = anime_links::table
             .filter(anime_links::anime_id.eq(link.anime_id))
-            .filter(anime_links::group_id.eq(link.group_id))
             .filter(anime_links::episode_no.eq(link.episode_no));
 
         let other_link_ids: Vec<i32> = episode
@@ -61,7 +60,6 @@ pub fn choose_version(conn: &mut PgConnection, link_id: i32) -> Result<VersionCh
         diesel::update(
             anime_link_conflicts::table
                 .filter(anime_link_conflicts::anime_id.eq(link.anime_id))
-                .filter(anime_link_conflicts::group_id.eq(link.group_id))
                 .filter(anime_link_conflicts::episode_no.eq(link.episode_no)),
         )
         .set((
@@ -103,7 +101,7 @@ pub fn defer_to_manual_choices(conn: &mut PgConnection) -> QueryResult<Vec<i32>>
          WHERE o.link_status = 'active' AND NOT o.manual_choice \
            AND EXISTS (SELECT 1 FROM anime_links m \
                        WHERE m.manual_choice AND m.link_status = 'active' \
-                         AND m.anime_id = o.anime_id AND m.group_id = o.group_id \
+                         AND m.anime_id = o.anime_id \
                          AND m.episode_no = o.episode_no) \
          RETURNING o.link_id",
     )
@@ -174,7 +172,7 @@ mod tests {
         download(&mut conn, abema, "downloading");
         let old_synced = version(&mut conn, s, 11, "OLD-11", false);
         let synced_download = download(&mut conn, old_synced, "synced");
-        insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, group_id, episode_no, resolution_status, created_at) VALUES ({}, {}, 11, 'unresolved', now()) RETURNING conflict_id AS id", s.0, s.1));
+        insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, episode_no, resolution_status, created_at) VALUES ({}, 11, 'unresolved', now()) RETURNING conflict_id AS id", s.0));
 
         let choice = choose_version(&mut conn, cr).unwrap();
 
@@ -223,6 +221,27 @@ mod tests {
         assert!(choose_version(&mut conn, 0).unwrap_err().contains("不存在"));
     }
 
+    #[test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    fn choosing_another_groups_version_sets_aside_the_one_in_the_library() {
+        let mut conn = test_db::conn();
+        let (anime, heibai) = season(&mut conn);
+        let (_, loli) = season(&mut conn);
+        let in_library = version(&mut conn, (anime, heibai), 1, "黑白-01", false);
+        let synced = download(&mut conn, in_library, "synced");
+        let other_group = version(&mut conn, (anime, loli), 1, "LoliHouse-01", false);
+
+        let choice = choose_version(&mut conn, other_group).unwrap();
+        assert_eq!(choice.other_link_ids, vec![in_library]);
+        assert_eq!(choice.kept_in_library, vec![synced]);
+        assert_eq!(state(&mut conn, in_library).0, "resolved");
+
+        // 之後別的字幕組又出了這一集：不採用
+        let (_, third) = season(&mut conn);
+        let later = version(&mut conn, (anime, third), 1, "第三組-01", false);
+        assert_eq!(defer_to_manual_choices(&mut conn).unwrap(), vec![later]);
+    }
+
     #[tokio::test]
     #[ignore = "needs DATABASE_TEST_URL"]
     async fn a_reopened_conflict_forgets_the_previous_choice() {
@@ -234,12 +253,12 @@ mod tests {
             let mut conn = pool.get().unwrap();
             let s = season(&mut conn);
             let chosen = version(&mut conn, s, 2, "TC-2", false);
-            insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, group_id, episode_no, resolution_status, chosen_link_id, resolved_at, created_at) VALUES ({}, {}, 2, 'resolved', {chosen}, '2026-10-19', '2026-10-14') RETURNING conflict_id AS id", s.0, s.1));
+            insert(&mut conn, &format!("INSERT INTO anime_link_conflicts (anime_id, episode_no, resolution_status, chosen_link_id, resolved_at, created_at) VALUES ({}, 2, 'resolved', {chosen}, '2026-10-19', '2026-10-14') RETURNING conflict_id AS id", s.0));
             s
         };
         let repo = DieselAnimeLinkConflictRepository::new(pool.clone());
 
-        let reopened = repo.upsert(s.0, s.1, 2).await.unwrap();
+        let reopened = repo.upsert(s.0, 2).await.unwrap();
         assert_eq!(reopened.resolution_status, "unresolved");
         assert_eq!(
             (reopened.chosen_link_id, reopened.resolved_at),
@@ -253,7 +272,7 @@ mod tests {
         );
 
         // 仍未解決時再偵測一次，偵測時間不變
-        let again = repo.upsert(s.0, s.1, 2).await.unwrap();
+        let again = repo.upsert(s.0, 2).await.unwrap();
         assert_eq!(again.created_at, reopened.created_at);
     }
 

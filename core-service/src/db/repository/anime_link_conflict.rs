@@ -14,13 +14,11 @@ pub trait AnimeLinkConflictRepository: Send + Sync {
     async fn find_by_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<Option<AnimeLinkConflict>, RepositoryError>;
     async fn upsert(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<AnimeLinkConflict, RepositoryError>;
     async fn resolve(
@@ -31,7 +29,6 @@ pub trait AnimeLinkConflictRepository: Send + Sync {
     async fn delete_by_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<bool, RepositoryError>;
 }
@@ -77,7 +74,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
     async fn find_by_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<Option<AnimeLinkConflict>, RepositoryError> {
         let pool = self.pool.clone();
@@ -85,7 +81,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
             let mut conn = pool.get()?;
             anime_link_conflicts::table
                 .filter(anime_link_conflicts::anime_id.eq(anime_id))
-                .filter(anime_link_conflicts::group_id.eq(group_id))
                 .filter(anime_link_conflicts::episode_no.eq(episode_no))
                 .first(&mut conn)
                 .optional()
@@ -97,7 +92,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
     async fn upsert(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<AnimeLinkConflict, RepositoryError> {
         let pool = self.pool.clone();
@@ -108,7 +102,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
             diesel::update(
                 anime_link_conflicts::table
                     .filter(anime_link_conflicts::anime_id.eq(anime_id))
-                    .filter(anime_link_conflicts::group_id.eq(group_id))
                     .filter(anime_link_conflicts::episode_no.eq(episode_no))
                     .filter(anime_link_conflicts::resolution_status.eq("resolved")),
             )
@@ -121,14 +114,12 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
             diesel::insert_into(anime_link_conflicts::table)
                 .values((
                     anime_link_conflicts::anime_id.eq(anime_id),
-                    anime_link_conflicts::group_id.eq(group_id),
                     anime_link_conflicts::episode_no.eq(episode_no),
                     anime_link_conflicts::resolution_status.eq("unresolved"),
                     anime_link_conflicts::created_at.eq(now),
                 ))
                 .on_conflict((
                     anime_link_conflicts::anime_id,
-                    anime_link_conflicts::group_id,
                     anime_link_conflicts::episode_no,
                 ))
                 .do_update()
@@ -166,7 +157,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
     async fn delete_by_episode(
         &self,
         anime_id: i32,
-        group_id: i32,
         episode_no: i32,
     ) -> Result<bool, RepositoryError> {
         let pool = self.pool.clone();
@@ -175,7 +165,6 @@ impl AnimeLinkConflictRepository for DieselAnimeLinkConflictRepository {
             let deleted = diesel::delete(
                 anime_link_conflicts::table
                     .filter(anime_link_conflicts::anime_id.eq(anime_id))
-                    .filter(anime_link_conflicts::group_id.eq(group_id))
                     .filter(anime_link_conflicts::episode_no.eq(episode_no)),
             )
             .execute(&mut conn)?;
@@ -236,7 +225,6 @@ pub mod mock {
         async fn find_by_episode(
             &self,
             anime_id: i32,
-            group_id: i32,
             episode_no: i32,
         ) -> Result<Option<AnimeLinkConflict>, RepositoryError> {
             Ok(self
@@ -244,22 +232,20 @@ pub mod mock {
                 .lock()
                 .unwrap()
                 .iter()
-                .find(|c| {
-                    c.anime_id == anime_id && c.group_id == group_id && c.episode_no == episode_no
-                })
+                .find(|c| c.anime_id == anime_id && c.episode_no == episode_no)
                 .cloned())
         }
 
         async fn upsert(
             &self,
             anime_id: i32,
-            group_id: i32,
             episode_no: i32,
         ) -> Result<AnimeLinkConflict, RepositoryError> {
             let mut conflicts = self.conflicts.lock().unwrap();
-            if let Some(c) = conflicts.iter_mut().find(|c| {
-                c.anime_id == anime_id && c.group_id == group_id && c.episode_no == episode_no
-            }) {
+            if let Some(c) = conflicts
+                .iter_mut()
+                .find(|c| c.anime_id == anime_id && c.episode_no == episode_no)
+            {
                 c.resolution_status = "unresolved".to_string();
                 return Ok(c.clone());
             }
@@ -267,7 +253,6 @@ pub mod mock {
             let conflict = AnimeLinkConflict {
                 conflict_id: *next_id,
                 anime_id,
-                group_id,
                 episode_no,
                 resolution_status: "unresolved".to_string(),
                 chosen_link_id: None,
@@ -297,14 +282,11 @@ pub mod mock {
         async fn delete_by_episode(
             &self,
             anime_id: i32,
-            group_id: i32,
             episode_no: i32,
         ) -> Result<bool, RepositoryError> {
             let mut conflicts = self.conflicts.lock().unwrap();
             let orig = conflicts.len();
-            conflicts.retain(|c| {
-                !(c.anime_id == anime_id && c.group_id == group_id && c.episode_no == episode_no)
-            });
+            conflicts.retain(|c| !(c.anime_id == anime_id && c.episode_no == episode_no));
             Ok(conflicts.len() < orig)
         }
     }

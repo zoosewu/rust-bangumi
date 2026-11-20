@@ -345,9 +345,6 @@ export interface components {
             created_at: string;
             /** Format: int32 */
             episode_no: number;
-            /** Format: int32 */
-            group_id: number;
-            group_name: string;
             links: components["schemas"]["AnimeLinkConflictLink"][];
             resolution_status: string;
             /** Format: int32 */
@@ -358,6 +355,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             download?: components["schemas"]["DownloadInfo"] | null;
+            /** @description 這個版本的字幕組（同一集的衝突版本可以來自不同字幕組） */
+            group_name: string;
             /** Format: int32 */
             link_id: number;
             link_status: string;
@@ -582,8 +581,6 @@ export interface components {
             anime_id: number;
             /** Format: int32 */
             chosen_raw_item_id: number;
-            /** Format: int32 */
-            group_id: number;
         };
         ResolveByRawItemResponse: {
             dispatched_link_ids: number[];

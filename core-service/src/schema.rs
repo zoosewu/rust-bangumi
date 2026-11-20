@@ -76,7 +76,6 @@ diesel::table! {
     anime_link_conflicts (conflict_id) {
         conflict_id -> Int4,
         anime_id -> Int4,
-        group_id -> Int4,
         episode_no -> Int4,
         #[max_length = 20]
         resolution_status -> Varchar,
@@ -400,7 +399,6 @@ diesel::joinable!(anime_cover_images -> service_modules (service_module_id));
 diesel::joinable!(anime_external_ids -> animes (anime_id));
 diesel::joinable!(anime_link_conflicts -> anime_links (chosen_link_id));
 diesel::joinable!(anime_link_conflicts -> animes (anime_id));
-diesel::joinable!(anime_link_conflicts -> subtitle_groups (group_id));
 diesel::joinable!(anime_links -> animes (anime_id));
 diesel::joinable!(anime_links -> raw_anime_items (raw_item_id));
 diesel::joinable!(anime_links -> subtitle_groups (group_id));

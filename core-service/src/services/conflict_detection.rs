@@ -71,8 +71,8 @@ impl ConflictDetectionService {
         }
     }
 
-    /// Scan all active unfiltered anime_links, detect conflicts (same series_id, group_id,
-    /// episode_no with COUNT > 1), set conflict_flag, and upsert anime_link_conflicts records.
+    /// Scan all active unfiltered anime_links, detect conflicts (more than one version of the
+    /// same episode of a season, whatever the subtitle group), set conflict_flag, and upsert anime_link_conflicts records.
     /// Also clears conflict_flag for groups that are no longer conflicting.
     /// When a conflict is auto-resolved, restores remaining links to 'active' status.
     pub async fn detect_and_mark_conflicts(&self) -> Result<ConflictDetectionResult, String> {
@@ -118,10 +118,10 @@ impl ConflictDetectionService {
 
         let mut conflicts_found = 0;
 
-        for (anime_id, group_id, episode_no) in &conflict_groups {
+        for (anime_id, episode_no) in &conflict_groups {
             let links = self
                 .link_repo
-                .find_active_links_for_episode(*anime_id, *group_id, *episode_no)
+                .find_active_links_for_episode(*anime_id, *episode_no)
                 .await
                 .map_err(|e| format!("Failed to find links for episode: {}", e))?;
 
@@ -136,16 +136,15 @@ impl ConflictDetectionService {
 
                 // Upsert conflict record
                 self.conflict_repo
-                    .upsert(*anime_id, *group_id, *episode_no)
+                    .upsert(*anime_id, *episode_no)
                     .await
                     .map_err(|e| format!("Failed to upsert conflict: {}", e))?;
 
                 conflicts_found += 1;
 
                 tracing::info!(
-                    "Conflict detected: anime_id={}, group_id={}, episode_no={}, {} links",
+                    "Conflict detected: anime_id={}, episode_no={}, {} links",
                     anime_id,
-                    group_id,
                     episode_no,
                     links.len()
                 );
@@ -165,11 +164,7 @@ impl ConflictDetectionService {
         for conflict in &unresolved {
             let active_links = self
                 .link_repo
-                .find_active_links_for_episode(
-                    conflict.anime_id,
-                    conflict.group_id,
-                    conflict.episode_no,
-                )
+                .find_active_links_for_episode(conflict.anime_id, conflict.episode_no)
                 .await
                 .map_err(|e| format!("Failed to check conflict links: {}", e))?;
 
@@ -177,17 +172,13 @@ impl ConflictDetectionService {
                 // No longer a conflict — delete the conflict record
                 let _ = self
                     .conflict_repo
-                    .delete_by_episode(conflict.anime_id, conflict.group_id, conflict.episode_no)
+                    .delete_by_episode(conflict.anime_id, conflict.episode_no)
                     .await;
 
                 // Restore resolved links for this episode back to 'active'
                 let resolved_links = self
                     .link_repo
-                    .find_resolved_links_for_episode(
-                        conflict.anime_id,
-                        conflict.group_id,
-                        conflict.episode_no,
-                    )
+                    .find_resolved_links_for_episode(conflict.anime_id, conflict.episode_no)
                     .await
                     .map_err(|e| format!("Failed to find resolved links: {}", e))?;
 
@@ -201,10 +192,9 @@ impl ConflictDetectionService {
                         .await
                         .map_err(|e| format!("Failed to restore link status: {}", e))?;
                     tracing::info!(
-                        "Restored {} resolved links to active for episode ({}, {}, {})",
+                        "Restored {} resolved links to active for episode ({}, {})",
                         resolved_ids.len(),
                         conflict.anime_id,
-                        conflict.group_id,
                         conflict.episode_no
                     );
                 }
@@ -219,13 +209,12 @@ impl ConflictDetectionService {
                         .await
                         .map_err(|e| format!("Failed to set conflict flags: {}", e))?;
                     self.conflict_repo
-                        .upsert(conflict.anime_id, conflict.group_id, conflict.episode_no)
+                        .upsert(conflict.anime_id, conflict.episode_no)
                         .await
                         .map_err(|e| format!("Failed to upsert conflict: {}", e))?;
                     tracing::info!(
-                        "Restored links form new conflict for episode ({}, {}, {}), {} links",
+                        "Restored links form new conflict for episode ({}, {}), {} links",
                         conflict.anime_id,
-                        conflict.group_id,
                         conflict.episode_no,
                         total_after_restore
                     );
@@ -264,7 +253,7 @@ impl ConflictDetectionService {
         })
     }
 
-    /// Bulk-resolve all unresolved conflicts under a given (anime_id, group_id) by
+    /// Bulk-resolve all unresolved conflicts of a season (anime_id) by
     /// preferring links from the chosen `raw_item_id`. For each conflict that has a
     /// candidate link with the matching raw_item_id, that link is chosen; others
     /// in the same conflict become `link_status='resolved'`. Conflicts with no
@@ -275,7 +264,6 @@ impl ConflictDetectionService {
     pub async fn resolve_conflicts_by_raw_item(
         &self,
         anime_id: i32,
-        group_id: i32,
         chosen_raw_item_id: i32,
     ) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), String> {
         let unresolved = self
@@ -289,17 +277,10 @@ impl ConflictDetectionService {
         let mut chosen_links: Vec<i32> = Vec::new();
         let mut unchosen_links: Vec<i32> = Vec::new();
 
-        for conflict in unresolved
-            .into_iter()
-            .filter(|c| c.anime_id == anime_id && c.group_id == group_id)
-        {
+        for conflict in unresolved.into_iter().filter(|c| c.anime_id == anime_id) {
             let links = self
                 .link_repo
-                .find_active_links_for_episode(
-                    conflict.anime_id,
-                    conflict.group_id,
-                    conflict.episode_no,
-                )
+                .find_active_links_for_episode(conflict.anime_id, conflict.episode_no)
                 .await
                 .map_err(|e| format!("Failed to find links: {}", e))?;
 
@@ -352,11 +333,7 @@ impl ConflictDetectionService {
         // 2. Get all active links for this episode
         let links = self
             .link_repo
-            .find_active_links_for_episode(
-                conflict.anime_id,
-                conflict.group_id,
-                conflict.episode_no,
-            )
+            .find_active_links_for_episode(conflict.anime_id, conflict.episode_no)
             .await
             .map_err(|e| format!("Failed to find links: {}", e))?;
 
@@ -457,7 +434,7 @@ mod tests {
         ]));
         let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
         // create one conflict for ep1
-        conflict_repo.upsert(1, 1, 1).await.unwrap();
+        conflict_repo.upsert(1, 1).await.unwrap();
 
         // Make ep2's link not in conflict
         link_repo.set_conflict_flags(&[2], false).await.unwrap();
@@ -466,7 +443,7 @@ mod tests {
             ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
 
         let (resolved, skipped, chosen, unchosen) =
-            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+            svc.resolve_conflicts_by_raw_item(1, 100).await.unwrap();
 
         assert_eq!(resolved.len(), 1, "ep1 conflict should be resolved");
         assert!(skipped.is_empty(), "no conflict should be skipped");
@@ -485,35 +462,35 @@ mod tests {
             link(4, 3, Some(400)),
         ]));
         let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
-        conflict_repo.upsert(1, 1, 1).await.unwrap();
-        let c3 = conflict_repo.upsert(1, 1, 3).await.unwrap();
+        conflict_repo.upsert(1, 1).await.unwrap();
+        let c3 = conflict_repo.upsert(1, 3).await.unwrap();
 
         let svc =
             ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
 
         let (resolved, skipped, chosen, _) =
-            svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+            svc.resolve_conflicts_by_raw_item(1, 100).await.unwrap();
 
         assert_eq!(resolved.len(), 1);
         assert_eq!(skipped, vec![c3.conflict_id]);
         assert_eq!(chosen, vec![1]);
     }
 
-    /// 不同 (anime_id, group_id) 的衝突不應被影響。
+    /// 其他季的衝突不應被影響。
     #[tokio::test]
-    async fn resolve_by_raw_item_scoped_to_anime_group() {
+    async fn resolve_by_raw_item_scoped_to_the_season() {
         let link_repo = Arc::new(MockAnimeLinkRepository::with_data(vec![
             link(1, 1, Some(100)),
             link(2, 1, Some(200)),
         ]));
         let conflict_repo = Arc::new(MockAnimeLinkConflictRepository::new());
         // 不同 anime_id 的衝突
-        let other = conflict_repo.upsert(99, 99, 1).await.unwrap();
+        let other = conflict_repo.upsert(99, 1).await.unwrap();
 
         let svc =
             ConflictDetectionService::new(link_repo.clone(), conflict_repo.clone(), fake_pool());
 
-        let (resolved, skipped, _, _) = svc.resolve_conflicts_by_raw_item(1, 1, 100).await.unwrap();
+        let (resolved, skipped, _, _) = svc.resolve_conflicts_by_raw_item(1, 100).await.unwrap();
 
         assert!(resolved.is_empty());
         assert!(skipped.is_empty());
@@ -657,6 +634,51 @@ mod tests {
             download(&mut conn, second[0], "cancelled");
             release(&mut conn, &s, "batch", 1..=2);
             assert!(skip_redundant_batches(&mut conn).unwrap().is_empty());
+        }
+
+        #[tokio::test]
+        #[ignore = "needs DATABASE_TEST_URL"]
+        async fn versions_of_an_episode_from_different_groups_conflict() {
+            use crate::db::repository::{AnimeLinkRepository, DieselAnimeLinkRepository};
+            let pool = test_db::pool();
+            let anime_id = {
+                let mut conn = pool.get().unwrap();
+                let s = season(&mut conn);
+                let other = Season {
+                    anime_id: s.anime_id,
+                    sub_id: s.sub_id,
+                    group_id: insert(&mut conn, "INSERT INTO subtitle_groups (group_name) VALUES ('跨字幕組測試組') ON CONFLICT (group_name) DO UPDATE SET group_name = EXCLUDED.group_name RETURNING group_id AS id"),
+                };
+                // 第 1 集：兩個字幕組 → 衝突；第 2 集：只有一個版本；第 3 集：另一個版本被過濾
+                let first = release(&mut conn, &s, "cross-group-1", 1..=1);
+                download(&mut conn, first[0], "synced");
+                release(&mut conn, &other, "cross-group-other-1", 1..=1);
+                release(&mut conn, &s, "cross-group-2", 2..=2);
+                release(&mut conn, &s, "cross-group-3", 3..=3);
+                let filtered = release(&mut conn, &other, "cross-group-other-3", 3..=3);
+                diesel::sql_query("UPDATE anime_links SET filtered_flag = true WHERE link_id = $1")
+                    .bind::<Integer, _>(filtered[0])
+                    .execute(&mut conn)
+                    .unwrap();
+                s.anime_id
+            };
+
+            let repo = DieselAnimeLinkRepository::new(pool.clone());
+            let conflicts: Vec<(i32, i32)> = repo
+                .detect_all_conflicts()
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|(anime, _)| *anime == anime_id)
+                .collect();
+            assert_eq!(conflicts, vec![(anime_id, 1)]);
+            assert_eq!(
+                repo.find_active_links_for_episode(anime_id, 1)
+                    .await
+                    .unwrap()
+                    .len(),
+                2
+            );
         }
 
         #[test]

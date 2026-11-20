@@ -53,17 +53,9 @@ pub async fn list_link_conflicts(
             .first::<String>(&mut conn)
             .unwrap_or_else(|_| "Unknown".to_string());
 
-        // Get group name
-        let group_name = subtitle_groups::table
-            .filter(subtitle_groups::group_id.eq(conflict.group_id))
-            .select(subtitle_groups::group_name)
-            .first::<String>(&mut conn)
-            .unwrap_or_else(|_| "Unknown".to_string());
-
-        // Get all active links for this episode
+        // Get all active links (versions) of this episode, whatever the subtitle group
         let links: Vec<AnimeLink> = anime_links::table
             .filter(anime_links::anime_id.eq(conflict.anime_id))
-            .filter(anime_links::group_id.eq(conflict.group_id))
             .filter(anime_links::episode_no.eq(conflict.episode_no))
             .filter(anime_links::link_status.eq("active"))
             .load::<AnimeLink>(&mut conn)
@@ -106,8 +98,15 @@ pub async fn list_link_conflicts(
                     })
                     .unwrap_or_default();
 
+                let group_name = subtitle_groups::table
+                    .filter(subtitle_groups::group_id.eq(link.group_id))
+                    .select(subtitle_groups::group_name)
+                    .first::<String>(&mut conn)
+                    .unwrap_or_else(|_| "Unknown".to_string());
+
                 AnimeLinkConflictLink {
                     link_id: link.link_id,
+                    group_name,
                     title: link.title.clone(),
                     url: link.url.clone(),
                     source_hash: link.source_hash.clone(),
@@ -125,10 +124,8 @@ pub async fn list_link_conflicts(
         result.push(AnimeLinkConflictInfo {
             conflict_id: conflict.conflict_id,
             series_id: conflict.anime_id,
-            group_id: conflict.group_id,
             episode_no: conflict.episode_no,
             anime_title,
-            group_name,
             resolution_status: conflict.resolution_status.clone(),
             chosen_link_id: conflict.chosen_link_id,
             links: link_infos,
@@ -181,7 +178,6 @@ pub async fn resolve_link_conflict(
     // Step 2: Get all active links in the conflict group to find unchosen link_ids
     let all_links: Vec<AnimeLink> = match anime_links::table
         .filter(anime_links::anime_id.eq(conflict.anime_id))
-        .filter(anime_links::group_id.eq(conflict.group_id))
         .filter(anime_links::episode_no.eq(conflict.episode_no))
         .filter(anime_links::link_status.eq("active"))
         .load::<AnimeLink>(&mut conn)
@@ -264,7 +260,7 @@ pub async fn resolve_link_conflict(
 
 /// POST /link-conflicts/resolve-by-raw-item
 ///
-/// 對 (anime_id, group_id) 下所有未解決的衝突，自動以指定 raw_item 為偏好來源。
+/// 對一季（anime_id）所有未解決的衝突，自動以指定 raw_item 為偏好來源。
 /// 每個衝突若有候選 link 來自該 raw_item，便採用之；否則該衝突保持未解決。
 /// 被選中的 link 會被派送下載；未選中的 link 對應的下載會被取消。
 pub async fn resolve_link_conflicts_by_raw_item(
@@ -273,11 +269,7 @@ pub async fn resolve_link_conflicts_by_raw_item(
 ) -> (StatusCode, Json<serde_json::Value>) {
     let result = match state
         .conflict_detection
-        .resolve_conflicts_by_raw_item(
-            payload.anime_id,
-            payload.group_id,
-            payload.chosen_raw_item_id,
-        )
+        .resolve_conflicts_by_raw_item(payload.anime_id, payload.chosen_raw_item_id)
         .await
     {
         Ok(r) => r,

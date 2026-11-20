@@ -294,7 +294,6 @@ pub struct NewAnimeLink {
 pub struct AnimeLinkConflict {
     pub conflict_id: i32,
     pub anime_id: i32,
-    pub group_id: i32,
     pub episode_no: i32,
     pub resolution_status: String,
     pub chosen_link_id: Option<i32>,
@@ -306,7 +305,6 @@ pub struct AnimeLinkConflict {
 #[diesel(table_name = super::super::schema::anime_link_conflicts)]
 pub struct NewAnimeLinkConflict {
     pub anime_id: i32,
-    pub group_id: i32,
     pub episode_no: i32,
     pub resolution_status: String,
     pub created_at: NaiveDateTime,

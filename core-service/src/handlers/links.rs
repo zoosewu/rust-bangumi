@@ -133,12 +133,12 @@ pub async fn get_anime_links(
         }
     };
 
-    // Build conflict group map: (group_id, episode_no) -> Vec<link_id> for conflicted links
-    let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
+    // Build conflict group map: episode_no -> Vec<link_id> for conflicted links (all subtitle groups)
+    let mut conflict_groups: HashMap<i32, Vec<i32>> = HashMap::new();
     for (link, _) in &links_with_groups {
         if link.conflict_flag {
             conflict_groups
-                .entry((link.group_id, link.episode_no))
+                .entry(link.episode_no)
                 .or_default()
                 .push(link.link_id);
         }
@@ -162,7 +162,7 @@ pub async fn get_anime_links(
 
         let conflicting_link_ids = if link.conflict_flag {
             conflict_groups
-                .get(&(link.group_id, link.episode_no))
+                .get(&link.episode_no)
                 .map(|ids| {
                     ids.iter()
                         .filter(|&&id| id != link.link_id)
@@ -363,11 +363,11 @@ pub async fn list_conflicting_links(
         HashMap::new()
     };
 
-    // 3. Build conflict group map: (anime_id, group_id, episode_no) -> Vec<link_id>
-    let mut conflict_groups: HashMap<(i32, i32, i32), Vec<i32>> = HashMap::new();
+    // 3. Build conflict group map: (anime_id, episode_no) -> Vec<link_id> (all subtitle groups)
+    let mut conflict_groups: HashMap<(i32, i32), Vec<i32>> = HashMap::new();
     for (link, _, _, _) in &rows {
         conflict_groups
-            .entry((link.anime_id, link.group_id, link.episode_no))
+            .entry((link.anime_id, link.episode_no))
             .or_default()
             .push(link.link_id);
     }
@@ -377,7 +377,7 @@ pub async fn list_conflicting_links(
         .iter()
         .map(|(link, group, series, work)| {
             let conflicting_link_ids = conflict_groups
-                .get(&(link.anime_id, link.group_id, link.episode_no))
+                .get(&(link.anime_id, link.episode_no))
                 .map(|ids| {
                     ids.iter()
                         .filter(|&&id| id != link.link_id)

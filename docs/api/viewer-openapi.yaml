@@ -127,7 +127,7 @@ paths:
       tags:
         - Sync
       summary: 刪除已同步檔案
-      description: 刪除 Viewer 已整理到媒體庫的檔案，並清除對應的 NFO 等 metadata 檔案
+      description: 刪除 Viewer 已整理到媒體庫的檔案，並清除對應的 NFO 等 metadata 檔案（同名的其他版本還在時保留共用的 NFO）
       operationId: deleteSynced
       requestBody:
         required: true
@@ -259,6 +259,14 @@ components:
           $ref: '#/components/schemas/ViewerSeries'
         season:
           $ref: '#/components/schemas/ViewerSeason'
+        replaceable_paths:
+          type: array
+          items:
+            type: string
+          description: |
+            同一集被這個版本取代、還在媒體庫的檔案。目標位置已有檔案時，只有列在這裡的才覆蓋，
+            否則回報失敗、不覆蓋（一集只留一個版本）
+          example: ["/media/jellyfin/葬送的芙莉蓮/Season 01/葬送的芙莉蓮 - S01E12.mkv"]
 
     ViewerResyncRequest:
       type: object
