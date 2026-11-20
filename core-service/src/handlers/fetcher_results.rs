@@ -798,10 +798,28 @@ pub(crate) fn process_parsed_result(
             link_status: "active".to_string(),
         };
 
-        let created_link: AnimeLink = diesel::insert_into(anime_links::table)
+        let created_link: Option<AnimeLink> = diesel::insert_into(anime_links::table)
             .values(&new_link)
+            .on_conflict(anime_links::source_hash)
+            .do_nothing()
             .get_result(conn)
+            .optional()
             .map_err(|e| format!("Failed to create anime link ep {}: {}", ep, e))?;
+        let Some(created_link) = created_link else {
+            // 這個原始項目再次被解析（同時重跑、或合集上次只建了一部分）：已有的連結保留，不算失敗
+            let owner: Option<i32> = anime_links::table
+                .filter(anime_links::source_hash.eq(&new_link.source_hash))
+                .select(anime_links::raw_item_id)
+                .first(conn)
+                .map_err(|e| format!("Failed to create anime link ep {}: {}", ep, e))?;
+            if owner == Some(raw_item.item_id) {
+                continue;
+            }
+            return Err(format!(
+                "Failed to create anime link ep {}: source_hash already used by raw item {:?}",
+                ep, owner
+            ));
+        };
 
         // Compute and update filtered_flag based on current filter rules
         match crate::services::filter_recalc::compute_filtered_flag_for_link(conn, &created_link) {
@@ -926,6 +944,55 @@ mod tests {
         assert_eq!(stored(&mut conn), Some(date("2026-10-10 02:08")));
         assert!(save_again(&mut conn, "2026-10-11 00:00").is_err());
         assert_eq!(stored(&mut conn), Some(date("2026-10-10 02:08")));
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn parsing_an_item_again_keeps_its_links_and_creates_only_the_missing_ones() {
+        let mut conn = setup();
+        let item = raw_item(&mut conn, &[]);
+        let identity = context(&mut conn, &item).await;
+        let single = parsed("重複解析測試", 1);
+        let first = process_parsed_result(&mut conn, &identity, &item, &single).unwrap();
+        assert_eq!(first.len(), 1);
+
+        // 第二次解析（例如兩個重跑同時處理同一筆）：已存在的連結不算失敗、也不再回傳派送
+        assert_eq!(
+            process_parsed_result(&mut conn, &identity, &item, &single).unwrap(),
+            Vec::<i32>::new()
+        );
+
+        // 合集只建了一部分時重跑：只補上缺的集數
+        let batch = ParsedResult {
+            episode_end: Some(3),
+            ..parsed("重複解析測試合集", 1)
+        };
+        let batch_item = raw_item(&mut conn, &[]);
+        let all = process_parsed_result(&mut conn, &identity, &batch_item, &batch).unwrap();
+        assert_eq!(all.len(), 3);
+        diesel::delete(anime_links::table.find(all[2]))
+            .execute(&mut conn)
+            .unwrap();
+        let again = process_parsed_result(&mut conn, &identity, &batch_item, &batch).unwrap();
+        assert_eq!(again.len(), 1, "only episode 3 is created again");
+    }
+
+    #[tokio::test]
+    #[ignore = "needs DATABASE_TEST_URL"]
+    async fn a_link_of_another_item_with_the_same_url_is_still_an_error() {
+        let mut conn = setup();
+        let item = raw_item(&mut conn, &[]);
+        let identity = context(&mut conn, &item).await;
+        process_parsed_result(&mut conn, &identity, &item, &parsed("同網址測試", 1)).unwrap();
+        let other = RawAnimeItem {
+            item_id: raw_item(&mut conn, &[]).item_id,
+            ..item.clone()
+        };
+        assert!(
+            process_parsed_result(&mut conn, &identity, &other, &parsed("同網址測試", 1))
+                .unwrap_err()
+                .contains("Failed to create anime link ep 1")
+        );
     }
 
     #[tokio::test]

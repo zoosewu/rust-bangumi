@@ -505,6 +505,11 @@ pub(crate) async fn rerun_unmatched_raw_items(pool: Arc<DbPool>) -> Result<Vec<i
     use crate::services::title_parser::{ParseStatus, TitleParserService};
     use std::collections::HashSet;
 
+    // 確認解析器、規則變更、精靈都會觸發重跑：同時只跑一個，後到的等前一個做完再讀最新狀態，
+    // 才不會兩個重跑處理同一批項目
+    static RERUN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _running = RERUN.lock().await;
+
     let items: Vec<RawAnimeItem> = {
         let mut conn = pool
             .get()
